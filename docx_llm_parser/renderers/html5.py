@@ -55,8 +55,13 @@ def iter_html5(parsed: ParsedDocument) -> Iterator[str]:
     # 文档来源标识，LLM 可用于引用原始文件名。
     yield f'<!-- source="{escape(parsed.metadata["sourceFile"], quote=True)}" -->\n\n'
 
-    # 正文块
+    # 正文块。页码变化时插入 <page n=N> 分页标记。
+    current_page = 0
     for block in parsed.blocks:
+        block_page = block.get("page", 1)
+        if block_page != current_page:
+            current_page = block_page
+            yield f"<page n={current_page}>\n"
         for line in block_to_html5(block):
             yield line + "\n"
 
@@ -76,31 +81,27 @@ def iter_html5(parsed: ParsedDocument) -> Iterator[str]:
 # ── Block 渲染 ──
 
 def block_to_html5(block: dict[str, Any]) -> list[str]:
-    """把内部 block 转成 HTML5 块元素。"""
+    """把内部 block 转成 HTML5 块元素。页码标记由 iter_html5 统一处理。"""
     block_type = block["type"]
-    page = block["page"]
-    block_id = block["id"]
 
     if block_type == "heading":
         level = min(block.get("level", 1), 6)
         tag = f"h{level}"
-        text = _inline_content(block)
-        return [f'<{tag} i={block_id} g={page}>{text}']
+        return [f"<{tag}>{_inline_content(block)}"]
 
     if block_type == "paragraph":
-        text = _inline_content(block)
-        return [f'<p i={block_id} g={page}>{text}']
+        return [f"<p>{_inline_content(block)}"]
 
     if block_type == "table":
         return _table_to_html5(block)
 
-    return [f'<p i={block_id} g={page}>[未知块类型: {block_type}]']
+    return [f"<p>[未知块类型: {block_type}]"]
 
 
 def _table_to_html5(block: dict[str, Any]) -> list[str]:
     """输出 HTML5 表格，利用 <th>/<td> 隐式闭合和 colspan/rowspan 属性。"""
     rows = block["rows"]
-    lines = [f'<table i={block["id"]} g={block["page"]}>']
+    lines = ["<table>"]
     for row in rows:
         row_tag = "<tr h>" if row.get("isHeader") else "<tr>"
         lines.append(row_tag)

@@ -325,9 +325,10 @@ def _assets_to_html5(assets: list[dict[str, Any]]) -> list[str]:
         return []
     lines = ["<!-- assets -->"]
     for asset in assets:
-        # AssetExtractor 目前只生成 type="image"，此分支处理未来可能的扩展。
         if asset["type"] != "image":
             raise ValueError(f"Unsupported asset type: {asset['type']}")
+        # 只输出 AI 理解任务需要的最小元数据：ID + 文件路径。
+        # 尺寸/格式等可由下游工具直接从文件读取。
         attrs = f'i={asset["id"]}'
         if asset.get("file"):
             attrs += f' f={escape(asset["file"], quote=True)}'
@@ -335,8 +336,6 @@ def _assets_to_html5(assets: list[dict[str, Any]]) -> list[str]:
             attrs += f' h={escape(asset["href"], quote=True)}'
         if asset.get("contentType"):
             attrs += f' m={escape(asset["contentType"], quote=True)}'
-        if asset.get("sizeBytes"):
-            attrs += f' s={asset["sizeBytes"]}'
         lines.append(f"<img {attrs}>")
     return lines
 

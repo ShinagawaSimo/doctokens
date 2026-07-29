@@ -1,14 +1,17 @@
-"""提取 DOCX 中可供 LLM 引用的媒体资源。"""
+"""提取 DOCX 中可供 LLM 引用的媒体资源。
+
+图片以内容哈希命名防冲突，下游工具通过文件路径直接读取。
+"""
 
 from __future__ import annotations
 
+import hashlib
 import mimetypes
 from pathlib import Path
 
 from ..core.models import ParseWarning
 from ..core.package import PackageReader
 from ..core.relationships import RelationshipIndex
-
 
 IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
 
@@ -46,8 +49,6 @@ class AssetExtractor:
                     "type": "image",
                     "source": "external",
                     "href": rel.target,
-                    "relationshipId": rel.id,
-                    "sourcePart": rel.source_part,
                 }
                 image_index += 1
                 assets.append(asset)
@@ -70,14 +71,12 @@ class AssetExtractor:
             suffix = Path(target).suffix or ".bin"
             asset_id = f"img{image_index}"
             image_index += 1
-            exported = assets_dir / f"{asset_id}{suffix}"
-            with self.package.open_entry(target) as src, exported.open("wb") as dst:
-                # 图片按流复制，避免把二进制整体放入最终 XML。
-                while True:
-                    chunk = src.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    dst.write(chunk)
+            # 读取全部图片数据，计算内容哈希用于防跨文档文件名冲突。
+            with self.package.open_entry(target) as src:
+                data = src.read()
+            file_hash = hashlib.sha256(data).hexdigest()[:8]
+            exported = assets_dir / f"{asset_id}_{file_hash}{suffix}"
+            exported.write_bytes(data)
 
             asset = {
                 "id": asset_id,
@@ -85,10 +84,6 @@ class AssetExtractor:
                 "source": "embedded",
                 "file": str(exported.relative_to(self.output_dir)).replace("\\", "/"),
                 "contentType": self._content_type_for_part(target),
-                "sizeBytes": exported.stat().st_size,
-                "relationshipId": rel.id,
-                "sourcePart": rel.source_part,
-                "packagePath": target,
             }
             assets.append(asset)
             lookup[(rel.source_part, rel.id)] = asset

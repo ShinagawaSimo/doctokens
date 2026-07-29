@@ -1,0 +1,465 @@
+"""解析 WordprocessingML 段落内联内容。"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
+from xml.etree import ElementTree as ET
+
+from ..core.constants import attr, child_elements, first_child, local_name, qn
+from ..core.models import ParseOptions, ParseWarning
+from ..core.relationships import RelationshipIndex
+from ..ooxml.formatting import merge_run_formats, parse_run_format, visible_run_format
+from ..ooxml.styles import StyleMap
+
+PageBreakCallback = Callable[[], None]
+
+
+class InlineParser:
+    """把段落内的文本、链接、格式和轻量对象解析成统一 run 流。"""
+
+    def __init__(
+        self,
+        styles: StyleMap,
+        options: ParseOptions,
+        warnings: list[ParseWarning],
+        relationships: RelationshipIndex,
+        asset_lookup: dict[tuple[str, str], dict[str, Any]],
+        object_lookup: dict[tuple[str, str], dict[str, Any]] | None = None,
+        on_page_break: PageBreakCallback | None = None,
+    ) -> None:
+        self.styles = styles
+        self.options = options
+        self.warnings = warnings
+        self.relationships = relationships
+        self.asset_lookup = asset_lookup
+        self.object_lookup = object_lookup or {}
+        self.on_page_break = on_page_break
+
+    def paragraph_runs(
+        self,
+        p: ET.Element,
+        part: str,
+        block_id: str,
+        paragraph_style_id: str | None,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """解析一个段落内的 run，并返回 debug 用 raw hints。"""
+        runs: list[dict[str, Any]] = []
+        raw_hints: list[dict[str, Any]] = []
+        for child in p:
+            self._extract_inline_runs(child, part, block_id, paragraph_style_id, raw_hints, runs)
+        return runs, raw_hints
+
+    def _extract_inline_runs(
+        self,
+        node: ET.Element,
+        part: str,
+        block_id: str,
+        paragraph_style_id: str | None,
+        raw_hints: list[dict[str, Any]],
+        runs: list[dict[str, Any]],
+    ) -> None:
+        """递归处理段落内联节点，保留 Word 明确给出的结构。"""
+        lname = local_name(node.tag)
+        if lname == "pPr":
+            # 段落属性由外层 block parser 处理。
+            return
+        if lname == "r":
+            # run 是 Word 文本和内联对象的常用载体。
+            run = self._parse_run(node, part, block_id, paragraph_style_id, raw_hints)
+            if run["text"] or "objects" in run or self.options.preserve_empty_paragraphs:
+                runs.append(run)
+            return
+        if lname == "hyperlink":
+            # 超链接的显示文字复用普通 inline 解析，链接目标作为轻量属性附着。
+            link = self._hyperlink_info(node, part)
+            raw_hints.append({"type": "hyperlink", **link})
+            temp_runs: list[dict[str, Any]] = []
+            for child in node:
+                self._extract_inline_runs(
+                    child, part, block_id, paragraph_style_id, raw_hints, temp_runs
+                )
+            for run in temp_runs:
+                run["link"] = link
+                runs.append(run)
+            return
+        if lname == "ins":
+            # 插入修订在 final/review 视图中属于可见文本。
+            self._warn(
+                "REVISION_INSERTION_INCLUDED",
+                "Encountered insertion revision; parser includes inserted text in final/review mode.",
+                part=part,
+                block_id=block_id,
+            )
+            if self.options.revision_mode in {"final", "review"}:
+                temp_runs: list[dict[str, Any]] = []
+                for child in node:
+                    self._extract_inline_runs(
+                        child, part, block_id, paragraph_style_id, raw_hints, temp_runs
+                    )
+                for run in temp_runs:
+                    if self.options.revision_mode == "review":
+                        run["revision"] = "inserted"
+                    runs.append(run)
+            return
+        if lname == "del":
+            # 删除修订只在 original/review 视图中输出。
+            self._warn(
+                "REVISION_DELETION_SKIPPED",
+                "Encountered deletion revision; deletion handling depends on revision_mode.",
+                part=part,
+                block_id=block_id,
+            )
+            if self.options.revision_mode in {"original", "review"}:
+                text = "".join((item.text or "") for item in node.iter(qn("w", "delText")))
+                if text:
+                    run = {"text": text}
+                    if self.options.revision_mode == "review":
+                        run["revision"] = "deleted"
+                    runs.append(run)
+            return
+        if lname in {"sdt", "sdtContent", "smartTag"}:
+            # 内容控件和智能标记是包装层，继续读取内部可见内容。
+            for child in node:
+                self._extract_inline_runs(child, part, block_id, paragraph_style_id, raw_hints, runs)
+            return
+        if lname in {"oMath", "oMathPara"}:
+            # 段落级 OMML 公式作为轻量对象进入最终 XML。
+            obj = self._equation_object(node)
+            runs.append({"text": "", "objects": [obj]})
+            raw_hints.append(obj)
+            return
+        if lname in {"bookmarkStart", "bookmarkEnd", "proofErr", "permStart", "permEnd"}:
+            # 这些标记不贡献可读文本。
+            return
+        if lname.startswith("commentRange"):
+            # 批注范围本身不含正文，commentReference 和 comments.xml 负责关联。
+            self._warn(
+                "COMMENT_ANCHOR_UNSUPPORTED",
+                "Encountered comment range marker; parser records commentReference when present.",
+                part=part,
+                block_id=block_id,
+            )
+            return
+        self._warn(
+            "UNSUPPORTED_PARAGRAPH_CHILD",
+            f"Encountered unsupported paragraph child: {lname}",
+            part=part,
+            block_id=block_id,
+        )
+
+    def _parse_run(
+        self,
+        run: ET.Element,
+        part: str,
+        block_id: str,
+        paragraph_style_id: str | None,
+        raw_hints: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """解析 run 的可见文本、必要格式和内联对象。"""
+        text_parts: list[str] = []
+        rpr = first_child(run, "w", "rPr")
+        out: dict[str, Any] = {"text": ""}
+
+        rstyle = first_child(rpr, "w", "rStyle")
+        run_style_id = attr(rstyle, "w", "val") if rstyle is not None else None
+        if run_style_id is not None:
+            # styleId 只进入 debug，不进入最终 XML。
+            out["styleId"] = run_style_id
+        run_format = merge_run_formats(
+            self.styles.resolve_run_format(paragraph_style_id),
+            self.styles.resolve_run_format(run_style_id),
+            parse_run_format(rpr),
+        )
+        visible_format = visible_run_format(run_format)
+        if visible_format:
+            out["format"] = visible_format
+
+        for child in run:
+            lname = local_name(child.tag)
+            if lname == "rPr":
+                # run 属性已经在前面合并。
+                continue
+            if lname == "t":
+                # xml:space=preserve 时必须保留原始空格。
+                if attr(child, "xml", "space") == "preserve":
+                    out["preserveSpace"] = True
+                text_parts.append(child.text or "")
+            elif lname == "tab":
+                # 制表符对列表式文本和伪表格有语义价值。
+                text_parts.append("\t")
+            elif lname in {"br", "cr"}:
+                # 普通换行转为换行符；分页符同时推动页码 hint。
+                text_parts.append("\n")
+                if attr(child, "w", "type") == "page":
+                    raw_hints.append({"type": "manualPageBreak"})
+                    self._mark_page_break()
+            elif lname == "lastRenderedPageBreak":
+                # 这是 Word 保存过的渲染页线索，不等同于可靠页码。
+                raw_hints.append({"type": "lastRenderedPageBreak"})
+                self._mark_page_break()
+            elif lname == "drawing":
+                # DrawingML 中可能同时包含图片、形状和文本框。
+                objects = self._drawing_objects(child, part)
+                out.setdefault("objects", []).extend(objects)
+                raw_hints.extend({"type": "drawing", **obj} for obj in objects)
+            elif lname == "pict":
+                # 旧式 VML 图形常承载文本框。
+                objects = self._pict_objects(child)
+                out.setdefault("objects", []).extend(objects)
+                raw_hints.extend({"type": "pict", **obj} for obj in objects)
+            elif lname in {"oMath", "oMathPara"}:
+                # run 内 OMML 公式保留为可读的轻量对象。
+                obj = self._equation_object(child)
+                out.setdefault("objects", []).append(obj)
+                raw_hints.append(obj)
+            elif lname in {"fldChar", "instrText"}:
+                # 字段指令用于目录、页码、交叉引用排查，但不展开成大量内部结构。
+                field_hint: dict[str, Any] = {"type": "field", "node": lname}
+                if lname == "instrText" and child.text:
+                    field_hint["instruction"] = child.text
+                    out.setdefault("objects", []).append(
+                        {"type": "fieldInstruction", "instruction": child.text}
+                    )
+                raw_hints.append(field_hint)
+            elif lname in {"footnoteRef", "endnoteRef", "annotationRef"}:
+                # note/comment 正文里的自编号标记已由 note/comment id 表达，不重复输出。
+                continue
+            elif lname in {"footnoteReference", "endnoteReference"}:
+                # 引用 id 会和 supplemental 中的 notes 正文对齐。
+                note_id = attr(child, "w", "id")
+                ref_type = "footnote" if lname == "footnoteReference" else "endnote"
+                obj = {"type": f"{ref_type}Ref", "id": note_id}
+                out.setdefault("objects", []).append(obj)
+                raw_hints.append(obj)
+            elif lname == "commentReference":
+                # 批注引用只保留 id，正文在 comments.xml 中解析。
+                obj = {"type": "commentRef", "id": attr(child, "w", "id")}
+                out.setdefault("objects", []).append(obj)
+                raw_hints.append(obj)
+            elif lname == "delText":
+                # final 视图默认不读删除文本。
+                self._warn(
+                    "DELETED_TEXT_SKIPPED",
+                    "Encountered deleted text in run; parser skips deleted text in final mode.",
+                    part=part,
+                    block_id=block_id,
+                )
+            else:
+                self._warn(
+                    "UNSUPPORTED_RUN_CHILD",
+                    f"Encountered unsupported run child: {lname}",
+                    part=part,
+                    block_id=block_id,
+                )
+
+        out["text"] = "".join(text_parts)
+        return out
+
+    def _hyperlink_info(self, node: ET.Element, part: str) -> dict[str, Any]:
+        """解析超链接目标，最终 XML 只使用 href/anchor。"""
+        rel_id = attr(node, "r", "id")
+        anchor = attr(node, "w", "anchor")
+        info: dict[str, Any] = {}
+        if rel_id:
+            rel = self.relationships.require(part, rel_id)
+            info["href"] = rel.resolved_target or rel.target
+        if anchor:
+            info["anchor"] = anchor
+        return info
+
+    def _drawing_objects(self, drawing: ET.Element, part: str) -> list[dict[str, Any]]:
+        """从 DrawingML 中提取图片引用、文本框和轻量图形占位。"""
+        placement, container = self._drawing_container(drawing)
+        common = self._drawing_common_attrs(container, placement)
+        objects: list[dict[str, Any]] = []
+
+        for chart in drawing.iter(qn("c", "chart")):
+            # chart 引用指向 word/charts/chart*.xml，正文只挂轻量摘要对象。
+            rel_id = attr(chart, "r", "id")
+            if rel_id:
+                objects.append(self._referenced_object(part, rel_id, "chart", common))
+
+        for rel_ids in drawing.iter(qn("dgm", "relIds")):
+            # SmartArt 的数据模型在 r:dm 指向的 diagram data part 中。
+            rel_id = attr(rel_ids, "r", "dm")
+            if rel_id:
+                objects.append(self._referenced_object(part, rel_id, "smartart", common))
+
+        blip = drawing.find(".//" + qn("a", "blip"))
+        rel_id = attr(blip, "r", "embed") if blip is not None else None
+        if rel_id:
+            asset = self.asset_lookup.get((part, rel_id))
+            if asset is not None:
+                image: dict[str, Any] = {"type": "image", **common}
+                image["assetId"] = asset["id"]
+                if "file" in asset:
+                    image["file"] = asset["file"]
+                if "href" in asset:
+                    image["href"] = asset["href"]
+                objects.append(image)
+            else:
+                # 资源缺失时保留图形占位，避免最终 XML 误指向不存在的图片。
+                objects.append({"type": "drawing", **common})
+
+        for txbx in self._textbox_content_nodes(drawing):
+            # 文本框文字可能是用户直接可见正文，必须进入最终 XML。
+            text = self._container_plain_text(txbx)
+            if text.strip():
+                objects.append({"type": "textbox", "text": text, **common})
+
+        if objects:
+            return objects
+        return [{"type": "drawing", **common}]
+
+    def _referenced_object(
+        self, part: str, rel_id: str, fallback_type: str, common: dict[str, Any]
+    ) -> dict[str, Any]:
+        """读取预解析对象；缺失时降级为轻量占位。"""
+        parsed = self.object_lookup.get((part, rel_id))
+        if parsed is None:
+            return {"type": fallback_type, "id": rel_id, **common}
+        obj = dict(parsed)
+        obj.update(common)
+        return obj
+
+    def _pict_objects(self, pict: ET.Element) -> list[dict[str, Any]]:
+        """从旧式 VML pict 中提取文本框；其它图形保留占位。"""
+        objects: list[dict[str, Any]] = []
+        common: dict[str, Any] = {"placement": "vml"}
+        for shape in pict.iter(qn("v", "shape")):
+            shape_id = shape.get("id")
+            alt = shape.get("alt")
+            if shape_id:
+                common["name"] = shape_id
+            if alt:
+                common["alt"] = alt
+
+        for txbx in self._textbox_content_nodes(pict):
+            text = self._container_plain_text(txbx)
+            if text.strip():
+                objects.append({"type": "textbox", "text": text, **common})
+        if objects:
+            return objects
+        return [{"type": "drawing", **common}]
+
+    def _drawing_container(self, drawing: ET.Element) -> tuple[str, ET.Element | None]:
+        """识别 DrawingML 是 inline 还是 anchor。"""
+        inline = drawing.find(".//" + qn("wp", "inline"))
+        anchor = drawing.find(".//" + qn("wp", "anchor"))
+        if inline is not None:
+            return ("inline", inline)
+        if anchor is not None:
+            return ("anchor", anchor)
+        return ("drawing", None)
+
+    def _drawing_common_attrs(
+        self, container: ET.Element | None, placement: str
+    ) -> dict[str, Any]:
+        """提取图片、形状、文本框共用的轻量辅助信息。"""
+        obj: dict[str, Any] = {"placement": placement}
+        if container is None:
+            return obj
+        doc_pr = container.find(".//" + qn("wp", "docPr"))
+        if doc_pr is not None:
+            name = doc_pr.get("name")
+            descr = doc_pr.get("descr")
+            title = doc_pr.get("title")
+            if name:
+                obj["name"] = name
+            if descr:
+                obj["alt"] = descr
+            if title:
+                obj["title"] = title
+        extent = first_child(container, "wp", "extent")
+        if extent is not None:
+            obj["cx"] = extent.attrib["cx"]
+            obj["cy"] = extent.attrib["cy"]
+        return obj
+
+    def _textbox_content_nodes(self, node: ET.Element) -> list[ET.Element]:
+        """查找 DrawingML/WPS/VML 文本框中的 w:txbxContent。"""
+        return [item for item in node.iter(qn("w", "txbxContent"))]
+
+    def _equation_object(self, node: ET.Element) -> dict[str, Any]:
+        """把 OMML 公式压缩成 LLM 可读的文本对象。"""
+        text = self._math_text(node)
+        return {"type": "equation", "text": text}
+
+    def _math_text(self, node: ET.Element) -> str:
+        """提取 OMML 中显式保存的公式文本。"""
+        parts: list[str] = []
+        for item in node.iter():
+            lname = local_name(item.tag)
+            if lname == "t":
+                parts.append(item.text or "")
+            elif lname == "tab":
+                parts.append("\t")
+            elif lname in {"br", "cr"}:
+                parts.append("\n")
+        return "".join(parts).strip()
+
+    def _container_plain_text(self, node: ET.Element) -> str:
+        """提取文本框内的轻量纯文本，并保留段落/表格分隔。"""
+        parts: list[str] = []
+        for child in node:
+            lname = local_name(child.tag)
+            if lname == "p":
+                text = self._inline_plain_text(child)
+                if text.strip():
+                    parts.append(text)
+            elif lname == "tbl":
+                text = self._table_plain_text(child)
+                if text.strip():
+                    parts.append(text)
+            else:
+                text = self._inline_plain_text(child)
+                if text.strip():
+                    parts.append(text)
+        return "\n".join(parts)
+
+    def _table_plain_text(self, tbl: ET.Element) -> str:
+        """把文本框内表格压缩为行文本。"""
+        rows: list[str] = []
+        for tr in child_elements(tbl, "w", "tr"):
+            cells = [self._container_plain_text(tc) for tc in child_elements(tr, "w", "tc")]
+            row = " | ".join(cell.strip() for cell in cells if cell.strip())
+            if row:
+                rows.append(row)
+        return "\n".join(rows)
+
+    def _inline_plain_text(self, node: ET.Element) -> str:
+        """提取一个节点子树内显式文本。"""
+        parts: list[str] = []
+        for item in node.iter():
+            lname = local_name(item.tag)
+            if lname == "t":
+                parts.append(item.text or "")
+            elif lname == "tab":
+                parts.append("\t")
+            elif lname in {"br", "cr"}:
+                parts.append("\n")
+        return "".join(parts)
+
+    def _mark_page_break(self) -> None:
+        """通知正文解析器当前 block 后需要推进 page hint。"""
+        if self.on_page_break is not None:
+            self.on_page_break()
+
+    def _warn(
+        self,
+        code: str,
+        message: str,
+        part: str | None = None,
+        block_id: str | None = None,
+    ) -> None:
+        """追加解析 warning。"""
+        self.warnings.append(
+            ParseWarning(
+                level="warning",
+                code=code,
+                message=message,
+                part=part,
+                block_id=block_id,
+            )
+        )

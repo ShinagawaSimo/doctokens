@@ -104,8 +104,8 @@ class DocumentBodyParser:
                         blocks.append(block)
                     elem.clear()
                 elif direct_body_child and lname == "tbl":
-                    # 表格作为正文 block 输出，保持与段落混排的顺序。
-                    blocks.append(self.parse_table(elem, "word/document.xml"))
+                    # 表格内可能有换页，parse_table 返回 list（每页一个子表 block）。
+                    blocks.extend(self.parse_table(elem, "word/document.xml"))
                     elem.clear()
                 elif direct_body_child and lname == "sectPr":
                     # 分节符：Word 渲染时总是从新页开始新节。
@@ -171,18 +171,32 @@ class DocumentBodyParser:
         self._pending_page_breaks = 0
         return block
 
-    def parse_table(self, tbl: ET.Element, part: str) -> dict[str, Any]:
-        """解析 Word 表格，保留行列、合并单元格和单元格内 block。"""
-        block_id = self.ids.next()
+    def parse_table(self, tbl: ET.Element, part: str) -> list[dict[str, Any]]:
+        """解析 Word 表格，保留行列、合并单元格和单元格内 block。
+        表格内发生换页时拆分为多个 block，使渲染器能在子表间输出 <page n=N>。"""
         self._order += 1
         # 应用前一个 block 积累的断页数。
         self._page_hint += self._pending_page_breaks
         self._pending_page_breaks = 0
-        page_start = self._page_hint
-        rows: list[dict[str, Any]] = []
+
+        sub_tables: list[dict[str, Any]] = []
+        current_rows: list[dict[str, Any]] = []
+        current_page = self._page_hint
         max_col = 0
 
         for row_index, tr in enumerate(child_elements(tbl, "w", "tr")):
+            # 处理本行前先检查是否有待处理的断页（来自上一行单元格内的 lrpb）。
+            if self._pending_page_breaks > 0:
+                # 当前行之前发生了断页：提交已有行作为一个子表，开始新子表。
+                if current_rows:
+                    sub_tables.append(self._make_table_block(
+                        part, current_page, current_rows, max_col
+                    ))
+                    current_rows = []
+                self._page_hint += self._pending_page_breaks
+                self._pending_page_breaks = 0
+                current_page = self._page_hint
+
             cells: list[dict[str, Any]] = []
             col_index = 0
             is_header = first_child(first_child(tr, "w", "trPr"), "w", "tblHeader") is not None
@@ -209,15 +223,28 @@ class DocumentBodyParser:
             if is_header:
                 # 重复表头对 LLM 理解表格语义有帮助，保留成轻量标记。
                 row["isHeader"] = True
-            rows.append(row)
+            current_rows.append(row)
 
-        self._apply_vertical_merges(rows)
+        # 提交最后一批行。
+        if current_rows:
+            self._apply_vertical_merges(current_rows)
+            sub_tables.append(self._make_table_block(
+                part, current_page, current_rows, max_col
+            ))
+
+        return sub_tables
+
+    def _make_table_block(
+        self, part: str, page: int, rows: list[dict[str, Any]], max_col: int
+    ) -> dict[str, Any]:
+        """构造一个表格 block 字典。"""
+        block_id = self.ids.next()
         return {
             "id": block_id,
             "type": "table",
             "part": part,
             "order": self._order,
-            "page": page_start,
+            "page": page,
             "rows": rows,
             "columnCount": max_col,
         }
@@ -234,8 +261,8 @@ class DocumentBodyParser:
                 if block is not None:
                     blocks.append(block)
             elif child_tag == _TAG_W_TBL:
-                # 嵌套表格递归解析，最终 XML 也保留轻量结构。
-                blocks.append(self.parse_table(child, part))
+                # 嵌套表格递归解析，表内换页也会拆分为多个子表。
+                blocks.extend(self.parse_table(child, part))
         return blocks
 
     def _apply_vertical_merges(self, rows: list[dict[str, Any]]) -> None:

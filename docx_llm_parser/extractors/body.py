@@ -143,6 +143,9 @@ class DocumentBodyParser:
 
         text = "".join(run["text"] for run in runs)
         if not text and not self.options.preserve_empty_paragraphs and not raw_hints:
+            # 空段被过滤，但段内 lrpb 仍需推进页码。
+            self._page_hint += self._pending_page_breaks
+            self._pending_page_breaks = 0
             return None
 
         heading_level = self.styles.resolve_heading_level(style_id)
@@ -173,7 +176,8 @@ class DocumentBodyParser:
 
     def parse_table(self, tbl: ET.Element, part: str) -> list[dict[str, Any]]:
         """解析 Word 表格，保留行列、合并单元格和单元格内 block。
-        表格内发生换页时拆分为多个 block，使渲染器能在子表间输出 <page n=N>。"""
+        表格内发生换页时拆分为多个 block，使渲染器能在子表间输出 <page n=N>。
+        同一行内多个单元格的 lrpb 合并为一次换页判断（按 _page_hint 变化）。"""
         self._order += 1
         # 应用前一个 block 积累的断页数。
         self._page_hint += self._pending_page_breaks
@@ -183,20 +187,10 @@ class DocumentBodyParser:
         current_rows: list[dict[str, Any]] = []
         current_page = self._page_hint
         max_col = 0
+        # 记录处理本行之前的页码，用于判断本行是否触发了换页。
+        page_before_row = self._page_hint
 
         for row_index, tr in enumerate(child_elements(tbl, "w", "tr")):
-            # 处理本行前先检查是否有待处理的断页（来自上一行单元格内的 lrpb）。
-            if self._pending_page_breaks > 0:
-                # 当前行之前发生了断页：提交已有行作为一个子表，开始新子表。
-                if current_rows:
-                    sub_tables.append(self._make_table_block(
-                        part, current_page, current_rows, max_col
-                    ))
-                    current_rows = []
-                self._page_hint += self._pending_page_breaks
-                self._pending_page_breaks = 0
-                current_page = self._page_hint
-
             cells: list[dict[str, Any]] = []
             col_index = 0
             is_header = first_child(first_child(tr, "w", "trPr"), "w", "tblHeader") is not None
@@ -223,7 +217,21 @@ class DocumentBodyParser:
             if is_header:
                 # 重复表头对 LLM 理解表格语义有帮助，保留成轻量标记。
                 row["isHeader"] = True
+
+            # 本行处理后 _page_hint 是否变化？同一行多列 lrpb 只算一次换页。
+            if self._page_hint != page_before_row:
+                if current_rows:
+                    sub_tables.append(self._make_table_block(
+                        part, current_page, current_rows, max_col
+                    ))
+                    current_rows = []
+                # 同一行多单元格 lrpb 合并为一次换页：页码只 +1。
+                self._page_hint = page_before_row + 1
+                self._pending_page_breaks = 0
+                current_page = self._page_hint
+
             current_rows.append(row)
+            page_before_row = self._page_hint
 
         # 提交最后一批行。
         if current_rows:

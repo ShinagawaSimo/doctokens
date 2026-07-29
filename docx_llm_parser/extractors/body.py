@@ -70,7 +70,8 @@ class DocumentBodyParser:
         self.ids = BlockIdAllocator()
         self._order = 0
         self._page_hint = 1
-        self._break_after_current_block = False
+        # 计数器替代布尔：一个段落/表格内可能有多个 lastRenderedPageBreak。
+        self._pending_page_breaks = 0
         self.body_events: list[dict[str, Any]] = []
 
     def parse(self) -> list[dict[str, Any]]:
@@ -107,12 +108,13 @@ class DocumentBodyParser:
                     blocks.append(self.parse_table(elem, "word/document.xml"))
                     elem.clear()
                 elif direct_body_child and lname == "sectPr":
-                    # 分节属性属于后续页码/版式阶段，本阶段仅记录提示。
+                    # 分节符：Word 渲染时总是从新页开始新节。
                     self._warn(
-                        "SECTION_PROPERTIES_SKIPPED",
-                        "Encountered section properties; parser records no section model yet.",
+                        "SECTION_PAGE_BREAK",
+                        "Section break treated as page break.",
                         part="word/document.xml",
                     )
+                    self._pending_page_breaks += 1
                     elem.clear()
 
                 if lname == "body":
@@ -126,8 +128,10 @@ class DocumentBodyParser:
         """解析段落；只有样式大纲级别明确时才输出 heading。"""
         block_id = self.ids.next()
         self._order += 1
+        # 应用前一个 block（如表表格单元格）积累的断页数。
+        self._page_hint += self._pending_page_breaks
+        self._pending_page_breaks = 0
         page_start = self._page_hint
-        self._break_after_current_block = False
 
         style_id = self._paragraph_style_id(p)
         runs, raw_hints = self.inline.paragraph_runs(p, part, block_id, style_id)
@@ -162,14 +166,18 @@ class DocumentBodyParser:
             block["runs"] = runs
         if self.options.include_raw_hints and raw_hints:
             block["rawHints"] = raw_hints
-        if self._break_after_current_block:
-            self._page_hint += 1
+        # lrpb 标志本段内的分页，推进页码供后续 block 使用。
+        self._page_hint += self._pending_page_breaks
+        self._pending_page_breaks = 0
         return block
 
     def parse_table(self, tbl: ET.Element, part: str) -> dict[str, Any]:
         """解析 Word 表格，保留行列、合并单元格和单元格内 block。"""
         block_id = self.ids.next()
         self._order += 1
+        # 应用前一个 block 积累的断页数。
+        self._page_hint += self._pending_page_breaks
+        self._pending_page_breaks = 0
         page_start = self._page_hint
         rows: list[dict[str, Any]] = []
         max_col = 0
@@ -362,8 +370,8 @@ class DocumentBodyParser:
         self.body_events.append(event)
 
     def _mark_page_break(self) -> None:
-        """由 InlineParser 通知当前 block 后推进 page hint。"""
-        self._break_after_current_block = True
+        """由 InlineParser 通知发现 lrpb/手动分页符，递增待处理断页计数。"""
+        self._pending_page_breaks += 1
 
     def _warn(
         self,

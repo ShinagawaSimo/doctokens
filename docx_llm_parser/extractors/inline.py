@@ -49,6 +49,7 @@ from ..core.constants import (
 from ..core.models import ParseOptions, ParseWarning
 from ..core.relationships import RelationshipIndex
 from ..ooxml.formatting import merge_run_formats, parse_run_format, visible_run_format
+from ..ooxml.omml_latex import omath_to_latex
 from ..ooxml.styles import StyleMap
 
 PageBreakCallback = Callable[[], None]
@@ -421,22 +422,9 @@ class InlineParser:
         return [item for item in node.iter(qn("w", "txbxContent"))]
 
     def _equation_object(self, node: ET.Element) -> dict[str, Any]:
-        """把 OMML 公式压缩成 LLM 可读的文本对象。"""
-        text = self._math_text(node)
+        """把 OMML 公式转换为 LaTeX 字符串。LLM 对 LaTeX 数学表达理解极好。"""
+        text = omath_to_latex(node)
         return {"type": "equation", "text": text}
-
-    def _math_text(self, node: ET.Element) -> str:
-        """提取 OMML 中显式保存的公式文本。"""
-        parts: list[str] = []
-        for item in node.iter():
-            lname = local_name(item.tag)
-            if lname == "t":
-                parts.append(item.text or "")
-            elif lname == "tab":
-                parts.append("\t")
-            elif lname in {"br", "cr"}:
-                parts.append("\n")
-        return "".join(parts).strip()
 
     def _container_plain_text(self, node: ET.Element) -> str:
         """提取文本框内的轻量纯文本，并保留段落/表格分隔。"""

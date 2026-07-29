@@ -1,13 +1,13 @@
 # DOCX 底层解析工具 Python 开发文档
 
-版本：v0.7  
-日期：2026-07-29  
+版本：v0.8  
+日期：2026-07-30  
 实现语言：Python 3  
-当前状态：已完成性能优化轮次（方案C），新增预计算标签名、单次遍历子节点、异步 debug 写入、dataclass __slots__ 等优化。对比实验方案B（lxml）因性能劣化（+16%）已放弃。
+当前状态：已完成输出格式切换（HTML5隐式闭合）、图片哈希命名、上下标支持。
 
 ## 1. 开发目标
 
-本工具的目标不是复刻 Word 排版，而是把 `.docx` 中的可读内容转换成大模型可以稳定理解、引用和回答问题的语义 XML。
+本工具的目标不是复刻 Word 排版，而是把 `.docx` 中的可读内容转换成大模型可以稳定理解、引用和回答问题的语义 HTML5 标记。
 
 实际用户可能会问：
 
@@ -96,6 +96,12 @@
 
 26. **lxml 方案实验（已放弃）**：在 `perf/lxml-optimization` 分支上尝试用 lxml.etree 替换 stdlib ElementTree，并使用预编译 `etree.XPath()` 加速深层 XML 查找。结果：大文档（4.5MB）body 解析 295→349ms（+18%），总耗时 392→455ms（+16%）。原因：CPython 3.12 的 stdlib ElementTree 底层已是 C 实现，对简单 iterparse/find 操作足够快；lxml 的 C 扩展调用反而引入额外开销。保留分支作为实验记录。
 
+27. **输出格式切换为 HTML5（v0.8）**：废弃 XML 渲染器（`renderers/xml.py`），切换为 HTML5 隐式闭合格式（`renderers/html5.py`）。块级元素（`<p>`、`<h1>`~`<h6>`、`<tr>`、`<th>`、`<td>`）利用 HTML5 标准隐式闭合规则，遇到下一个块元素自动关闭。inline 元素（`<a>`、`<b>`、`<i>` 等）保留闭合标签。实测大文档 token 节省 31%（275KB→190KB）。提取 `_text_utils.py` 和 `_metrics.py` 共享模块消除渲染器间重复。
+
+28. **图片内容哈希命名（v0.8）**：`extractors/assets.py` 中图片文件命名从 `img1.png` 改为 `img1_{sha256[:8]}.png`，防跨文档文件名冲突。下游工具通过 `img{序号}` 定位文件。资产元数据精简为仅保留 id、file、contentType。
+
+29. **上下标支持（v0.8）**：`ooxml/formatting.py` 新增 `_read_vert_align()` 解析 `w:vertAlign` 元素。渲染器输出 `<sup>`/`<sub>` 标签。实测大文档输出 181 处 `<sup>`、32 处 `<sub>`。
+
 **性能基线（4.5MB docx，debug=False）：**
 
 | 指标 | v0.6 (优化前) | v0.7 (优化后) | 变化 |
@@ -178,43 +184,44 @@ docx_llm_parser/
 最终只输出：
 
 ```text
-out/<docx_stem>/parsed.xml
+out/<docx_stem>/parsed.html
 ```
 
-XML 结构示例：
+HTML5 隐式闭合结构（块级元素无需 `</p>`、`</h2>`、`</td>` 等闭合标签）：
 
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<document source="sample.docx" format="docx" pageModel="ooxml-hints">
-  <body>
-    <p id="b1" page="1">第一段正文。</p>
-    <p id="b2" page="1">带<link href="https://example.com">链接</link>的段落。</p>
-    <p id="b3" page="1">二．	摄影拼接</p>
-    <p id="b4" page="1"><b>粗体段落</b>，以及<color value="#FF0000">红色文字</color>。</p>
-    <p id="b5" page="1">图形中的文字：<textbox placement="inline" alt="说明">文本框内容</textbox></p>
-    <p id="b6" page="1">公式：<eq>x+1=y</eq></p>
-    <p id="b7" page="1"><chart id="chart1" kind="bar" title="人口趋势" series="1" points="2"><series name="人群A" points="2" min="1.5" max="2.5" preview="一期=1.5; 二期=2.5" /></chart></p>
-    <p id="b8" page="1"><smartart id="smartart1" nodes="2" links="1"><node n="1">采集</node><node n="2">分析</node><link-edge from="1" to="2" kind="parOf" /></smartart></p>
-    <table id="b9" page="1" rows="1" cols="2">
-      <row n="1">
-        <cell c="1">姓名</cell>
-        <cell c="2">角色<nested-table rows="1" cols="1"><row n="1"><cell c="1">嵌套信息</cell></row></nested-table></cell>
-      </row>
-    </table>
-  </body>
-  <assets>
-    <image id="img1" file="assets/img1.png" contentType="image/png" sizeBytes="12345" />
-  </assets>
-  <supplemental>
-    <footnotes>
-      <note id="1">脚注正文。</note>
-    </footnotes>
-    <comments>
-      <comment id="2" author="Alice">批注正文。</comment>
-    </comments>
-  </supplemental>
-</document>
+```html
+<!-- source="sample.docx" -->
+
+<p i=b1 g=1>第一段正文。
+<p i=b2 g=1>带<a h=https://example.com>链接</a>的段落。
+<h2 i=b3 g=1>二．摄影拼接
+<p i=b4 g=1><b>粗体段落</b>，以及<c v=#FF0000>红色文字</c>。
+<p i=b5 g=1>图形中的文字：<tb alt=说明>文本框内容</tb>
+<p i=b6 g=1>公式：<eq>x+1=y</eq>
+<p i=b7 g=1><chart i=c1 k=bar t=人口趋势 s=1 p=2><s n=人群A p=2 min=1.5 max=2.5 pv=一期=1.5; 二期=2.5/></chart>
+<p i=b8 g=1><sa i=s1 n=2 l=1><n i=1>采集</n><n i=2>分析</n><e f=1 t=2 k=parOf/></sa>
+<table i=b9 g=1>
+<tr h>
+<th>姓名
+<th>角色
+<tr>
+<td>张三
+<td>作者<ntable r=1 c=1><r><td>嵌套信息
+
+<!-- assets -->
+<img i=img1 f=assets/img1_a3f2b9c1.png m=image/png>
+
+<!-- supplemental -->
+<fn id=1>脚注正文。
+<cm id=2 a=Alice>批注正文。
 ```
+
+格式要点：
+- 块级元素隐式闭合（HTML5 标准行为），新块开始 = 前一个块结束
+- 单字符属性名省 token：`i`=id, `g`=page, `h`=href, `v`=value, `s`=size/span, `f`=file, `m`=MIME type
+- inline 元素仍需闭合（`<a>...</a>`、`<b>...</b>` 等），因为格式化范围必须标记边界
+- 图片文件以内容哈希命名（`img1_a3f2b9c1.png`），防跨文档冲突
+- 实测 4.5MB docx：XML 275KB → HTML5 190KB（-31% token）
 
 ### 4.2 为什么保留 `id` 和 `page`
 

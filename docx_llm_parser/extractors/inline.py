@@ -6,7 +6,46 @@ from collections.abc import Callable
 from typing import Any
 from xml.etree import ElementTree as ET
 
-from ..core.constants import attr, child_elements, first_child, local_name, qn
+from ..core.constants import (
+    _TAG_A_BLIP,
+    _TAG_C_CHART,
+    _TAG_DGM_REL_IDS,
+    _TAG_M_OMATH,
+    _TAG_M_OMATH_PARA,
+    _TAG_W_ANNOTATION_REF,
+    _TAG_W_BR,
+    _TAG_W_COMMENT_REFERENCE,
+    _TAG_W_CR,
+    _TAG_W_DEL,
+    _TAG_W_DEL_TEXT,
+    _TAG_W_DRAWING,
+    _TAG_W_ENDNOTE_REF,
+    _TAG_W_ENDNOTE_REFERENCE,
+    _TAG_W_FLD_CHAR,
+    _TAG_W_FOOTNOTE_REF,
+    _TAG_W_FOOTNOTE_REFERENCE,
+    _TAG_W_HYPERLINK,
+    _TAG_W_INS,
+    _TAG_W_INSTR_TEXT,
+    _TAG_W_LAST_RENDERED_PAGE_BREAK,
+    _TAG_W_PICT,
+    _TAG_W_R,
+    _TAG_W_RPR,
+    _TAG_W_R_STYLE,
+    _TAG_W_SDT,
+    _TAG_W_SDT_CONTENT,
+    _TAG_W_SMART_TAG,
+    _TAG_W_T,
+    _TAG_W_TAB,
+    _TAG_W_TC,
+    _TAG_W_TR,
+    attr,
+    child_elements,
+    first_child,
+    local_name,
+    local_name_fast,
+    qn,
+)
 from ..core.models import ParseOptions, ParseWarning
 from ..core.relationships import RelationshipIndex
 from ..ooxml.formatting import merge_run_formats, parse_run_format, visible_run_format
@@ -60,7 +99,8 @@ class InlineParser:
         runs: list[dict[str, Any]],
     ) -> None:
         """递归处理段落内联节点，保留 Word 明确给出的结构。"""
-        lname = local_name(node.tag)
+        # 优化：使用 local_name_fast 避免 split 内存分配（热路径每秒数千次调用）。
+        lname = local_name_fast(node.tag)
         if lname == "pPr":
             # 段落属性由外层 block parser 处理。
             return
@@ -111,7 +151,7 @@ class InlineParser:
                 block_id=block_id,
             )
             if self.options.revision_mode in {"original", "review"}:
-                text = "".join((item.text or "") for item in node.iter(qn("w", "delText")))
+                text = "".join((item.text or "") for item in node.iter(_TAG_W_DEL_TEXT))
                 if text:
                     run = {"text": text}
                     if self.options.revision_mode == "review":
@@ -156,65 +196,48 @@ class InlineParser:
         paragraph_style_id: str | None,
         raw_hints: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        """解析 run 的可见文本、必要格式和内联对象。"""
+        """解析 run 的可见文本、必要格式和内联对象。
+        优化：单次遍历 run 的所有子节点，按标签名分发处理。
+        原来需要 first_child(run, 'rPr') + child 循环两次扫描，
+        现在合并为一次迭代。"""
         text_parts: list[str] = []
-        rpr = first_child(run, "w", "rPr")
+        rpr: ET.Element | None = None
         out: dict[str, Any] = {"text": ""}
 
-        rstyle = first_child(rpr, "w", "rStyle")
-        run_style_id = attr(rstyle, "w", "val") if rstyle is not None else None
-        if run_style_id is not None:
-            # styleId 只进入 debug，不进入最终 XML。
-            out["styleId"] = run_style_id
-        run_format = merge_run_formats(
-            self.styles.resolve_run_format(paragraph_style_id),
-            self.styles.resolve_run_format(run_style_id),
-            parse_run_format(rpr),
-        )
-        visible_format = visible_run_format(run_format)
-        if visible_format:
-            out["format"] = visible_format
-
+        # 单次遍历：同时收集 rPr 和处理文本/对象子节点。
         for child in run:
-            lname = local_name(child.tag)
-            if lname == "rPr":
-                # run 属性已经在前面合并。
-                continue
-            if lname == "t":
-                # xml:space=preserve 时必须保留原始空格。
+            # 优化：使用预计算标签名比对，避免重复 qn() 调用。
+            child_tag = child.tag
+            if child_tag == _TAG_W_RPR:
+                rpr = child
+            elif child_tag == _TAG_W_T:
                 if attr(child, "xml", "space") == "preserve":
                     out["preserveSpace"] = True
                 text_parts.append(child.text or "")
-            elif lname == "tab":
-                # 制表符对列表式文本和伪表格有语义价值。
+            elif child_tag == _TAG_W_TAB:
                 text_parts.append("\t")
-            elif lname in {"br", "cr"}:
-                # 普通换行转为换行符；分页符同时推动页码 hint。
+            elif child_tag == _TAG_W_BR or child_tag == _TAG_W_CR:
                 text_parts.append("\n")
                 if attr(child, "w", "type") == "page":
                     raw_hints.append({"type": "manualPageBreak"})
                     self._mark_page_break()
-            elif lname == "lastRenderedPageBreak":
-                # 这是 Word 保存过的渲染页线索，不等同于可靠页码。
+            elif child_tag == _TAG_W_LAST_RENDERED_PAGE_BREAK:
                 raw_hints.append({"type": "lastRenderedPageBreak"})
                 self._mark_page_break()
-            elif lname == "drawing":
-                # DrawingML 中可能同时包含图片、形状和文本框。
+            elif child_tag == _TAG_W_DRAWING:
                 objects = self._drawing_objects(child, part)
                 out.setdefault("objects", []).extend(objects)
                 raw_hints.extend({"type": "drawing", **obj} for obj in objects)
-            elif lname == "pict":
-                # 旧式 VML 图形常承载文本框。
+            elif child_tag == _TAG_W_PICT:
                 objects = self._pict_objects(child)
                 out.setdefault("objects", []).extend(objects)
                 raw_hints.extend({"type": "pict", **obj} for obj in objects)
-            elif lname in {"oMath", "oMathPara"}:
-                # run 内 OMML 公式保留为可读的轻量对象。
+            elif child_tag in (_TAG_M_OMATH, _TAG_M_OMATH_PARA):
                 obj = self._equation_object(child)
                 out.setdefault("objects", []).append(obj)
                 raw_hints.append(obj)
-            elif lname in {"fldChar", "instrText"}:
-                # 字段指令用于目录、页码、交叉引用排查，但不展开成大量内部结构。
+            elif child_tag in (_TAG_W_FLD_CHAR, _TAG_W_INSTR_TEXT):
+                lname = local_name_fast(child_tag)
                 field_hint: dict[str, Any] = {"type": "field", "node": lname}
                 if lname == "instrText" and child.text:
                     field_hint["instruction"] = child.text
@@ -222,22 +245,20 @@ class InlineParser:
                         {"type": "fieldInstruction", "instruction": child.text}
                     )
                 raw_hints.append(field_hint)
-            elif lname in {"footnoteRef", "endnoteRef", "annotationRef"}:
-                # note/comment 正文里的自编号标记已由 note/comment id 表达，不重复输出。
+            elif child_tag in (_TAG_W_FOOTNOTE_REF, _TAG_W_ENDNOTE_REF, _TAG_W_ANNOTATION_REF):
                 continue
-            elif lname in {"footnoteReference", "endnoteReference"}:
-                # 引用 id 会和 supplemental 中的 notes 正文对齐。
+            elif child_tag in (_TAG_W_FOOTNOTE_REFERENCE, _TAG_W_ENDNOTE_REFERENCE):
                 note_id = attr(child, "w", "id")
+                lname = local_name_fast(child_tag)
                 ref_type = "footnote" if lname == "footnoteReference" else "endnote"
                 obj = {"type": f"{ref_type}Ref", "id": note_id}
                 out.setdefault("objects", []).append(obj)
                 raw_hints.append(obj)
-            elif lname == "commentReference":
-                # 批注引用只保留 id，正文在 comments.xml 中解析。
+            elif child_tag == _TAG_W_COMMENT_REFERENCE:
                 obj = {"type": "commentRef", "id": attr(child, "w", "id")}
                 out.setdefault("objects", []).append(obj)
                 raw_hints.append(obj)
-            elif lname == "delText":
+            elif child_tag == _TAG_W_DEL_TEXT:
                 # final 视图默认不读删除文本。
                 self._warn(
                     "DELETED_TEXT_SKIPPED",
@@ -245,13 +266,31 @@ class InlineParser:
                     part=part,
                     block_id=block_id,
                 )
+            elif child_tag == _TAG_W_R_STYLE:
+                # rStyle 由下方 rPr 段落统一用 first_child 提取，此处仅跳过。
+                pass
             else:
                 self._warn(
                     "UNSUPPORTED_RUN_CHILD",
-                    f"Encountered unsupported run child: {lname}",
+                    f"Encountered unsupported run child: {local_name_fast(child_tag)}",
                     part=part,
                     block_id=block_id,
                 )
+
+        # 在遍历完子节点后，解析 rPr（前面已在循环中找到）。
+        if rpr is not None:
+            rstyle = first_child(rpr, "w", "rStyle")
+            run_style_id = attr(rstyle, "w", "val") if rstyle is not None else None
+            if run_style_id is not None:
+                out["styleId"] = run_style_id
+            run_format = merge_run_formats(
+                self.styles.resolve_run_format(paragraph_style_id),
+                self.styles.resolve_run_format(run_style_id),
+                parse_run_format(rpr),
+            )
+            visible_format = visible_run_format(run_format)
+            if visible_format:
+                out["format"] = visible_format
 
         out["text"] = "".join(text_parts)
         return out

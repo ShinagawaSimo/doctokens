@@ -32,6 +32,8 @@ class DocxParser:
         output_dir = opts.output_dir
         debug_dir = output_dir / "debug"
         debug = DebugWriter(debug_dir, enabled=opts.debug)
+        # 优化：开启异步 debug 写入，JSON 序列化和磁盘 I/O 在后台线程完成。
+        debug.enable_async()
         metrics = MetricsRecorder()
         metrics.set_counter("inputBytes", path.stat().st_size)
 
@@ -132,8 +134,12 @@ class DocxParser:
             self._write_debug(
                 debug, zip_index, content_types, relationships, style_rows, body_parser, parsed
             )
+        # 等待异步 debug 写入全部完成，确保数据落盘后再写 metrics。
+        debug.wait_all()
         parsed.metrics = metrics.snapshot()
         self._write_metrics_debug(debug, parsed)
+        # 等待 metrics 异步写入完成后返回。
+        debug.wait_all()
         return parsed
 
     def _write_debug(

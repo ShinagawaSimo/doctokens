@@ -5,7 +5,19 @@ from __future__ import annotations
 from typing import Any
 from xml.etree import ElementTree as ET
 
-from ..core.constants import attr, child_elements, first_child, local_name
+from ..core.constants import (
+    _TAG_W_BODY,
+    _TAG_W_P,
+    _TAG_W_PPR,
+    _TAG_W_TBL,
+    _TAG_W_TC,
+    _TAG_W_TR,
+    attr,
+    child_elements,
+    first_child,
+    local_name,
+    local_name_fast,
+)
 from ..core.models import ParseOptions, ParseWarning
 from ..core.package import PackageReader
 from ..core.relationships import RelationshipIndex
@@ -69,7 +81,8 @@ class DocumentBodyParser:
             stack: list[str] = []
             body_depth: int | None = None
             for event, elem in parser:
-                lname = local_name(elem.tag)
+                # 优化：使用 local_name_fast 避免 split 内存分配。
+                lname = local_name_fast(elem.tag)
                 if event == "start":
                     # start 事件只维护当前位置栈，不构造完整 DOM。
                     stack.append(lname)
@@ -202,16 +215,17 @@ class DocumentBodyParser:
         }
 
     def _parse_cell_blocks(self, tc: ET.Element, part: str) -> list[dict[str, Any]]:
-        """解析单元格内部内容；单元格可以包含段落和嵌套表格。"""
+        """解析单元格内部内容；单元格可以包含段落和嵌套表格。
+        优化：使用预计算标签名直接比对，避免每次调用 local_name。"""
         blocks: list[dict[str, Any]] = []
         for child in tc:
-            lname = local_name(child.tag)
-            if lname == "p":
+            child_tag = child.tag
+            if child_tag == _TAG_W_P:
                 # 单元格段落保留为嵌套 block，避免丢失多段结构。
                 block = self.parse_paragraph(child, part)
                 if block is not None:
                     blocks.append(block)
-            elif lname == "tbl":
+            elif child_tag == _TAG_W_TBL:
                 # 嵌套表格递归解析，最终 XML 也保留轻量结构。
                 blocks.append(self.parse_table(child, part))
         return blocks

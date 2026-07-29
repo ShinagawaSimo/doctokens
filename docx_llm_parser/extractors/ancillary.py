@@ -5,7 +5,21 @@ from __future__ import annotations
 from typing import Any
 from xml.etree import ElementTree as ET
 
-from ..core.constants import attr, child_elements, first_child, local_name
+from ..core.constants import (
+    _TAG_W_P,
+    _TAG_W_PPR,
+    _TAG_W_P_STYLE,
+    _TAG_W_SDT,
+    _TAG_W_SDT_CONTENT,
+    _TAG_W_SMART_TAG,
+    _TAG_W_TBL,
+    _TAG_W_TC,
+    _TAG_W_TR,
+    attr,
+    child_elements,
+    first_child,
+    local_name_fast,
+)
 from ..core.models import ParseOptions, ParseWarning
 from ..core.package import PackageReader
 from ..core.relationships import RelationshipIndex
@@ -144,13 +158,14 @@ class AncillaryParser:
             return None
 
     def _container_content(self, node: ET.Element, part: str) -> dict[str, Any]:
-        """提取容器内段落、表格和轻量 inline 对象。"""
+        """提取容器内段落、表格和轻量 inline 对象。
+        优化：使用预计算标签名直接比对，避免热路径中的 qn()/local_name 调用。"""
         text_parts: list[str] = []
         runs: list[dict[str, Any]] = []
         raw_hints: list[dict[str, Any]] = []
         for child in node:
-            lname = local_name(child.tag)
-            if lname == "p":
+            child_tag = child.tag
+            if child_tag == _TAG_W_P:
                 # 补充区域也按段落解析，避免丢失链接和格式。
                 p_runs, p_hints = self.inline.paragraph_runs(
                     child, part, self._next_block_id(part), self._paragraph_style_id(child)
@@ -162,7 +177,7 @@ class AncillaryParser:
                     runs.extend(p_runs)
                     text_parts.append(p_text)
                     raw_hints.extend(p_hints)
-            elif lname == "tbl":
+            elif child_tag == _TAG_W_TBL:
                 # 补充区域内表格压缩为行文本，但保留单元格里的 inline 对象。
                 table_content = self._table_content(child, part)
                 if table_content["text"].strip() or self._has_objects(table_content["runs"]):
@@ -171,7 +186,7 @@ class AncillaryParser:
                     runs.extend(table_content["runs"])
                     text_parts.append(table_content["text"])
                     raw_hints.extend(table_content["rawHints"])
-            elif lname in {"sdt", "sdtContent", "smartTag"}:
+            elif child_tag in (_TAG_W_SDT, _TAG_W_SDT_CONTENT, _TAG_W_SMART_TAG):
                 # 包装层继续向内提取可读内容。
                 nested = self._container_content(child, part)
                 if nested["text"].strip() or self._has_objects(nested["runs"]):

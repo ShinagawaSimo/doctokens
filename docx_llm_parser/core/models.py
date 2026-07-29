@@ -22,7 +22,7 @@ class ParseOptions:
     max_total_uncompressed_bytes: int = 500 * 1024 * 1024
 
 
-@dataclass
+@dataclass(slots=True)
 class ParseWarning:
     """解析过程中可恢复问题的记录。"""
 
@@ -33,7 +33,7 @@ class ParseWarning:
     block_id: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class RelationshipRecord:
     """OPC relationship 记录。"""
 
@@ -45,7 +45,7 @@ class RelationshipRecord:
     resolved_target: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class StyleRecord:
     """Word 样式摘要。"""
 

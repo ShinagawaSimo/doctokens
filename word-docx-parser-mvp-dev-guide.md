@@ -1,10 +1,9 @@
 # DOCX 底层解析工具 Python 开发文档
 
-版本：v0.6  
-日期：2026-07-28  
+版本：v0.7  
+日期：2026-07-29  
 实现语言：Python 3  
-当前状态：已实现第 1-8 步的 MVP 骨架，并完成首轮功能增强：共享 inline 解析、supplemental 富文本复用、文本框、OMML 公式、复杂表格轻量结构、图表/SmartArt 轻量解析和 debug 阶段计时。  
-当前要求：debug 模式暂时常开；最终产物改为语义 XML；暂不保留 Markdown。
+当前状态：已完成性能优化轮次（方案C），新增预计算标签名、单次遍历子节点、异步 debug 写入、dataclass __slots__ 等优化。对比实验方案B（lxml）因性能劣化（+16%）已放弃。
 
 ## 1. 开发目标
 
@@ -82,6 +81,28 @@
 18. 样式热路径优化：`StyleMap` 对 heading level、numbering、run format 解析做只读缓存，避免大文档中重复递归样式继承链。
 19. 图表轻量解析：解析实际 relationship 指向的 `word/charts/chart*.xml`，最终 XML 输出 `<chart>`，包含图表类型、标题、系列数、点数、系列名、min/max 和少量缓存点 preview。
 20. SmartArt 轻量解析：解析实际 relationship 指向的 `word/diagrams/data*.xml`，最终 XML 输出 `<smartart>`，包含节点文本和节点间连接关系。
+
+### 2.1 性能优化（v0.7，2026-07-29）
+
+21. **预计算标签名**：`core/constants.py` 新增 50+ 个常用 `qn()` 标签的模块级常量（`_TAG_W_P`、`_TAG_W_RPR` 等），避免热路径中每次 `qn(prefix, local)` 做 `f"{{{ns}}}{local}"` 字符串拼接。
+
+22. **单次遍历子节点**：`extractors/inline.py:_parse_run()` 原来先 `first_child(run, "rPr")` 扫描一遍子节点，再 `for child in run` 扫描第二遍。现在合并为一次迭代，子节点标签用预计算常量直接比对（`child_tag == _TAG_W_RPR`）。
+
+23. **local_name_fast**：新增 `local_name_fast(tag)`，用 `rfind("}")` + 切片替代 `rsplit("}", 1)[1]`，避免 split 产生的 list 内存分配。body iterparse 循环中每次 event 调用此函数，每秒数千次。
+
+24. **异步 debug 写入**：`core/debug.py:DebugWriter` 新增 `enable_async()`/`wait_all()` 模式。debug JSON 序列化和磁盘 I/O 提交到 `ThreadPoolExecutor(max_workers=1)` 后台线程。debug_write 阶段从 218ms 降至 2ms（异步提交耗时）。
+
+25. **dataclass __slots__**：`StyleRecord`、`RelationshipRecord`、`ParseWarning` 使用 `@dataclass(slots=True)`（Python 3.10+），减少每个实例的 `__dict__` 内存分配。
+
+26. **lxml 方案实验（已放弃）**：在 `perf/lxml-optimization` 分支上尝试用 lxml.etree 替换 stdlib ElementTree，并使用预编译 `etree.XPath()` 加速深层 XML 查找。结果：大文档（4.5MB）body 解析 295→349ms（+18%），总耗时 392→455ms（+16%）。原因：CPython 3.12 的 stdlib ElementTree 底层已是 C 实现，对简单 iterparse/find 操作足够快；lxml 的 C 扩展调用反而引入额外开销。保留分支作为实验记录。
+
+**性能基线（4.5MB docx，debug=False）：**
+
+| 指标 | v0.6 (优化前) | v0.7 (优化后) | 变化 |
+|---|---|---|---|
+| body 解析 | 307ms | 295ms | -4% |
+| 总耗时 | 404ms | 392ms | -3% |
+| debug_write | 218ms | 2ms (异步) | -99% |
 
 仍未实现或只做轻量记录：
 

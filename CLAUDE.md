@@ -92,21 +92,15 @@ Do NOT add defensive defaults for internal fields like `block["type"]`, `block["
 ```
 out/<docx_stem>/
   parsed.html         # Final LLM-readable HTML5 semantic markup
-  assets/             # Exported embedded images (img1.png, img2.jpg, ...)
-  debug/
-    zip_index.json
-    content_types.json
-    relationships.json
+  assets/             # Exported embedded images (img1_hash.png, ...)
+  .debug/             # Debug artifacts (hidden directory)
+    blocks.json       # Parsed block structure
+    events.jsonl      # Body parse event stream
+    manifest.json     # Assets + embedded objects + ancillary + summary
+    package.json      # ZIP index + content types + relationships
     styles.json
     numbering.json
-    internal_blocks.json
-    assets.json
-    embedded_objects.json    # charts + smartarts
-    ancillary.json           # headers/footers/footnotes/endnotes/comments
-    body_events.jsonl
-    warnings.json
-    summary.json
-    metrics.json             # per-stage timing + output size counters
+    metrics.json      # Per-stage timing + output size counters
 ```
 
 ## Research Documents

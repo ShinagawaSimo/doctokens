@@ -30,7 +30,7 @@ class DocxParser:
         opts = options or ParseOptions(output_dir=Path("out") / path.stem)
         warnings: list[ParseWarning] = []
         output_dir = opts.output_dir
-        debug_dir = output_dir / "debug"
+        debug_dir = output_dir / ".debug"
         debug = DebugWriter(debug_dir, enabled=opts.debug)
         # 优化：开启异步 debug 写入，JSON 序列化和磁盘 I/O 在后台线程完成。
         debug.enable_async()
@@ -154,51 +154,56 @@ class DocxParser:
     ) -> None:
         """输出调试中间结果；失败时只追加 warning，不影响主输出。"""
         try:
-            debug.write_json("zip_index.json", zip_index)
-            debug.write_json("content_types.json", content_types)
-            debug.write_json("relationships.json", relationships.to_debug_list())
+            # 包结构：ZIP索引 + Content Types + Relationships 合并
+            debug.write_json(
+                "package.json",
+                {
+                    "zipIndex": zip_index,
+                    "contentTypes": content_types,
+                    "relationships": relationships.to_debug_list(),
+                },
+            )
             debug.write_json("styles.json", style_rows)
             debug.write_json("numbering.json", parsed.numbering)
-            debug.write_json("internal_blocks.json", parsed.blocks)
-            debug.write_json("assets.json", parsed.assets)
+            # 核心：解析后的正文块结构
+            debug.write_json("blocks.json", parsed.blocks)
+            # 资产与补充内容合并
             debug.write_json(
-                "embedded_objects.json",
+                "manifest.json",
                 {
-                    "charts": parsed.charts,
-                    "smartarts": parsed.smartarts,
+                    "assets": parsed.assets,
+                    "embedded": {
+                        "charts": parsed.charts,
+                        "smartarts": parsed.smartarts,
+                    },
+                    "ancillary": {
+                        "headers": parsed.headers,
+                        "footers": parsed.footers,
+                        "footnotes": parsed.footnotes,
+                        "endnotes": parsed.endnotes,
+                        "comments": parsed.comments,
+                    },
+                    "summary": {
+                        "blockCount": len(parsed.blocks),
+                        "assetCount": len(parsed.assets),
+                        "chartCount": len(parsed.charts),
+                        "smartartCount": len(parsed.smartarts),
+                        "headerCount": len(parsed.headers),
+                        "footerCount": len(parsed.footers),
+                        "footnoteCount": len(parsed.footnotes),
+                        "endnoteCount": len(parsed.endnotes),
+                        "commentCount": len(parsed.comments),
+                        "styleCount": len(parsed.styles),
+                        "relationshipCount": len(parsed.relationships),
+                        "warningCount": len(parsed.warnings),
+                        "packageInfo": parsed.package_info,
+                    },
                 },
             )
-            debug.write_json(
-                "ancillary.json",
-                {
-                    "headers": parsed.headers,
-                    "footers": parsed.footers,
-                    "footnotes": parsed.footnotes,
-                    "endnotes": parsed.endnotes,
-                    "comments": parsed.comments,
-                },
-            )
-            debug.write_jsonl("body_events.jsonl", body_parser.body_events)
+            # 事件流
+            debug.write_jsonl("events.jsonl", body_parser.body_events)
+            # 警告与指标
             debug.write_json("warnings.json", [asdict(item) for item in parsed.warnings])
-            debug.write_json(
-                "summary.json",
-                {
-                    "blockCount": len(parsed.blocks),
-                    "relationshipCount": len(parsed.relationships),
-                    "styleCount": len(parsed.styles),
-                    "numberingInstanceCount": len(parsed.numbering["nums"]),
-                    "assetCount": len(parsed.assets),
-                    "chartCount": len(parsed.charts),
-                    "smartartCount": len(parsed.smartarts),
-                    "headerCount": len(parsed.headers),
-                    "footerCount": len(parsed.footers),
-                    "footnoteCount": len(parsed.footnotes),
-                    "endnoteCount": len(parsed.endnotes),
-                    "commentCount": len(parsed.comments),
-                    "warningCount": len(parsed.warnings),
-                    "packageInfo": parsed.package_info,
-                },
-            )
         except Exception as exc:
             parsed.warnings.append(
                 ParseWarning(

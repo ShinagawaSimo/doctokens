@@ -4,14 +4,23 @@ import argparse
 from pathlib import Path
 
 from docx_llm_parser import DocxParser, ParseOptions
-from docx_llm_parser.renderers.xml import write_outputs
+from docx_llm_parser.renderers.html5 import write_outputs as write_html5
+from docx_llm_parser.renderers.xml import write_outputs as write_xml
 
 
 def main() -> int:
-    """命令行入口：解析单个 DOCX 并输出语义 XML/debug。"""
-    parser = argparse.ArgumentParser(description="Parse DOCX into LLM-readable semantic XML.")
+    """命令行入口：解析单个 DOCX 并输出语义标记。"""
+    parser = argparse.ArgumentParser(
+        description="Parse DOCX into LLM-readable semantic markup."
+    )
     parser.add_argument("docx", type=Path, help="Input .docx file")
     parser.add_argument("--out", type=Path, default=Path("out"), help="Output base directory")
+    parser.add_argument(
+        "--format",
+        choices=["html5", "xml"],
+        default="html5",
+        help="Output format: html5 (HTML5 implicit close, ~51%% token savings) or xml (current XML)",
+    )
     parser.add_argument("--keep-empty-paragraphs", action="store_true")
     parser.add_argument("--no-runs", action="store_true")
     parser.add_argument("--no-raw-hints", action="store_true")
@@ -36,12 +45,18 @@ def main() -> int:
     )
 
     parsed = DocxParser().parse(args.docx, options)
-    paths = write_outputs(parsed, output_dir)
+    # 根据 --format 选择渲染器
+    if args.format == "html5":
+        paths = write_html5(parsed, output_dir)
+        output_key = "html"
+    else:
+        paths = write_xml(parsed, output_dir)
+        output_key = "xml"
 
     if not args.quiet:
         # 控制台只打印摘要，详细中间结果在 debug 目录。
         print(f"[OK] Parsed {args.docx}")
-        print(f"[OK] XML: {paths['xml']}")
+        print(f"[OK] Output ({args.format}): {paths[output_key]}")
         print(f"[OK] Debug: {parsed.debug_dir}")
         print(
             "[OK] Summary: "

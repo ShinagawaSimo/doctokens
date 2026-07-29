@@ -4,4 +4,10 @@ from .concurrency import BatchParseResult, parse_many
 from .core.models import ParseOptions, ParsedDocument
 from .parser import DocxParser
 
-__all__ = ["BatchParseResult", "DocxParser", "ParseOptions", "ParsedDocument", "parse_many"]
+__all__ = [
+    "BatchParseResult",
+    "DocxParser",
+    "ParseOptions",
+    "ParsedDocument",
+    "parse_many",
+]

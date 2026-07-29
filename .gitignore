@@ -7,3 +7,4 @@ out_batch_test/
 dist/
 build/
 .eggs/
+~$*

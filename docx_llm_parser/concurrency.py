@@ -10,8 +10,7 @@ from typing import Iterable, cast
 
 from .core.models import ParseOptions
 from .parser import DocxParser
-from .renderers.html5 import write_outputs as write_html5
-from .renderers.xml import write_outputs as write_xml
+from .renderers.html5 import write_outputs
 
 
 @dataclass(frozen=True)
@@ -21,7 +20,7 @@ class BatchParseResult:
     docx: Path
     output_dir: Path
     ok: bool
-    xml_path: Path | None = None
+    output_path: Path | None = None
     debug_dir: Path | None = None
     error: str | None = None
 
@@ -32,7 +31,6 @@ def parse_many(
     *,
     max_workers: int | None = None,
     revision_mode: str = "final",
-    output_format: str = "html5",
 ) -> list[BatchParseResult]:
     """并发解析多篇 DOCX，并保持返回结果与输入顺序一致。"""
     paths = [Path(item) for item in docx_paths]
@@ -41,10 +39,9 @@ def parse_many(
 
     worker_count = max_workers or min(32, (os.cpu_count() or 1) + 4, len(paths))
     results: list[BatchParseResult | None] = [None] * len(paths)
-    write_outputs = write_html5 if output_format == "html5" else write_xml
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         futures = {
-            executor.submit(_parse_one, path, Path(output_base), revision_mode, write_outputs): index
+            executor.submit(_parse_one, path, Path(output_base), revision_mode): index
             for index, path in enumerate(paths)
         }
         for future in as_completed(futures):
@@ -55,7 +52,7 @@ def parse_many(
 
 
 def _parse_one(
-    docx_path: Path, output_base: Path, revision_mode: str, write_outputs
+    docx_path: Path, output_base: Path, revision_mode: str
 ) -> BatchParseResult:
     """解析单篇文档；异常被收敛为批量结果，便于其它文档继续完成。"""
     output_dir = output_base / docx_path.stem
@@ -64,12 +61,11 @@ def _parse_one(
         options = ParseOptions(debug=True, revision_mode=revision_mode, output_dir=output_dir)
         parsed = DocxParser().parse(docx_path, options)
         paths = write_outputs(parsed, output_dir)
-        output_key = "html" if "html" in paths else "xml"
         return BatchParseResult(
             docx=docx_path,
             output_dir=output_dir,
             ok=True,
-            xml_path=Path(paths[output_key]),
+            output_path=Path(paths["html"]),
             debug_dir=Path(parsed.debug_dir),
         )
     except Exception as exc:

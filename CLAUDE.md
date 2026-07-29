@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A DOCX-to-semantic-XML parser that converts `.docx` files into LLM-readable XML. Pure Python 3, zero external dependencies — relies entirely on stdlib (`zipfile`, `xml.etree.ElementTree`, `dataclasses`, `argparse`, `pathlib`, `html`).
+A DOCX-to-semantic-HTML5 parser that converts `.docx` files into LLM-readable HTML5 markup (with implicit close tags for token efficiency). Pure Python 3, zero external dependencies — relies entirely on stdlib.
 
 ## Commands
 
 ```bash
 # Parse a single .docx
-python docx_parser_cli.py <file.docx>                          # output to out/<stem>/parsed.xml
+python docx_parser_cli.py <file.docx>                          # output to out/<stem>/parsed.html
 python docx_parser_cli.py <file.docx> --out custom_out_dir     # custom output base
 python docx_parser_cli.py <file.docx> --revision-mode review   # show insertions/deletions
 python docx_parser_cli.py <file.docx> --no-runs                # strip inline XML, keep merged text only
@@ -46,7 +46,9 @@ docx_llm_parser/
     objects.py         # EmbeddedObjectExtractor — chart XML and SmartArt data model lightweight parsing
     ancillary.py       # AncillaryParser — headers, footers, footnotes, endnotes, comments
   renderers/
-    xml.py             # Final LLM XML output: block→XML, table→XML (including nested), inline formatting, supplemental sections
+    html5.py           # Final LLM HTML5 output: implicit close + short attrs (~31% token savings)
+    _text_utils.py     # Shared run merging & format filtering (used by all renderers)
+    _metrics.py        # Shared render metrics recording
 ```
 
 ### Parse Pipeline (DocxParser.parse)
@@ -63,7 +65,7 @@ PackageReader (validate ZIP, build entry index, read Content_Types + all .rels)
   → MetricsRecorder snapshots
 ```
 
-The final XML (`parsed.xml`) is written by `renderers/xml.py:write_outputs()` using streaming `iter_llm_xml()` to handle large documents without holding the full XML string in memory.
+The final HTML5 markup (`parsed.html`) is written by `renderers/html5.py:write_outputs()` using streaming `iter_html5()` to handle large documents without holding the full HTML string in memory. HTML5 implicit close rules eliminate block-level closing tags, saving ~31% tokens vs XML.
 
 ### Key Design Decisions
 
@@ -89,7 +91,7 @@ Do NOT add defensive defaults for internal fields like `block["type"]`, `block["
 
 ```
 out/<docx_stem>/
-  parsed.xml          # Final LLM-readable semantic XML
+  parsed.html         # Final LLM-readable HTML5 semantic markup
   assets/             # Exported embedded images (img1.png, img2.jpg, ...)
   debug/
     zip_index.json

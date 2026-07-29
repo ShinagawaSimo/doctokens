@@ -6,7 +6,7 @@
 inline 元素（<a>、<b>、<i>、<u>、<s>、<c>、<m>、<eq>）保留闭合标签，
 因为链接/格式文本的边界必须显式标记。
 
-与 XML 相比节省约 51% token：
+与 XML 相比实际节省约 31% token（4.5MB docx 实测）：
 - 块级闭合标签全部消除
 - 单字符属性名（i=id, g=page, h=href, v=value, s=size/span, f=file, m=mime）
 - 标签名缩短（heading→h2, link→a, paragraph→p）
@@ -14,25 +14,21 @@ inline 元素（<a>、<b>、<i>、<u>、<s>、<c>、<m>、<eq>）保留闭合标
 
 from __future__ import annotations
 
-import json
 from html import escape
 from pathlib import Path
 from time import perf_counter
 from typing import Any, Iterator
 
-from ..core.models import ParsedDocument, ParseWarning
-
-# ── HTML5 块级元素（隐式闭合，无需结束标签） ──
-_BLOCK_TAGS = frozenset({"p", "h1", "h2", "h3", "h4", "h5", "h6", "table", "tr", "th", "td"})
-# inline 元素（需要显式闭合）
-_INLINE_CLOSE_TAGS = frozenset({"a", "b", "i", "u", "s", "c", "m", "eq"})
+from ..core.models import ParsedDocument
+from ._metrics import record_render_metrics, write_metrics_debug
+from ._text_utils import filter_format, merge_text_runs, run_output_signature
 
 
 def write_outputs(parsed: ParsedDocument, output_dir: Path) -> dict[str, str]:
     """写出最终 HTML5 标记，并在 metrics 中记录渲染耗时。"""
     output_dir.mkdir(parents=True, exist_ok=True)
     # 清理旧版本产物，避免混淆。
-    for stale_name in ("parsed.xml", "readable.md", "parsed.json"):
+    for stale_name in ("readable.md", "parsed.json"):
         stale = output_dir / stale_name
         if stale.exists():
             stale.unlink()
@@ -44,8 +40,8 @@ def write_outputs(parsed: ParsedDocument, output_dir: Path) -> dict[str, str]:
             output_chars += len(chunk)
             f.write(chunk)
     elapsed_ms = (perf_counter() - start) * 1000
-    _record_render_metrics(parsed, html_path, output_chars, elapsed_ms)
-    _write_metrics_debug(parsed)
+    record_render_metrics(parsed, html_path, output_chars, elapsed_ms)
+    write_metrics_debug(parsed)
     return {"html": str(html_path)}
 
 
@@ -56,9 +52,8 @@ def to_html5(parsed: ParsedDocument) -> str:
 
 def iter_html5(parsed: ParsedDocument) -> Iterator[str]:
     """按片段生成 HTML5 标记，供大文档流式写出。"""
-    # 文档级元数据作为注释（对 LLM 可读且不影响内容解析）。
-    yield f'<!-- source="{escape(parsed.metadata["sourceFile"], quote=True)}" -->\n'
-    yield f'<!-- parser=docx_llm_parser v{parsed.metadata["parserVersion"]} -->\n\n'
+    # 文档来源标识，LLM 可用于引用原始文件名。
+    yield f'<!-- source="{escape(parsed.metadata["sourceFile"], quote=True)}" -->\n\n'
 
     # 正文块
     for block in parsed.blocks:
@@ -149,15 +144,15 @@ def _nested_table(block: dict[str, Any]) -> str:
         parts.append(tag)
         for cell in row["cells"]:
             c_tag = "th" if row.get("isHeader") else "td"
-            attrs = f'<{c_tag}'
+            attrs_parts: list[str] = [c_tag]
             if cell["colSpan"] != 1:
-                attrs += f' s={cell["colSpan"]}'
+                attrs_parts.append(f's={cell["colSpan"]}')
             if cell["rowSpan"] != 1:
-                attrs += f' rs={cell["rowSpan"]}'
+                attrs_parts.append(f'rs={cell["rowSpan"]}')
             if cell.get("vMerge"):
-                attrs += f' v={cell["vMerge"]}'
-            attrs += ">"
-            parts.append(attrs + _cell_content(cell))
+                attrs_parts.append(f'v={cell["vMerge"]}')
+            attrs = " ".join(attrs_parts)
+            parts.append(f"<{attrs}>{_cell_content(cell)}")
     return "".join(parts)
 
 
@@ -169,14 +164,14 @@ def _inline_content(block: dict[str, Any]) -> str:
     if "runs" not in block:
         return escape(block["text"])
 
-    runs = _merge_text_runs(block["runs"])
+    runs = merge_text_runs(block["runs"])
     if not runs:
         return escape(block["text"])
 
     parts: list[str] = []
     for run in runs:
         text = escape(run["text"])
-        fmt = _filter_format(run)
+        fmt = filter_format(run)
         text = _apply_inline_format(text, fmt)
 
         if run.get("revision") == "inserted":
@@ -199,59 +194,6 @@ def _inline_content(block: dict[str, Any]) -> str:
             for obj in run["objects"]:
                 parts.append(_inline_object(obj))
     return "".join(parts)
-
-
-def _merge_text_runs(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """合并相邻且输出语义相同的纯文本 run，减少碎片。"""
-    merged: list[dict[str, Any]] = []
-    pending: dict[str, Any] | None = None
-    pending_key: tuple | None = None
-
-    for run in runs:
-        if "objects" in run:
-            if pending is not None:
-                merged.append(pending)
-                pending = None
-                pending_key = None
-            merged.append(run)
-            continue
-
-        text = run["text"]
-        if not text:
-            continue
-        signature = _run_signature(run)
-        if pending is not None and pending_key == signature:
-            pending["text"] += text
-            continue
-        if pending is not None:
-            merged.append(pending)
-        pending = {"text": text}
-        for output_key in ("revision", "link", "format"):
-            if output_key in run:
-                pending[output_key] = run[output_key]
-        pending_key = signature
-
-    if pending is not None:
-        merged.append(pending)
-    return merged
-
-
-def _run_signature(run: dict[str, Any]) -> tuple:
-    """生成 run 输出相关字段的稳定签名。"""
-    link = tuple(sorted((run.get("link") or {}).items()))
-    fmt = tuple(sorted((run.get("format") or {}).items()))
-    return (run.get("revision"), link, fmt)
-
-
-def _filter_format(run: dict[str, Any]) -> dict[str, Any]:
-    """过滤 run 格式，把超链接默认样式去掉。"""
-    fmt = dict(run.get("format") or {})
-    if run.get("link"):
-        if fmt.get("color") in {"#0563C1", "#0000FF"}:
-            fmt.pop("color", None)
-        if fmt.get("underline") is True:
-            fmt.pop("underline", None)
-    return fmt
 
 
 def _apply_inline_format(text: str, fmt: dict[str, Any]) -> str:
@@ -383,19 +325,19 @@ def _assets_to_html5(assets: list[dict[str, Any]]) -> list[str]:
         return []
     lines = ["<!-- assets -->"]
     for asset in assets:
-        if asset["type"] == "image":
-            attrs = f'i={asset["id"]}'
-            if asset.get("file"):
-                attrs += f' f={escape(asset["file"], quote=True)}'
-            if asset.get("href"):
-                attrs += f' h={escape(asset["href"], quote=True)}'
-            if asset.get("contentType"):
-                attrs += f' m={escape(asset["contentType"], quote=True)}'
-            if asset.get("sizeBytes"):
-                attrs += f' s={asset["sizeBytes"]}'
-            lines.append(f"<img {attrs}>")
-        else:
-            lines.append(f'<img i={asset["id"]} t={escape(asset["type"], quote=True)}>')
+        # AssetExtractor 目前只生成 type="image"，此分支处理未来可能的扩展。
+        if asset["type"] != "image":
+            raise ValueError(f"Unsupported asset type: {asset['type']}")
+        attrs = f'i={asset["id"]}'
+        if asset.get("file"):
+            attrs += f' f={escape(asset["file"], quote=True)}'
+        if asset.get("href"):
+            attrs += f' h={escape(asset["href"], quote=True)}'
+        if asset.get("contentType"):
+            attrs += f' m={escape(asset["contentType"], quote=True)}'
+        if asset.get("sizeBytes"):
+            attrs += f' s={asset["sizeBytes"]}'
+        lines.append(f"<img {attrs}>")
     return lines
 
 
@@ -426,38 +368,3 @@ def _supplemental_to_html5(parsed: ParsedDocument) -> list[str]:
             content = _inline_content(item)
             lines.append(f"<{tag} {attrs}>{content}")
     return lines
-
-
-# ── Metrics（与 XML 渲染器相同的统计逻辑） ──
-
-def _record_render_metrics(
-    parsed: ParsedDocument, html_path: Path, output_chars: int, elapsed_ms: float
-) -> None:
-    """把最终渲染阶段的指标追加到 parsed.metrics。"""
-    metrics = parsed.metrics
-    stages = metrics.setdefault("stagesMs", {})
-    counters = metrics.setdefault("counters", {})
-    metrics.setdefault("parseTotalMs", metrics.get("totalMs", 0.0))
-    metrics["totalMs"] = round(metrics["parseTotalMs"] + elapsed_ms, 3)
-    stages["render_html5"] = round(elapsed_ms, 3)
-    counters["outputChars"] = output_chars
-    counters["outputBytes"] = html_path.stat().st_size
-    counters["estimatedTokens"] = max(1, round(output_chars / 4))
-
-
-def _write_metrics_debug(parsed: ParsedDocument) -> None:
-    """渲染后重写 metrics.json。"""
-    if not parsed.debug_dir:
-        return
-    try:
-        path = Path(parsed.debug_dir) / "metrics.json"
-        with path.open("w", encoding="utf-8") as f:
-            json.dump(parsed.metrics, f, ensure_ascii=False, indent=2)
-    except Exception as exc:
-        parsed.warnings.append(
-            ParseWarning(
-                level="warning",
-                code="METRICS_WRITE_FAILED",
-                message=f"Failed to write render metrics debug artifact: {exc}",
-            )
-        )

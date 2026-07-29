@@ -216,6 +216,10 @@ def _apply_inline_format(text: str, fmt: dict[str, Any]) -> str:
         text = f"<i>{text}</i>"
     if fmt.get("bold"):
         text = f"<b>{text}</b>"
+    if fmt.get("superscript"):
+        text = f"<sup>{text}</sup>"
+    if fmt.get("subscript"):
+        text = f"<sub>{text}</sub>"
     return text
 
 

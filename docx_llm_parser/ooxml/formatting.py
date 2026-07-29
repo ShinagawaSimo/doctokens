@@ -9,7 +9,10 @@ from xml.etree import ElementTree as ET
 from ..core.constants import attr, first_child, is_on
 
 
-VISIBLE_FORMAT_KEYS = ("bold", "italic", "underline", "strike", "color", "highlight", "bg")
+VISIBLE_FORMAT_KEYS = (
+    "bold", "italic", "underline", "strike", "superscript", "subscript",
+    "color", "highlight", "bg",
+)
 
 
 def parse_run_format(rpr: ET.Element | None) -> dict[str, Any]:
@@ -22,6 +25,7 @@ def parse_run_format(rpr: ET.Element | None) -> dict[str, Any]:
     _read_bool_format(rpr, "i", "italic", fmt)
     _read_underline(rpr, fmt)
     _read_strike(rpr, fmt)
+    _read_vert_align(rpr, fmt)
     _read_color(rpr, fmt)
     _read_highlight(rpr, fmt)
     _read_background(rpr, fmt)
@@ -80,6 +84,20 @@ def _read_strike(rpr: ET.Element, fmt: dict[str, Any]) -> None:
         fmt["strike"] = is_on(strike)
     if double_strike is not None:
         fmt["strike"] = is_on(double_strike)
+
+
+def _read_vert_align(rpr: ET.Element, fmt: dict[str, Any]) -> None:
+    """读取上标/下标标记（w:vertAlign）。"""
+    node = first_child(rpr, "w", "vertAlign")
+    if node is None:
+        return
+    val = (attr(node, "w", "val") or "").lower()
+    if val == "superscript":
+        fmt["superscript"] = True
+        fmt.pop("subscript", None)
+    elif val == "subscript":
+        fmt["subscript"] = True
+        fmt.pop("superscript", None)
 
 
 def _read_color(rpr: ET.Element, fmt: dict[str, Any]) -> None:

@@ -2,25 +2,29 @@
 
 from __future__ import annotations
 
-from typing import Any
 from xml.etree import ElementTree as ET
 
 from ..core.constants import (
-    _TAG_W_P,
-    _TAG_W_PPR,
-    _TAG_W_P_STYLE,
-    _TAG_W_SDT,
+    _TAG_W_PARAGRAPH,
     _TAG_W_SDT_CONTENT,
     _TAG_W_SMART_TAG,
-    _TAG_W_TBL,
-    _TAG_W_TC,
-    _TAG_W_TR,
+    _TAG_W_STRUCTURED_DOCUMENT_TAG,
+    _TAG_W_TABLE,
     attr,
     child_elements,
     first_child,
-    local_name_fast,
 )
-from ..core.models import ParseOptions, ParseWarning
+from ..core.models import (
+    AncillaryContent,
+    AncillaryItem,
+    AncillaryResult,
+    AssetLookup,
+    ObjectLookup,
+    ParseOptions,
+    ParseWarning,
+    RawHint,
+    Run,
+)
 from ..core.package import PackageReader
 from ..core.relationships import RelationshipIndex
 from ..ooxml.styles import StyleMap
@@ -37,8 +41,8 @@ class AncillaryParser:
         options: ParseOptions,
         warnings: list[ParseWarning],
         relationships: RelationshipIndex,
-        asset_lookup: dict[tuple[str, str], dict[str, Any]],
-        object_lookup: dict[tuple[str, str], dict[str, Any]],
+        asset_lookup: AssetLookup,
+        object_lookup: ObjectLookup,
     ) -> None:
         self.package = package
         self.options = options
@@ -53,7 +57,7 @@ class AncillaryParser:
         )
         self._block_index = 0
 
-    def parse(self) -> dict[str, list[dict]]:
+    def parse(self) -> AncillaryResult:
         """返回 headers/footers/footnotes/endnotes/comments 五类补充信息。"""
         return {
             "headers": self._parse_header_footer("header"),
@@ -63,10 +67,10 @@ class AncillaryParser:
             "comments": self._parse_comments(),
         }
 
-    def _parse_header_footer(self, kind: str) -> list[dict]:
+    def _parse_header_footer(self, kind: str) -> list[AncillaryItem]:
         """解析 word/header*.xml 或 word/footer*.xml。"""
         prefix = f"word/{kind}"
-        rows: list[dict] = []
+        rows: list[AncillaryItem] = []
         for name in sorted(item["name"] for item in self.package.read_entry_index()):
             if not (name.startswith(prefix) and name.endswith(".xml")):
                 continue
@@ -76,7 +80,7 @@ class AncillaryParser:
             content = self._container_content(root, name)
             if content["text"].strip() or self._has_objects(content["runs"]):
                 item_id = name.rsplit("/", 1)[-1].removesuffix(".xml")
-                row = {
+                row: AncillaryItem = {
                     "id": item_id,
                     "loc": f"{kind}s.{item_id}",
                     "text": content["text"],
@@ -87,14 +91,14 @@ class AncillaryParser:
                 rows.append(row)
         return rows
 
-    def _parse_notes(self, part_name: str, tag_name: str) -> list[dict]:
+    def _parse_notes(self, part_name: str, tag_name: str) -> list[AncillaryItem]:
         """解析脚注或尾注。"""
         if not self.package.exists(part_name):
             return []
         root = self._parse_xml_part(part_name)
         if root is None:
             return []
-        rows: list[dict] = []
+        rows: list[AncillaryItem] = []
         group = "footnotes" if tag_name == "footnote" else "endnotes"
         for note in child_elements(root, "w", tag_name):
             note_type = attr(note, "w", "type")
@@ -104,7 +108,7 @@ class AncillaryParser:
             note_id = attr(note, "w", "id")
             content = self._container_content(note, part_name)
             if content["text"].strip() or self._has_objects(content["runs"]):
-                row = {
+                row: AncillaryItem = {
                     "id": note_id,
                     "loc": f"{group}.{note_id}",
                     "text": content["text"],
@@ -115,7 +119,7 @@ class AncillaryParser:
                 rows.append(row)
         return rows
 
-    def _parse_comments(self) -> list[dict]:
+    def _parse_comments(self) -> list[AncillaryItem]:
         """解析批注正文。"""
         part_name = "word/comments.xml"
         if not self.package.exists(part_name):
@@ -123,12 +127,12 @@ class AncillaryParser:
         root = self._parse_xml_part(part_name)
         if root is None:
             return []
-        rows: list[dict] = []
+        rows: list[AncillaryItem] = []
         for comment in child_elements(root, "w", "comment"):
             comment_id = attr(comment, "w", "id")
             content = self._container_content(comment, part_name)
             if content["text"].strip() or self._has_objects(content["runs"]):
-                row = {
+                row: AncillaryItem = {
                     "id": comment_id,
                     "loc": f"comments.{comment_id}",
                     "author": attr(comment, "w", "author"),
@@ -157,15 +161,15 @@ class AncillaryParser:
             )
             return None
 
-    def _container_content(self, node: ET.Element, part: str) -> dict[str, Any]:
+    def _container_content(self, node: ET.Element, part: str) -> AncillaryContent:
         """提取容器内段落、表格和轻量 inline 对象。
-        优化：使用预计算标签名直接比对，避免热路径中的 qn()/local_name 调用。"""
+        优化：使用预计算标签名直接比对，避免热路径中的 qualified_name()/local_name 调用。"""
         text_parts: list[str] = []
-        runs: list[dict[str, Any]] = []
-        raw_hints: list[dict[str, Any]] = []
+        runs: list[Run] = []
+        raw_hints: list[RawHint] = []
         for child in node:
             child_tag = child.tag
-            if child_tag == _TAG_W_P:
+            if child_tag == _TAG_W_PARAGRAPH:
                 # 补充区域也按段落解析，避免丢失链接和格式。
                 p_runs, p_hints = self.inline.paragraph_runs(
                     child, part, self._next_block_id(part), self._paragraph_style_id(child)
@@ -177,7 +181,7 @@ class AncillaryParser:
                     runs.extend(p_runs)
                     text_parts.append(p_text)
                     raw_hints.extend(p_hints)
-            elif child_tag == _TAG_W_TBL:
+            elif child_tag == _TAG_W_TABLE:
                 # 补充区域内表格压缩为行文本，但保留单元格里的 inline 对象。
                 table_content = self._table_content(child, part)
                 if table_content["text"].strip() or self._has_objects(table_content["runs"]):
@@ -186,7 +190,11 @@ class AncillaryParser:
                     runs.extend(table_content["runs"])
                     text_parts.append(table_content["text"])
                     raw_hints.extend(table_content["rawHints"])
-            elif child_tag in (_TAG_W_SDT, _TAG_W_SDT_CONTENT, _TAG_W_SMART_TAG):
+            elif child_tag in (
+                _TAG_W_STRUCTURED_DOCUMENT_TAG,
+                _TAG_W_SDT_CONTENT,
+                _TAG_W_SMART_TAG,
+            ):
                 # 包装层继续向内提取可读内容。
                 nested = self._container_content(child, part)
                 if nested["text"].strip() or self._has_objects(nested["runs"]):
@@ -197,17 +205,19 @@ class AncillaryParser:
                     raw_hints.extend(nested["rawHints"])
         return {"text": "\n".join(text_parts), "runs": runs, "rawHints": raw_hints}
 
-    def _table_content(self, tbl: ET.Element, part: str) -> dict[str, Any]:
+    def _table_content(self, tbl: ET.Element, part: str) -> AncillaryContent:
         """把补充区域中的表格压缩为行文本，并保留 inline run。"""
         text_rows: list[str] = []
-        runs: list[dict[str, Any]] = []
-        raw_hints: list[dict[str, Any]] = []
+        runs: list[Run] = []
+        raw_hints: list[RawHint] = []
         for tr in child_elements(tbl, "w", "tr"):
             cell_contents = [
                 self._container_content(tc, part) for tc in child_elements(tr, "w", "tc")
             ]
             visible_cells = [
-                cell for cell in cell_contents if cell["text"].strip() or self._has_objects(cell["runs"])
+                cell
+                for cell in cell_contents
+                if cell["text"].strip() or self._has_objects(cell["runs"])
             ]
             if not visible_cells:
                 continue
@@ -225,8 +235,8 @@ class AncillaryParser:
 
     def _paragraph_style_id(self, p: ET.Element) -> str | None:
         """读取补充区域段落样式 ID。"""
-        ppr = first_child(p, "w", "pPr")
-        pstyle = first_child(ppr, "w", "pStyle")
+        paragraph_properties = first_child(p, "w", "pPr")
+        pstyle = first_child(paragraph_properties, "w", "pStyle")
         return attr(pstyle, "w", "val") if pstyle is not None else None
 
     def _next_block_id(self, part: str) -> str:
@@ -234,6 +244,6 @@ class AncillaryParser:
         self._block_index += 1
         return f"{part}#{self._block_index}"
 
-    def _has_objects(self, runs: list[dict[str, Any]]) -> bool:
+    def _has_objects(self, runs: list[Run]) -> bool:
         """判断 run 流中是否有图片、脚注引用、公式等非文本对象。"""
         return any("objects" in run for run in runs)

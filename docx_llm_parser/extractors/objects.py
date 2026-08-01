@@ -2,17 +2,27 @@
 
 from __future__ import annotations
 
-from typing import Any
 from xml.etree import ElementTree as ET
 
-from ..core.constants import attr, first_child, local_name, qn
-from ..core.models import ParseWarning
+from ..core.constants import first_child, local_name, qualified_name
+from ..core.models import (
+    Chart,
+    ChartSeries,
+    ObjectLookup,
+    ParseWarning,
+    SmartArt,
+    SmartArtLink,
+    SmartArtNode,
+)
 from ..core.package import PackageReader
 from ..core.relationships import RelationshipIndex
 
 CHART_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
 DIAGRAM_DATA_REL_TYPE = (
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData"
+)
+DIAGRAM_LAYOUT_REL_TYPE = (
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout"
 )
 
 CHART_TYPE_MAP = {
@@ -49,16 +59,42 @@ class EmbeddedObjectExtractor:
         self.relationships = relationships
         self.warnings = warnings
 
-    def extract(self) -> tuple[dict[tuple[str, str], dict[str, Any]], list[dict], list[dict]]:
+    def extract(self) -> tuple[ObjectLookup, list[Chart], list[SmartArt]]:
         """解析图表和 SmartArt，并返回 `(sourcePart, rId)` 索引。"""
-        lookup: dict[tuple[str, str], dict[str, Any]] = {}
+        lookup: ObjectLookup = {}
+        layout_map = self._build_layout_map()
         charts = self._extract_charts(lookup)
-        smartarts = self._extract_smartarts(lookup)
+        smartarts = self._extract_smartarts(lookup, layout_map)
         return lookup, charts, smartarts
 
-    def _extract_charts(self, lookup: dict[tuple[str, str], dict[str, Any]]) -> list[dict]:
+    def _build_layout_map(self) -> dict[str, str]:
+        """构建 SmartArt data part → layout type 映射。
+
+        从 DIAGRAM_LAYOUT_REL_TYPE 关系中读取 layoutN.xml，
+        提取 catLst/cat@type 的末尾类别名。
+        """
+        layout_map: dict[str, str] = {}
+        for rel in self.relationships.by_type(DIAGRAM_LAYOUT_REL_TYPE):
+            target = rel.resolved_target
+            if not target or not self.package.exists(target):
+                continue
+            try:
+                with self.package.open_entry(target) as stream:
+                    root = ET.parse(stream).getroot()
+                layout_type = _layout_type(root)
+                if layout_type:
+                    layout_map[rel.source_part] = layout_type
+            except Exception as exc:
+                self._warn(
+                    "LAYOUT_PARSE_FAILED",
+                    f"Failed to parse layout part {target}: {exc}",
+                    part=target,
+                )
+        return layout_map
+
+    def _extract_charts(self, lookup: ObjectLookup) -> list[Chart]:
         """解析 chart relationships 指向的图表 part。"""
-        charts: list[dict] = []
+        charts: list[Chart] = []
         for chart_index, rel in enumerate(self.relationships.by_type(CHART_REL_TYPE), start=1):
             chart_id = f"chart{chart_index}"
             target = rel.resolved_target
@@ -87,16 +123,19 @@ class EmbeddedObjectExtractor:
             lookup[(rel.source_part, rel.id)] = chart
         return charts
 
-    def _extract_smartarts(self, lookup: dict[tuple[str, str], dict[str, Any]]) -> list[dict]:
+    def _extract_smartarts(
+        self,
+        lookup: ObjectLookup,
+        layout_map: dict[str, str],
+    ) -> list[SmartArt]:
         """解析 SmartArt data model relationships 指向的 diagram data part。"""
-        smartarts: list[dict] = []
+        smartarts: list[SmartArt] = []
         for item_index, rel in enumerate(
             self.relationships.by_type(DIAGRAM_DATA_REL_TYPE), start=1
         ):
             smartart_id = f"smartart{item_index}"
             target = rel.resolved_target
             if rel.target_mode == "External" or not target or not self.package.exists(target):
-                # data model 缺失时正文仍可输出 SmartArt 占位。
                 self._warn(
                     "SMARTART_TARGET_MISSING",
                     f"SmartArt data target is missing: {target}",
@@ -114,6 +153,10 @@ class EmbeddedObjectExtractor:
                     part=target,
                 )
                 continue
+            # 注入 layout type（从 layoutN.xml 中提取的类别名）
+            layout_type = layout_map.get(rel.source_part)
+            if layout_type:
+                smartart["layoutType"] = layout_type
             smartart["sourcePart"] = rel.source_part
             smartart["relationshipId"] = rel.id
             smartarts.append(smartart)
@@ -125,13 +168,13 @@ class EmbeddedObjectExtractor:
         self.warnings.append(ParseWarning(level="warning", code=code, message=message, part=part))
 
 
-def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> dict[str, Any]:
+def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> Chart:
     """从 chart XML 中抽取 LLM 需要的轻量图表信息。"""
-    plot_area = root.find(".//" + qn("c", "plotArea"))
-    chart_type = _chart_type(plot_area)
+    plot_area = root.find(".//" + qualified_name("c", "plotArea"))
+    chart_type = _chart_type(plot_area) or "unknown"
     series = _chart_series(plot_area)
     point_count = sum(item["pointCount"] for item in series)
-    chart: dict[str, Any] = {
+    chart: Chart = {
         "id": chart_id,
         "type": "chart",
         "chartType": chart_type,
@@ -146,31 +189,36 @@ def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> dict[st
     return chart
 
 
-def parse_smartart_root(root: ET.Element, smartart_id: str, part_name: str) -> dict[str, Any]:
+def parse_smartart_root(root: ET.Element, smartart_id: str, part_name: str) -> SmartArt:
     """从 SmartArt data model 中抽取节点文字和连接关系。"""
-    nodes: list[dict[str, Any]] = []
+    nodes: list[SmartArtNode] = []
     node_index_by_model_id: dict[str, int] = {}
-    for point in root.iter(qn("dgm", "pt")):
+    for point in root.iter(qualified_name("dgm", "pt")):
         model_id = point.attrib["modelId"]
         text = _drawing_text(point)
         if not text:
             continue
-        node = {"modelId": model_id, "text": text}
+        node: SmartArtNode = {"modelId": model_id, "text": text}
         point_type = point.get("type")
         if point_type:
             node["kind"] = point_type
         node_index_by_model_id[model_id] = len(nodes) + 1
         nodes.append(node)
 
-    links: list[dict[str, Any]] = []
+    links: list[SmartArtLink] = []
     raw_link_count = 0
-    for connection in root.iter(qn("dgm", "cxn")):
+    for connection in root.iter(qualified_name("dgm", "cxn")):
         raw_link_count += 1
         source = connection.get("srcId")
         target = connection.get("destId")
-        if source in node_index_by_model_id and target in node_index_by_model_id:
+        if (
+            source is not None
+            and target is not None
+            and source in node_index_by_model_id
+            and target in node_index_by_model_id
+        ):
             # 最终 XML 使用短序号引用节点，避免暴露冗长 modelId。
-            link: dict[str, Any] = {
+            link: SmartArtLink = {
                 "from": node_index_by_model_id[source],
                 "to": node_index_by_model_id[target],
             }
@@ -204,18 +252,18 @@ def _chart_type(plot_area: ET.Element | None) -> str | None:
 
 def _chart_title(root: ET.Element) -> str | None:
     """读取图表标题富文本。"""
-    title = root.find(".//" + qn("c", "title"))
+    title = root.find(".//" + qualified_name("c", "title"))
     if title is None:
         return None
     return _drawing_text(title) or None
 
 
-def _chart_series(plot_area: ET.Element | None) -> list[dict[str, Any]]:
+def _chart_series(plot_area: ET.Element | None) -> list[ChartSeries]:
     """解析所有 c:ser，并生成轻量数据摘要。"""
     if plot_area is None:
         return []
-    rows: list[dict[str, Any]] = []
-    for ser_index, ser in enumerate(plot_area.iter(qn("c", "ser")), start=1):
+    rows: list[ChartSeries] = []
+    for ser_index, ser in enumerate(plot_area.iter(qualified_name("c", "ser")), start=1):
         categories = _cached_values(first_child(ser, "c", "cat")) or _cached_values(
             first_child(ser, "c", "xVal")
         )
@@ -224,15 +272,14 @@ def _chart_series(plot_area: ET.Element | None) -> list[dict[str, Any]]:
         )
         name = _series_name(ser)
         point_count = max(len(categories), len(values))
-        row: dict[str, Any] = {
+        row: ChartSeries = {
             "index": ser_index,
             "pointCount": point_count,
             "preview": _series_preview(categories, values),
         }
         if name:
             row["name"] = name
-        value_numbers = [_to_float(value) for value in values]
-        value_numbers = [value for value in value_numbers if value is not None]
+        value_numbers = [number for value in values if (number := _to_float(value)) is not None]
         if value_numbers:
             # min/max 支持用户快速理解趋势和范围。
             row["min"] = min(value_numbers)
@@ -260,7 +307,7 @@ def _cached_values(node: ET.Element | None) -> list[str]:
     if node is None:
         return []
     points: list[tuple[int, str]] = []
-    for point in node.iter(qn("c", "pt")):
+    for point in node.iter(qualified_name("c", "pt")):
         value = first_child(point, "c", "v")
         if value is None:
             continue
@@ -271,7 +318,7 @@ def _cached_values(node: ET.Element | None) -> list[str]:
 
 def _first_chart_value(node: ET.Element) -> str | None:
     """读取 chart 子树中的第一个 c:v 文本。"""
-    value = node.find(".//" + qn("c", "v"))
+    value = node.find(".//" + qualified_name("c", "v"))
     if value is None:
         return None
     return value.text or None
@@ -279,7 +326,7 @@ def _first_chart_value(node: ET.Element) -> str | None:
 
 def _first_formula(node: ET.Element) -> str | None:
     """读取系列数据来源公式，仅进入 debug/内部对象。"""
-    formula = node.find(".//" + qn("c", "f"))
+    formula = node.find(".//" + qualified_name("c", "f"))
     if formula is None:
         return None
     return formula.text or None
@@ -298,10 +345,7 @@ def _series_preview(categories: list[str], values: list[str]) -> str:
 
 def _drawing_text(node: ET.Element) -> str:
     """读取 DrawingML/diagram 富文本中的 a:t 文本。"""
-    parts: list[str] = []
-    for item in node.iter():
-        if item.tag == qn("a", "t"):
-            parts.append(item.text or "")
+    parts = [item.text or "" for item in node.iter() if item.tag == qualified_name("a", "t")]
     return "".join(parts).strip()
 
 
@@ -311,3 +355,19 @@ def _to_float(value: str) -> float | None:
         return float(value)
     except ValueError:
         return None
+
+
+def _layout_type(root: ET.Element) -> str | None:
+    """从 dgm:layoutDef 中提取布局类别名。
+
+    读取 catLst 中第一个 cat 元素的 type 属性，提取 URI 最后一段作为类别名
+    （如 process, cycle, hierarchy, list, relationship, matrix, pyramid）。
+    """
+    cat = root.find(".//" + qualified_name("dgm", "cat"))
+    if cat is None:
+        return None
+    type_uri = cat.get("type", "")
+    if not type_uri:
+        return None
+    # 提取 URI 最后一段作为类别名
+    return type_uri.rstrip("/").rsplit("/", 1)[-1]

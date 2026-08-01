@@ -1,374 +1,248 @@
-"""输出面向大模型阅读的 HTML5 语义标记。
-
-利用 HTML5 隐式闭合规则：块级元素（<p>、<h1>~<h6>、<table>、<tr>、<th>、<td>）
-遇到下一个块元素时自动关闭，无需显式闭合标签。
-
-inline 元素（<a>、<b>、<i>、<u>、<s>、<c>、<m>、<eq>）保留闭合标签，
-因为链接/格式文本的边界必须显式标记。
-
-与 XML 相比实际节省约 31% token（4.5MB docx 实测）：
-- 块级闭合标签全部消除
-- 单字符属性名（i=id, g=page, h=href, v=value, s=size/span, f=file, m=mime）
-- 标签名缩短（heading→h2, link→a, paragraph→p）
-"""
+"""Internal HTML5 renderer orchestration and resource query helpers."""
 
 from __future__ import annotations
 
-from html import escape
+import os
+from collections.abc import Iterator
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from time import perf_counter
-from typing import Any, Iterator
 
-from ..core.models import ParsedDocument
+from ..core.enums import Density, ResourceType
+from ..core.models import DocumentManifest, ParsedDocument, ResourceDetail, TableBlock
 from ._metrics import record_render_metrics, write_metrics_debug
-from ._text_utils import filter_format, merge_text_runs, run_output_signature
+from ._render import iter_l0, iter_l1, iter_l2
+from .objects import extract_chart_item, extract_smartart_item
+
+# ── 公共 API ──
 
 
-def write_outputs(parsed: ParsedDocument, output_dir: Path) -> dict[str, str]:
-    """写出最终 HTML5 标记，并在 metrics 中记录渲染耗时。"""
+def write_outputs(
+    parsed: ParsedDocument,
+    output_dir: Path,
+    density: Density | str = Density.SEMANTIC,
+) -> dict[str, str]:
+    """写出最终标记文件，并在 metrics 中记录渲染耗时。"""
+    resolved_density = Density.parse(density)
     output_dir.mkdir(parents=True, exist_ok=True)
-    # 清理旧版本产物，避免混淆。
-    for stale_name in ("readable.md", "parsed.json"):
-        stale = output_dir / stale_name
-        if stale.exists():
-            stale.unlink()
-    html_path = output_dir / "parsed.html"
+    density_files = {
+        Density.PLAIN: "l0.txt",
+        Density.STRUCTURAL: "l1.html",
+        Density.SEMANTIC: "parsed.html",
+    }
+    fname = density_files[resolved_density]
+    output_path = output_dir / fname
     start = perf_counter()
     output_chars = 0
-    with html_path.open("w", encoding="utf-8") as f:
-        for chunk in iter_html5(parsed):
-            output_chars += len(chunk)
-            f.write(chunk)
+    temp_path: Path | None = None
+    try:
+        with NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=output_dir,
+            prefix=f".{fname}.",
+            suffix=".tmp",
+            delete=False,
+        ) as stream:
+            temp_path = Path(stream.name)
+            for chunk in iter_html5(parsed, resolved_density):
+                output_chars += len(chunk)
+                stream.write(chunk)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temp_path.replace(output_path)
+    except Exception:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink()
+        raise
     elapsed_ms = (perf_counter() - start) * 1000
-    record_render_metrics(parsed, html_path, output_chars, elapsed_ms)
+    record_render_metrics(parsed, output_path, output_chars, elapsed_ms)
     write_metrics_debug(parsed)
-    return {"html": str(html_path)}
+    return {"html": str(output_path)}
 
 
-def to_html5(parsed: ParsedDocument) -> str:
-    """生成完整 HTML5 标记字符串。"""
-    return "".join(iter_html5(parsed))
+def to_html5(parsed: ParsedDocument, density: Density | str = Density.SEMANTIC) -> str:
+    """生成完整标记字符串（L0 纯文本 / L1 结构 / L2 语义）。"""
+    return "".join(iter_html5(parsed, density))
 
 
-def iter_html5(parsed: ParsedDocument) -> Iterator[str]:
-    """按片段生成 HTML5 标记，供大文档流式写出。"""
-    # 文档来源标识，LLM 可用于引用原始文件名。
-    yield f'<!-- source="{escape(parsed.metadata["sourceFile"], quote=True)}" -->\n\n'
+def iter_html5(parsed: ParsedDocument, density: Density | str = Density.SEMANTIC) -> Iterator[str]:
+    """按片段生成标记，供大文档流式写出。"""
+    resolved_density = Density.parse(density)
+    if resolved_density is Density.PLAIN:
+        yield from iter_l0(parsed)
+    elif resolved_density is Density.STRUCTURAL:
+        yield from iter_l1(parsed)
+    else:
+        yield from iter_l2(parsed)
 
-    # 正文块。页码变化时插入 <page n=N> 分页标记。
-    current_page = 0
+
+def window(
+    parsed: ParsedDocument,
+    page: int,
+    span: int = 1,
+    density: Density | str = Density.SEMANTIC,
+) -> str:
+    """返回指定页码范围的内容片段。page=-1 表示最后一页。"""
+    resolved_density = Density.parse(density)
+    if page != -1 and page < 1:
+        raise ValueError("page must be -1 or greater than zero")
+    if span < 1:
+        raise ValueError("span must be greater than zero")
+    page_index = _build_page_index(parsed)
+    total_pages = max(page_index.keys()) if page_index else 1
+
+    if page == -1:
+        start_page = total_pages
+    elif page < 1:
+        start_page = 1
+    else:
+        start_page = min(page, total_pages)
+
+    end_page = min(start_page + span - 1, total_pages)
+
+    start_block = page_index.get(start_page, (0,))[0] if start_page in page_index else 0
+    end_block = page_index.get(end_page, (len(parsed.blocks) - 1,))
+    end_idx = end_block[1] if isinstance(end_block, tuple) and len(end_block) > 1 else end_block[0]
+
+    window_blocks = parsed.blocks[start_block : end_idx + 1]
+
+    window_parsed = ParsedDocument(
+        metadata=parsed.metadata,
+        package_info=parsed.package_info,
+        blocks=window_blocks,
+        relationships=parsed.relationships,
+        styles=parsed.styles,
+        warnings=parsed.warnings,
+        assets=parsed.assets,
+        charts=parsed.charts,
+        smartarts=parsed.smartarts,
+        headers=[],
+        footers=[],
+        footnotes=parsed.footnotes,
+        endnotes=parsed.endnotes,
+        comments=[],
+        numbering=parsed.numbering,
+        metrics=parsed.metrics,
+    )
+    return "".join(iter_html5(window_parsed, resolved_density))
+
+
+def manifest(parsed: ParsedDocument) -> DocumentManifest:
+    """返回文档元信息，供 LLM 首轮调用获取概览。"""
+    page_index = _build_page_index(parsed)
+    pages = max(page_index.keys()) if page_index else 1
+    return {
+        "pages": pages,
+        "tables": len(_table_groups(parsed)),
+        "images": sum(1 for a in parsed.assets if a["type"] == "image"),
+        "footnotes": len(parsed.footnotes),
+        "endnotes": len(parsed.endnotes),
+        "comments": len(parsed.comments),
+    }
+
+
+def extract(
+    parsed: ParsedDocument,
+    resource_type: ResourceType | str,
+    resource_id: str | None = None,
+) -> list[ResourceDetail]:
+    """独立提取非文本资源，无需先取全文。"""
+    resolved_type = ResourceType.parse(resource_type)
+    if resolved_type.is_plural and resource_id is not None:
+        raise ValueError("resource_id is only valid with a singular resource type")
+    if not resolved_type.is_plural and resource_id is None:
+        raise ValueError("resource_id is required with a singular resource type")
+
+    if resolved_type in {ResourceType.IMAGES, ResourceType.IMAGE}:
+        result = []
+        for a in parsed.assets:
+            if a["type"] != "image":
+                raise ValueError(f"Unsupported asset type: {a['type']}")
+            item: ResourceDetail = {"id": a["id"]}
+            if a.get("file"):
+                item["file"] = a["file"]
+            if a.get("contentType"):
+                item["contentType"] = a["contentType"]
+            if resource_id and a["id"] != resource_id:
+                continue
+            result.append(item)
+        return result
+
+    if resolved_type in {ResourceType.CHARTS, ResourceType.CHART}:
+        result = []
+        for c in parsed.charts:
+            if resource_id and c.get("id") != resource_id:
+                continue
+            result.append(extract_chart_item(c))
+        return result
+
+    if resolved_type in {ResourceType.SMARTARTS, ResourceType.SMARTART}:
+        result = []
+        for s in parsed.smartarts:
+            if resource_id and s.get("id") != resource_id:
+                continue
+            result.append(extract_smartart_item(s))
+        return result
+
+    if resolved_type is ResourceType.TABLES:
+        return [
+            _table_summary(table_id, segments)
+            for table_id, segments in _table_groups(parsed).items()
+        ]
+
+    if resolved_type is ResourceType.TABLE:
+        assert resource_id is not None
+        segments = _table_groups(parsed).get(resource_id)
+        if segments is None:
+            return []
+        item = _table_summary(resource_id, segments)
+        item["rows"] = [row for segment in segments for row in segment["rows"]]
+        return [item]
+
+    raise AssertionError("validated resource type was not handled")
+
+
+def _table_groups(parsed: ParsedDocument) -> dict[str, list[TableBlock]]:
+    """Group top-level table segments by their stable logical table ID."""
+    groups: dict[str, list[TableBlock]] = {}
     for block in parsed.blocks:
+        if block["type"] != "table":
+            continue
+        groups.setdefault(block["tableId"], []).append(block)
+    return groups
+
+
+def _table_summary(table_id: str, segments: list[TableBlock]) -> ResourceDetail:
+    """Build a stable summary for one logical table."""
+    return {
+        "id": table_id,
+        "rowCount": sum(len(segment["rows"]) for segment in segments),
+        "columnCount": max((segment["columnCount"] for segment in segments), default=0),
+        "segmentCount": len(segments),
+        "pages": [segment.get("page", 1) for segment in segments],
+    }
+
+
+# ── 页码索引 ──
+
+
+def _build_page_index(parsed: ParsedDocument) -> dict[int, tuple[int, int]]:
+    """构建 page → (start_block_idx, end_block_idx) 映射。"""
+    index: dict[int, tuple[int, int]] = {}
+    current_page = 1
+    page_start = 0
+
+    for i, block in enumerate(parsed.blocks):
         block_page = block.get("page", 1)
         if block_page != current_page:
+            index[current_page] = (page_start, i - 1)
             current_page = block_page
-            yield f"<page n={current_page}>\n"
-        for line in block_to_html5(block):
-            yield line + "\n"
+            page_start = i
 
-    # 资源清单
-    yield "\n"
-    for line in _assets_to_html5(parsed.assets):
-        yield line + "\n"
+    if parsed.blocks:
+        index[current_page] = (page_start, len(parsed.blocks) - 1)
+    else:
+        index[1] = (0, -1)
 
-    # 补充内容
-    supplemental = _supplemental_to_html5(parsed)
-    if supplemental:
-        yield "\n"
-        for line in supplemental:
-            yield line + "\n"
-
-
-# ── Block 渲染 ──
-
-def block_to_html5(block: dict[str, Any]) -> list[str]:
-    """把内部 block 转成 HTML5 块元素。页码标记由 iter_html5 统一处理。"""
-    block_type = block["type"]
-
-    if block_type == "heading":
-        level = min(block.get("level", 1), 6)
-        tag = f"h{level}"
-        return [f"<{tag}>{_inline_content(block)}"]
-
-    if block_type == "paragraph":
-        return [f"<p>{_inline_content(block)}"]
-
-    if block_type == "table":
-        return _table_to_html5(block)
-
-    return [f"<p>[未知块类型: {block_type}]"]
-
-
-def _table_to_html5(block: dict[str, Any]) -> list[str]:
-    """输出 HTML5 表格，利用 <th>/<td> 隐式闭合和 colspan/rowspan 属性。"""
-    rows = block["rows"]
-    lines = ["<table>"]
-    for row in rows:
-        row_tag = "<tr h>" if row.get("isHeader") else "<tr>"
-        lines.append(row_tag)
-        for cell in row["cells"]:
-            cell_tag = "th" if row.get("isHeader") else "td"
-            attrs_parts: list[str] = [f'{cell_tag}']
-            if cell["colSpan"] != 1:
-                attrs_parts.append(f's={cell["colSpan"]}')
-            if cell["rowSpan"] != 1:
-                attrs_parts.append(f'rs={cell["rowSpan"]}')
-            if cell.get("vMerge"):
-                attrs_parts.append(f'v={cell["vMerge"]}')
-            attrs = " ".join(attrs_parts)
-            cell_text = _cell_content(cell)
-            lines.append(f'<{attrs}>{cell_text}')
-    return lines
-
-
-def _cell_content(cell: dict[str, Any]) -> str:
-    """输出单元格文本，保留内嵌段落换行。"""
-    blocks = cell.get("blocks", [])
-    if not blocks:
-        return escape(cell["text"])
-    # 单元格中的多个段落用 <br> 分隔（<br> 是自闭合空元素）。
-    parts: list[str] = []
-    for block in blocks:
-        if block["type"] in {"paragraph", "heading"}:
-            parts.append(_inline_content(block))
-        elif block["type"] == "table":
-            # 嵌套表格保留轻量行列结构。
-            parts.append(_nested_table(block))
-    return "<br>".join(part for part in parts if part)
-
-
-def _nested_table(block: dict[str, Any]) -> str:
-    """把嵌套表格渲染为轻量 HTML5。"""
-    rows = block["rows"]
-    parts = [f'<ntable r={len(rows)} c={block["columnCount"]}>']
-    for row in rows:
-        tag = "<r h>" if row.get("isHeader") else "<r>"
-        parts.append(tag)
-        for cell in row["cells"]:
-            c_tag = "th" if row.get("isHeader") else "td"
-            attrs_parts: list[str] = [c_tag]
-            if cell["colSpan"] != 1:
-                attrs_parts.append(f's={cell["colSpan"]}')
-            if cell["rowSpan"] != 1:
-                attrs_parts.append(f'rs={cell["rowSpan"]}')
-            if cell.get("vMerge"):
-                attrs_parts.append(f'v={cell["vMerge"]}')
-            attrs = " ".join(attrs_parts)
-            parts.append(f"<{attrs}>{_cell_content(cell)}")
-    return "".join(parts)
-
-
-# ── Inline 内容渲染 ──
-
-def _inline_content(block: dict[str, Any]) -> str:
-    """把 run 文本、链接、图片、脚注引用等合成为 inline HTML5。
-    块级元素不需要闭合标签，但 inline 元素（a/b/i/u/s/c/m/eq）需要。"""
-    if "runs" not in block:
-        return escape(block["text"])
-
-    runs = merge_text_runs(block["runs"])
-    if not runs:
-        return escape(block["text"])
-
-    parts: list[str] = []
-    for run in runs:
-        text = escape(run["text"])
-        fmt = filter_format(run)
-        text = _apply_inline_format(text, fmt)
-
-        if run.get("revision") == "inserted":
-            text = f"<ins>{text}</ins>"
-        elif run.get("revision") == "deleted":
-            text = f"<del>{text}</del>"
-
-        link = run.get("link")
-        if link and text:
-            href = link.get("href", "")
-            anchor = link.get("anchor", "")
-            attrs = f'h={escape(href, quote=True)}'
-            if anchor:
-                attrs += f' a={escape(anchor, quote=True)}'
-            text = f"<a {attrs}>{text}</a>"
-        if text:
-            parts.append(text)
-
-        if "objects" in run:
-            for obj in run["objects"]:
-                parts.append(_inline_object(obj))
-    return "".join(parts)
-
-
-def _apply_inline_format(text: str, fmt: dict[str, Any]) -> str:
-    """用 HTML5 inline 标签包裹格式化文本。
-    标签嵌套顺序从外到内：bg > mark > color > s > u > i > b。"""
-    if not text or not fmt:
-        return text
-    # 从外到内包裹
-    if fmt.get("bg"):
-        text = f'<m v={fmt["bg"]}>{text}</m>'
-    if fmt.get("highlight"):
-        text = f'<m v={fmt["highlight"]}>{text}</m>'
-    if fmt.get("color"):
-        text = f'<c v={fmt["color"]}>{text}</c>'
-    if fmt.get("strike"):
-        text = f"<s>{text}</s>"
-    if fmt.get("underline"):
-        text = f"<u>{text}</u>"
-    if fmt.get("italic"):
-        text = f"<i>{text}</i>"
-    if fmt.get("bold"):
-        text = f"<b>{text}</b>"
-    if fmt.get("superscript"):
-        text = f"<sup>{text}</sup>"
-    if fmt.get("subscript"):
-        text = f"<sub>{text}</sub>"
-    return text
-
-
-def _inline_object(obj: dict[str, Any]) -> str:
-    """渲染段落内的非纯文本对象引用。"""
-    obj_type = obj["type"]
-
-    if obj_type == "image":
-        attrs = f'i={obj.get("assetId","")} f={escape(obj.get("file",""), quote=True)}'
-        if obj.get("alt"):
-            attrs += f' alt={escape(obj["alt"], quote=True)}'
-        return f"<img {attrs}>"
-
-    if obj_type == "drawing":
-        alt = obj.get("alt") or obj.get("title") or obj.get("name") or ""
-        return f'<img alt={escape(alt, quote=True)}>' if alt else "<img>"
-
-    if obj_type == "textbox":
-        alt = obj.get("alt") or obj.get("title") or ""
-        attrs = f'alt={escape(alt, quote=True)}' if alt else ""
-        return f"<tb {attrs}>{escape(obj['text'])}</tb>"
-
-    if obj_type == "equation":
-        if obj["text"]:
-            return f"<eq>{escape(obj['text'])}</eq>"
-        return "<eq/>"
-
-    if obj_type == "chart":
-        return _chart_to_html5(obj)
-
-    if obj_type == "smartart":
-        return _smartart_to_html5(obj)
-
-    if obj_type == "footnoteRef":
-        return f'<fnr id={obj["id"]}/>'
-    if obj_type == "endnoteRef":
-        return f'<enr id={obj["id"]}/>'
-    if obj_type == "commentRef":
-        return f'<cmr id={obj["id"]}/>'
-
-    if obj_type == "fieldInstruction":
-        return f'<fld i={escape(obj["instruction"], quote=True)}/>'
-
-    # 未知对象类型：保留轻量占位
-    return f"<obj t={escape(obj_type, quote=True)}/>"
-
-
-def _chart_to_html5(obj: dict[str, Any]) -> str:
-    """输出图表轻量摘要。"""
-    attrs = f'i={obj["id"]} k={obj.get("chartType","?")}'
-    if obj.get("title"):
-        attrs += f' t={escape(obj["title"], quote=True)}'
-    attrs += f' s={obj.get("seriesCount",0)} p={obj.get("pointCount",0)}'
-
-    series = obj.get("series") or []
-    if not series:
-        return f"<chart {attrs}/>"
-
-    parts = [f"<chart {attrs}>"]
-    for item in series[:4]:
-        s_attrs = f'n={escape(item.get("name","?"), quote=True)} p={item["pointCount"]}'
-        if "min" in item:
-            s_attrs += f' min={item["min"]}'
-        if "max" in item:
-            s_attrs += f' max={item["max"]}'
-        if item.get("preview"):
-            s_attrs += f' pv={escape(item["preview"], quote=True)}'
-        parts.append(f"<s {s_attrs}/>")
-    if len(series) > 4:
-        parts.append(f"<ms c={len(series)-4}/>")
-    parts.append("</chart>")
-    return "".join(parts)
-
-
-def _smartart_to_html5(obj: dict[str, Any]) -> str:
-    """输出 SmartArt 节点和连接。"""
-    attrs = f'i={obj["id"]} n={obj.get("nodeCount",0)} l={obj.get("linkCount",0)}'
-    nodes = obj.get("nodes") or []
-    links = obj.get("links") or []
-    if not nodes and not links:
-        return f"<sa {attrs}/>"
-
-    parts = [f"<sa {attrs}>"]
-    for index, node in enumerate(nodes[:12], start=1):
-        n_attrs = f"i={index}"
-        if node.get("kind"):
-            n_attrs += f' k={escape(node["kind"], quote=True)}'
-        parts.append(f'<n {n_attrs}>{escape(node["text"])}</n>')
-    if len(nodes) > 12:
-        parts.append(f"<mn c={len(nodes)-12}/>")
-    for link in links[:16]:
-        l_attrs = f'f={link["from"]} t={link["to"]}'
-        if link.get("kind"):
-            l_attrs += f' k={escape(link["kind"], quote=True)}'
-        parts.append(f"<e {l_attrs}/>")
-    if len(links) > 16:
-        parts.append(f"<ml c={len(links)-16}/>")
-    parts.append("</sa>")
-    return "".join(parts)
-
-
-# ── 资源与补充内容 ──
-
-def _assets_to_html5(assets: list[dict[str, Any]]) -> list[str]:
-    """输出图片等资源清单，正文通过 img ref 引用。"""
-    if not assets:
-        return []
-    lines = ["<!-- assets -->"]
-    for asset in assets:
-        if asset["type"] != "image":
-            raise ValueError(f"Unsupported asset type: {asset['type']}")
-        # 只输出 AI 理解任务需要的最小元数据：ID + 文件路径。
-        # 尺寸/格式等可由下游工具直接从文件读取。
-        attrs = f'i={asset["id"]}'
-        if asset.get("file"):
-            attrs += f' f={escape(asset["file"], quote=True)}'
-        if asset.get("href"):
-            attrs += f' h={escape(asset["href"], quote=True)}'
-        if asset.get("contentType"):
-            attrs += f' m={escape(asset["contentType"], quote=True)}'
-        lines.append(f"<img {attrs}>")
-    return lines
-
-
-def _supplemental_to_html5(parsed: ParsedDocument) -> list[str]:
-    """输出正文之外的补充文本，不混入主阅读流。"""
-    groups = [
-        ("headers", "hdr", parsed.headers),
-        ("footers", "ftr", parsed.footers),
-        ("footnotes", "fn", parsed.footnotes),
-        ("endnotes", "en", parsed.endnotes),
-        ("comments", "cm", parsed.comments),
-    ]
-    if not any(items for _group, _tag, items in groups):
-        return []
-
-    lines = ["<!-- supplemental -->"]
-    for _group_name, tag, items in groups:
-        if not items:
-            continue
-        for item in items:
-            attrs = f'id={item["id"]}'
-            if item.get("loc"):
-                attrs += f' loc={escape(item["loc"], quote=True)}'
-            if item.get("author"):
-                attrs += f' a={escape(item["author"], quote=True)}'
-            if item.get("date"):
-                attrs += f' d={escape(item["date"], quote=True)}'
-            content = _inline_content(item)
-            lines.append(f"<{tag} {attrs}>{content}")
-    return lines
+    return index

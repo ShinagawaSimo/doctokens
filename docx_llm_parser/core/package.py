@@ -6,11 +6,12 @@ import posixpath
 import re
 import zipfile
 from pathlib import Path
-from typing import BinaryIO
+from types import TracebackType
+from typing import IO
 from xml.etree import ElementTree as ET
 
 from .constants import NS
-from .models import ParseOptions, RelationshipRecord
+from .models import ContentTypes, ParseOptions, RelationshipRecord, ZipEntryInfo
 
 
 class DocxPackageError(RuntimeError):
@@ -26,17 +27,22 @@ class PackageReader:
         self.path = path
         self.options = options
         self._zip: zipfile.ZipFile | None = None
-        self._entry_index: list[dict] | None = None
+        self._entry_index: list[ZipEntryInfo] | None = None
         self._names: set[str] = set()
 
-    def __enter__(self) -> "PackageReader":
+    def __enter__(self) -> PackageReader:
         """打开 zip 文件，并确认输入至少是可读 ZIP。"""
         if not zipfile.is_zipfile(self.path):
             raise DocxPackageError(f"Not a zip/docx file: {self.path}")
         self._zip = zipfile.ZipFile(self.path, "r")
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         if self._zip is not None:
             self._zip.close()
 
@@ -63,7 +69,7 @@ class PackageReader:
         self._ensure_index()
         return name in self._names
 
-    def read_entry_index(self) -> list[dict]:
+    def read_entry_index(self) -> list[ZipEntryInfo]:
         """建立 ZIP entry 索引，并做大小和路径安全检查。"""
         if self._entry_index is not None:
             # 索引只构建一次，后续复用只读结果。
@@ -75,16 +81,14 @@ class PackageReader:
             raise DocxPackageError(f"Too many zip entries: {len(infos)}")
 
         total_uncompressed = 0
-        rows: list[dict] = []
+        rows: list[ZipEntryInfo] = []
         names: set[str] = set()
         for info in infos:
             name = info.filename.replace("\\", "/")
             self._validate_entry_name(name)
             if info.file_size > self.options.max_entry_uncompressed_bytes:
                 # 单 entry 太大时直接拒绝，防止内存被 XML 拉爆。
-                raise DocxPackageError(
-                    f"Entry too large: {name} ({info.file_size} bytes)"
-                )
+                raise DocxPackageError(f"Entry too large: {name} ({info.file_size} bytes)")
             total_uncompressed += info.file_size
             if total_uncompressed > self.options.max_total_uncompressed_bytes:
                 # 总解压体积限制用于防 ZIP 炸弹。
@@ -105,7 +109,7 @@ class PackageReader:
         self._names = names
         return rows
 
-    def read_content_types(self) -> dict:
+    def read_content_types(self) -> ContentTypes:
         """解析 [Content_Types].xml 中的默认类型和覆盖类型。"""
         with self.open_entry("[Content_Types].xml") as stream:
             root = ET.parse(stream).getroot()
@@ -170,7 +174,7 @@ class PackageReader:
             )
         return records
 
-    def open_entry(self, name: str) -> BinaryIO:
+    def open_entry(self, name: str) -> IO[bytes]:
         """按需打开 ZIP entry 的二进制流。"""
         self._ensure_index()
         normalized = name.replace("\\", "/")

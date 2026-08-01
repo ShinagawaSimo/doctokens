@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict
+from types import MappingProxyType
 from xml.etree import ElementTree as ET
 
-from ..core.constants import attr, first_child, qn
-from ..core.models import ParseWarning, StyleRecord
+from ..core.constants import attr, first_child, qualified_name
+from ..core.models import ParseWarning, RunFormat, StyleRecord
 from ..core.package import PackageReader
 from .formatting import merge_run_formats, parse_run_format
 
@@ -15,11 +17,11 @@ class StyleMap:
     """样式索引；构建完成后只读，便于并发解析。"""
 
     def __init__(self, records: dict[str, StyleRecord], warnings: list[ParseWarning]) -> None:
-        self.records = records
+        self.records: Mapping[str, StyleRecord] = MappingProxyType(dict(records))
         self.warnings = warnings
         self._heading_level_cache: dict[str, int | None] = {}
         self._numbering_cache: dict[str, tuple[str, int] | None] = {}
-        self._run_format_cache: dict[str, dict] = {}
+        self._run_format_cache: dict[str, RunFormat] = {}
 
     def resolve_heading_level(self, style_id: str | None) -> int | None:
         """根据 styleId 解析标题级别；不使用段落文本启发式。"""
@@ -41,7 +43,7 @@ class StyleMap:
             self._numbering_cache[style_id] = self._resolve_numbering(style_id, visited=set())
         return self._numbering_cache[style_id]
 
-    def resolve_run_format(self, style_id: str | None) -> dict:
+    def resolve_run_format(self, style_id: str | None) -> RunFormat:
         """根据 styleId 解析样式继承后的可见文字格式。"""
         if not style_id:
             return {}
@@ -50,13 +52,14 @@ class StyleMap:
             self._run_format_cache[style_id] = self._resolve_run_format(style_id, visited=set())
         return self._run_format_cache[style_id]
 
-    def to_debug_list(self) -> list[dict]:
+    def to_debug_list(self) -> list[dict[str, object]]:
         """输出 debug 用样式摘要。"""
-        rows: list[dict] = []
+        rows: list[dict[str, object]] = []
         for style_id in sorted(self.records):
             record = self.records[style_id]
-            record.resolved_heading_level = self.resolve_heading_level(style_id)
-            rows.append(asdict(record))
+            row = asdict(record)
+            row["resolved_heading_level"] = self.resolve_heading_level(style_id)
+            rows.append(row)
         return rows
 
     def _resolve_heading_level(self, style_id: str, visited: set[str]) -> int | None:
@@ -114,7 +117,7 @@ class StyleMap:
             return self._resolve_numbering(record.based_on, visited)
         return None
 
-    def _resolve_run_format(self, style_id: str, visited: set[str]) -> dict:
+    def _resolve_run_format(self, style_id: str, visited: set[str]) -> RunFormat:
         """递归合并 basedOn 继承链中的 run 格式。"""
         if style_id in visited:
             self.warnings.append(
@@ -131,7 +134,7 @@ class StyleMap:
         if record is None:
             return {}
 
-        inherited: dict = {}
+        inherited: RunFormat = {}
         if record.based_on:
             visited.add(style_id)
             inherited = self._resolve_run_format(record.based_on, visited)
@@ -163,7 +166,7 @@ class StylesParser:
             root = ET.parse(stream).getroot()
 
         records: dict[str, StyleRecord] = {}
-        for style in root.findall(qn("w", "style")):
+        for style in root.findall(qualified_name("w", "style")):
             style_id = attr(style, "w", "styleId")
             if not style_id:
                 # 没有 styleId 的样式无法被正文引用。
@@ -176,15 +179,15 @@ class StylesParser:
             name = first_child(style, "w", "name")
             based_on = first_child(style, "w", "basedOn")
             next_style = first_child(style, "w", "next")
-            ppr = first_child(style, "w", "pPr")
-            rpr = first_child(style, "w", "rPr")
-            outline = first_child(ppr, "w", "outlineLvl")
-            numpr = first_child(ppr, "w", "numPr")
+            paragraph_properties = first_child(style, "w", "pPr")
+            run_properties = first_child(style, "w", "rPr")
+            outline = first_child(paragraph_properties, "w", "outlineLvl")
+            numbering_properties = first_child(paragraph_properties, "w", "numPr")
 
             record.name = attr(name, "w", "val") if name is not None else None
             record.based_on = attr(based_on, "w", "val") if based_on is not None else None
             record.next = attr(next_style, "w", "val") if next_style is not None else None
-            record.run_format = parse_run_format(rpr)
+            record.run_format = parse_run_format(run_properties)
             outline_val = attr(outline, "w", "val") if outline is not None else None
             if outline_val is not None:
                 try:
@@ -199,8 +202,8 @@ class StylesParser:
                             part="word/styles.xml",
                         )
                     )
-            num_id_node = first_child(numpr, "w", "numId")
-            ilvl_node = first_child(numpr, "w", "ilvl")
+            num_id_node = first_child(numbering_properties, "w", "numId")
+            ilvl_node = first_child(numbering_properties, "w", "ilvl")
             num_id = attr(num_id_node, "w", "val") if num_id_node is not None else None
             ilvl = attr(ilvl_node, "w", "val") if ilvl_node is not None else None
             if num_id is not None:

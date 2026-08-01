@@ -7,59 +7,77 @@
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable
 from xml.etree import ElementTree as ET
 
-from ..core.constants import attr, child_elements, first_child, local_name_fast, qn
+from ..core.constants import attr, child_elements, first_child, local_name, qualified_name
 
 # ── N-ary 运算符映射 ──
 # <m:chr> 的 Unicode 字符值 → LaTeX 命令
 _NARY_OPERATOR_MAP: dict[str, str] = {
-    "∑": r"\sum",       # ∑
-    "∏": r"\prod",      # ∏
-    "∐": r"\coprod",    # ∐
-    "∫": r"\int",       # ∫
-    "∬": r"\iint",      # ∬
-    "∭": r"\iiint",     # ∭
-    "∮": r"\oint",      # ∮
-    "⋃": r"\bigcup",    # ⋃
-    "⋂": r"\bigcap",    # ⋂
+    "∑": r"\sum",  # ∑
+    "∏": r"\prod",  # ∏
+    "∐": r"\coprod",  # ∐
+    "∫": r"\int",  # ∫
+    "∬": r"\iint",  # ∬
+    "∭": r"\iiint",  # ∭
+    "∮": r"\oint",  # ∮
+    "⋃": r"\bigcup",  # ⋃
+    "⋂": r"\bigcap",  # ⋂
     "⋀": r"\bigwedge",  # ⋀
-    "⋁": r"\bigvee",    # ⋁
-    "⨀": r"\bigodot",   # ⨀
+    "⋁": r"\bigvee",  # ⋁
+    "⨀": r"\bigodot",  # ⨀
     "⨁": r"\bigoplus",  # ⨁
-    "⨂": r"\bigotimes", # ⨂
+    "⨂": r"\bigotimes",  # ⨂
 }
 
 # ── 重音映射 ──
 # <m:acc> 的 <m:chr> 值 → LaTeX 重音命令
 _ACCENT_MAP: dict[str, str] = {
-    "̂": r"\hat",       # 抑扬符  ̂
-    "̃": r"\tilde",     # 波浪线  ̃
-    "̇": r"\dot",       # 点      ̇
-    "̈": r"\ddot",      # 双点    ̈
-    "⃗": r"\vec",       # 向量箭头 ⃗
-    "̄": r"\bar",       # 上划线  ̄
-    "̆": r"\breve",     # 短音符  ̆
-    "̌": r"\check",     # 抑扬符  ̌
-    "̀": r"\grave",     # 重音符  ̀
-    "́": r"\acute",     # 尖音符  ́
+    "̂": r"\hat",  # 抑扬符  ̂
+    "̃": r"\tilde",  # 波浪线  ̃
+    "̇": r"\dot",  # 点      ̇
+    "̈": r"\ddot",  # 双点    ̈
+    "⃗": r"\vec",  # 向量箭头 ⃗
+    "̄": r"\bar",  # 上划线  ̄
+    "̆": r"\breve",  # 短音符  ̆
+    "̌": r"\check",  # 抑扬符  ̌
+    "̀": r"\grave",  # 重音符  ̀
+    "́": r"\acute",  # 尖音符  ́
 }
 
 # ── 数学函数映射 ──
 # <m:func> 的 <m:fName> 文本 → LaTeX 函数命令
 _FUNC_MAP: dict[str, str] = {
-    "sin": r"\sin", "cos": r"\cos", "tan": r"\tan",
-    "csc": r"\csc", "sec": r"\sec", "cot": r"\cot",
-    "sinh": r"\sinh", "cosh": r"\cosh", "tanh": r"\tanh",
-    "arcsin": r"\arcsin", "arccos": r"\arccos", "arctan": r"\arctan",
-    "log": r"\log", "ln": r"\ln", "lg": r"\lg",
+    "sin": r"\sin",
+    "cos": r"\cos",
+    "tan": r"\tan",
+    "csc": r"\csc",
+    "sec": r"\sec",
+    "cot": r"\cot",
+    "sinh": r"\sinh",
+    "cosh": r"\cosh",
+    "tanh": r"\tanh",
+    "arcsin": r"\arcsin",
+    "arccos": r"\arccos",
+    "arctan": r"\arctan",
+    "log": r"\log",
+    "ln": r"\ln",
+    "lg": r"\lg",
     "exp": r"\exp",
-    "max": r"\max", "min": r"\min",
-    "sup": r"\sup", "inf": r"\inf",
-    "lim": r"\lim", "limsup": r"\limsup", "liminf": r"\liminf",
-    "det": r"\det", "gcd": r"\gcd", "deg": r"\deg",
-    "dim": r"\dim", "hom": r"\hom", "ker": r"\ker",
+    "max": r"\max",
+    "min": r"\min",
+    "sup": r"\sup",
+    "inf": r"\inf",
+    "lim": r"\lim",
+    "limsup": r"\limsup",
+    "liminf": r"\liminf",
+    "det": r"\det",
+    "gcd": r"\gcd",
+    "deg": r"\deg",
+    "dim": r"\dim",
+    "hom": r"\hom",
+    "ker": r"\ker",
     "arg": r"\arg",
     "mod": r"\mod",
     "Pr": r"\Pr",
@@ -68,17 +86,20 @@ _FUNC_MAP: dict[str, str] = {
 # ── 括号/定界符映射 ──
 # <m:dPr> 的 begChr/endChr 字符 → LaTeX 定界符
 _DELIM_MAP: dict[str, str] = {
-    "(": "(", ")": ")",
-    "[": "[", "]": "]",
-    "{": r"\{", "}": r"\}",
+    "(": "(",
+    ")": ")",
+    "[": "[",
+    "]": "]",
+    "{": r"\{",
+    "}": r"\}",
     "|": "|",
     "‖": r"\|",  # ‖ 双竖线
-    "⌊": r"\lfloor",   # ⌊
-    "⌋": r"\rfloor",   # ⌋
-    "⌈": r"\lceil",    # ⌈
-    "⌉": r"\rceil",    # ⌉
-    "⟨": r"\langle",   # ⟨
-    "⟩": r"\rangle",   # ⟩
+    "⌊": r"\lfloor",  # ⌊
+    "⌋": r"\rfloor",  # ⌋
+    "⌈": r"\lceil",  # ⌈
+    "⌉": r"\rceil",  # ⌉
+    "⟨": r"\langle",  # ⟨
+    "⟩": r"\rangle",  # ⟩
 }
 
 
@@ -95,7 +116,7 @@ def omath_to_latex(elem: ET.Element) -> str:
 
 def _convert_node(node: ET.Element) -> str:
     """按节点标签名分发到对应的处理函数。"""
-    lname = local_name_fast(node.tag)
+    lname = local_name(node.tag)
     handler = _DISPATCH.get(lname)
     if handler is not None:
         return handler(node)
@@ -105,11 +126,12 @@ def _convert_node(node: ET.Element) -> str:
 
 # ── 叶子节点：数学文本 run ──
 
+
 def _handle_r(elem: ET.Element) -> str:
     """处理 <m:r>：提取格式化文本并转义 LaTeX 特殊字符。"""
     parts: list[str] = []
     for child in elem:
-        if local_name_fast(child.tag) == "t":
+        if local_name(child.tag) == "t":
             text = child.text or ""
             parts.append(_escape_latex(text))
     return "".join(parts)
@@ -122,6 +144,7 @@ def _handle_t(elem: ET.Element) -> str:
 
 # ── 分式 ──
 
+
 def _handle_f(elem: ET.Element) -> str:
     """处理 <m:f> → \\frac{num}{den}。"""
     num = _child_convert(elem, "num")
@@ -130,6 +153,7 @@ def _handle_f(elem: ET.Element) -> str:
 
 
 # ── 根号 ──
+
 
 def _handle_rad(elem: ET.Element) -> str:
     """处理 <m:rad> → \\sqrt[deg]{e}。"""
@@ -141,6 +165,7 @@ def _handle_rad(elem: ET.Element) -> str:
 
 
 # ── 上下标 ──
+
 
 def _handle_ssub(elem: ET.Element) -> str:
     """处理 <m:sSub> → {e}_{sub}。"""
@@ -188,6 +213,7 @@ def _handle_spre(elem: ET.Element) -> str:
 
 # ── N-ary 运算符（求和、积分、乘积等） ──
 
+
 def _handle_nary(elem: ET.Element) -> str:
     """处理 <m:nary> → \\sum_{sub}^{sup} 或 \\int_{sub}^{sup} 等。"""
     # 从 <m:chr> 读取运算符字符
@@ -210,6 +236,7 @@ def _handle_nary(elem: ET.Element) -> str:
 
 # ── 重音 ──
 
+
 def _handle_acc(elem: ET.Element) -> str:
     """处理 <m:acc> → \\hat{e}、\\vec{e} 等。"""
     chr_val = _child_attr(elem, "chr", "val")
@@ -219,6 +246,7 @@ def _handle_acc(elem: ET.Element) -> str:
 
 
 # ── 上下划线 ──
+
 
 def _handle_bar(elem: ET.Element) -> str:
     """处理 <m:bar> → \\overline{e} 或 \\underline{e}。"""
@@ -230,6 +258,7 @@ def _handle_bar(elem: ET.Element) -> str:
 
 
 # ── 数学函数 ──
+
 
 def _handle_func(elem: ET.Element) -> str:
     """处理 <m:func> → \\sin{e} 或 \\lim_{sub} e。"""
@@ -258,6 +287,7 @@ def _func_name(elem: ET.Element) -> str:
 
 # ── 括号组 ──
 
+
 def _handle_groupchr(elem: ET.Element) -> str:
     """处理 <m:groupChr> → {e} 或上方有符号的括号组。"""
     chr_val = _child_attr(elem, "pr", "chr") or _child_attr(elem, "groupChrPr", "chr")
@@ -268,6 +298,7 @@ def _handle_groupchr(elem: ET.Element) -> str:
 
 
 # ── 定界符（括号） ──
+
 
 def _handle_d(elem: ET.Element) -> str:
     """处理 <m:d> → \\left( e \\right)。"""
@@ -281,14 +312,12 @@ def _handle_d(elem: ET.Element) -> str:
 
 # ── 矩阵 ──
 
+
 def _handle_m(elem: ET.Element) -> str:
     """处理 <m:m>（矩阵）→ \\begin{matrix}...\\end{matrix}。"""
     rows: list[str] = []
     for mr in child_elements(elem, "m", "mr"):
-        cells: list[str] = []
-        for cell in mr:
-            if local_name_fast(cell.tag) == "e":
-                cells.append(_convert_node(cell))
+        cells = [_convert_node(cell) for cell in mr if local_name(cell.tag) == "e"]
         rows.append(" & ".join(cells))
     body = r" \\ ".join(rows)
     return rf"\begin{{matrix}} {body} \end{{matrix}}"
@@ -296,17 +325,16 @@ def _handle_m(elem: ET.Element) -> str:
 
 # ── 方程组 ──
 
+
 def _handle_eqarr(elem: ET.Element) -> str:
     """处理 <m:eqArr> → \\begin{aligned}...\\end{aligned}。"""
-    rows: list[str] = []
-    for child in elem:
-        if local_name_fast(child.tag) == "e":
-            rows.append(_convert_node(child))
+    rows = [_convert_node(child) for child in elem if local_name(child.tag) == "e"]
     body = r" \\ ".join(rows)
     return rf"\begin{{aligned}} {body} \end{{aligned}}"
 
 
 # ── 极限 ──
+
 
 def _handle_limlow(elem: ET.Element) -> str:
     """处理 <m:limLow> → {e}_{lim}。"""
@@ -323,6 +351,7 @@ def _handle_limupp(elem: ET.Element) -> str:
 
 
 # ── 幻影/边框盒/空盒 ──
+
 
 def _handle_phant(elem: ET.Element) -> str:
     """处理 <m:phant> → \\phantom{e}。"""
@@ -342,6 +371,7 @@ def _handle_box(elem: ET.Element) -> str:
 
 
 # ── 辅助函数 ──
+
 
 def _child_convert(elem: ET.Element, child_local: str) -> str:
     """查找指定 local name 的第一个子元素并转换，不存在时返回空串。"""
@@ -382,10 +412,7 @@ def _wrap_group(latex: str) -> str:
 
 def _plain_text(elem: ET.Element) -> str:
     """提取元素内所有 <m:t> 文本（fallback 用）。"""
-    parts: list[str] = []
-    for mt in elem.iter(qn("m", "t")):
-        if mt.text:
-            parts.append(mt.text)
+    parts = [mt.text for mt in elem.iter(qualified_name("m", "t")) if mt.text]
     return "".join(parts)
 
 
@@ -411,7 +438,7 @@ def _escape_latex(text: str) -> str:
 
 # ── 元素分发表 ──
 
-_DISPATCH: dict[str, Any] = {
+_DISPATCH: dict[str, Callable[[ET.Element], str]] = {
     "r": _handle_r,
     "t": _handle_t,
     "f": _handle_f,
@@ -445,7 +472,7 @@ _DISPATCH: dict[str, Any] = {
     "deg": _convert_children,
     "lim": _convert_children,
     "fName": lambda e: _plain_text(e).strip(),
-    "chr": lambda e: e.get(qn("m", "val"), ""),
+    "chr": lambda e: e.get(qualified_name("m", "val"), ""),
     # 格式控制元素：不产生输出
     "oMathParaPr": lambda e: "",
     "oMathPr": lambda e: "",

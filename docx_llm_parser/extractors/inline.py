@@ -3,50 +3,48 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
 from xml.etree import ElementTree as ET
 
 from ..core.constants import (
-    _TAG_A_BLIP,
-    _TAG_C_CHART,
-    _TAG_DGM_REL_IDS,
     _TAG_M_OMATH,
     _TAG_M_OMATH_PARA,
     _TAG_W_ANNOTATION_REF,
-    _TAG_W_BR,
+    _TAG_W_BREAK,
+    _TAG_W_CARRIAGE_RETURN,
     _TAG_W_COMMENT_REFERENCE,
-    _TAG_W_CR,
-    _TAG_W_DEL,
-    _TAG_W_DEL_TEXT,
+    _TAG_W_DELETION_TEXT,
     _TAG_W_DRAWING,
     _TAG_W_ENDNOTE_REF,
     _TAG_W_ENDNOTE_REFERENCE,
     _TAG_W_FLD_CHAR,
     _TAG_W_FOOTNOTE_REF,
     _TAG_W_FOOTNOTE_REFERENCE,
-    _TAG_W_HYPERLINK,
-    _TAG_W_INS,
     _TAG_W_INSTR_TEXT,
     _TAG_W_LAST_RENDERED_PAGE_BREAK,
-    _TAG_W_PICT,
-    _TAG_W_R,
-    _TAG_W_RPR,
-    _TAG_W_R_STYLE,
-    _TAG_W_SDT,
-    _TAG_W_SDT_CONTENT,
-    _TAG_W_SMART_TAG,
-    _TAG_W_T,
+    _TAG_W_PICTURE,
+    _TAG_W_RUN_PROPERTIES,
+    _TAG_W_RUN_STYLE,
     _TAG_W_TAB,
-    _TAG_W_TC,
-    _TAG_W_TR,
+    _TAG_W_TEXT,
     attr,
     child_elements,
     first_child,
     local_name,
-    local_name_fast,
-    qn,
+    qualified_name,
 )
-from ..core.models import ParseOptions, ParseWarning
+from ..core.models import (
+    AssetLookup,
+    Chart,
+    DrawingCommon,
+    InlineObject,
+    LinkInfo,
+    ObjectLookup,
+    ParseOptions,
+    ParseWarning,
+    RawHint,
+    Run,
+    SmartArt,
+)
 from ..core.relationships import RelationshipIndex
 from ..ooxml.formatting import merge_run_formats, parse_run_format, visible_run_format
 from ..ooxml.omml_latex import omath_to_latex
@@ -64,8 +62,8 @@ class InlineParser:
         options: ParseOptions,
         warnings: list[ParseWarning],
         relationships: RelationshipIndex,
-        asset_lookup: dict[tuple[str, str], dict[str, Any]],
-        object_lookup: dict[tuple[str, str], dict[str, Any]] | None = None,
+        asset_lookup: AssetLookup,
+        object_lookup: ObjectLookup | None = None,
         on_page_break: PageBreakCallback | None = None,
     ) -> None:
         self.styles = styles
@@ -82,10 +80,10 @@ class InlineParser:
         part: str,
         block_id: str,
         paragraph_style_id: str | None,
-    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    ) -> tuple[list[Run], list[RawHint]]:
         """解析一个段落内的 run，并返回 debug 用 raw hints。"""
-        runs: list[dict[str, Any]] = []
-        raw_hints: list[dict[str, Any]] = []
+        runs: list[Run] = []
+        raw_hints: list[RawHint] = []
         for child in p:
             self._extract_inline_runs(child, part, block_id, paragraph_style_id, raw_hints, runs)
         return runs, raw_hints
@@ -96,12 +94,12 @@ class InlineParser:
         part: str,
         block_id: str,
         paragraph_style_id: str | None,
-        raw_hints: list[dict[str, Any]],
-        runs: list[dict[str, Any]],
+        raw_hints: list[RawHint],
+        runs: list[Run],
     ) -> None:
         """递归处理段落内联节点，保留 Word 明确给出的结构。"""
-        # 优化：使用 local_name_fast 避免 split 内存分配（热路径每秒数千次调用）。
-        lname = local_name_fast(node.tag)
+        # 优化：使用 local_name 避免 split 内存分配（热路径每秒数千次调用）。
+        lname = local_name(node.tag)
         if lname == "pPr":
             # 段落属性由外层 block parser 处理。
             return
@@ -115,7 +113,7 @@ class InlineParser:
             # 超链接的显示文字复用普通 inline 解析，链接目标作为轻量属性附着。
             link = self._hyperlink_info(node, part)
             raw_hints.append({"type": "hyperlink", **link})
-            temp_runs: list[dict[str, Any]] = []
+            temp_runs: list[Run] = []
             for child in node:
                 self._extract_inline_runs(
                     child, part, block_id, paragraph_style_id, raw_hints, temp_runs
@@ -128,17 +126,18 @@ class InlineParser:
             # 插入修订在 final/review 视图中属于可见文本。
             self._warn(
                 "REVISION_INSERTION_INCLUDED",
-                "Encountered insertion revision; parser includes inserted text in final/review mode.",
+                "Encountered insertion revision; parser includes inserted text "
+                "in final/review mode.",
                 part=part,
                 block_id=block_id,
             )
             if self.options.revision_mode in {"final", "review"}:
-                temp_runs: list[dict[str, Any]] = []
+                revision_runs: list[Run] = []
                 for child in node:
                     self._extract_inline_runs(
-                        child, part, block_id, paragraph_style_id, raw_hints, temp_runs
+                        child, part, block_id, paragraph_style_id, raw_hints, revision_runs
                     )
-                for run in temp_runs:
+                for run in revision_runs:
                     if self.options.revision_mode == "review":
                         run["revision"] = "inserted"
                     runs.append(run)
@@ -152,17 +151,19 @@ class InlineParser:
                 block_id=block_id,
             )
             if self.options.revision_mode in {"original", "review"}:
-                text = "".join((item.text or "") for item in node.iter(_TAG_W_DEL_TEXT))
+                text = "".join((item.text or "") for item in node.iter(_TAG_W_DELETION_TEXT))
                 if text:
-                    run = {"text": text}
+                    deletion_run: Run = {"text": text}
                     if self.options.revision_mode == "review":
-                        run["revision"] = "deleted"
-                    runs.append(run)
+                        deletion_run["revision"] = "deleted"
+                    runs.append(deletion_run)
             return
         if lname in {"sdt", "sdtContent", "smartTag"}:
             # 内容控件和智能标记是包装层，继续读取内部可见内容。
             for child in node:
-                self._extract_inline_runs(child, part, block_id, paragraph_style_id, raw_hints, runs)
+                self._extract_inline_runs(
+                    child, part, block_id, paragraph_style_id, raw_hints, runs
+                )
             return
         if lname in {"oMath", "oMathPara"}:
             # 段落级 OMML 公式作为轻量对象进入最终 XML。
@@ -195,112 +196,133 @@ class InlineParser:
         part: str,
         block_id: str,
         paragraph_style_id: str | None,
-        raw_hints: list[dict[str, Any]],
-    ) -> dict[str, Any]:
+        raw_hints: list[RawHint],
+    ) -> Run:
         """解析 run 的可见文本、必要格式和内联对象。
         优化：单次遍历 run 的所有子节点，按标签名分发处理。
         原来需要 first_child(run, 'rPr') + child 循环两次扫描，
         现在合并为一次迭代。"""
         text_parts: list[str] = []
-        rpr: ET.Element | None = None
-        out: dict[str, Any] = {"text": ""}
+        run_properties: ET.Element | None = None
+        parsed_run: Run = {"text": ""}
 
         # 单次遍历：同时收集 rPr 和处理文本/对象子节点。
         for child in run:
-            # 优化：使用预计算标签名比对，避免重复 qn() 调用。
+            # 优化：使用预计算标签名比对，避免重复 qualified_name() 调用。
             child_tag = child.tag
-            if child_tag == _TAG_W_RPR:
-                rpr = child
-            elif child_tag == _TAG_W_T:
-                if attr(child, "xml", "space") == "preserve":
-                    out["preserveSpace"] = True
-                text_parts.append(child.text or "")
-            elif child_tag == _TAG_W_TAB:
-                text_parts.append("\t")
-            elif child_tag == _TAG_W_BR or child_tag == _TAG_W_CR:
-                text_parts.append("\n")
-                if attr(child, "w", "type") == "page":
-                    raw_hints.append({"type": "manualPageBreak"})
-                    self._mark_page_break()
-            elif child_tag == _TAG_W_LAST_RENDERED_PAGE_BREAK:
-                raw_hints.append({"type": "lastRenderedPageBreak"})
-                self._mark_page_break()
-            elif child_tag == _TAG_W_DRAWING:
-                objects = self._drawing_objects(child, part)
-                out.setdefault("objects", []).extend(objects)
-                raw_hints.extend({"type": "drawing", **obj} for obj in objects)
-            elif child_tag == _TAG_W_PICT:
-                objects = self._pict_objects(child)
-                out.setdefault("objects", []).extend(objects)
-                raw_hints.extend({"type": "pict", **obj} for obj in objects)
-            elif child_tag in (_TAG_M_OMATH, _TAG_M_OMATH_PARA):
-                obj = self._equation_object(child)
-                out.setdefault("objects", []).append(obj)
-                raw_hints.append(obj)
-            elif child_tag in (_TAG_W_FLD_CHAR, _TAG_W_INSTR_TEXT):
-                lname = local_name_fast(child_tag)
-                field_hint: dict[str, Any] = {"type": "field", "node": lname}
-                if lname == "instrText" and child.text:
-                    field_hint["instruction"] = child.text
-                    out.setdefault("objects", []).append(
-                        {"type": "fieldInstruction", "instruction": child.text}
-                    )
-                raw_hints.append(field_hint)
-            elif child_tag in (_TAG_W_FOOTNOTE_REF, _TAG_W_ENDNOTE_REF, _TAG_W_ANNOTATION_REF):
-                continue
-            elif child_tag in (_TAG_W_FOOTNOTE_REFERENCE, _TAG_W_ENDNOTE_REFERENCE):
-                note_id = attr(child, "w", "id")
-                lname = local_name_fast(child_tag)
-                ref_type = "footnote" if lname == "footnoteReference" else "endnote"
-                obj = {"type": f"{ref_type}Ref", "id": note_id}
-                out.setdefault("objects", []).append(obj)
-                raw_hints.append(obj)
-            elif child_tag == _TAG_W_COMMENT_REFERENCE:
-                obj = {"type": "commentRef", "id": attr(child, "w", "id")}
-                out.setdefault("objects", []).append(obj)
-                raw_hints.append(obj)
-            elif child_tag == _TAG_W_DEL_TEXT:
-                # final 视图默认不读删除文本。
-                self._warn(
-                    "DELETED_TEXT_SKIPPED",
-                    "Encountered deleted text in run; parser skips deleted text in final mode.",
-                    part=part,
-                    block_id=block_id,
-                )
-            elif child_tag == _TAG_W_R_STYLE:
-                # rStyle 由下方 rPr 段落统一用 first_child 提取，此处仅跳过。
-                pass
+            if child_tag == _TAG_W_RUN_PROPERTIES:
+                run_properties = child
             else:
-                self._warn(
-                    "UNSUPPORTED_RUN_CHILD",
-                    f"Encountered unsupported run child: {local_name_fast(child_tag)}",
-                    part=part,
-                    block_id=block_id,
+                self._handle_run_child(
+                    child,
+                    part,
+                    block_id,
+                    raw_hints,
+                    parsed_run,
+                    text_parts,
                 )
 
         # 在遍历完子节点后，解析 rPr（前面已在循环中找到）。
-        if rpr is not None:
-            rstyle = first_child(rpr, "w", "rStyle")
+        if run_properties is not None:
+            rstyle = first_child(run_properties, "w", "rStyle")
             run_style_id = attr(rstyle, "w", "val") if rstyle is not None else None
             if run_style_id is not None:
-                out["styleId"] = run_style_id
+                parsed_run["styleId"] = run_style_id
             run_format = merge_run_formats(
                 self.styles.resolve_run_format(paragraph_style_id),
                 self.styles.resolve_run_format(run_style_id),
-                parse_run_format(rpr),
+                parse_run_format(run_properties),
             )
             visible_format = visible_run_format(run_format)
             if visible_format:
-                out["format"] = visible_format
+                parsed_run["format"] = visible_format
 
-        out["text"] = "".join(text_parts)
-        return out
+        parsed_run["text"] = "".join(text_parts)
+        return parsed_run
 
-    def _hyperlink_info(self, node: ET.Element, part: str) -> dict[str, Any]:
+    def _handle_run_child(
+        self,
+        child: ET.Element,
+        part: str,
+        block_id: str,
+        raw_hints: list[RawHint],
+        parsed_run: Run,
+        text_parts: list[str],
+    ) -> None:
+        """Dispatch one run child into text, inline objects or warnings."""
+        child_tag = child.tag
+        if child_tag == _TAG_W_TEXT:
+            if attr(child, "xml", "space") == "preserve":
+                parsed_run["preserveSpace"] = True
+            text_parts.append(child.text or "")
+        elif child_tag == _TAG_W_TAB:
+            text_parts.append("\t")
+        elif child_tag in (_TAG_W_BREAK, _TAG_W_CARRIAGE_RETURN):
+            text_parts.append("\n")
+            if attr(child, "w", "type") == "page":
+                raw_hints.append({"type": "manualPageBreak"})
+                self._mark_page_break()
+        elif child_tag == _TAG_W_LAST_RENDERED_PAGE_BREAK:
+            raw_hints.append({"type": "lastRenderedPageBreak"})
+            self._mark_page_break()
+        elif child_tag == _TAG_W_DRAWING:
+            objects = self._drawing_objects(child, part)
+            parsed_run.setdefault("objects", []).extend(objects)
+            raw_hints.extend({"type": "drawing", **obj} for obj in objects)
+        elif child_tag == _TAG_W_PICTURE:
+            objects = self._pict_objects(child)
+            parsed_run.setdefault("objects", []).extend(objects)
+            raw_hints.extend({"type": "pict", **obj} for obj in objects)
+        elif child_tag in (_TAG_M_OMATH, _TAG_M_OMATH_PARA):
+            obj = self._equation_object(child)
+            parsed_run.setdefault("objects", []).append(obj)
+            raw_hints.append(obj)
+        elif child_tag in (_TAG_W_FLD_CHAR, _TAG_W_INSTR_TEXT):
+            lname = local_name(child_tag)
+            field_hint: RawHint = {"type": "field", "node": lname}
+            if lname == "instrText" and child.text:
+                field_hint["instruction"] = child.text
+                parsed_run.setdefault("objects", []).append(
+                    {"type": "fieldInstruction", "instruction": child.text}
+                )
+            raw_hints.append(field_hint)
+        elif child_tag in (_TAG_W_FOOTNOTE_REF, _TAG_W_ENDNOTE_REF, _TAG_W_ANNOTATION_REF):
+            return
+        elif child_tag in (_TAG_W_FOOTNOTE_REFERENCE, _TAG_W_ENDNOTE_REFERENCE):
+            note_id = attr(child, "w", "id")
+            lname = local_name(child_tag)
+            ref_type = "footnote" if lname == "footnoteReference" else "endnote"
+            obj = {"type": f"{ref_type}Ref", "id": note_id}
+            parsed_run.setdefault("objects", []).append(obj)
+            raw_hints.append(obj)
+        elif child_tag == _TAG_W_COMMENT_REFERENCE:
+            obj = {"type": "commentRef", "id": attr(child, "w", "id")}
+            parsed_run.setdefault("objects", []).append(obj)
+            raw_hints.append(obj)
+        elif child_tag == _TAG_W_DELETION_TEXT:
+            # final 视图默认不读删除文本。
+            self._warn(
+                "DELETED_TEXT_SKIPPED",
+                "Encountered deleted text in run; parser skips deleted text in final mode.",
+                part=part,
+                block_id=block_id,
+            )
+        elif child_tag == _TAG_W_RUN_STYLE:
+            # rStyle 由下方 rPr 段落统一用 first_child 提取，此处仅跳过。
+            return
+        else:
+            self._warn(
+                "UNSUPPORTED_RUN_CHILD",
+                f"Encountered unsupported run child: {local_name(child_tag)}",
+                part=part,
+                block_id=block_id,
+            )
+
+    def _hyperlink_info(self, node: ET.Element, part: str) -> LinkInfo:
         """解析超链接目标，最终 XML 只使用 href/anchor。"""
         rel_id = attr(node, "r", "id")
         anchor = attr(node, "w", "anchor")
-        info: dict[str, Any] = {}
+        info: LinkInfo = {}
         if rel_id:
             rel = self.relationships.require(part, rel_id)
             info["href"] = rel.resolved_target or rel.target
@@ -308,30 +330,31 @@ class InlineParser:
             info["anchor"] = anchor
         return info
 
-    def _drawing_objects(self, drawing: ET.Element, part: str) -> list[dict[str, Any]]:
+    def _drawing_objects(self, drawing: ET.Element, part: str) -> list[InlineObject]:
         """从 DrawingML 中提取图片引用、文本框和轻量图形占位。"""
         placement, container = self._drawing_container(drawing)
         common = self._drawing_common_attrs(container, placement)
-        objects: list[dict[str, Any]] = []
+        objects: list[InlineObject] = []
 
-        for chart in drawing.iter(qn("c", "chart")):
+        for chart in drawing.iter(qualified_name("c", "chart")):
             # chart 引用指向 word/charts/chart*.xml，正文只挂轻量摘要对象。
             rel_id = attr(chart, "r", "id")
             if rel_id:
                 objects.append(self._referenced_object(part, rel_id, "chart", common))
 
-        for rel_ids in drawing.iter(qn("dgm", "relIds")):
+        for rel_ids in drawing.iter(qualified_name("dgm", "relIds")):
             # SmartArt 的数据模型在 r:dm 指向的 diagram data part 中。
             rel_id = attr(rel_ids, "r", "dm")
             if rel_id:
                 objects.append(self._referenced_object(part, rel_id, "smartart", common))
 
-        blip = drawing.find(".//" + qn("a", "blip"))
+        blip = drawing.find(".//" + qualified_name("a", "blip"))
         rel_id = attr(blip, "r", "embed") if blip is not None else None
         if rel_id:
             asset = self.asset_lookup.get((part, rel_id))
             if asset is not None:
-                image: dict[str, Any] = {"type": "image", **common}
+                image: InlineObject = {"type": "image"}
+                self._copy_drawing_common(image, common)
                 image["assetId"] = asset["id"]
                 if "file" in asset:
                     image["file"] = asset["file"]
@@ -340,34 +363,42 @@ class InlineParser:
                 objects.append(image)
             else:
                 # 资源缺失时保留图形占位，避免最终 XML 误指向不存在的图片。
-                objects.append({"type": "drawing", **common})
+                drawing_obj: InlineObject = {"type": "drawing"}
+                self._copy_drawing_common(drawing_obj, common)
+                objects.append(drawing_obj)
 
         for txbx in self._textbox_content_nodes(drawing):
             # 文本框文字可能是用户直接可见正文，必须进入最终 XML。
             text = self._container_plain_text(txbx)
             if text.strip():
-                objects.append({"type": "textbox", "text": text, **common})
+                textbox: InlineObject = {"type": "textbox", "text": text}
+                self._copy_drawing_common(textbox, common)
+                objects.append(textbox)
 
         if objects:
             return objects
-        return [{"type": "drawing", **common}]
+        fallback_obj: InlineObject = {"type": "drawing"}
+        self._copy_drawing_common(fallback_obj, common)
+        return [fallback_obj]
 
     def _referenced_object(
-        self, part: str, rel_id: str, fallback_type: str, common: dict[str, Any]
-    ) -> dict[str, Any]:
+        self, part: str, rel_id: str, fallback_type: str, common: DrawingCommon
+    ) -> InlineObject:
         """读取预解析对象；缺失时降级为轻量占位。"""
         parsed = self.object_lookup.get((part, rel_id))
         if parsed is None:
-            return {"type": fallback_type, "id": rel_id, **common}
-        obj = dict(parsed)
-        obj.update(common)
+            obj: InlineObject = {"type": fallback_type, "id": rel_id}
+            self._copy_drawing_common(obj, common)
+            return obj
+        obj = self._object_from_lookup(parsed)
+        self._copy_drawing_common(obj, common)
         return obj
 
-    def _pict_objects(self, pict: ET.Element) -> list[dict[str, Any]]:
+    def _pict_objects(self, pict: ET.Element) -> list[InlineObject]:
         """从旧式 VML pict 中提取文本框；其它图形保留占位。"""
-        objects: list[dict[str, Any]] = []
-        common: dict[str, Any] = {"placement": "vml"}
-        for shape in pict.iter(qn("v", "shape")):
+        objects: list[InlineObject] = []
+        common: DrawingCommon = {"placement": "vml"}
+        for shape in pict.iter(qualified_name("v", "shape")):
             shape_id = shape.get("id")
             alt = shape.get("alt")
             if shape_id:
@@ -378,29 +409,74 @@ class InlineParser:
         for txbx in self._textbox_content_nodes(pict):
             text = self._container_plain_text(txbx)
             if text.strip():
-                objects.append({"type": "textbox", "text": text, **common})
+                textbox: InlineObject = {"type": "textbox", "text": text}
+                self._copy_drawing_common(textbox, common)
+                objects.append(textbox)
         if objects:
             return objects
-        return [{"type": "drawing", **common}]
+        drawing: InlineObject = {"type": "drawing"}
+        self._copy_drawing_common(drawing, common)
+        return [drawing]
+
+    def _copy_drawing_common(self, obj: InlineObject, common: DrawingCommon) -> None:
+        """Copy shared DrawingML/VML metadata without TypedDict ** expansion."""
+        if "placement" in common:
+            obj["placement"] = common["placement"]
+        if "name" in common:
+            obj["name"] = common["name"]
+        if "alt" in common:
+            obj["alt"] = common["alt"]
+        if "title" in common:
+            obj["title"] = common["title"]
+        if "cx" in common:
+            obj["cx"] = common["cx"]
+        if "cy" in common:
+            obj["cy"] = common["cy"]
+
+    def _object_from_lookup(self, parsed: Chart | SmartArt) -> InlineObject:
+        """Convert a parsed chart/SmartArt object to the inline-object shape."""
+        obj: InlineObject = {
+            "type": parsed["type"],
+            "id": parsed["id"],
+            "part": parsed["part"],
+        }
+        if parsed["type"] == "chart":
+            obj["chartType"] = parsed["chartType"]
+            obj["seriesCount"] = parsed["seriesCount"]
+            obj["pointCount"] = parsed["pointCount"]
+            obj["series"] = parsed["series"]
+            if "title" in parsed:
+                obj["title"] = parsed["title"]
+        else:
+            obj["nodeCount"] = parsed["nodeCount"]
+            obj["linkCount"] = parsed["linkCount"]
+            obj["rawLinkCount"] = parsed["rawLinkCount"]
+            obj["nodes"] = parsed["nodes"]
+            obj["links"] = parsed["links"]
+            if "layoutType" in parsed:
+                obj["layoutType"] = parsed["layoutType"]
+        if "sourcePart" in parsed:
+            obj["sourcePart"] = parsed["sourcePart"]
+        if "relationshipId" in parsed:
+            obj["relationshipId"] = parsed["relationshipId"]
+        return obj
 
     def _drawing_container(self, drawing: ET.Element) -> tuple[str, ET.Element | None]:
         """识别 DrawingML 是 inline 还是 anchor。"""
-        inline = drawing.find(".//" + qn("wp", "inline"))
-        anchor = drawing.find(".//" + qn("wp", "anchor"))
+        inline = drawing.find(".//" + qualified_name("wp", "inline"))
+        anchor = drawing.find(".//" + qualified_name("wp", "anchor"))
         if inline is not None:
             return ("inline", inline)
         if anchor is not None:
             return ("anchor", anchor)
         return ("drawing", None)
 
-    def _drawing_common_attrs(
-        self, container: ET.Element | None, placement: str
-    ) -> dict[str, Any]:
+    def _drawing_common_attrs(self, container: ET.Element | None, placement: str) -> DrawingCommon:
         """提取图片、形状、文本框共用的轻量辅助信息。"""
-        obj: dict[str, Any] = {"placement": placement}
+        obj: DrawingCommon = {"placement": placement}
         if container is None:
             return obj
-        doc_pr = container.find(".//" + qn("wp", "docPr"))
+        doc_pr = container.find(".//" + qualified_name("wp", "docPr"))
         if doc_pr is not None:
             name = doc_pr.get("name")
             descr = doc_pr.get("descr")
@@ -419,9 +495,9 @@ class InlineParser:
 
     def _textbox_content_nodes(self, node: ET.Element) -> list[ET.Element]:
         """查找 DrawingML/WPS/VML 文本框中的 w:txbxContent。"""
-        return [item for item in node.iter(qn("w", "txbxContent"))]
+        return list(node.iter(qualified_name("w", "txbxContent")))
 
-    def _equation_object(self, node: ET.Element) -> dict[str, Any]:
+    def _equation_object(self, node: ET.Element) -> InlineObject:
         """把 OMML 公式转换为 LaTeX 字符串。LLM 对 LaTeX 数学表达理解极好。"""
         text = omath_to_latex(node)
         return {"type": "equation", "text": text}

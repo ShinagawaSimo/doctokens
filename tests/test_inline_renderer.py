@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from io import BytesIO
 import unittest
+from io import BytesIO
+from typing import cast
 from xml.etree import ElementTree as ET
 
 from docx_llm_parser.core.models import ParseOptions, RelationshipRecord
+from docx_llm_parser.core.package import PackageReader
 from docx_llm_parser.core.relationships import RelationshipIndex
 from docx_llm_parser.extractors.body import DocumentBodyParser
 from docx_llm_parser.extractors.inline import InlineParser
@@ -17,9 +19,10 @@ from docx_llm_parser.extractors.objects import (
     parse_chart_root,
     parse_smartart_root,
 )
+from docx_llm_parser.ooxml.numbering import NumberingMap, NumberingState
 from docx_llm_parser.ooxml.styles import StyleMap
-from docx_llm_parser.renderers.html5 import _inline_content, _nested_table
-
+from docx_llm_parser.renderers.inline.content import inline_content as _inline_content
+from docx_llm_parser.renderers.tables.render import nested_table as _nested_table
 
 NS = (
     'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
@@ -52,7 +55,7 @@ class InlineRendererTests(unittest.TestCase):
         """解析一段 OOXML 并渲染为段落内 XML。"""
         p = ET.fromstring(xml)
         runs, _hints = self.parser.paragraph_runs(p, "word/document.xml", "b-test", None)
-        return _inline_content({"text": "", "runs": runs})
+        return _inline_content({"text": "", "runs": runs}, "L2")
 
     def _render_with_objects(self, xml: str, object_lookup: dict) -> str:
         """使用预解析对象索引渲染一段 OOXML。"""
@@ -66,11 +69,11 @@ class InlineRendererTests(unittest.TestCase):
         )
         p = ET.fromstring(xml)
         runs, _hints = parser.paragraph_runs(p, "word/document.xml", "b-test", None)
-        return _inline_content({"text": "", "runs": runs})
+        return _inline_content({"text": "", "runs": runs}, "L2")
 
     def test_omml_equation_renders_as_eq(self) -> None:
         """OMML 公式应进入最终 XML，而不是只进入 debug。"""
-        xml = f'<w:p {NS}><m:oMath><m:r><m:t>x+1=y</m:t></m:r></m:oMath></w:p>'
+        xml = f"<w:p {NS}><m:oMath><m:r><m:t>x+1=y</m:t></m:r></m:oMath></w:p>"
 
         self.assertEqual(self._render_paragraph(xml), "<eq>x+1=y</eq>")
 
@@ -79,13 +82,14 @@ class InlineRendererTests(unittest.TestCase):
         xml = f"""<w:p {NS}>
           <w:r><w:drawing><wp:inline>
             <wp:docPr id="1" name="Box 1" descr="desc"/>
-            <wps:txbx><w:txbxContent><w:p><w:r><w:t>text box</w:t></w:r></w:p></w:txbxContent></wps:txbx>
+            <wps:txbx><w:txbxContent><w:p><w:r><w:t>text box</w:t></w:r></w:p>
+            </w:txbxContent></wps:txbx>
           </wp:inline></w:drawing></w:r>
         </w:p>"""
 
         self.assertEqual(
             self._render_paragraph(xml),
-            '<tb alt=desc>text box</tb>',
+            "<tb alt=desc>text box</tb>",
         )
 
     def test_vml_textbox_renders_as_textbox(self) -> None:
@@ -98,12 +102,12 @@ class InlineRendererTests(unittest.TestCase):
 
         self.assertEqual(
             self._render_paragraph(xml),
-            '<tb alt=old box>vml text</tb>',
+            "<tb alt=old box>vml text</tb>",
         )
 
     def test_note_self_reference_is_not_warning_noise(self) -> None:
         """尾注正文内的自编号标记不应进入最终 XML 或 warning。"""
-        xml = f'<w:p {NS}><w:r><w:endnoteRef /></w:r><w:r><w:t>note text</w:t></w:r></w:p>'
+        xml = f"<w:p {NS}><w:r><w:endnoteRef /></w:r><w:r><w:t>note text</w:t></w:r></w:p>"
 
         self.assertEqual(self._render_paragraph(xml), "note text")
         self.assertEqual(self.warnings, [])
@@ -140,7 +144,7 @@ class InlineRendererTests(unittest.TestCase):
 
         self.assertEqual(
             _nested_table(nested),
-            '<ntable r=1 c=3><r><td>A<td s=2>B',
+            "<ntable r=1 c=3><r><td>A<td s=2>B",
         )
 
     def test_vertical_merge_updates_origin_rowspan(self) -> None:
@@ -175,7 +179,17 @@ class InlineRendererTests(unittest.TestCase):
                 ],
             },
         ]
-        parser = object.__new__(DocumentBodyParser)
+        numbering = NumberingMap({}, {}, self.warnings)
+        parser = DocumentBodyParser(
+            cast(PackageReader, object()),
+            StyleMap({}, self.warnings),
+            ParseOptions(),
+            self.warnings,
+            RelationshipIndex.from_records([]),
+            {},
+            {},
+            NumberingState(numbering, self.warnings),
+        )
 
         parser._apply_vertical_merges(rows)
 
@@ -187,7 +201,8 @@ class InlineRendererTests(unittest.TestCase):
           <c:chart>
             <c:title><c:tx><c:rich><a:p><a:r><a:t>人口趋势</a:t></a:r></a:p></c:rich></c:tx></c:title>
             <c:plotArea><c:barChart><c:ser>
-              <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>人群A</c:v></c:pt></c:strCache></c:strRef></c:tx>
+              <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>人群A</c:v></c:pt>
+              </c:strCache></c:strRef></c:tx>
               <c:cat><c:strRef><c:strCache>
                 <c:pt idx="0"><c:v>一期</c:v></c:pt><c:pt idx="1"><c:v>二期</c:v></c:pt>
               </c:strCache></c:strRef></c:cat>
@@ -204,8 +219,11 @@ class InlineRendererTests(unittest.TestCase):
 
         rendered = self._render_with_objects(xml, {("word/document.xml", "rIdChart"): chart})
 
-        self.assertIn('<chart i=chart1 k=bar t=人口趋势 s=1 p=2>', rendered)
-        self.assertIn('pv=一期=1.5; 二期=2.5', rendered)
+        self.assertIn("<chart id=chart1 type=bar title=人口趋势 series=1", rendered)
+        self.assertIn("pv=一期=1.5; 二期=2.5", rendered)
+        self.assertIn("names=人群A", rendered)
+        self.assertIn("range=1.5~2.5", rendered)
+        self.assertIn('<!-- Use extract("chart", "chart1") for full data. -->', rendered)
 
     def test_smartart_data_renders_nodes_and_links(self) -> None:
         """SmartArt data model 应输出节点文本和连接关系。"""
@@ -225,15 +243,17 @@ class InlineRendererTests(unittest.TestCase):
 
         rendered = self._render_with_objects(xml, {("word/document.xml", "rIdDm"): smartart})
 
-        self.assertIn('<sa i=smartart1 n=2 l=1>', rendered)
-        self.assertIn('<n i=1>采集</n>', rendered)
-        self.assertIn('<e f=1 t=2 k=parOf/>', rendered)
+        self.assertIn("<sa id=smartart1 type= nodes=2 links=1>", rendered)
+        self.assertIn("<n i=1>采集</n>", rendered)
+        self.assertIn("<e f=1 t=2 k=parOf/>", rendered)
+        self.assertIn('<!-- Use extract("smartart", "smartart1") for full data. -->', rendered)
 
     def test_embedded_object_extractor_builds_lookup(self) -> None:
         """对象解析器应按 relationship 建立 chart/SmartArt 查询索引。"""
         chart_xml = f"""<c:chartSpace {NS}><c:chart>
           <c:plotArea><c:lineChart><c:ser>
-            <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>3</c:v></c:pt></c:numCache></c:numRef></c:val>
+            <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>3</c:v></c:pt>
+            </c:numCache></c:numRef></c:val>
           </c:ser></c:lineChart></c:plotArea>
         </c:chart></c:chartSpace>"""
         smartart_xml = f"""<dgm:dataModel {NS}><dgm:ptLst>

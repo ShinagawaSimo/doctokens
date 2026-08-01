@@ -3,38 +3,44 @@
 from __future__ import annotations
 
 import re
-from typing import Any
 from xml.etree import ElementTree as ET
 
 from ..core.constants import attr, first_child, is_on
-
+from ..core.models import RunFormat
 
 VISIBLE_FORMAT_KEYS = (
-    "bold", "italic", "underline", "strike", "superscript", "subscript",
-    "color", "highlight", "bg",
+    "bold",
+    "italic",
+    "underline",
+    "strike",
+    "superscript",
+    "subscript",
+    "color",
+    "highlight",
+    "bg",
 )
 
 
-def parse_run_format(rpr: ET.Element | None) -> dict[str, Any]:
+def parse_run_format(run_properties: ET.Element | None) -> RunFormat:
     """从 w:rPr 提取最终文本可能需要保留的轻量格式。"""
-    if rpr is None:
+    if run_properties is None:
         return {}
 
-    fmt: dict[str, Any] = {}
-    _read_bool_format(rpr, "b", "bold", fmt)
-    _read_bool_format(rpr, "i", "italic", fmt)
-    _read_underline(rpr, fmt)
-    _read_strike(rpr, fmt)
-    _read_vert_align(rpr, fmt)
-    _read_color(rpr, fmt)
-    _read_highlight(rpr, fmt)
-    _read_background(rpr, fmt)
+    fmt: RunFormat = {}
+    _read_bool_format(run_properties, "b", "bold", fmt)
+    _read_bool_format(run_properties, "i", "italic", fmt)
+    _read_underline(run_properties, fmt)
+    _read_strike(run_properties, fmt)
+    _read_vert_align(run_properties, fmt)
+    _read_color(run_properties, fmt)
+    _read_highlight(run_properties, fmt)
+    _read_background(run_properties, fmt)
     return fmt
 
 
-def merge_run_formats(*formats: dict[str, Any] | None) -> dict[str, Any]:
+def merge_run_formats(*formats: RunFormat | None) -> RunFormat:
     """按继承顺序合并格式，后面的显式值覆盖前面的值。"""
-    merged: dict[str, Any] = {}
+    merged: RunFormat = {}
     for fmt in formats:
         if not fmt:
             continue
@@ -49,7 +55,7 @@ def merge_run_formats(*formats: dict[str, Any] | None) -> dict[str, Any]:
     return merged
 
 
-def visible_run_format(fmt: dict[str, Any] | None) -> dict[str, Any]:
+def visible_run_format(fmt: RunFormat | None) -> RunFormat:
     """过滤成最终 XML 需要表达的格式集合。"""
     if not fmt:
         return {}
@@ -60,35 +66,37 @@ def visible_run_format(fmt: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def _read_bool_format(rpr: ET.Element, child_name: str, key: str, fmt: dict[str, Any]) -> None:
+def _read_bool_format(
+    run_properties: ET.Element, child_name: str, key: str, fmt: RunFormat
+) -> None:
     """读取 b/i 这类布尔 run 属性。"""
-    node = first_child(rpr, "w", child_name)
+    node = first_child(run_properties, "w", child_name)
     if node is not None:
         fmt[key] = is_on(node)
 
 
-def _read_underline(rpr: ET.Element, fmt: dict[str, Any]) -> None:
+def _read_underline(run_properties: ET.Element, fmt: RunFormat) -> None:
     """读取下划线；最终只关心有没有下划线，不暴露具体线型。"""
-    node = first_child(rpr, "w", "u")
+    node = first_child(run_properties, "w", "u")
     if node is None:
         return
     val = (attr(node, "w", "val") or "single").lower()
     fmt["underline"] = val not in {"0", "false", "off", "none"}
 
 
-def _read_strike(rpr: ET.Element, fmt: dict[str, Any]) -> None:
+def _read_strike(run_properties: ET.Element, fmt: RunFormat) -> None:
     """读取删除线和双删除线，最终都表达为 strike。"""
-    strike = first_child(rpr, "w", "strike")
-    double_strike = first_child(rpr, "w", "dstrike")
+    strike = first_child(run_properties, "w", "strike")
+    double_strike = first_child(run_properties, "w", "dstrike")
     if strike is not None:
         fmt["strike"] = is_on(strike)
     if double_strike is not None:
         fmt["strike"] = is_on(double_strike)
 
 
-def _read_vert_align(rpr: ET.Element, fmt: dict[str, Any]) -> None:
+def _read_vert_align(run_properties: ET.Element, fmt: RunFormat) -> None:
     """读取上标/下标标记（w:vertAlign）。"""
-    node = first_child(rpr, "w", "vertAlign")
+    node = first_child(run_properties, "w", "vertAlign")
     if node is None:
         return
     val = (attr(node, "w", "val") or "").lower()
@@ -100,9 +108,9 @@ def _read_vert_align(rpr: ET.Element, fmt: dict[str, Any]) -> None:
         fmt.pop("superscript", None)
 
 
-def _read_color(rpr: ET.Element, fmt: dict[str, Any]) -> None:
+def _read_color(run_properties: ET.Element, fmt: RunFormat) -> None:
     """读取字体颜色；主题色映射暂留给后续主题解析。"""
-    node = first_child(rpr, "w", "color")
+    node = first_child(run_properties, "w", "color")
     if node is None:
         return
     value = normalize_hex_color(attr(node, "w", "val"))
@@ -110,9 +118,9 @@ def _read_color(rpr: ET.Element, fmt: dict[str, Any]) -> None:
         fmt["color"] = value
 
 
-def _read_highlight(rpr: ET.Element, fmt: dict[str, Any]) -> None:
+def _read_highlight(run_properties: ET.Element, fmt: RunFormat) -> None:
     """读取 Word 文本高亮。"""
-    node = first_child(rpr, "w", "highlight")
+    node = first_child(run_properties, "w", "highlight")
     if node is None:
         return
     value = attr(node, "w", "val")
@@ -122,9 +130,9 @@ def _read_highlight(rpr: ET.Element, fmt: dict[str, Any]) -> None:
         fmt["highlight"] = None
 
 
-def _read_background(rpr: ET.Element, fmt: dict[str, Any]) -> None:
+def _read_background(run_properties: ET.Element, fmt: RunFormat) -> None:
     """读取 run 底纹背景色。"""
-    node = first_child(rpr, "w", "shd")
+    node = first_child(run_properties, "w", "shd")
     if node is None:
         return
     value = normalize_hex_color(attr(node, "w", "fill"))

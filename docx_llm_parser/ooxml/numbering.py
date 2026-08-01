@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field, replace
+from types import MappingProxyType
 from xml.etree import ElementTree as ET
 
 from ..core.constants import attr, child_elements, first_child
-from ..core.models import ParseWarning
+from ..core.models import NumberingLabel, ParseWarning
 from ..core.package import PackageReader
 
 
@@ -15,22 +17,26 @@ from ..core.package import PackageReader
 class NumberingLevel:
     """单个编号层级的显示规则。"""
 
-    ilvl: int
+    numbering_level: int
     start: int = 1
-    num_fmt: str = "decimal"
-    lvl_text: str | None = None
+    number_format: str = "decimal"
+    level_text: str | None = None
     suffix: str = "tab"
-    p_style: str | None = None
+    paragraph_style_id: str | None = None
 
 
 @dataclass(frozen=True)
 class NumberingInstance:
     """一个 numId 对应的实际编号实例。"""
 
-    num_id: str
+    numbering_id: str
     abstract_num_id: str
-    level_overrides: dict[int, NumberingLevel] = field(default_factory=dict)
-    start_overrides: dict[int, int] = field(default_factory=dict)
+    level_overrides: Mapping[int, NumberingLevel] = field(default_factory=dict)
+    start_overrides: Mapping[int, int] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "level_overrides", MappingProxyType(dict(self.level_overrides)))
+        object.__setattr__(self, "start_overrides", MappingProxyType(dict(self.start_overrides)))
 
 
 class NumberingMap:
@@ -42,49 +48,52 @@ class NumberingMap:
         instances: dict[str, NumberingInstance],
         warnings: list[ParseWarning],
     ) -> None:
-        self.abstract_levels = abstract_levels
-        self.instances = instances
+        self.abstract_levels: Mapping[str, Mapping[int, NumberingLevel]] = MappingProxyType(
+            {key: MappingProxyType(dict(value)) for key, value in abstract_levels.items()}
+        )
+        self.instances: Mapping[str, NumberingInstance] = MappingProxyType(dict(instances))
         self.warnings = warnings
 
-    def level_for(self, num_id: str, ilvl: int) -> NumberingLevel | None:
+    def level_for(self, num_id: str, numbering_level: int) -> NumberingLevel | None:
         """按 numId/ilvl 找到最终生效的层级规则。"""
         instance = self.instances.get(num_id)
         if instance is None:
             return None
-        if ilvl in instance.level_overrides:
+        if numbering_level in instance.level_overrides:
             # lvlOverride 中的完整 lvl 定义优先于 abstractNum。
-            return instance.level_overrides[ilvl]
-        base = self.abstract_levels.get(instance.abstract_num_id, {}).get(ilvl)
+            return instance.level_overrides[numbering_level]
+        base = self.abstract_levels.get(instance.abstract_num_id, {}).get(numbering_level)
         if base is None:
             return None
-        if ilvl in instance.start_overrides:
+        if numbering_level in instance.start_overrides:
             # startOverride 只改起始值，其余格式继承 abstractNum。
-            return replace(base, start=instance.start_overrides[ilvl])
+            return replace(base, start=instance.start_overrides[numbering_level])
         return base
 
-    def to_debug_dict(self) -> dict:
+    def to_debug_dict(self) -> dict[str, object]:
         """输出 debug 用编号定义，最终 XML 不直接暴露这些字段。"""
         return {
             "abstractNums": {
                 abstract_id: {
-                    str(ilvl): asdict(level) for ilvl, level in sorted(levels.items())
+                    str(numbering_level): asdict(level)
+                    for numbering_level, level in sorted(levels.items())
                 }
                 for abstract_id, levels in sorted(self.abstract_levels.items())
             },
             "nums": {
-                num_id: {
-                    "numId": instance.num_id,
+                numbering_id: {
+                    "numId": instance.numbering_id,
                     "abstractNumId": instance.abstract_num_id,
                     "levelOverrides": {
-                        str(ilvl): asdict(level)
-                        for ilvl, level in sorted(instance.level_overrides.items())
+                        str(numbering_level): asdict(level)
+                        for numbering_level, level in sorted(instance.level_overrides.items())
                     },
                     "startOverrides": {
-                        str(ilvl): start
-                        for ilvl, start in sorted(instance.start_overrides.items())
+                        str(numbering_level): start
+                        for numbering_level, start in sorted(instance.start_overrides.items())
                     },
                 }
-                for num_id, instance in sorted(self.instances.items())
+                for numbering_id, instance in sorted(self.instances.items())
             },
         }
 
@@ -101,19 +110,22 @@ class NumberingState:
     def advance(
         self,
         num_id: str,
-        ilvl: int,
+        numbering_level: int,
         *,
         part: str | None = None,
         block_id: str | None = None,
-    ) -> dict | None:
+    ) -> NumberingLabel | None:
         """推进指定编号序列，并返回应该插入段落开头的可见编号。"""
-        level = self.numbering.level_for(num_id, ilvl)
+        level = self.numbering.level_for(num_id, numbering_level)
         if level is None:
             self.warnings.append(
                 ParseWarning(
                     level="warning",
                     code="NUMBERING_LEVEL_MISSING",
-                    message=f"Missing numbering level for numId={num_id}, ilvl={ilvl}",
+                    message=(
+                        f"Missing numbering level for numId={num_id}, "
+                        f"numbering_level={numbering_level}"
+                    ),
                     part=part,
                     block_id=block_id,
                 )
@@ -121,64 +133,66 @@ class NumberingState:
             return None
 
         counters = self._counters.setdefault(num_id, {})
-        if ilvl not in counters:
-            # 第一次遇到该层级时，从 w:start 或 startOverride 开始。
-            counters[ilvl] = level.start
+        if numbering_level not in counters:
+            counters[numbering_level] = level.start
         else:
-            counters[ilvl] += 1
-        for existing_ilvl in list(counters):
-            if existing_ilvl > ilvl:
-                # 高层级继续后，子层级需要重新开始。
-                del counters[existing_ilvl]
+            counters[numbering_level] += 1
+        for existing_numbering_level in list(counters):
+            if existing_numbering_level > numbering_level:
+                del counters[existing_numbering_level]
 
-        label = self._render_label(num_id, ilvl, counters)
+        label = self._render_label(num_id, numbering_level, counters)
         visible_text = label + self._suffix_text(level.suffix)
         return {
             "numId": num_id,
-            "level": ilvl,
+            "level": numbering_level,
             "label": label,
             "text": visible_text,
-            "format": level.num_fmt,
-            "template": level.lvl_text,
+            "format": level.number_format,
+            "template": level.level_text,
             "suffix": level.suffix,
-            "counter": counters.get(ilvl),
+            "counter": counters[numbering_level],
         }
 
-    def _render_label(self, num_id: str, ilvl: int, counters: dict[int, int]) -> str:
+    def _render_label(self, num_id: str, numbering_level: int, counters: dict[int, int]) -> str:
         """把 lvlText 中的 %1、%2 等占位符替换成真实编号。"""
-        current_level = self.numbering.level_for(num_id, ilvl)
+        current_level = self.numbering.level_for(num_id, numbering_level)
         if current_level is None:
             return ""
-        template = current_level.lvl_text
+        template = current_level.level_text
         if not template:
             # bullet 通常会把符号直接放在 lvlText；缺失时给一个轻量符号。
-            return "•" if current_level.num_fmt == "bullet" else self._format_number(
-                counters.get(ilvl, current_level.start), current_level.num_fmt
+            return (
+                "•"
+                if current_level.number_format == "bullet"
+                else self._format_number(
+                    counters.get(numbering_level, current_level.start), current_level.number_format
+                )
             )
 
         def replace_match(match: re.Match[str]) -> str:
-            ref_ilvl = int(match.group(1)) - 1
-            ref_level = self.numbering.level_for(num_id, ref_ilvl) or current_level
-            value = counters.get(ref_ilvl, ref_level.start)
-            return self._format_number(value, ref_level.num_fmt)
+            ref_numbering_level = int(match.group(1)) - 1
+            ref_level = self.numbering.level_for(num_id, ref_numbering_level) or current_level
+            value = counters.get(ref_numbering_level, ref_level.start)
+            return self._format_number(value, ref_level.number_format)
 
         return re.sub(r"%([1-9])", replace_match, template)
 
-    def _format_number(self, value: int, num_fmt: str) -> str:
+    def _format_number(self, value: int, number_format: str) -> str:
         """按 OOXML numFmt 把整数转换成可见编号文本。"""
-        if num_fmt in {"decimal", "ordinal"}:
+        if number_format in {"decimal", "ordinal"}:
             return str(value)
-        if num_fmt == "decimalZero":
+        if number_format == "decimalZero":
             return f"{value:02d}"
-        if num_fmt == "upperLetter":
+        if number_format == "upperLetter":
             return self._alpha(value).upper()
-        if num_fmt == "lowerLetter":
+        if number_format == "lowerLetter":
             return self._alpha(value).lower()
-        if num_fmt == "upperRoman":
+        if number_format == "upperRoman":
             return self._roman(value).upper()
-        if num_fmt == "lowerRoman":
+        if number_format == "lowerRoman":
             return self._roman(value).lower()
-        if num_fmt in {
+        if number_format in {
             "chineseCounting",
             "chineseCountingThousand",
             "ideographDigital",
@@ -186,17 +200,19 @@ class NumberingState:
             "taiwaneseCounting",
         }:
             return self._chinese_counting(value)
-        if num_fmt == "bullet":
+        if number_format == "bullet":
             return "•"
 
-        if num_fmt not in self._warned_formats:
+        if number_format not in self._warned_formats:
             # 未覆盖格式不阻断解析，先用十进制兜底并在 debug 中暴露风险。
-            self._warned_formats.add(num_fmt)
+            self._warned_formats.add(number_format)
             self.warnings.append(
                 ParseWarning(
                     level="warning",
                     code="UNSUPPORTED_NUMBER_FORMAT",
-                    message=f"Unsupported numbering format {num_fmt!r}; decimal fallback is used.",
+                    message=(
+                        f"Unsupported numbering format {number_format!r}; decimal fallback is used."
+                    ),
                     part="word/numbering.xml",
                 )
             )
@@ -305,7 +321,7 @@ class NumberingParser:
             for lvl in child_elements(abstract_num, "w", "lvl"):
                 level = self._parse_level(lvl)
                 if level is not None:
-                    levels[level.ilvl] = level
+                    levels[level.numbering_level] = level
             abstract_levels[abstract_id] = levels
 
         instances: dict[str, NumberingInstance] = {}
@@ -317,15 +333,17 @@ class NumberingParser:
             level_overrides: dict[int, NumberingLevel] = {}
             start_overrides: dict[int, int] = {}
             for override in child_elements(num, "w", "lvlOverride"):
-                ilvl = self._parse_int(attr(override, "w", "ilvl"), 0)
+                override_level_index = self._parse_int(attr(override, "w", "ilvl"))
+                if override_level_index is None:
+                    override_level_index = 0
                 start = self._parse_int(self._child_attr(override, "startOverride", "val"))
                 if start is not None:
-                    start_overrides[ilvl] = start
+                    start_overrides[override_level_index] = start
                 override_level = self._parse_level(first_child(override, "w", "lvl"))
                 if override_level is not None:
-                    level_overrides[ilvl] = override_level
+                    level_overrides[override_level_index] = override_level
             instances[num_id] = NumberingInstance(
-                num_id=num_id,
+                numbering_id=num_id,
                 abstract_num_id=abstract_id,
                 level_overrides=level_overrides,
                 start_overrides=start_overrides,
@@ -333,27 +351,29 @@ class NumberingParser:
 
         return NumberingMap(abstract_levels, instances, self.warnings)
 
-    def _parse_level(self, lvl) -> NumberingLevel | None:
+    def _parse_level(self, lvl: ET.Element | None) -> NumberingLevel | None:
         """解析一个 w:lvl 节点。"""
         if lvl is None:
             return None
-        ilvl = self._parse_int(attr(lvl, "w", "ilvl"), 0)
+        level_value = self._parse_int(attr(lvl, "w", "ilvl"))
+        if level_value is None:
+            level_value = 0
         start = self._parse_int(self._child_attr(lvl, "start", "val"), 1) or 1
-        num_fmt = self._child_attr(lvl, "numFmt", "val") or "decimal"
-        lvl_text = self._child_attr(lvl, "lvlText", "val")
+        number_format = self._child_attr(lvl, "numFmt", "val") or "decimal"
+        level_text = self._child_attr(lvl, "lvlText", "val")
         suffix = self._child_attr(lvl, "suff", "val") or "tab"
-        p_style = self._child_attr(lvl, "pStyle", "val")
+        paragraph_style_id = self._child_attr(lvl, "pStyle", "val")
         return NumberingLevel(
-            ilvl=ilvl,
+            numbering_level=level_value,
             start=start,
-            num_fmt=num_fmt,
-            lvl_text=lvl_text,
+            number_format=number_format,
+            level_text=level_text,
             suffix=suffix,
-            p_style=p_style,
+            paragraph_style_id=paragraph_style_id,
         )
 
     @staticmethod
-    def _child_attr(node, child_name: str, attr_name: str) -> str | None:
+    def _child_attr(node: ET.Element, child_name: str, attr_name: str) -> str | None:
         """读取直接子节点上的 w 属性，子节点缺失时返回 None。"""
         child = first_child(node, "w", child_name)
         return attr(child, "w", attr_name) if child is not None else None

@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from time import perf_counter
-from typing import Any
 
 from ..core.models import ParsedDocument, ParseWarning
 
@@ -22,9 +20,15 @@ def record_render_metrics(
 ) -> None:
     """把最终渲染阶段的指标追加到 parsed.metrics。"""
     metrics = parsed.metrics
-    stages = metrics.setdefault("stagesMs", {})
-    counters = metrics.setdefault("counters", {})
-    metrics.setdefault("parseTotalMs", metrics.get("totalMs", 0.0))
+    if "stagesMs" not in metrics:
+        metrics["stagesMs"] = {}
+    if "counters" not in metrics:
+        metrics["counters"] = {}
+    if "parseTotalMs" not in metrics:
+        metrics["parseTotalMs"] = metrics.get("totalMs", 0.0)
+
+    stages = metrics["stagesMs"]
+    counters = metrics["counters"]
     metrics["totalMs"] = round(metrics["parseTotalMs"] + elapsed_ms, 3)
     stages[stage_name] = round(elapsed_ms, 3)
     counters["outputChars"] = output_chars

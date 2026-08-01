@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
-from typing import Iterable
+from types import MappingProxyType
+from typing import Any
 
 from .models import RelationshipRecord
 
@@ -14,13 +16,13 @@ class RelationshipIndex:
     """按 source part、relationship id 和类型索引 OPC relationship。"""
 
     records: tuple[RelationshipRecord, ...]
-    _by_source_id: dict[tuple[str, str], RelationshipRecord]
-    _by_source: dict[str, tuple[RelationshipRecord, ...]]
-    _by_type: dict[str, tuple[RelationshipRecord, ...]]
-    _by_source_type: dict[tuple[str, str], tuple[RelationshipRecord, ...]]
+    _by_source_id: Mapping[tuple[str, str], RelationshipRecord]
+    _by_source: Mapping[str, tuple[RelationshipRecord, ...]]
+    _by_type: Mapping[str, tuple[RelationshipRecord, ...]]
+    _by_source_type: Mapping[tuple[str, str], tuple[RelationshipRecord, ...]]
 
     @classmethod
-    def from_records(cls, records: Iterable[RelationshipRecord]) -> "RelationshipIndex":
+    def from_records(cls, records: Iterable[RelationshipRecord]) -> RelationshipIndex:
         """一次性构建多路索引，后续解析阶段只读复用。"""
         rows = tuple(records)
         by_source_id: dict[tuple[str, str], RelationshipRecord] = {}
@@ -37,10 +39,12 @@ class RelationshipIndex:
 
         return cls(
             records=rows,
-            _by_source_id=by_source_id,
-            _by_source={key: tuple(value) for key, value in by_source.items()},
-            _by_type={key: tuple(value) for key, value in by_type.items()},
-            _by_source_type={key: tuple(value) for key, value in by_source_type.items()},
+            _by_source_id=MappingProxyType(by_source_id),
+            _by_source=MappingProxyType({key: tuple(value) for key, value in by_source.items()}),
+            _by_type=MappingProxyType({key: tuple(value) for key, value in by_type.items()}),
+            _by_source_type=MappingProxyType(
+                {key: tuple(value) for key, value in by_source_type.items()}
+            ),
         )
 
     def get(self, source_part: str, rel_id: str) -> RelationshipRecord | None:
@@ -63,6 +67,6 @@ class RelationshipIndex:
             return self._by_source_type.get((source_part, rel_type), ())
         return self._by_type.get(rel_type, ())
 
-    def to_debug_list(self) -> list[dict]:
+    def to_debug_list(self) -> list[dict[str, Any]]:
         """输出 debug JSON 可序列化结构。"""
         return [asdict(item) for item in self.records]

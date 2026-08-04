@@ -165,7 +165,7 @@ class EmbeddedObjectExtractor:
 
     def _warn(self, code: str, message: str, part: str | None = None) -> None:
         """记录对象解析 warning。"""
-        self.warnings.append(ParseWarning(level="warning", code=code, message=message, part=part))
+        self.warnings.append(ParseWarning(code=code, message=message, locator=part))
 
 
 def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> Chart:

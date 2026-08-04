@@ -29,18 +29,23 @@ from .ooxml.styles import StylesParser
 class DocxParser:
     """对外暴露的 DOCX 解析器。"""
 
-    def parse(self, docx_path: str | Path, options: ParseOptions | None = None) -> ParsedDocument:
+    def parse(self, docx_source: str | Path | bytes, options: ParseOptions | None = None) -> ParsedDocument:
         """解析单个 DOCX；每次调用都创建独立上下文，便于并发。"""
-        path = Path(docx_path)
-        opts = options or ParseOptions(output_dir=Path("out") / path.stem)
+        opts = options or ParseOptions()
         warnings: list[ParseWarning] = []
         output_dir = opts.output_dir
         debug_dir = output_dir / ".debug"
         debug = DebugWriter(debug_dir, enabled=opts.debug)
         metrics = MetricsRecorder()
-        metrics.set_counter("inputBytes", path.stat().st_size)
+        if isinstance(docx_source, bytes):
+            metrics.set_counter("inputBytes", len(docx_source))
+            source_name = "stream"
+        else:
+            path = Path(docx_source)
+            metrics.set_counter("inputBytes", path.stat().st_size)
+            source_name = path.name
 
-        with PackageReader(path, opts) as package:
+        with PackageReader(docx_source, opts) as package:
             # 先校验包结构和安全阈值，再进入 XML 内容解析。
             with metrics.stage("zip_index"):
                 zip_index = package.read_entry_index()
@@ -61,7 +66,6 @@ class DocxParser:
                     package=package,
                     relationships=relationships,
                     content_types=content_types,
-                    output_dir=output_dir,
                     warnings=warnings,
                 ).extract()
             with metrics.stage("embedded_objects"):
@@ -111,11 +115,12 @@ class DocxParser:
         metrics.set_counter("zipUncompressedBytes", total_uncompressed)
         metrics.set_counter("zipCompressedBytes", total_compressed)
         metadata: dict[str, object] = {
-            "sourceFile": path.name,
-            "sourcePath": str(path),
+            "sourceFile": source_name,
+            "sourcePath": str(docx_source) if not isinstance(docx_source, bytes) else "",
             "format": "docx",
             "parser": "docx_llm_parser",
             "parserVersion": __version__,
+            "sectionRefs": body_parser.section_refs,
         }
 
         parsed = ParsedDocument(
@@ -212,7 +217,6 @@ class DocxParser:
         except Exception as exc:
             parsed.warnings.append(
                 ParseWarning(
-                    level="warning",
                     code="DEBUG_WRITE_FAILED",
                     message=f"Failed to write debug artifacts: {exc}",
                 )
@@ -284,7 +288,6 @@ class DocxParser:
         except Exception as exc:
             parsed.warnings.append(
                 ParseWarning(
-                    level="warning",
                     code="METRICS_WRITE_FAILED",
                     message=f"Failed to write metrics debug artifact: {exc}",
                 )

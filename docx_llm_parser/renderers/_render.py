@@ -10,68 +10,79 @@ from ._blocks import render_block
 from .inline import inline_content
 from .l0 import block_text_only, inline_text_only
 
-# ── L2 渲染 ──
+
+def _paragraph_text(block, density: str) -> str:
+    """Extract rendered text for a single paragraph block."""
+    return inline_content(block, density)
+
+# ── semantic 渲染 ──
 
 
 def iter_l2(parsed: ParsedDocument) -> Iterator[str]:
-    """L2 — 完整语义 HTML5。"""
+    """semantic — 完整语义 HTML5。每段独立一个 <p> 标签。"""
+    yield "density=semantic\n"
     current_page = 0
     for block in parsed.blocks:
         block_page = block.get("page", 1)
         if block_page != current_page:
             current_page = block_page
-            yield f"<page n={current_page}>\n"
-        yield from render_block(block, "L2")
+            yield f"<page={current_page}>\n"
 
-    yield "\n"
+        if block["type"] == "paragraph":
+            text = _paragraph_text(block, "semantic")
+            yield f"<p>{text}\n"
+        else:
+            yield from render_block(block, "semantic")
+
     for asset in parsed.assets:
-        attrs = []
-        attrs.append(f"id={asset['id']}")
-        if asset.get("file"):
-            attrs.append(f"f={escape(asset['file'], quote=True)}")
+        attrs = f"id={asset['id']}"
         if asset.get("href"):
-            attrs.append(f"h={escape(asset['href'], quote=True)}")
-        if asset.get("contentType"):
-            attrs.append(f"m={escape(asset['contentType'], quote=True)}")
-        yield f"<img {' '.join(attrs)}>\n"
+            attrs += f" href={escape(asset['href'], quote=True)}"
+        yield f"<img {attrs}>\n"
+        yield "\n"
 
-    supplemental = supplemental_to_html5(parsed, "L2")
+    supplemental = supplemental_to_html5(parsed, "semantic")
     if supplemental:
         yield "\n"
         yield supplemental
 
 
-# ── L1 渲染 ──
+# ── structural 渲染 ──
 
 
 def iter_l1(parsed: ParsedDocument) -> Iterator[str]:
-    """L1 — 块级结构 + 语义对象，去掉 inline 格式。"""
+    """structural — 块级结构 + 语义对象，去掉 inline 格式。"""
+    yield "density=structural\n"
     current_page = 0
     for block in parsed.blocks:
         block_page = block.get("page", 1)
         if block_page != current_page:
             current_page = block_page
-            yield f"<page n={current_page}>\n"
-        yield from render_block(block, "L1")
+            yield f"<page={current_page}>\n"
 
-    yield "\n"
+        if block["type"] == "paragraph":
+            text = _paragraph_text(block, "structural")
+            yield f"<p>{text}\n"
+        else:
+            yield from render_block(block, "structural")
+
     for asset in parsed.assets:
         attrs = f"id={asset['id']}"
-        if asset.get("file"):
-            attrs += f" f={escape(asset['file'], quote=True)}"
         yield f"<img {attrs}>\n"
+        yield "\n"
 
-    supplemental = supplemental_to_html5(parsed, "L1")
+    supplemental = supplemental_to_html5(parsed, "structural")
     if supplemental:
         yield "\n"
         yield supplemental
 
 
-# ── L0 渲染 ──
+# ── plain 渲染 ──
 
 
 def iter_l0(parsed: ParsedDocument) -> Iterator[str]:
-    """L0 — 纯文本流。脚注拼段末，尾注拼文末。"""
+    """plain — 纯文本流。脚注拼段末，尾注拼文末。"""
+    yield "density=plain\n"
     footnote_map: dict[str, str] = {}
     for fn in parsed.footnotes:
         fn_text = inline_text_only(fn)
@@ -106,19 +117,19 @@ def iter_l0(parsed: ParsedDocument) -> Iterator[str]:
 
 
 def supplemental_to_html5(parsed: ParsedDocument, density: str) -> str:
-    """L1/L2：输出正文之外的补充文本。"""
+    """structural/semantic：输出正文之外的补充文本。"""
     groups: list[tuple[str, str, list[AncillaryItem]]] = [
-        ("headers", "hdr", parsed.headers),
-        ("footers", "ftr", parsed.footers),
-        ("footnotes", "fn", parsed.footnotes),
-        ("endnotes", "en", parsed.endnotes),
-        ("comments", "cm", parsed.comments),
+        ("headers", "header", parsed.headers),
+        ("footers", "footer", parsed.footers),
+        ("footnotes", "footnote", parsed.footnotes),
+        ("endnotes", "endnote", parsed.endnotes),
+        ("comments", "comment", parsed.comments),
     ]
-    if density == "L1":
+    if density == "structural":
         groups = [
-            ("footnotes", "fn", parsed.footnotes),
-            ("endnotes", "en", parsed.endnotes),
-            ("comments", "cm", parsed.comments),
+            ("footnotes", "footnote", parsed.footnotes),
+            ("endnotes", "endnote", parsed.endnotes),
+            ("comments", "comment", parsed.comments),
         ]
 
     if not any(items for _group_name, _tag, items in groups):
@@ -134,10 +145,10 @@ def supplemental_to_html5(parsed: ParsedDocument, density: str) -> str:
                 attrs += f" loc={escape(item['loc'], quote=True)}"
             author = item.get("author")
             if author is not None:
-                attrs += f" a={escape(author, quote=True)}"
+                attrs += f" author={escape(author, quote=True)}"
             date = item.get("date")
             if date is not None:
-                attrs += f" d={escape(date, quote=True)}"
+                attrs += f" date={escape(date, quote=True)}"
             content = inline_content(item, density)
             lines.append(f"<{tag} {attrs}>{content}")
     return "\n".join(lines)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import posixpath
 import re
 import zipfile
+from io import BytesIO
 from pathlib import Path
 from types import TracebackType
 from typing import IO
@@ -12,6 +13,11 @@ from xml.etree import ElementTree as ET
 
 from .constants import NS
 from .models import ContentTypes, ParseOptions, RelationshipRecord, ZipEntryInfo
+
+# 压缩比下限：解压后大小 / 压缩后大小的比值若低于此值，视为可疑压缩包。
+_MIN_INFLATE_RATIO = 0.01
+# 小 entry 豁免阈值（字节）：小于此值的 entry 不做压缩比检查。
+_GRACE_ENTRY_SIZE = 100_000
 
 
 class DocxPackageError(RuntimeError):
@@ -23,8 +29,8 @@ class DocxPackageError(RuntimeError):
 class PackageReader:
     """按需读取 DOCX 包，不把所有 entry 解压到磁盘。"""
 
-    def __init__(self, path: Path, options: ParseOptions) -> None:
-        self.path = path
+    def __init__(self, source: Path | bytes, options: ParseOptions) -> None:
+        self._source = source
         self.options = options
         self._zip: zipfile.ZipFile | None = None
         self._entry_index: list[ZipEntryInfo] | None = None
@@ -32,9 +38,15 @@ class PackageReader:
 
     def __enter__(self) -> PackageReader:
         """打开 zip 文件，并确认输入至少是可读 ZIP。"""
-        if not zipfile.is_zipfile(self.path):
-            raise DocxPackageError(f"Not a zip/docx file: {self.path}")
-        self._zip = zipfile.ZipFile(self.path, "r")
+        if isinstance(self._source, bytes):
+            if not zipfile.is_zipfile(BytesIO(self._source)):
+                raise DocxPackageError("Not a valid zip/docx byte stream")
+            self._zip = zipfile.ZipFile(BytesIO(self._source), "r")
+        else:
+            path = Path(self._source)
+            if not zipfile.is_zipfile(path):
+                raise DocxPackageError(f"Not a zip/docx file: {path}")
+            self._zip = zipfile.ZipFile(path, "r")
         return self
 
     def __exit__(
@@ -83,9 +95,23 @@ class PackageReader:
         total_uncompressed = 0
         rows: list[ZipEntryInfo] = []
         names: set[str] = set()
+        seen_lower: set[str] = set()
         for info in infos:
             name = info.filename.replace("\\", "/")
             self._validate_entry_name(name)
+
+            # 加密 entry 拒绝。
+            if info.flag_bits & 0x1:
+                raise DocxPackageError(f"Encrypted entry is not supported: {name}")
+
+            # 重复 entry 拒绝（大小写不敏感，参考 Apache POI）。
+            lower_name = name.lower()
+            if lower_name in seen_lower:
+                raise DocxPackageError(f"Duplicate zip entry: {name}")
+            if not name:
+                raise DocxPackageError("Zip entry with empty name")
+            seen_lower.add(lower_name)
+
             if info.file_size > self.options.max_entry_uncompressed_bytes:
                 # 单 entry 太大时直接拒绝，防止内存被 XML 拉爆。
                 raise DocxPackageError(f"Entry too large: {name} ({info.file_size} bytes)")
@@ -95,6 +121,16 @@ class PackageReader:
                 raise DocxPackageError(
                     f"Package uncompressed size too large: {total_uncompressed} bytes"
                 )
+
+            # 压缩比检查：小文件豁免，避免误判。
+            if info.file_size > _GRACE_ENTRY_SIZE and info.compress_size > 0:
+                ratio = info.compress_size / info.file_size
+                if ratio < _MIN_INFLATE_RATIO:
+                    raise DocxPackageError(
+                        f"Suspicious compression ratio for {name}: "
+                        f"{info.compress_size}/{info.file_size}"
+                    )
+
             names.add(name)
             rows.append(
                 {

@@ -1,4 +1,4 @@
-"""Block-level rendering dispatcher."""
+"""Block-level rendering dispatcher (headings and tables only)."""
 
 from __future__ import annotations
 
@@ -15,6 +15,6 @@ def render_block(block: Block, density: str) -> Iterator[str]:
         level = min(block["level"], 6)
         yield f"<h{level}>{inline_content(block, density)}\n"
     elif block["type"] == "paragraph":
-        yield f"<p>{inline_content(block, density)}\n\n"
+        yield inline_content(block, density)
     else:
         yield from render_table(block, density)

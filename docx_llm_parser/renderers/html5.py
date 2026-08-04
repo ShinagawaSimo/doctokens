@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import zipfile
 from collections.abc import Iterator
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -62,7 +63,7 @@ def write_outputs(
 
 
 def to_html5(parsed: ParsedDocument, density: Density | str = Density.SEMANTIC) -> str:
-    """生成完整标记字符串（L0 纯文本 / L1 结构 / L2 语义）。"""
+    """生成完整标记字符串（plain 纯文本 / structural 结构 / semantic 语义）。"""
     return "".join(iter_html5(parsed, density))
 
 
@@ -146,8 +147,18 @@ def extract(
     parsed: ParsedDocument,
     resource_type: ResourceType | str,
     resource_id: str | None = None,
+    *,
+    rows: str | None = None,
+    columns: list[str] | None = None,
+    aggregate: str | None = None,
+    aggregate_column: str | None = None,
 ) -> list[ResourceDetail]:
-    """独立提取非文本资源，无需先取全文。"""
+    """独立提取非文本资源，无需先取全文。
+
+    表格支持 ``rows``（行范围 ``"10-25"``，1-based 含两端）、
+    ``columns``（按表头名称筛选）、``aggregate``（sum/count/avg/min/max，
+    需配合 ``aggregate_column``）。
+    """
     resolved_type = ResourceType.parse(resource_type)
     if resolved_type.is_plural and resource_id is not None:
         raise ValueError("resource_id is only valid with a singular resource type")
@@ -155,17 +166,23 @@ def extract(
         raise ValueError("resource_id is required with a singular resource type")
 
     if resolved_type in {ResourceType.IMAGES, ResourceType.IMAGE}:
+        source_path = parsed.metadata.get("sourcePath", "")
         result = []
         for a in parsed.assets:
             if a["type"] != "image":
-                raise ValueError(f"Unsupported asset type: {a['type']}")
-            item: ResourceDetail = {"id": a["id"]}
-            if a.get("file"):
-                item["file"] = a["file"]
-            if a.get("contentType"):
-                item["contentType"] = a["contentType"]
+                continue
             if resource_id and a["id"] != resource_id:
                 continue
+            item: ResourceDetail = {"id": a["id"]}
+            if a.get("href"):
+                item["href"] = a["href"]
+            if a.get("contentType"):
+                item["contentType"] = a["contentType"]
+            # 从原始 ZIP 中按需读取图片二进制数据
+            zip_path = a.get("zipPath")
+            if zip_path and source_path:
+                with zipfile.ZipFile(source_path, "r") as zf:
+                    item["data"] = zf.read(zip_path)
             result.append(item)
         return result
 
@@ -197,7 +214,12 @@ def extract(
         if segments is None:
             return []
         item = _table_summary(resource_id, segments)
-        item["rows"] = [row for segment in segments for row in segment["rows"]]
+        all_rows = [row for segment in segments for row in segment["rows"]]
+        if aggregate is not None:
+            agg_result = _compute_aggregate(all_rows, aggregate, aggregate_column or "")
+            item.update(agg_result)
+        else:
+            item["rows"] = _slice_and_filter_rows(all_rows, rows, columns)
         return [item]
 
     raise AssertionError("validated resource type was not handled")
@@ -222,6 +244,102 @@ def _table_summary(table_id: str, segments: list[TableBlock]) -> ResourceDetail:
         "segmentCount": len(segments),
         "pages": [segment.get("page", 1) for segment in segments],
     }
+
+
+def _slice_and_filter_rows(
+    rows: list,
+    rows_spec: str | None,
+    columns: list[str] | None,
+) -> list:
+    """Apply row slicing and column filtering to table rows.
+
+    Column filtering is applied first (needs header row for name matching),
+    then row slicing operates on the already-filtered result.
+    """
+    if columns is not None:
+        rows = _filter_columns(rows, columns)
+    if rows_spec is not None:
+        rows = _slice_rows(rows, rows_spec)
+    return rows
+
+
+def _slice_rows(rows: list, spec: str) -> list:
+    """Slice rows by range like ``"10-25"`` (1-based, inclusive)."""
+    try:
+        start_str, end_str = spec.split("-", 1)
+        start = int(start_str) - 1
+        end = int(end_str)
+    except (ValueError, TypeError):
+        raise ValueError(f"Invalid rows range: {spec!r}") from None
+    if start < 0 or end < start:
+        raise ValueError(f"Invalid rows range: {spec!r}")
+    return rows[start:end]
+
+
+def _filter_columns(rows: list, column_names: list[str]) -> list:
+    """Keep only the columns whose header text matches one of *column_names*."""
+    if not rows:
+        return rows
+    header = rows[0]
+    header_texts = [cell["text"] for cell in header["cells"]]
+    keep_indices = []
+    for name in column_names:
+        for idx, hdr_text in enumerate(header_texts):
+            if hdr_text == name and idx not in keep_indices:
+                keep_indices.append(idx)
+                break
+    keep_indices.sort()
+    result = []
+    for row in rows:
+        filtered = [row["cells"][i] for i in keep_indices if i < len(row["cells"])]
+        result.append({"rowIndex": row["rowIndex"], "cells": filtered, "isHeader": row.get("isHeader", False)})
+    return result
+
+
+_AGGREGATORS = {
+    "sum": sum,
+    "count": len,
+    "avg": lambda vals: sum(vals) / len(vals) if vals else 0,
+    "min": lambda vals: min(vals) if vals else 0,
+    "max": lambda vals: max(vals) if vals else 0,
+}
+
+
+def _compute_aggregate(rows: list, operation: str, column: str) -> ResourceDetail:
+    """Compute an aggregate over a named column; returns dict to merge into table item."""
+    operation = operation.lower()
+    if operation not in _AGGREGATORS:
+        raise ValueError(
+            f"Unknown aggregate {operation!r}; expected one of: {', '.join(sorted(_AGGREGATORS))}"
+        )
+    values = _column_values(rows, column)
+    return {"aggregate": operation, "aggregate_column": column, "aggregate_value": _AGGREGATORS[operation](values)}
+
+
+def _column_values(rows: list, column: str) -> list[float]:
+    """Extract numeric values from a named column (matched by header text)."""
+    if not rows:
+        return []
+    header = rows[0]
+    col_idx: int | None = None
+    for idx, cell in enumerate(header["cells"]):
+        if cell["text"] == column:
+            col_idx = idx
+            break
+    if col_idx is None:
+        raise ValueError(f"Column {column!r} not found in table header")
+    values: list[float] = []
+    for row in rows[1:]:  # skip header row
+        if col_idx >= len(row["cells"]):
+            continue
+        text = row["cells"][col_idx].get("text", "").strip()
+        if not text:
+            continue
+        try:
+            values.append(float(text))
+        except ValueError:
+            continue
+    return values
 
 
 # ── 页码索引 ──

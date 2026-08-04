@@ -1,4 +1,4 @@
-"""表格渲染（L1/L2）：完整表格、截断表格、行、单元格、嵌套表格。"""
+"""表格渲染（structural/semantic）：完整表格、截断表格、行、单元格、嵌套表格。"""
 
 from __future__ import annotations
 
@@ -11,10 +11,10 @@ from ..inline import inline_content
 
 
 def render_table(block: TableBlock, density: str) -> Iterator[str]:
-    """输出 HTML5 表格（L1/L2 用）。行内单元格无换行，仅行间换行。"""
+    """输出 HTML5 表格（structural/semantic 用）。行内单元格无换行，仅行间换行。"""
     rows = block.get("rows", [])
 
-    if len(rows) > _constants._TABLE_TRUNCATE_L12:
+    if len(rows) > _constants._TABLE_TRUNCATE_STRUCTURAL_SEMANTIC:
         yield from render_truncated_table(block, rows, density)
         return
 
@@ -24,13 +24,11 @@ def render_table(block: TableBlock, density: str) -> Iterator[str]:
 
 
 def render_truncated_table(block: TableBlock, rows: list[TableRow], density: str) -> Iterator[str]:
-    """输出截断表格（L1/L2 用）：表头行 + 首行 + 截断提示。"""
-    total_rows = len(rows)
-    yield "<table>\n"
+    """输出截断表格（structural/semantic 用）：表头行 + 首行。"""
+    yield "<table truncated>\n"
     yield render_table_row(rows[0], density) + "\n"
     if len(rows) > 1:
         yield render_table_row(rows[1], density) + "\n"
-    yield f'<!-- {total_rows} rows truncated. Use extract("table", "{table_id(block)}") -->\n'
 
 
 def table_id(block: TableBlock) -> str:
@@ -42,21 +40,21 @@ def table_id(block: TableBlock) -> str:
 
 
 def render_table_row(row: TableRow, density: str) -> str:
-    """渲染一行表格。L1 忽略 colspan/rowspan/vMerge。"""
+    """渲染一行表格。structural 忽略 colspan/rowspan/vMerge。"""
     row_tag = "<tr h>" if row.get("isHeader") else "<tr>"
     parts = [row_tag]
 
     for cell in row["cells"]:
         cell_tag = "th" if row.get("isHeader") else "td"
 
-        if density == "L2":
+        if density == "semantic":
             attrs_parts: list[str] = [cell_tag]
             if cell["colSpan"] != 1:
-                attrs_parts.append(f"s={cell['colSpan']}")
+                attrs_parts.append(f"colspan={cell['colSpan']}")
             if cell["rowSpan"] != 1:
-                attrs_parts.append(f"rs={cell['rowSpan']}")
+                attrs_parts.append(f"rowspan={cell['rowSpan']}")
             if cell.get("vMerge"):
-                attrs_parts.append(f"v={cell['vMerge']}")
+                attrs_parts.append(f"vmerge={cell['vMerge']}")
             tag = " ".join(attrs_parts)
         else:
             tag = cell_tag
@@ -75,7 +73,7 @@ def cell_content(cell: TableCell, density: str) -> str:
     parts: list[str] = []
     for block in blocks:
         if block["type"] == "table":
-            if density == "L2":
+            if density == "semantic":
                 parts.append(nested_table(block))
         else:
             parts.append(inline_content(block, density))
@@ -83,21 +81,21 @@ def cell_content(cell: TableCell, density: str) -> str:
 
 
 def nested_table(block: TableBlock) -> str:
-    """L2：把嵌套表格渲染为轻量 HTML5。"""
+    """semantic：把嵌套表格渲染为轻量 HTML5。"""
     rows = block["rows"]
-    parts = [f"<ntable r={len(rows)} c={block['columnCount']}>"]
+    parts = [f"<nestedtable rows={len(rows)} cols={block['columnCount']}>"]
     for row in rows:
-        tag = "<r h>" if row.get("isHeader") else "<r>"
+        tag = "<row header>" if row.get("isHeader") else "<row>"
         parts.append(tag)
         for cell in row["cells"]:
             c_tag = "th" if row.get("isHeader") else "td"
             attrs_parts: list[str] = [c_tag]
             if cell["colSpan"] != 1:
-                attrs_parts.append(f"s={cell['colSpan']}")
+                attrs_parts.append(f"colspan={cell['colSpan']}")
             if cell["rowSpan"] != 1:
-                attrs_parts.append(f"rs={cell['rowSpan']}")
+                attrs_parts.append(f"rowspan={cell['rowSpan']}")
             if cell.get("vMerge"):
-                attrs_parts.append(f"v={cell['vMerge']}")
+                attrs_parts.append(f"vmerge={cell['vMerge']}")
             attrs = " ".join(attrs_parts)
-            parts.append(f"<{attrs}>{cell_content(cell, 'L2')}")
+            parts.append(f"<{attrs}>{cell_content(cell, 'semantic')}")
     return "".join(parts)

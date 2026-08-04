@@ -153,10 +153,9 @@ class AncillaryParser:
         except Exception as exc:
             self.warnings.append(
                 ParseWarning(
-                    level="warning",
                     code="ANCILLARY_XML_PARSE_FAILED",
                     message=f"Failed to parse {part_name}: {exc}",
-                    part=part_name,
+                    locator=part_name,
                 )
             )
             return None

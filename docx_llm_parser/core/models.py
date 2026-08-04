@@ -56,11 +56,11 @@ class ImageAssetRequired(TypedDict):
 
 
 class ImageAsset(ImageAssetRequired, total=False):
-    """External or exported image referenced by the document."""
+    """Image referenced by the document. Binary data retrieved via get_resource."""
 
     href: str
-    file: str
     contentType: str
+    zipPath: str
 
 
 class ChartSeriesRequired(TypedDict):
@@ -373,11 +373,9 @@ class ParseOptions:
 class ParseWarning:
     """解析过程中可恢复问题的记录。"""
 
-    level: str
     code: str
     message: str
-    part: str | None = None
-    block_id: str | None = None
+    locator: str = ""
 
 
 @dataclass(slots=True)

@@ -9,15 +9,12 @@ from .api import (
     parse_docx,
     render_document,
     render_window,
-    write_document,
 )
-from .concurrency import BatchParseResult, parse_many
 from .core.enums import Density, ResourceType, RevisionMode
 from .core.models import ParsedDocument, ParseOptions, ParseWarning
 from .parser import DocxParser
 
 __all__ = [
-    "BatchParseResult",
     "Density",
     "DocxParser",
     "ParseOptions",
@@ -31,8 +28,6 @@ __all__ = [
     "iter_document",
     "list_resources",
     "parse_docx",
-    "parse_many",
     "render_document",
     "render_window",
-    "write_document",
 ]

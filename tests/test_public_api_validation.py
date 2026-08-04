@@ -12,10 +12,10 @@ from docx_llm_parser import (
     RevisionMode,
     get_resource,
     list_resources,
-    parse_many,
     render_document,
     render_window,
 )
+from docx_llm_parser.concurrency import parse_many
 
 
 def _empty_document() -> ParsedDocument:
@@ -31,7 +31,7 @@ def _empty_document() -> ParsedDocument:
 
 class PublicApiValidationTests(unittest.TestCase):
     def test_string_enums_preserve_serialized_values(self) -> None:
-        self.assertEqual(str(Density.SEMANTIC), "L2")
+        self.assertEqual(str(Density.SEMANTIC), "semantic")
         self.assertEqual(str(RevisionMode.FINAL), "final")
         self.assertEqual(str(ResourceType.TABLES), "tables")
 

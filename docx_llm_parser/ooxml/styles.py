@@ -68,10 +68,9 @@ class StyleMap:
             # 样式循环继承不能递归到底，记录 warning 后停止。
             self.warnings.append(
                 ParseWarning(
-                    level="warning",
                     code="STYLE_INHERITANCE_CYCLE",
                     message=f"Style inheritance cycle detected at {style_id}",
-                    part="word/styles.xml",
+                    locator="word/styles.xml",
                 )
             )
             return None
@@ -96,10 +95,9 @@ class StyleMap:
         if style_id in visited:
             self.warnings.append(
                 ParseWarning(
-                    level="warning",
                     code="STYLE_NUMBERING_INHERITANCE_CYCLE",
                     message=f"Style numbering inheritance cycle detected at {style_id}",
-                    part="word/styles.xml",
+                    locator="word/styles.xml",
                 )
             )
             return None
@@ -122,10 +120,9 @@ class StyleMap:
         if style_id in visited:
             self.warnings.append(
                 ParseWarning(
-                    level="warning",
                     code="STYLE_FORMAT_INHERITANCE_CYCLE",
                     message=f"Style format inheritance cycle detected at {style_id}",
-                    part="word/styles.xml",
+                    locator="word/styles.xml",
                 )
             )
             return {}
@@ -154,10 +151,9 @@ class StylesParser:
             # 样式文件缺失时仍可抽段落，但无法可靠识别标题。
             self.warnings.append(
                 ParseWarning(
-                    level="warning",
                     code="MISSING_STYLES",
                     message="word/styles.xml is missing; heading detection will be limited.",
-                    part="word/styles.xml",
+                    locator="word/styles.xml",
                 )
             )
             return StyleMap({}, self.warnings)
@@ -196,29 +192,27 @@ class StylesParser:
                     # 非法 outlineLvl 不影响其它样式解析。
                     self.warnings.append(
                         ParseWarning(
-                            level="warning",
                             code="INVALID_OUTLINE_LEVEL",
                             message=f"Invalid outline level {outline_val!r} for style {style_id}",
-                            part="word/styles.xml",
+                            locator="word/styles.xml",
                         )
                     )
-            num_id_node = first_child(numbering_properties, "w", "numId")
-            ilvl_node = first_child(numbering_properties, "w", "ilvl")
-            num_id = attr(num_id_node, "w", "val") if num_id_node is not None else None
-            ilvl = attr(ilvl_node, "w", "val") if ilvl_node is not None else None
-            if num_id is not None:
-                record.numbering_num_id = num_id
+            numid_elem = first_child(numbering_properties, "w", "numId")
+            level_elem = first_child(numbering_properties, "w", "ilvl")
+            numbering_id = attr(numid_elem, "w", "val") if numid_elem is not None else None
+            level_str = attr(level_elem, "w", "val") if level_elem is not None else None
+            if numbering_id is not None:
+                record.numbering_num_id = numbering_id
                 try:
-                    record.numbering_level = int(ilvl) if ilvl is not None else 0
+                    record.numbering_level = int(level_str) if level_str is not None else 0
                 except ValueError:
                     # 样式编号层级非法时按 0 层处理，同时保留 warning。
                     record.numbering_level = 0
                     self.warnings.append(
                         ParseWarning(
-                            level="warning",
                             code="INVALID_STYLE_NUMBERING_LEVEL",
                             message=f"Invalid numbering level {ilvl!r} for style {style_id}",
-                            part="word/styles.xml",
+                            locator="word/styles.xml",
                         )
                     )
             records[style_id] = record

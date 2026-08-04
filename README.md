@@ -74,7 +74,7 @@
 
 - **隐式闭合 HTML5**：块级元素（`<h1>` 到 `<h6>`、`<p>`、`<td>`、`<th>`、`<tr>` 等）省略闭合标签，由下一个块级元素的开始隐式表示前者的结束。实测节省约 **31% 的结构标签 token**。
 - **单字符属性名**：`h` 替代 `href`、`i` 替代 `id`、`g` 替代 `page`、`v` 替代 `value`——每个属性节省 2-5 个字符，在包含大量表格和超链接的文档中积累显著。
-- **三密度分级输出**：LLM 可以按需选择粒度——概括全文用 L0（纯文本），定位段落用 L1（块级结构 + 语义对象），精细分析用 L2（完整语义 + 格式信息）。不需要为一个简单问题消耗全文的 L2 token。
+- **三密度分级输出**：LLM 可以按需选择粒度——概括全文用 plain（纯文本），定位段落用 structural（块级结构 + 语义对象），精细分析用 semantic（完整语义 + 格式信息）。不需要为一个简单问题消耗全文的 semantic token。
 - **图片压缩**：超过 1MB 的嵌入图片自动缩放至 2000px + JPEG 重编码，控制下游 base64 token 消耗。
 - **页面窗口读取**：基于 OOXML 分页标记的精确页面定位，LLM 可以按页读取而非一次加载全文。
 
@@ -106,7 +106,7 @@
 | 合并单元格表格       | ❌                      | ⚠ 部分支持              | ❌                      | ✅ colspan/rowspan/vMerge |
 | 图表 / SmartArt | ❌                      | ❌                   | ❌                      | ✅ 轻量摘要                   |
 | 修订追踪          | ❌                      | ✅                   | ❌                      | ✅ 三策略                    |
-| 脚注拼接（L0）      | ❌                      | ❌                   | ❌                      | ✅                        |
+| 脚注拼接（plain）      | ❌                      | ❌                   | ❌                      | ✅                        |
 | Token 优化      | ❌                      | ❌                   | ❌                      | ✅ 隐式闭合+短属性+密度            |
 | 安装复杂度         | 轻量                     | 中等                  | 重量（模型+系统依赖）            | 极轻（Pillow 单依赖）           |
 
@@ -129,7 +129,7 @@ from docx_llm_parser import ParseOptions, parse_docx, write_document
 
 output_dir = Path("out") / "example"
 parsed = parse_docx("example.docx", ParseOptions(debug=True, output_dir=output_dir))
-html_path = write_document(parsed, output_dir, density="L2")  # "L0" | "L1" | "L2"
+html_path = write_document(parsed, output_dir, density="semantic")  # "plain" | "structural" | "semantic"
 ```
 
 ### 分步使用
@@ -146,19 +146,19 @@ parsed = parse_docx(
 )
 
 # 渲染
-html_text = render_document(parsed, density="L2")                 # 返回字符串
-html_path = write_document(parsed, Path("out/example"), density="L2")  # 写入 parsed.html
+html_text = render_document(parsed, density="semantic")                 # 返回字符串
+html_path = write_document(parsed, Path("out/example"), density="semantic")  # 写入 parsed.html
 ```
 
 ### 三种密度
 
 | 密度     | 输出                          | 典型场景             |
 | ------ | --------------------------- | ---------------- |
-| **L0** | 纯文本，段落间 `\n\n` 分隔           | 概括全文、分类、提取关键词    |
-| **L1** | 块级 HTML5（无粗体/斜体/颜色等格式）      | 定位段落、对比段落、读取表格   |
-| **L2** | 完整语义 HTML5（含所有格式 + 链接 + 公式） | 理解格式语义、链接目标、公式结构 |
+| **plain** | 纯文本，段落间 `\n\n` 分隔           | 概括全文、分类、提取关键词    |
+| **structural** | 块级 HTML5（无粗体/斜体/颜色等格式）      | 定位段落、对比段落、读取表格   |
+| **semantic** | 完整语义 HTML5（含所有格式 + 链接 + 公式） | 理解格式语义、链接目标、公式结构 |
 
-每种密度下脚注/尾注/页码/表格的处理策略不同。L0 将脚注文本拼接到引用段落末尾，尾注拼接到文档末尾，表格退化为 `\t` 分隔文本；L1/L2 保留引用标记并将完整内容放在 independent 区域。
+每种密度下脚注/尾注/页码/表格的处理策略不同。plain 将脚注文本拼接到引用段落末尾，尾注拼接到文档末尾，表格退化为 `\t` 分隔文本；structural/semantic 保留引用标记并将完整内容放在 independent 区域。
 
 ### 多文档并发
 
@@ -191,8 +191,8 @@ info = build_manifest(parsed)
 ```python
 from docx_llm_parser import render_window
 
-content = render_window(parsed, page=3)                          # 第 3 页，L2
-content = render_window(parsed, page=5, span=3, density="L1")    # 第 5-7 页，L1
+content = render_window(parsed, page=3)                          # 第 3 页，semantic
+content = render_window(parsed, page=5, span=3, density="structural")    # 第 5-7 页，structural
 last_page = render_window(parsed, page=-1)                       # 最后一页（page=-1 语法糖）
 ```
 
@@ -245,9 +245,9 @@ table = get_resource(parsed, "table", "t2")        # 完整逻辑表格
 
 ```
 out/<docx_stem>/
-  parsed.html         # L2 完整语义 HTML5
-  l1.html             # L1 块级结构
-  l0.txt              # L0 纯文本
+  parsed.html         # semantic 完整语义 HTML5
+  l1.html             # structural 块级结构
+  l0.txt              # plain 纯文本
   assets/             # 导出图片（img1_hash.png, ...）
   .debug/             # debug=True 时的中间产物（blocks.json, styles.json, metrics.json 等）
 ```

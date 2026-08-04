@@ -1,11 +1,10 @@
-"""Plain-text (L0) rendering helpers."""
+"""Plain-text rendering helpers."""
 
 from __future__ import annotations
 
 from ...core.models import Block, InlineContainer, InlineObject, TableBlock
 from .. import _constants
 from .._text_utils import merge_text_runs
-from ..tables import table_id
 
 
 def _string_field(value: object, default: str = "") -> str:
@@ -77,6 +76,8 @@ def l0_object_placeholder(obj: InlineObject) -> str:
         return _string_field(obj.get("text", ""))
     if obj_type == "fieldInstruction":
         return ""
+    if obj_type == "embedded":
+        return ""
     return ""
 
 
@@ -90,10 +91,7 @@ def l0_chart_placeholder(obj: InlineObject) -> str:
     names_str = ", ".join(names) if names else ""
     title_part = f" {title}" if title else ""
     names_part = f": {names_str}" if names_str else ""
-    return (
-        f"[Chart{title_part} ({chart_type}, {len(series)} series{names_part}). "
-        f'Use extract("chart", "{chart_id}")]'
-    )
+    return f"[Chart{title_part} ({chart_type}, {len(series)} series{names_part})]"
 
 
 def l0_smartart_placeholder(obj: InlineObject) -> str:
@@ -104,10 +102,7 @@ def l0_smartart_placeholder(obj: InlineObject) -> str:
     node_text = " ".join(node.get("text", "") for node in nodes)
     node_count = obj.get("nodeCount", len(nodes))
     type_part = f'"{smartart_type}" ' if smartart_type else ""
-    return (
-        f"[SmartArt {type_part}: {node_text} ({node_count} nodes). "
-        f'Use extract("smartart", "{smartart_id}")]'
-    )
+    return f"[SmartArt {type_part}: {node_text} ({node_count} nodes)]"
 
 
 def collect_footnote_refs(block: InlineContainer) -> list[str]:
@@ -143,15 +138,13 @@ def collect_endnote_refs(block: InlineContainer) -> list[str]:
 def table_text_only(block: TableBlock) -> str:
     """Render a table as tab-separated plain text, truncating very large tables."""
     rows = block["rows"]
-    if len(rows) > _constants._TABLE_TRUNCATE_L0:
+    if len(rows) > _constants._TABLE_TRUNCATE_PLAIN:
         first_row = rows[0]
         header_line = "\t".join(cell["text"] for cell in first_row["cells"])
         total_rows = len(rows)
         column_count = block["columnCount"]
-        resolved_table_id = table_id(block)
         return (
-            f"{header_line}\n[Table truncated: {total_rows} rows, {column_count} cols. "
-            f'Use extract("table", "{resolved_table_id}")]'
+            f"{header_line}\n[Table truncated: {total_rows} rows, {column_count} cols]"
         )
 
     row_texts = ["\t".join(cell["text"] for cell in row["cells"]) for row in rows]

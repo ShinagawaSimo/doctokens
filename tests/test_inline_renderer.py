@@ -75,7 +75,7 @@ class InlineRendererTests(unittest.TestCase):
         """OMML 公式应进入最终 XML，而不是只进入 debug。"""
         xml = f"<w:p {NS}><m:oMath><m:r><m:t>x+1=y</m:t></m:r></m:oMath></w:p>"
 
-        self.assertEqual(self._render_paragraph(xml), "<eq>x+1=y</eq>")
+        self.assertEqual(self._render_paragraph(xml), "<equation>x+1=y</equation>")
 
     def test_drawingml_textbox_renders_as_textbox(self) -> None:
         """DrawingML/WPS 文本框应保留文字和有语义的 alt。"""
@@ -89,7 +89,7 @@ class InlineRendererTests(unittest.TestCase):
 
         self.assertEqual(
             self._render_paragraph(xml),
-            "<tb alt=desc>text box</tb>",
+            "<textbox alt=desc>text box</textbox>",
         )
 
     def test_vml_textbox_renders_as_textbox(self) -> None:
@@ -102,7 +102,7 @@ class InlineRendererTests(unittest.TestCase):
 
         self.assertEqual(
             self._render_paragraph(xml),
-            "<tb alt=old box>vml text</tb>",
+            "<textbox alt=old box>vml text</textbox>",
         )
 
     def test_note_self_reference_is_not_warning_noise(self) -> None:
@@ -144,7 +144,7 @@ class InlineRendererTests(unittest.TestCase):
 
         self.assertEqual(
             _nested_table(nested),
-            "<ntable r=1 c=3><r><td>A<td s=2>B",
+            "<nestedtable rows=1 cols=3><row><td>A<td colspan=2>B",
         )
 
     def test_vertical_merge_updates_origin_rowspan(self) -> None:
@@ -220,10 +220,9 @@ class InlineRendererTests(unittest.TestCase):
         rendered = self._render_with_objects(xml, {("word/document.xml", "rIdChart"): chart})
 
         self.assertIn("<chart id=chart1 type=bar title=人口趋势 series=1", rendered)
-        self.assertIn("pv=一期=1.5; 二期=2.5", rendered)
+        self.assertIn("truncated", rendered)
         self.assertIn("names=人群A", rendered)
-        self.assertIn("range=1.5~2.5", rendered)
-        self.assertIn('<!-- Use extract("chart", "chart1") for full data. -->', rendered)
+        self.assertIn("categories=一期,二期", rendered)
 
     def test_smartart_data_renders_nodes_and_links(self) -> None:
         """SmartArt data model 应输出节点文本和连接关系。"""
@@ -243,10 +242,7 @@ class InlineRendererTests(unittest.TestCase):
 
         rendered = self._render_with_objects(xml, {("word/document.xml", "rIdDm"): smartart})
 
-        self.assertIn("<sa id=smartart1 type= nodes=2 links=1>", rendered)
-        self.assertIn("<n i=1>采集</n>", rendered)
-        self.assertIn("<e f=1 t=2 k=parOf/>", rendered)
-        self.assertIn('<!-- Use extract("smartart", "smartart1") for full data. -->', rendered)
+        self.assertIn("<smartart id=smartart1 type= nodes=2 links=1 truncated>采集 分析", rendered)
 
     def test_embedded_object_extractor_builds_lookup(self) -> None:
         """对象解析器应按 relationship 建立 chart/SmartArt 查询索引。"""

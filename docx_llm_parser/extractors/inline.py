@@ -21,6 +21,7 @@ from ..core.constants import (
     _TAG_W_FOOTNOTE_REFERENCE,
     _TAG_W_INSTR_TEXT,
     _TAG_W_LAST_RENDERED_PAGE_BREAK,
+    _TAG_W_OBJECT,
     _TAG_W_PICTURE,
     _TAG_W_RUN_PROPERTIES,
     _TAG_W_RUN_STYLE,
@@ -51,6 +52,26 @@ from ..ooxml.omml_latex import omath_to_latex
 from ..ooxml.styles import StyleMap
 
 PageBreakCallback = Callable[[], None]
+
+
+def _progid_to_type(progid: str) -> str:
+    """Map OLE ProgID to a human-readable type name."""
+    progid_lower = progid.lower()
+    if "excel" in progid_lower:
+        return "excel"
+    if "word" in progid_lower:
+        return "word"
+    if "powerpoint" in progid_lower:
+        return "powerpoint"
+    if "acroexch" in progid_lower:
+        return "pdf"
+    if "visio" in progid_lower:
+        return "visio"
+    if "paint" in progid_lower:
+        return "image"
+    if "package" in progid_lower:
+        return "package"
+    return "unknown"
 
 
 class InlineParser:
@@ -173,6 +194,11 @@ class InlineParser:
             return
         if lname in {"bookmarkStart", "bookmarkEnd", "proofErr", "permStart", "permEnd"}:
             # 这些标记不贡献可读文本。
+            return
+        if lname == "object":
+            obj = self._parse_embedded_object(node)
+            runs.append({"text": "", "objects": [obj]})
+            raw_hints.append(obj)
             return
         if lname.startswith("commentRange"):
             # 批注范围本身不含正文，commentReference 和 comments.xml 负责关联。
@@ -307,6 +333,10 @@ class InlineParser:
                 part=part,
                 block_id=block_id,
             )
+        elif child_tag == _TAG_W_OBJECT:
+            obj = self._parse_embedded_object(child)
+            parsed_run.setdefault("objects", []).append(obj)
+            raw_hints.append(obj)
         elif child_tag == _TAG_W_RUN_STYLE:
             # rStyle 由下方 rPr 段落统一用 first_child 提取，此处仅跳过。
             return
@@ -417,6 +447,31 @@ class InlineParser:
         drawing: InlineObject = {"type": "drawing"}
         self._copy_drawing_common(drawing, common)
         return [drawing]
+
+    def _parse_embedded_object(self, obj_elem: ET.Element) -> InlineObject:
+        """从 w:object 元素中提取嵌入对象类型。"""
+        result: InlineObject = {"type": "embedded"}
+        ole = first_child(obj_elem, "o", "OLEObject")
+        if ole is not None:
+            progid = ole.get("ProgID", "")
+            if progid:
+                result["embeddedType"] = _progid_to_type(progid)
+                result["progid"] = progid
+        if "embeddedType" not in result:
+            result["embeddedType"] = "unknown"
+        # 尝试从 shape/docPr 提取名称
+        for shape in obj_elem.iter(qualified_name("v", "shape")):
+            title = shape.get("title") or shape.get("alt")
+            if title:
+                result["name"] = title
+                break
+        if "name" not in result:
+            for doc_pr in obj_elem.iter(qualified_name("wp", "docPr")):
+                name = doc_pr.get("name")
+                if name:
+                    result["name"] = name
+                    break
+        return result
 
     def _copy_drawing_common(self, obj: InlineObject, common: DrawingCommon) -> None:
         """Copy shared DrawingML/VML metadata without TypedDict ** expansion."""
@@ -559,10 +614,8 @@ class InlineParser:
         """追加解析 warning。"""
         self.warnings.append(
             ParseWarning(
-                level="warning",
                 code=code,
                 message=message,
-                part=part,
-                block_id=block_id,
+                locator=":".join(filter(None, [part, block_id])),
             )
         )

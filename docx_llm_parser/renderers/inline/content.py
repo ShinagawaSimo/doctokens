@@ -6,7 +6,7 @@ from html import escape
 
 from ...core.models import InlineContainer, InlineObject, RunFormat
 from .._text_utils import filter_format, merge_text_runs
-from ..objects import chart_to_html5, chart_type_attrs, smartart_to_html5
+from ..objects import chart_to_html5, smartart_to_html5
 
 
 def inline_content(block: InlineContainer, density: str) -> str:
@@ -24,7 +24,7 @@ def inline_content(block: InlineContainer, density: str) -> str:
         fmt = filter_format(run)
         text = apply_inline_format(text, fmt, density)
 
-        if density == "L2":
+        if density == "semantic":
             if run.get("revision") == "inserted":
                 text = f"<ins>{text}</ins>"
             elif run.get("revision") == "deleted":
@@ -34,9 +34,9 @@ def inline_content(block: InlineContainer, density: str) -> str:
         if link and text:
             href = link.get("href", "")
             anchor = link.get("anchor", "")
-            attrs = f"h={escape(href, quote=True)}"
+            attrs = f"href={escape(href, quote=True)}"
             if anchor:
-                attrs += f" a={escape(anchor, quote=True)}"
+                attrs += f" anchor={escape(anchor, quote=True)}"
             text = f"<a {attrs}>{text}</a>"
         if text:
             parts.append(text)
@@ -47,17 +47,17 @@ def inline_content(block: InlineContainer, density: str) -> str:
 
 
 def apply_inline_format(text: str, fmt: RunFormat, density: str) -> str:
-    """用 HTML5 inline 标签包裹格式化文本。L1 不做格式包裹。"""
-    if density == "L1":
+    """用 HTML5 inline 标签包裹格式化文本。structural 不做格式包裹。"""
+    if density == "structural":
         return text
     if not text or not fmt:
         return text
     if fmt.get("bg"):
-        text = f"<m v={fmt['bg']}>{text}</m>"
+        text = f"<mark value={fmt['bg']}>{text}</mark>"
     if fmt.get("highlight"):
-        text = f"<m v={fmt['highlight']}>{text}</m>"
+        text = f"<mark value={fmt['highlight']}>{text}</mark>"
     if fmt.get("color"):
-        text = f"<c v={fmt['color']}>{text}</c>"
+        text = f"<color value={fmt['color']}>{text}</color>"
     if fmt.get("strike"):
         text = f"<s>{text}</s>"
     if fmt.get("underline"):
@@ -88,8 +88,8 @@ def inline_object(obj: InlineObject, density: str) -> str:
 
     if obj_type == "equation":
         if obj["text"]:
-            return f"<eq>{escape(obj['text'])}</eq>"
-        return "<eq/>"
+            return f"<equation>{escape(obj['text'])}</equation>"
+        return "<equation/>"
 
     if obj_type == "chart":
         return chart_object(obj, density)
@@ -98,23 +98,26 @@ def inline_object(obj: InlineObject, density: str) -> str:
         return smartart_object(obj, density)
 
     if obj_type == "footnoteRef":
-        return f"<fnr id={obj['id']}/>"
+        return f"<footnoteref id={obj['id']}/>"
     if obj_type == "endnoteRef":
-        return f"<enr id={obj['id']}/>"
+        return f"<endnoteref id={obj['id']}/>"
     if obj_type == "commentRef":
-        return f"<cmr id={obj['id']}/>"
+        return f"<commentref id={obj['id']}/>"
 
     if obj_type == "fieldInstruction":
-        return f"<fld i={escape(obj['instruction'], quote=True)}/>"
+        return f"<field instruction={escape(obj['instruction'], quote=True)}/>"
 
-    return f"<obj t={escape(obj_type, quote=True)}/>"
+    if obj_type == "embedded":
+        return embedded_object(obj, density)
+
+    return f"<unsupported type={escape(obj_type, quote=True)}/>"
 
 
 def image_object(obj: InlineObject, density: str) -> str:
     """Render an embedded image reference."""
-    if density == "L1":
+    if density == "structural":
         return "<img>"
-    attrs = f"id={obj.get('assetId', '')} f={escape(obj.get('file', ''), quote=True)}"
+    attrs = f"id={obj.get('assetId', '')}"
     if obj.get("alt"):
         attrs += f" alt={escape(obj['alt'], quote=True)}"
     return f"<img {attrs}>"
@@ -122,48 +125,34 @@ def image_object(obj: InlineObject, density: str) -> str:
 
 def drawing_object(obj: InlineObject, density: str) -> str:
     """Render a drawing fallback when a concrete asset is unavailable."""
-    if density == "L1":
+    if density == "structural":
         return "<img>"
     alt = obj.get("alt") or obj.get("title") or obj.get("name") or ""
     return f"<img alt={escape(alt, quote=True)}>" if alt else "<img>"
 
 
+def embedded_object(obj: InlineObject, density: str) -> str:
+    """Render an embedded OLE object with type hint."""
+    attrs = f"type={escape(obj.get('embeddedType', 'unknown'), quote=True)}"
+    if obj.get("name"):
+        attrs += f" name={escape(obj['name'], quote=True)}"
+    return f"<embedded {attrs}>"
+
+
 def textbox_object(obj: InlineObject, density: str) -> str:
     """Render DrawingML/VML textbox content."""
-    if density == "L1":
-        return f"<tb>{escape(obj['text'])}</tb>"
+    if density == "structural":
+        return f"<textbox>{escape(obj['text'])}</textbox>"
     alt = obj.get("alt") or obj.get("title") or ""
     attrs = f"alt={escape(alt, quote=True)}" if alt else ""
-    return f"<tb {attrs}>{escape(obj['text'])}</tb>"
+    return f"<textbox {attrs}>{escape(obj['text'])}</textbox>"
 
 
 def chart_object(obj: InlineObject, density: str) -> str:
-    """Render a chart reference with L1/L2 density differences."""
-    if density != "L1":
-        return chart_to_html5(obj)
-    chart_id = obj.get("id", "?")
-    chart_type = obj.get("chartType", "?")
-    attrs = f"id={chart_id} type={chart_type}"
-    if obj.get("title"):
-        attrs += f" title={escape(obj['title'], quote=True)}"
-    attrs += f" series={obj.get('seriesCount', 0)}"
-    type_attrs = chart_type_attrs(obj, chart_type)
-    if type_attrs:
-        attrs += type_attrs
-    return f'<chart {attrs}>\n<!-- Use extract("chart", "{chart_id}") for full data. -->\n'
+    """Render a chart reference. Full data via get_resource."""
+    return chart_to_html5(obj)
 
 
 def smartart_object(obj: InlineObject, density: str) -> str:
-    """Render a SmartArt reference with L1/L2 density differences."""
-    if density != "L1":
-        return smartart_to_html5(obj)
-    smartart_id = obj.get("id", "?")
-    smartart_type = obj.get("layoutType", "")
-    node_count = obj.get("nodeCount", 0)
-    link_count = obj.get("linkCount", 0)
-    node_text = " ".join(n.get("text", "") for n in (obj.get("nodes") or []))
-    attrs = f"id={smartart_id} type={smartart_type} nodes={node_count} links={link_count}"
-    return (
-        f"<sa {attrs}>{escape(node_text)}\n"
-        f'<!-- Use extract("smartart", "{smartart_id}") for full data. -->\n'
-    )
+    """Render a SmartArt reference. Full structure via get_resource."""
+    return smartart_to_html5(obj)

@@ -160,14 +160,13 @@ class NumberingAndAssetTests(unittest.TestCase):
         self.assertIsNone(state.advance("missing", 0, part="word/document.xml", block_id="b1"))
         self.assertEqual(warnings[-1].code, "NUMBERING_LEVEL_MISSING")
 
-    def test_asset_extractor_handles_external_missing_embedded_and_compress_failure(self) -> None:
+    def test_asset_extractor_handles_external_missing_and_embedded(self) -> None:
         with TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir)
             warnings: list[ParseWarning] = []
             package = FakePackage(
                 {
                     "word/media/image1.png": b"png-data",
-                    "word/media/huge.bin": b"not an image" * 120_000,
                 }
             )
             relationships = RelationshipIndex.from_records(
@@ -196,18 +195,10 @@ class NumberingAndAssetTests(unittest.TestCase):
                         None,
                         "word/media/image1.png",
                     ),
-                    RelationshipRecord(
-                        "word/document.xml",
-                        "rHuge",
-                        IMAGE_REL_TYPE,
-                        "media/huge.bin",
-                        None,
-                        "word/media/huge.bin",
-                    ),
                 ]
             )
             content_types: ContentTypes = {
-                "defaults": {"bin": "application/octet-stream"},
+                "defaults": {},
                 "overrides": {"word/media/image1.png": "image/png"},
             }
 
@@ -215,19 +206,16 @@ class NumberingAndAssetTests(unittest.TestCase):
                 package,
                 relationships,
                 content_types,
-                output_dir,
                 warnings,
             ).extract()
 
             self.assertEqual(
                 [asset["source"] for asset in assets],
-                ["external", "embedded", "embedded"],
+                ["external", "embedded"],
             )
             self.assertEqual(assets[1]["contentType"], "image/png")
-            self.assertEqual(assets[2]["contentType"], "application/octet-stream")
             self.assertEqual(lookup[("word/document.xml", "rPng")]["id"], assets[1]["id"])
             self.assertIn("IMAGE_TARGET_MISSING", [warning.code for warning in warnings])
-            self.assertIn("IMAGE_COMPRESS_FAILED", [warning.code for warning in warnings])
 
 
 class RendererBranchTests(unittest.TestCase):
@@ -254,12 +242,12 @@ class RendererBranchTests(unittest.TestCase):
             "title": "Sales",
         }
 
-        self.assertIn("<ms c=2/>", chart_to_html5(chart))
+        self.assertIn("categories=Q1,Q2", chart_to_html5(chart))
         self.assertIn("names=Q1,Q2", chart_to_html5({**chart, "chartType": "pie"}))
         self.assertIn("points=12", chart_to_html5({**chart, "chartType": "scatter"}))
-        self.assertIn("x=Q1,Q2", chart_to_html5({**chart, "chartType": "stock"}))
+        self.assertIn("categories=Q1,Q2", chart_to_html5({**chart, "chartType": "stock"}))
         self.assertIn("names=S1,S2", chart_to_html5({**chart, "chartType": "surface"}))
-        self.assertIn('Use extract("chart", "empty")', chart_to_html5({"id": "empty"}))
+        self.assertIn("<chart id=empty type=? series=0 truncated>", chart_to_html5({"id": "empty"}))
         self.assertEqual(extract_chart_item(chart)["series"][0]["points"], ["Q1=1", "Q2=2"])
 
         smartart = {
@@ -278,10 +266,10 @@ class RendererBranchTests(unittest.TestCase):
         }
 
         rendered_sa = smartart_to_html5(smartart)
-        self.assertIn("<mn c=2/>", rendered_sa)
-        self.assertIn("<ml c=2/>", rendered_sa)
+        self.assertIn("truncated", rendered_sa)
+        self.assertIn("Node 1", rendered_sa)
+        self.assertIn("Node 14", rendered_sa)
         self.assertIn("Node 1", extract_smartart_item(smartart)["nodes"][0]["text"])
-        self.assertIn('Use extract("smartart", "empty")', smartart_to_html5({"id": "empty"}))
 
         rows = [
             {
@@ -302,7 +290,7 @@ class RendererBranchTests(unittest.TestCase):
         ]
         table = {"type": "table", "tableId": "t-long", "rows": rows, "columnCount": 1}
 
-        self.assertIn("31 rows truncated", "".join(render_table(table, "L2")))
+        self.assertIn("<table truncated>", "".join(render_table(table, "L2")))
         self.assertIn("<td>R1", "".join(render_table({"rows": rows[:2]}, "L1")))
         with self.assertRaisesRegex(TypeError, "tableId"):
             table_id({"tableId": 123})

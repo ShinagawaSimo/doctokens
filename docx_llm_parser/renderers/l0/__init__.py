@@ -1,4 +1,4 @@
-"""L0 纯文本渲染辅助。"""
+"""plain 纯文本渲染辅助。"""
 
 from .helpers import (
     block_text_only,

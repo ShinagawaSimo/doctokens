@@ -120,14 +120,12 @@ class NumberingState:
         if level is None:
             self.warnings.append(
                 ParseWarning(
-                    level="warning",
                     code="NUMBERING_LEVEL_MISSING",
                     message=(
                         f"Missing numbering level for numId={num_id}, "
                         f"numbering_level={numbering_level}"
                     ),
-                    part=part,
-                    block_id=block_id,
+                    locator=":".join(filter(None, [part, block_id])),
                 )
             )
             return None
@@ -208,12 +206,11 @@ class NumberingState:
             self._warned_formats.add(number_format)
             self.warnings.append(
                 ParseWarning(
-                    level="warning",
                     code="UNSUPPORTED_NUMBER_FORMAT",
                     message=(
                         f"Unsupported numbering format {number_format!r}; decimal fallback is used."
                     ),
-                    part="word/numbering.xml",
+                    locator="word/numbering.xml",
                 )
             )
         return str(value)

@@ -47,7 +47,6 @@ def write_metrics_debug(parsed: ParsedDocument) -> None:
     except Exception as exc:
         parsed.warnings.append(
             ParseWarning(
-                level="warning",
                 code="METRICS_WRITE_FAILED",
                 message=f"Failed to write render metrics debug artifact: {exc}",
             )

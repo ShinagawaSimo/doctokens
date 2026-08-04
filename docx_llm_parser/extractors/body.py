@@ -80,6 +80,8 @@ class DocumentBodyParser:
         # 计数器替代布尔：一个段落/表格内可能有多个 lastRenderedPageBreak。
         self._pending_page_breaks = 0
         self.body_events: list[BodyEvent] = []
+        self._section_header_refs: list[tuple[str, str]] = []
+        self._section_footer_refs: list[tuple[str, str]] = []
 
     def parse(self) -> list[Block]:
         """流式解析 word/document.xml，并保持段落/表格的原始顺序。"""
@@ -116,11 +118,7 @@ class DocumentBodyParser:
                     elem.clear()
                 elif direct_body_child and lname == "sectPr":
                     # 分节符：Word 渲染时总是从新页开始新节。
-                    self._warn(
-                        "SECTION_PAGE_BREAK",
-                        "Section break treated as page break.",
-                        part="word/document.xml",
-                    )
+                    self._collect_section_refs(elem)
                     self._pending_page_breaks += 1
                     elem.clear()
 
@@ -472,6 +470,27 @@ class DocumentBodyParser:
         self._pending_page_breaks = 0
         return self._page_hint
 
+    def _collect_section_refs(self, sect_pr: ET.Element) -> None:
+        """从 sectPr 中提取 header/footer 引用。"""
+        for child in sect_pr:
+            lname = local_name(child.tag)
+            r_id = attr(child, "r", "id")
+            if not r_id:
+                continue
+            ref_type = attr(child, "w", "type") or "default"
+            if lname == "headerReference":
+                self._section_header_refs.append((r_id, ref_type))
+            elif lname == "footerReference":
+                self._section_footer_refs.append((r_id, ref_type))
+
+    @property
+    def section_refs(self) -> dict[str, list[tuple[str, str]]]:
+        """返回收集到的节引用，供 AncillaryParser 过滤未使用的页眉页脚。"""
+        return {
+            "headers": list(self._section_header_refs),
+            "footers": list(self._section_footer_refs),
+        }
+
     def _warn(
         self,
         code: str,
@@ -482,10 +501,8 @@ class DocumentBodyParser:
         """追加解析 warning。"""
         self.warnings.append(
             ParseWarning(
-                level="warning",
                 code=code,
                 message=message,
-                part=part,
-                block_id=block_id,
+                locator=":".join(filter(None, [part, block_id])),
             )
         )

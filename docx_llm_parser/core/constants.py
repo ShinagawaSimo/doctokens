@@ -12,6 +12,7 @@ NS = {
     "c": "http://schemas.openxmlformats.org/drawingml/2006/chart",
     "dgm": "http://schemas.openxmlformats.org/drawingml/2006/diagram",
     "m": "http://schemas.openxmlformats.org/officeDocument/2006/math",
+    "o": "urn:schemas-microsoft-com:office:office",
     "v": "urn:schemas-microsoft-com:vml",
     "wps": "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
     "rel": "http://schemas.openxmlformats.org/package/2006/relationships",
@@ -49,6 +50,7 @@ _TAG_W_CELL_PROPERTIES = qualified_name("w", "tcPr")
 _TAG_W_BREAK = qualified_name("w", "br")
 _TAG_W_CARRIAGE_RETURN = qualified_name("w", "cr")
 _TAG_W_TAB = qualified_name("w", "tab")
+_TAG_W_OBJECT = qualified_name("w", "object")
 _TAG_W_DRAWING = qualified_name("w", "drawing")
 _TAG_W_PICTURE = qualified_name("w", "pict")
 _TAG_W_HYPERLINK = qualified_name("w", "hyperlink")

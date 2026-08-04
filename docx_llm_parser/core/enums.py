@@ -15,16 +15,16 @@ class StringEnum(str, Enum):
 class Density(StringEnum):
     """Amount of document detail retained by a renderer."""
 
-    PLAIN = "L0"
-    STRUCTURAL = "L1"
-    SEMANTIC = "L2"
+    PLAIN = "plain"
+    STRUCTURAL = "structural"
+    SEMANTIC = "semantic"
 
     @classmethod
     def parse(cls, value: Density | str) -> Density:
         try:
             return cls(value)
         except ValueError as exc:
-            raise ValueError("density must be one of: 'L0', 'L1', 'L2'") from exc
+            raise ValueError("density must be one of: 'plain', 'structural', 'semantic'") from exc
 
 
 class RevisionMode(StringEnum):

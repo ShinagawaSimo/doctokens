@@ -16,11 +16,11 @@ from docx_llm_parser import (
     get_resource,
     list_resources,
     parse_docx,
-    parse_many,
     render_document,
     render_window,
-    write_document,
 )
+from docx_llm_parser.api import write_document
+from docx_llm_parser.concurrency import parse_many
 
 PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
@@ -72,9 +72,9 @@ class DocxPipelineTests(unittest.TestCase):
 
             html = render_document(parsed, density=Density.SEMANTIC)
             self.assertIn("<h1>Document Title", html)
-            self.assertIn("<a h=https://example.test>link</a>", html)
+            self.assertIn("<a href=https://example.test>link</a>", html)
             self.assertIn("<chart id=chart1 type=bar", html)
-            self.assertIn("<sa id=smartart1 type=process nodes=2 links=1>", html)
+            self.assertIn("<smartart id=smartart1 type=process nodes=2 links=1 truncated>", html)
             self.assertIn("<img id=img1", html)
             self.assertIn("<!-- supplemental -->", html)
 

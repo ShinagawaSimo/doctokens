@@ -22,9 +22,9 @@ from .renderers.html5 import window as _window
 from .renderers.html5 import write_outputs
 
 
-def parse_docx(docx_path: str | Path, options: ParseOptions | None = None) -> ParsedDocument:
+def parse_docx(docx_source: str | Path | bytes, options: ParseOptions | None = None) -> ParsedDocument:
     """解析单个 DOCX 文件，返回结构化文档模型。"""
-    return DocxParser().parse(docx_path, options)
+    return DocxParser().parse(docx_source, options)
 
 
 def render_document(
@@ -87,10 +87,26 @@ def get_resource(
     document: ParsedDocument,
     resource_type: ResourceType | str,
     resource_id: str,
+    *,
+    rows: str | None = None,
+    columns: list[str] | None = None,
+    aggregate: str | None = None,
+    aggregate_column: str | None = None,
 ) -> ResourceDetail | None:
-    """Return one resource detail by ID, or None when the ID is absent."""
+    """Return one resource detail by ID, with optional range/column/aggregate filtering.
+
+    ``rows`` is a range string like ``"10-25"`` (inclusive on both ends, 1-based).
+    ``columns`` filters by header name (first row is treated as header).
+    ``aggregate`` is one of ``sum``, ``count``, ``avg``, ``min``, ``max`` and requires
+    ``aggregate_column`` to specify which column to operate on.
+    All values come from the file's cached data; no formula recalculation is performed.
+    """
     resolved_type = ResourceType.parse(resource_type)
     if resolved_type.is_plural:
         raise ValueError("resource_type must be singular when getting one resource")
-    items = _extract_resources(document, resolved_type, resource_id)
+    items = _extract_resources(
+        document, resolved_type, resource_id,
+        rows=rows, columns=columns,
+        aggregate=aggregate, aggregate_column=aggregate_column,
+    )
     return items[0] if items else None

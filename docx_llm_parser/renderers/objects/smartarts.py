@@ -5,43 +5,20 @@ from __future__ import annotations
 from html import escape
 
 from ...core.models import InlineObject, ResourceDetail, SmartArt
-from .. import _constants
 
 
 def smartart_to_html5(obj: InlineObject) -> str:
-    """L2：输出 SmartArt 节点和连接（使用语义属性名）。"""
+    """输出 SmartArt 摘要：显示全部节点文本，完整结构通过 get_resource 获取。"""
     smartart_id = obj.get("id", "?")
     smartart_type = obj.get("layoutType", "")
     node_count = obj.get("nodeCount", 0)
     link_count = obj.get("linkCount", 0)
 
-    attrs = f"id={smartart_id} type={smartart_type} nodes={node_count} links={link_count}"
+    attrs = f"id={smartart_id} type={smartart_type} nodes={node_count} links={link_count} truncated"
+
     nodes = obj.get("nodes") or []
-    links = obj.get("links") or []
-
-    extract_hint = f'\n<!-- Use extract("smartart", "{smartart_id}") for full data. -->'
-
-    if not nodes and not links:
-        return f"<sa {attrs}>" + extract_hint
-
-    parts = [f"<sa {attrs}>"]
-    for index, node in enumerate(nodes[: _constants._SA_NODES_TRUNCATE], start=1):
-        n_attrs = f"i={index}"
-        if node.get("kind"):
-            n_attrs += f" k={escape(node['kind'], quote=True)}"
-        parts.append(f"<n {n_attrs}>{escape(node['text'])}</n>")
-    if len(nodes) > _constants._SA_NODES_TRUNCATE:
-        parts.append(f"<mn c={len(nodes) - _constants._SA_NODES_TRUNCATE}/>")
-    for link in links[: _constants._SA_LINKS_TRUNCATE]:
-        l_attrs = f"f={link['from']} t={link['to']}"
-        if link.get("kind"):
-            l_attrs += f" k={escape(link['kind'], quote=True)}"
-        parts.append(f"<e {l_attrs}/>")
-    if len(links) > _constants._SA_LINKS_TRUNCATE:
-        parts.append(f"<ml c={len(links) - _constants._SA_LINKS_TRUNCATE}/>")
-    parts.append("</sa>")
-    parts.append(extract_hint)
-    return "".join(parts)
+    all_text = " ".join(n.get("text", "") for n in nodes)
+    return f"<smartart {attrs}>{escape(all_text)}\n"
 
 
 def extract_smartart_item(s: SmartArt) -> ResourceDetail:

@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from html import escape
 
-from ..models import Cell, ParsedWorkbook
+from ..models import ParsedWorkbook
+from ._constants import _GRID_BOUND_SENTINEL
 
 
 def render_workbook(wb: ParsedWorkbook) -> str:
@@ -20,7 +21,7 @@ def iter_workbook(wb: ParsedWorkbook) -> Iterator[str]:
 
 
 def _render_sheet(sheet) -> Iterator[str]:
-    """Render one sheet."""
+    """Render one sheet with grid and rows."""
     name = sheet["name"]
     state = sheet.get("state", "visible")
     attrs = f"name={escape(name, quote=True)}"
@@ -34,10 +35,10 @@ def _render_sheet(sheet) -> Iterator[str]:
     if not rows:
         return
 
-    # Compute grid ref from actual cell positions
-    min_col = 9999
+    # Compute actual grid ref from cell positions (do not trust <dimension>)
+    min_col = _GRID_BOUND_SENTINEL
     max_col = 0
-    min_row = 9999
+    min_row = _GRID_BOUND_SENTINEL
     max_row = 0
     for row_cells in rows:
         for cell in row_cells:

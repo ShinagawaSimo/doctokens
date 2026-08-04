@@ -1,4 +1,4 @@
-"""XLSX 解析器中间模型。"""
+"""XLSX parser intermediate models."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import TypedDict
 class Cell(TypedDict, total=False):
     """A single spreadsheet cell in typed IR."""
 
-    ref: str          # e.g. "A1"
+    ref: str          # A1-style reference, e.g. "A1"
     row: int          # 1-based row number
     col: int          # 1-based column number
     text: str         # resolved display text

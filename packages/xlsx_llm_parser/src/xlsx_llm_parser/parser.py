@@ -10,7 +10,7 @@ from ooxml_llm_core.package import PackageReader
 
 from .models import Cell, ParsedWorkbook, SheetInfo
 
-# XLSX main namespace
+# SpreadsheetML main namespace
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 
@@ -23,7 +23,6 @@ def parse_xlsx(source: str | Path | bytes) -> ParsedWorkbook:
 
         sheets = _parse_workbook(pkg)
 
-        # Parse each worksheet
         for sheet in sheets:
             sheet["rows"] = _parse_sheet(pkg, sheet["part"])
 
@@ -36,11 +35,10 @@ def parse_xlsx(source: str | Path | bytes) -> ParsedWorkbook:
 
 
 def _parse_workbook(pkg: PackageReader) -> list[SheetInfo]:
-    """Parse xl/workbook.xml → list of sheet metadata."""
+    """Parse xl/workbook.xml to discover sheet names and worksheet parts."""
     with pkg.open_entry("xl/workbook.xml") as stream:
         root = ET.parse(stream).getroot()
 
-    # Resolve relationships for sheet target parts
     rels = {r.id: r.resolved_target for r in pkg.read_relationships_for_part("xl/workbook.xml")}
 
     sheets: list[SheetInfo] = []
@@ -62,13 +60,13 @@ def _parse_workbook(pkg: PackageReader) -> list[SheetInfo]:
 
 
 def _parse_sheet(pkg: PackageReader, part: str) -> list[list[Cell]]:
-    """Parse a single worksheet XML → list of rows.
+    """Parse a single worksheet XML into typed cell rows.
 
-    Handles:
-      - inline strings (t="inlineStr")
-      - numbers (no t or t="n")
-      - booleans (t="b")
-      - errors (t="e")
+    Handles cell types:
+      - inlineStr (t="inlineStr") — text embedded in the cell element
+      - number (t="n" or no t) — numeric value from <v>
+      - boolean (t="b") — "1" → true, "0" → false
+      - error (t="e") — error code like #DIV/0!
     """
     if not pkg.exists(part):
         return []
@@ -101,11 +99,7 @@ def _parse_sheet(pkg: PackageReader, part: str) -> list[list[Cell]]:
                 if v_elem is not None and v_elem.text:
                     text = v_elem.text
                     if cell_type == "b":
-                        # Boolean: "1" → true, "0" → false
                         text = "true" if v_elem.text == "1" else "false"
-                    elif cell_type == "e":
-                        # Error value: keep as-is (e.g. "#DIV/0!")
-                        pass
 
             cell: Cell = {"ref": ref, "row": row_num or row, "col": col, "text": text}
             if cell_type != "n":
@@ -118,7 +112,7 @@ def _parse_sheet(pkg: PackageReader, part: str) -> list[list[Cell]]:
 
 
 def _parse_ref(ref: str) -> tuple[int, int]:
-    """Parse an A1-style reference into (col, row) 1-based integers."""
+    """Parse an A1-style reference into (col, row) as 1-based integers."""
     col_str = ""
     row_str = ""
     for ch in ref:

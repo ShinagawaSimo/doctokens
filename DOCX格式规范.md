@@ -267,16 +267,7 @@ supplemental 区（资产索引）：
 
 ## 资源提取 API
 
-正文中被截断的资源（`<table truncated>`、`<chart ... truncated>`、`<smartart ... truncated>`）可通过以下 API 按需获取完整数据：
-
-### 列表查询
-
-| 调用 | 返回 |
-|---|---|
-| `list_resources(parsed, ResourceType.TABLES)` | 所有表格摘要 [{id, rowCount, columnCount, segmentCount, pages}] |
-| `list_resources(parsed, ResourceType.CHARTS)` | 所有图表摘要 [{id, chartType, seriesCount, pointCount}] |
-| `list_resources(parsed, ResourceType.SMARTARTS)` | 所有 SmartArt 摘要 [{id, type, nodeCount, linkCount}] |
-| `list_resources(parsed, ResourceType.IMAGES)` | 所有图片摘要 [{id}] |
+正文中被截断的资源（`<table truncated>`、`<chart ... truncated>`、`<smartart ... truncated>`）可通过 `get_resource` 按需获取完整数据：
 
 ### 单资源详情
 

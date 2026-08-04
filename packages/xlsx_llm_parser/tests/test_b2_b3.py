@@ -1,4 +1,4 @@
-"""B2+B3: multi-sheet navigation + shared strings and all cell types."""
+"""Multi-sheet navigation + shared strings and all cell types."""
 
 import io
 import unittest
@@ -62,8 +62,8 @@ def _shared_strings_xml(strings: list[str]) -> str:
     )
 
 
-class B2MultiSheetTests(unittest.TestCase):
-    """B2: workbook navigation — multiple sheets, hidden state, ordering."""
+class MultiSheetTests(unittest.TestCase):
+    """Workbook navigation — multiple sheets, hidden state, ordering."""
 
     def test_multiple_sheets_in_order(self) -> None:
         data = _make_xlsx(
@@ -138,8 +138,8 @@ class B2MultiSheetTests(unittest.TestCase):
         self.assertNotIn("hidden", html.split("Hidden")[0])  # Visible has no hidden
 
 
-class B3SharedStringsTests(unittest.TestCase):
-    """B3: shared strings, formula strings, dates, rich text."""
+class SharedStringsTests(unittest.TestCase):
+    """Shared strings, formula strings, dates, rich text."""
 
     def test_shared_strings_basic(self) -> None:
         """t='s' cells look up text from sharedStrings.xml."""

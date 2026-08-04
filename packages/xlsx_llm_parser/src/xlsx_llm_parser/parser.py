@@ -14,7 +14,7 @@ from .models import Cell, ParsedWorkbook, SheetInfo
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 
-# Relationship types for sheet kind detection (B2)
+# Relationship types for sheet kind detection
 _REL_WORKSHEET = f"{NS_R}/worksheet"
 _REL_CHARTSHEET = f"{NS_R}/chartsheet"
 
@@ -26,7 +26,7 @@ def parse_xlsx(source: str | Path | bytes) -> ParsedWorkbook:
         pkg.validate(required_part="xl/workbook.xml")
 
         sheets = _parse_workbook(pkg)
-        # B3: shared strings table — text cells reference this by index
+        # Shared strings table — text cells reference this by index
         sst = _parse_shared_strings(pkg)
 
         for sheet in sheets:
@@ -42,7 +42,7 @@ def parse_xlsx(source: str | Path | bytes) -> ParsedWorkbook:
 
 
 def _parse_workbook(pkg: PackageReader) -> list[SheetInfo]:
-    """Parse xl/workbook.xml to discover sheet names, order, and part targets (B2).
+    """Parse xl/workbook.xml to discover sheet names, order, and part targets.
 
     Distinguishes worksheet from chartsheet by relationship type.
     """
@@ -80,7 +80,7 @@ def _parse_workbook(pkg: PackageReader) -> list[SheetInfo]:
 
 
 def _parse_shared_strings(pkg: PackageReader) -> list[str]:
-    """Parse xl/sharedStrings.xml into an ordered list of string values (B3).
+    """Parse xl/sharedStrings.xml into an ordered list of string values.
 
     Each <si> element may contain a plain <t> or rich-text <r> runs.
     For rich text only the concatenated text is kept; formatting is ignored.
@@ -111,7 +111,7 @@ def _parse_shared_strings(pkg: PackageReader) -> list[str]:
 
 
 def _parse_sheet(pkg: PackageReader, part: str, sst: list[str]) -> list[list[Cell]]:
-    """Parse a single worksheet XML into typed cell rows (B3).
+    """Parse a single worksheet XML into typed cell rows.
 
     Handles all six ECMA-376 cell types:
       - n (or absent) — number

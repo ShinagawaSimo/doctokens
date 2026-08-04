@@ -21,7 +21,7 @@ def iter_workbook(wb: ParsedWorkbook) -> Iterator[str]:
 
 
 def _render_sheet(sheet) -> Iterator[str]:
-    """Render one sheet with grid and rows (B2: chartsheet detection)."""
+    """Render one sheet with grid and rows."""
     name = sheet["name"]
     state = sheet.get("state", "visible")
     kind = sheet.get("kind", "worksheet")

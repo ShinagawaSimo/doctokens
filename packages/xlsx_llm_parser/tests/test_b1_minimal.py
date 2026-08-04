@@ -1,4 +1,4 @@
-"""B1: minimal XLSX parse + render round-trip."""
+"""Minimal XLSX parse + render round-trip."""
 
 import io
 import unittest
@@ -66,7 +66,7 @@ def _sheet_xml(rows: list[str]) -> str:
     return f'<worksheet xmlns="{NS_S}"><sheetData>{"".join(rows)}</sheetData></worksheet>'
 
 
-class B1MinimalParseTests(unittest.TestCase):
+class MinimalParseTests(unittest.TestCase):
     def test_single_sheet_inline_strings_and_numbers(self) -> None:
         """Inline strings and plain number cells."""
         data = _make_xlsx(

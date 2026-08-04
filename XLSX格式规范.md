@@ -3,7 +3,7 @@
 本文档面向下游开发者和 LLM tool description 编写者，解释 `xlsx-llm-parser` 输出的语义 HTML5 标记格式。
 文档随开发阶段逐步更新。
 
-当前阶段：**B1 — 最小端到端解析骨架**（2026-08-05）
+当前阶段：**B3 — 全部基础单元格类型 + 多 sheet 导航**（2026-08-05）
 
 ## 总体设计
 
@@ -21,27 +21,30 @@ XLSX 默认密度为 structural，因为大型工作簿常见。
 
 块级元素省略闭合标签，与 DOCX 解析器一致。
 
-**隐式闭合的块级元素**：`<sheet>`、`<grid>`、`<tr>`、`<td>`
+**隐式闭合的块级元素**：`<sheet>`、`<chartsheet>`、`<grid>`、`<tr>`、`<td>`
 
-## 当前能力（B1）
+## 当前能力（B3）
 
-### 工作表 `<sheet>`
+### 工作表 `<sheet>` 与 `<chartsheet>`
 
 ```
 <sheet name=Sheet1>
 <sheet name=Calculations hidden>
 <sheet name=Archive veryHidden>
+<chartsheet name=Charts>
 ```
 
 - `name`：工作表名称（Excel 内唯一，是 `read_range()` 的定位符）
 - `hidden` / `veryHidden`：仅不可见时输出；可见状态省略
+- `<chartsheet>`：仅图表页使用专用标签，不含 `<grid>` 内容
+- 多 sheet 按 workbook.xml 声明顺序输出
 
 ### 网格 `<grid>`
 
 ```
 <grid ref=A1:B3>
-<tr><td>Product<td>Price
-<tr><td>Widget<td>99
+<tr><td>Product<td>99
+<tr row=5><td>Subtotal<td col=D>42
 ```
 
 - `ref`：实际单元格占据的 A1 范围（扫描计算，不信任 OOXML `<dimension>` 声明）
@@ -50,22 +53,28 @@ XLSX 默认密度为 structural，因为大型工作簿常见。
 - `row=`：仅实际行号不连续时输出（恢复位置）
 - `col=`：仅行内列号不连续时输出（恢复位置）
 
-### 支持的单元格类型
+### 全部 7 种单元格类型
 
-| `t=` | 含义 | 处理 |
-|------|------|------|
-| `inlineStr` | 内联字符串 | 读取 `<is><t>` 文本 |
-| 无 / `n` | 数字 | 读取 `<v>` 原文 |
+| `t=` | 含义 | 值来源 |
+|------|------|--------|
+| 无 / `n` | 数字 | `<v>` 原文 |
+| `s` | 共享字符串 | `<v>` 为 `xl/sharedStrings.xml` 的 0-based 索引 |
+| `inlineStr` | 内联字符串 | `<is><t>` 内嵌文本 |
+| `str` | 公式结果字符串 | `<v>` 缓存结果 |
 | `b` | 布尔 | `"1"` → `true`，`"0"` → `false` |
 | `e` | 错误 | 保留原值如 `#DIV/0!` |
+| `d` | ISO 日期 | `<v>` 即 ISO 8601 日期字符串 |
+
+### 共享字符串
+
+`xl/sharedStrings.xml` 存储工作簿中所有文本字符串。简单文本使用 `<si><t>`；富文本使用 `<si><r><t>`（当前仅提取文本内容，忽略格式）。
 
 ### 尚未支持（后续阶段）
 
-- `t="s"` 共享字符串（B3）
-- 日期/时间格式化（C1）
-- 公式（C2）
+- 日期序列解码 / 数字格式化（C1）
+- 公式原文保存（C2）
 - 合并单元格（C4）
-- 样式、富文本、超链接、批注
+- 样式、超链接、批注
 - 图表、数据透视表、图片
 
 ## 坐标隐式推进规则

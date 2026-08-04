@@ -20,8 +20,9 @@ class SheetInfo(TypedDict, total=False):
 
     name: str
     part: str
+    kind: str      # "worksheet" | "chartsheet"
     rows: list[list[Cell]]
-    state: str  # "visible" | "hidden" | "veryHidden"
+    state: str     # "visible" | "hidden" | "veryHidden"
 
 
 class ParsedWorkbook(TypedDict):

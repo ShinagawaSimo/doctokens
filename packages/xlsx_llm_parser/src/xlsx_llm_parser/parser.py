@@ -14,6 +14,10 @@ from .models import Cell, ParsedWorkbook, SheetInfo
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 
+# Relationship types for sheet kind detection (B2)
+_REL_WORKSHEET = f"{NS_R}/worksheet"
+_REL_CHARTSHEET = f"{NS_R}/chartsheet"
+
 
 def parse_xlsx(source: str | Path | bytes) -> ParsedWorkbook:
     """Parse an XLSX file and return a typed workbook IR."""
@@ -22,9 +26,12 @@ def parse_xlsx(source: str | Path | bytes) -> ParsedWorkbook:
         pkg.validate(required_part="xl/workbook.xml")
 
         sheets = _parse_workbook(pkg)
+        # B3: shared strings table — text cells reference this by index
+        sst = _parse_shared_strings(pkg)
 
         for sheet in sheets:
-            sheet["rows"] = _parse_sheet(pkg, sheet["part"])
+            if sheet.get("kind") != "chartsheet":
+                sheet["rows"] = _parse_sheet(pkg, sheet["part"], sst)
 
     return {
         "sheets": sheets,
@@ -35,11 +42,18 @@ def parse_xlsx(source: str | Path | bytes) -> ParsedWorkbook:
 
 
 def _parse_workbook(pkg: PackageReader) -> list[SheetInfo]:
-    """Parse xl/workbook.xml to discover sheet names and worksheet parts."""
+    """Parse xl/workbook.xml to discover sheet names, order, and part targets (B2).
+
+    Distinguishes worksheet from chartsheet by relationship type.
+    """
     with pkg.open_entry("xl/workbook.xml") as stream:
         root = ET.parse(stream).getroot()
 
-    rels = {r.id: r.resolved_target for r in pkg.read_relationships_for_part("xl/workbook.xml")}
+    # Build a lookup of rel_id → (resolved_target, rel_type)
+    rels = {
+        r.id: (r.resolved_target, r.type)
+        for r in pkg.read_relationships_for_part("xl/workbook.xml")
+    }
 
     sheets: list[SheetInfo] = []
     sheets_elem = root.find(f"{{{NS_S}}}sheets")
@@ -49,9 +63,15 @@ def _parse_workbook(pkg: PackageReader) -> list[SheetInfo]:
     for sheet_elem in sheets_elem.findall(f"{{{NS_S}}}sheet"):
         name = sheet_elem.get("name", "")
         rel_id = sheet_elem.get(f"{{{NS_R}}}id", "")
-        part = rels.get(rel_id, f"xl/worksheets/sheet{len(sheets) + 1}.xml")
+        rel_info = rels.get(rel_id)
+        part, rel_type = rel_info if rel_info else (
+            f"xl/worksheets/sheet{len(sheets) + 1}.xml",
+            _REL_WORKSHEET,
+        )
         state = sheet_elem.get("state", "visible")
-        sheet_info: SheetInfo = {"name": name, "rows": [], "part": part}
+
+        kind = "chartsheet" if rel_type == _REL_CHARTSHEET else "worksheet"
+        sheet_info: SheetInfo = {"name": name, "rows": [], "part": part, "kind": kind}
         if state != "visible":
             sheet_info["state"] = state
         sheets.append(sheet_info)
@@ -59,14 +79,48 @@ def _parse_workbook(pkg: PackageReader) -> list[SheetInfo]:
     return sheets
 
 
-def _parse_sheet(pkg: PackageReader, part: str) -> list[list[Cell]]:
-    """Parse a single worksheet XML into typed cell rows.
+def _parse_shared_strings(pkg: PackageReader) -> list[str]:
+    """Parse xl/sharedStrings.xml into an ordered list of string values (B3).
 
-    Handles cell types:
-      - inlineStr (t="inlineStr") — text embedded in the cell element
-      - number (t="n" or no t) — numeric value from <v>
-      - boolean (t="b") — "1" → true, "0" → false
-      - error (t="e") — error code like #DIV/0!
+    Each <si> element may contain a plain <t> or rich-text <r> runs.
+    For rich text only the concatenated text is kept; formatting is ignored.
+    """
+    if not pkg.exists("xl/sharedStrings.xml"):
+        return []
+
+    with pkg.open_entry("xl/sharedStrings.xml") as stream:
+        root = ET.parse(stream).getroot()
+
+    strings: list[str] = []
+    for si in root.findall(f"{{{NS_S}}}si"):
+        # Plain text: <si><t>value</t></si>
+        t_elem = si.find(f"{{{NS_S}}}t")
+        if t_elem is not None:
+            strings.append(t_elem.text or "")
+        else:
+            # Rich text: <si><r><t>part1</t></r><r><t>part2</t></r></si>
+            parts = [
+                rt.text or ""
+                for r_elem in si.findall(f"{{{NS_S}}}r")
+                for rt in r_elem.findall(f"{{{NS_S}}}t")
+                if rt.text
+            ]
+            strings.append("".join(parts))
+
+    return strings
+
+
+def _parse_sheet(pkg: PackageReader, part: str, sst: list[str]) -> list[list[Cell]]:
+    """Parse a single worksheet XML into typed cell rows (B3).
+
+    Handles all six ECMA-376 cell types:
+      - n (or absent) — number
+      - s — shared string index into sst
+      - inlineStr — inline string in <is><t>
+      - str — formula result string
+      - b — boolean ("1" → true)
+      - e — error (#DIV/0!, #N/A, etc.)
+      - d — ISO 8601 date
     """
     if not pkg.exists(part):
         return []
@@ -89,12 +143,24 @@ def _parse_sheet(pkg: PackageReader, part: str) -> list[list[Cell]]:
 
             text = ""
             if cell_type == "inlineStr":
+                # Text embedded directly in the cell
                 is_elem = cell_elem.find(f"{{{NS_S}}}is")
                 if is_elem is not None:
                     t_elem = is_elem.find(f"{{{NS_S}}}t")
                     if t_elem is not None and t_elem.text:
                         text = t_elem.text
+            elif cell_type == "s":
+                # Shared string index
+                v_elem = cell_elem.find(f"{{{NS_S}}}v")
+                if v_elem is not None and v_elem.text:
+                    try:
+                        idx = int(v_elem.text)
+                        if 0 <= idx < len(sst):
+                            text = sst[idx]
+                    except ValueError:
+                        pass
             else:
+                # n, str, b, e, d — all read from <v>
                 v_elem = cell_elem.find(f"{{{NS_S}}}v")
                 if v_elem is not None and v_elem.text:
                     text = v_elem.text

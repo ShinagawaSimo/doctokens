@@ -3,22 +3,11 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "docx-llm-parser"
-description = "Parse DOCX files into LLM-readable semantic HTML5."
-readme = "README.md"
+name = "ooxml-llm-workspace"
+version = "0.0.0"
+description = "Monorepo workspace for OOXML LLM parsers"
 requires-python = ">=3.10"
 dependencies = []
-dynamic = ["version"]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Typing :: Typed",
-]
 
 [project.optional-dependencies]
 dev = [
@@ -29,55 +18,42 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["docx_llm_parser*"]
-
-[tool.setuptools.package-data]
-docx_llm_parser = ["py.typed"]
-
-[tool.setuptools.dynamic]
-version = {attr = "docx_llm_parser._version.__version__"}
+where = []
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = [
+    "packages/ooxml_llm_core/tests",
+    "packages/docx_llm_parser/tests",
+    "packages/xlsx_llm_parser/tests",
+]
 addopts = [
     "-ra",
     "--strict-config",
     "--strict-markers",
+    "--cov=ooxml_llm_core",
     "--cov=docx_llm_parser",
+    "--cov=xlsx_llm_parser",
     "--cov-branch",
-    "--cov-report=term-missing",
     "--cov-fail-under=85",
 ]
 
 [tool.coverage.run]
 branch = true
-source = ["docx_llm_parser"]
-
-[tool.coverage.report]
-show_missing = true
-skip_covered = true
-fail_under = 85
+source = ["packages/ooxml_llm_core/src", "packages/docx_llm_parser/src", "packages/xlsx_llm_parser/src"]
 
 [tool.ruff]
 target-version = "py310"
 line-length = 100
-extend-exclude = ["out", "tmp"]
-include = ["*.py", "*.pyi"]
-
-[tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "PERF", "RUF"]
-ignore = ["RUF001", "RUF002", "RUF003"]
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-line-ending = "auto"
+exclude = ["out", "tmp"]
+lint.select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "PERF", "RUF"]
+lint.ignore = ["RUF001", "RUF002", "RUF003"]
+format.quote-style = "double"
 
 [tool.mypy]
-python_version = "3.10"
-files = ["docx_llm_parser"]
-exclude = "^(out|tmp)/"
 strict = true
 warn_unreachable = true
-pretty = true
-show_error_codes = true
+files = [
+    "packages/ooxml_llm_core/src",
+    "packages/docx_llm_parser/src",
+    "packages/xlsx_llm_parser/src",
+]

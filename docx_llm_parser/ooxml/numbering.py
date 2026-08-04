@@ -9,6 +9,7 @@ from types import MappingProxyType
 from xml.etree import ElementTree as ET
 
 from ..core.constants import attr, child_elements, first_child
+from ..core.locator import part_block_locator as locator
 from ..core.models import NumberingLabel, ParseWarning
 from ..core.package import PackageReader
 
@@ -125,7 +126,7 @@ class NumberingState:
                         f"Missing numbering level for numId={num_id}, "
                         f"numbering_level={numbering_level}"
                     ),
-                    locator=":".join(filter(None, [part, block_id])),
+                    locator=locator(part, block_id),
                 )
             )
             return None

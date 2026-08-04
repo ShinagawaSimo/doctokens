@@ -12,6 +12,7 @@ from ..core.constants import (
     first_child,
     local_name,
 )
+from ..core.locator import part_block_locator as locator
 from ..core.models import (
     AssetLookup,
     Block,
@@ -503,6 +504,6 @@ class DocumentBodyParser:
             ParseWarning(
                 code=code,
                 message=message,
-                locator=":".join(filter(None, [part, block_id])),
+                locator=locator(part, block_id),
             )
         )

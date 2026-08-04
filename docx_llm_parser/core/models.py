@@ -1,4 +1,4 @@
-"""解析器内部数据模型。"""
+"""解析器内部数据模型 — DOCX 专用类型 + 共享类型 re-export。"""
 
 from __future__ import annotations
 
@@ -6,26 +6,18 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Literal, TypedDict
 
+from ooxml_llm_core.models import (  # noqa: F401 — re-exported as stable API
+    ContentTypes,
+    JsonObject,
+    MetricValue,
+    MetricsSnapshot,
+    ParseWarning,
+    RelationshipRecord,
+    ZipEntryInfo,
+)
+from ooxml_llm_core.models import ParseWarning  # noqa: F811 — explicit single import
+
 from .enums import RevisionMode
-
-
-class ZipEntryInfo(TypedDict):
-    """Security-relevant metadata for one ZIP package entry."""
-
-    name: str
-    compressedSize: int
-    uncompressedSize: int
-    crc: int
-
-
-class ContentTypes(TypedDict):
-    """OPC content type mappings keyed by extension and part name."""
-
-    defaults: dict[str, str]
-    overrides: dict[str, str]
-
-
-JsonObject = dict[str, object]
 RunFormat = dict[str, bool | str | None]
 
 
@@ -331,16 +323,6 @@ class DocumentManifest(TypedDict):
 
 ResourceSummary = dict[str, object]
 ResourceDetail = dict[str, object]
-MetricValue = int | float | str
-
-
-class MetricsSnapshot(TypedDict, total=False):
-    """Parse/render timing and size counters safe to serialize as JSON."""
-
-    totalMs: float
-    parseTotalMs: float
-    stagesMs: dict[str, float]
-    counters: dict[str, MetricValue]
 
 
 @dataclass(frozen=True)
@@ -367,27 +349,6 @@ class ParseOptions:
         for name, value in limits.items():
             if value <= 0:
                 raise ValueError(f"{name} must be greater than zero")
-
-
-@dataclass(slots=True)
-class ParseWarning:
-    """解析过程中可恢复问题的记录。"""
-
-    code: str
-    message: str
-    locator: str = ""
-
-
-@dataclass(slots=True)
-class RelationshipRecord:
-    """OPC relationship 记录。"""
-
-    source_part: str
-    id: str
-    type: str
-    target: str
-    target_mode: str | None = None
-    resolved_target: str | None = None
 
 
 @dataclass(slots=True)

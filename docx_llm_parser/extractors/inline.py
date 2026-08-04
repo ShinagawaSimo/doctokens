@@ -47,6 +47,7 @@ from ..core.models import (
     SmartArt,
 )
 from ..core.relationships import RelationshipIndex
+from ..core.locator import part_block_locator as locator
 from ..ooxml.formatting import merge_run_formats, parse_run_format, visible_run_format
 from ..ooxml.omml_latex import omath_to_latex
 from ..ooxml.styles import StyleMap
@@ -616,6 +617,6 @@ class InlineParser:
             ParseWarning(
                 code=code,
                 message=message,
-                locator=":".join(filter(None, [part, block_id])),
+                locator=locator(part, block_id),
             )
         )

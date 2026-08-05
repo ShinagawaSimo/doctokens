@@ -1,4 +1,4 @@
-"""Structural HTML5 renderer for XLSX workbooks."""
+"""HTML5 renderers for XLSX workbooks — all three densities."""
 
 from __future__ import annotations
 
@@ -6,28 +6,45 @@ from collections.abc import Iterator
 from html import escape
 
 from ..models import Cell, ParsedWorkbook, SheetInfo
-from ._constants import _GRID_BOUND_SENTINEL
+from ._constants import (
+    _CELL_BUDGET,
+    _COL_BUDGET,
+    _GRID_BOUND_SENTINEL,
+    _HEAD_COLS,
+    _HEAD_ROWS,
+    _ROW_BUDGET,
+    _TAIL_COLS,
+    _TAIL_ROWS,
+)
+
+Density = str  # "plain" | "structural" | "semantic"
 
 
-def render_workbook(wb: ParsedWorkbook) -> str:
-    """Render a parsed workbook as structural HTML5."""
-    return "".join(iter_workbook(wb))
+# ── Public API ──
 
 
-def iter_workbook(wb: ParsedWorkbook) -> Iterator[str]:
-    """Stream workbook rendering chunks."""
+def render_workbook(wb: ParsedWorkbook, *, density: Density = "structural") -> str:
+    """Render a parsed workbook at the given density."""
+    return "".join(iter_workbook(wb, density=density))
+
+
+def iter_workbook(wb: ParsedWorkbook, *, density: Density = "structural") -> Iterator[str]:
+    """Stream workbook rendering chunks — concatenation matches render_workbook."""
+    yield f"density={density}\n"
     for sheet in wb["sheets"]:
-        yield from _render_sheet(sheet)
+        yield from _render_sheet(sheet, density)
 
 
 def render_range(
     wb: ParsedWorkbook,
     sheet: str,
     range_spec: str,
+    *,
+    density: Density = "structural",
 ) -> str:
     """Render cells within an A1-style range, e.g. ``"A1:H30"``.
 
-    Returns only the ``<grid ref=...>`` block for the matching sheet.
+    Returns the ``<grid ref=...>`` block for the matching sheet.
     Raises ``ValueError`` if the sheet is not found or the range is invalid.
     """
     sheet_info = _find_sheet(wb, sheet)
@@ -35,7 +52,155 @@ def render_range(
 
     rows = sheet_info.get("rows", [])
     filtered = _filter_rows(rows, start_col, start_row, end_col, end_row)
-    return _render_grid(filtered)
+    return _render_grid(filtered, density)
+
+
+# ── Per-sheet rendering ──
+
+
+def _render_sheet(sheet, density: Density) -> Iterator[str]:
+    name = sheet["name"]
+    state = sheet.get("state", "visible")
+    kind = sheet.get("kind", "worksheet")
+
+    if kind == "chartsheet":
+        yield f"<chartsheet name={escape(name, quote=True)}>\n"
+        return
+
+    attrs = f"name={escape(name, quote=True)}"
+    if state == "hidden":
+        attrs += " hidden"
+    elif state == "veryHidden":
+        attrs += " veryHidden"
+    yield f"<sheet {attrs}>\n"
+
+    rows = sheet.get("rows", [])
+    if not rows:
+        return
+
+    if density == "plain":
+        yield from _render_plain(rows)
+    else:
+        yield _render_grid(rows, density)
+
+
+# ── Plain text ──
+
+
+def _render_plain(rows: list[list[Cell]]) -> Iterator[str]:
+    """Tab-separated cell values, no coordinates."""
+    for row_cells in rows:
+        if not row_cells:
+            continue
+        texts = [cell["text"] for cell in row_cells]
+        yield "\t".join(texts) + "\n"
+
+
+# ── Grid rendering (structural / semantic) ──
+
+
+def _render_grid(rows: list[list[Cell]], density: Density) -> str:
+    if not rows:
+        return ""
+
+    all_rows = rows
+    truncated = _should_truncate(rows)
+    if truncated:
+        all_rows = _head_tail_rows(rows)
+
+    # Compute grid ref from ALL rows (full range), not the sampled subset
+    min_col = _GRID_BOUND_SENTINEL
+    max_col = 0
+    min_row = _GRID_BOUND_SENTINEL
+    max_row = 0
+    for row_cells in rows:
+        for cell in row_cells:
+            if cell["col"] < min_col:
+                min_col = cell["col"]
+            if cell["col"] > max_col:
+                max_col = cell["col"]
+            if cell["row"] < min_row:
+                min_row = cell["row"]
+            if cell["row"] > max_row:
+                max_row = cell["row"]
+
+    ref = f"{_col_letter(min_col)}{min_row}:{_col_letter(max_col)}{max_row}"
+    tag = f"<grid ref={ref}"
+    if truncated:
+        tag += " truncated"
+    parts = [tag + ">\n"]
+
+    for row_cells in all_rows:
+        parts.append(_render_row(row_cells, min_col, density))
+
+    return "".join(parts)
+
+
+def _render_row(row_cells: list[Cell], grid_min_col: int, density: Density) -> str:
+    actual_row = row_cells[0]["row"]
+    parts = [f"<tr row={actual_row}>"]
+
+    next_col = grid_min_col
+    for cell in row_cells:
+        c = cell["col"]
+        if c != next_col:
+            parts.append(f"<td col={_col_letter(c)}>")
+        else:
+            parts.append("<td>")
+        parts.append(escape(cell["text"]))
+        next_col = c + 1
+
+    parts.append("\n")
+    return "".join(parts)
+
+
+# ── Truncation logic ──
+
+
+def _should_truncate(rows: list[list[Cell]]) -> bool:
+    cell_count = 0
+    col_set: set[int] = set()
+    for row_cells in rows:
+        cell_count += len(row_cells)
+        for cell in row_cells:
+            col_set.add(cell["col"])
+    return cell_count > _CELL_BUDGET or len(rows) > _ROW_BUDGET or len(col_set) > _COL_BUDGET
+
+
+def _head_tail_rows(rows: list[list[Cell]]) -> list[list[Cell]]:
+    """Keep head + tail rows. For wide tables, also restrict columns per row."""
+    if len(rows) <= _HEAD_ROWS + _TAIL_ROWS:
+        return rows
+
+    # Compute column set for truncation
+    col_set: set[int] = set()
+    for row_cells in rows:
+        for cell in row_cells:
+            col_set.add(cell["col"])
+    cols = sorted(col_set)
+
+    should_truncate_cols = len(cols) > _COL_BUDGET
+    keep_cols: set[int] = set()
+    if should_truncate_cols:
+        keep_cols = set(cols[:_HEAD_COLS]) | set(cols[-_TAIL_COLS:])
+    else:
+        keep_cols = set(cols)
+
+    result: list[list[Cell]] = []
+    for row_cells in rows[:_HEAD_ROWS]:
+        if should_truncate_cols:
+            row_cells = [c for c in row_cells if c["col"] in keep_cols]
+        result.append(row_cells)
+
+    for row_cells in rows[-_TAIL_ROWS:]:
+        if should_truncate_cols:
+            row_cells = [c for c in row_cells if c["col"] in keep_cols]
+        result.append(row_cells)
+
+    return result
+
+
+# ── Helpers ──
 
 
 def _find_sheet(wb: ParsedWorkbook, name: str) -> SheetInfo:
@@ -73,77 +238,6 @@ def _filter_rows(
         if kept:
             result.append(kept)
     return result
-
-
-def _render_grid(rows: list[list[Cell]]) -> str:
-    """Render a filtered set of rows as a ``<grid>`` block."""
-    if not rows:
-        return ""
-
-    min_col = _GRID_BOUND_SENTINEL
-    max_col = 0
-    min_row = _GRID_BOUND_SENTINEL
-    max_row = 0
-    for row_cells in rows:
-        for cell in row_cells:
-            if cell["col"] < min_col:
-                min_col = cell["col"]
-            if cell["col"] > max_col:
-                max_col = cell["col"]
-            if cell["row"] < min_row:
-                min_row = cell["row"]
-            if cell["row"] > max_row:
-                max_row = cell["row"]
-
-    parts = [f"<grid ref={_col_letter(min_col)}{min_row}:{_col_letter(max_col)}{max_row}>\n"]
-
-    for row_cells in rows:
-        actual_row = row_cells[0]["row"]
-        parts.append(f"<tr row={actual_row}>")
-
-        next_col = min_col
-        for cell in row_cells:
-            c = cell["col"]
-            if c != next_col:
-                parts.append(f"<td col={_col_letter(c)}>")
-            else:
-                parts.append("<td>")
-            parts.append(escape(cell["text"]))
-            next_col = c + 1
-
-        parts.append("\n")
-
-    return "".join(parts)
-
-
-# ── Sheet rendering ──
-
-
-def _render_sheet(sheet) -> Iterator[str]:
-    """Render one sheet with grid and rows."""
-    name = sheet["name"]
-    state = sheet.get("state", "visible")
-    kind = sheet.get("kind", "worksheet")
-
-    if kind == "chartsheet":
-        yield f"<chartsheet name={escape(name, quote=True)}>\n"
-        return
-
-    attrs = f"name={escape(name, quote=True)}"
-    if state == "hidden":
-        attrs += " hidden"
-    elif state == "veryHidden":
-        attrs += " veryHidden"
-    yield f"<sheet {attrs}>\n"
-
-    rows = sheet.get("rows", [])
-    if not rows:
-        return
-
-    yield _render_grid(rows)
-
-
-# ── Helpers ──
 
 
 def _col_letter(col: int) -> str:

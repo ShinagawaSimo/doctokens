@@ -166,11 +166,26 @@ semantic 密度下，左上角单元格输出 `colspan=N rowspan=N`，shadow 格
 
 `<row outlineLevel="1" collapsed="1">` 在 semantic 中输出 `<tr outlineLevel=N collapsed>`，structural 忽略。
 
+## 保护（仅 semantic）
+
+`<sheetProtection>` 存在时，semantic 在 `<grid>` 前输出 `<sheetProtection/>`。
+
+单元格 `xf` 中 `<protection locked="0">` 输出 `<td unlocked>`，`<protection hidden="1">` 输出 `<td formulaHidden>`。Excel 默认已锁定且公式可见，仅非默认值输出。
+
 ## 富文本（仅 semantic）
 
 共享字符串中的格式化 run 展开为内联 `<b>`、`<i>`、`<u>`、`<color>` 标记。
 
+## 超链接
+
+`<hyperlink>` 通过 relationship 解析外部 URL 或内部位置。structural 和 semantic 均输出 `<a href="...">` 包裹单元格正文：
+
+```
+<tr row=1><td><a href="https://example.com">Click</a>
+<tr row=2><td><a href="#Sheet2!B5">Go
+```
+
 ## 尚未支持
 
-- 超链接、批注
+- 批注
 - 图表、数据透视表、图片

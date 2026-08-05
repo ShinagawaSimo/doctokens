@@ -187,10 +187,10 @@ def _render_row(row_cells: list[Cell], grid_min_col: int, density: Density,
         if c != next_col:
             tag_attrs += f" col={_col_letter(c)}"
         parts.append(f"<{tag_attrs}>")
-        if density == "semantic" and cell.get("rich"):
-            parts.append(_render_rich_text(cell["rich"]))
-        else:
-            parts.append(escape(cell["text"]))
+        body = _render_rich_text(cell["rich"]) if density == "semantic" and cell.get("rich") else escape(cell["text"])
+        if cell.get("hyperlink"):
+            body = f'<a href="{escape(cell["hyperlink"], quote=True)}">{body}</a>'
+        parts.append(body)
         next_col = c + (cell.get("colspan", 1))
 
     parts.append("\n")

@@ -26,6 +26,7 @@ class Cell(TypedDict, total=False):
     hidden: bool      # row hidden state
     outlineLevel: int # row outline level (0 = none)
     collapsed: bool   # row collapsed state
+    hyperlink: str    # resolved URL or internal ref from <hyperlink> + rels
     style: int        # index into cellXfs for style lookup
     rich: list[dict]  # formatted text runs [{text, bold, italic, color}]
 

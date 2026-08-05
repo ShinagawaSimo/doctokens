@@ -302,6 +302,9 @@ def _parse_sheet(
     # Mark dynamic array spill relationships
     _apply_spill_ranges(rows)
 
+    # Resolve hyperlinks (relationship IDs → URLs)
+    _apply_hyperlinks(root, rows, pkg, part)
+
     return rows, hidden_cols, sheet_protection
 
 
@@ -379,6 +382,48 @@ def _apply_spill_ranges(rows: list[list[Cell]]) -> None:
                     recipient = cell_map.get((col, r))
                     if recipient is not None and "formula" not in recipient and "si" not in recipient:
                         recipient["spillFrom"] = cell["ref"]
+
+
+def _apply_hyperlinks(root: ET.Element, rows: list[list[Cell]],
+                     pkg: PackageReader, part: str) -> None:
+    """Resolve <hyperlinks> via relationships and attach to cells."""
+    hyperlinks = root.find(f"{{{NS_S}}}hyperlinks")
+    if hyperlinks is None:
+        return
+
+    # Build rId → (target, target_mode) from sheet rels
+    rel_targets: dict[str, str] = {}
+    for rel in pkg.read_relationships_for_part(part):
+        target = rel.resolved_target or ""
+        if target:
+            rel_targets[rel.id] = target
+
+    # Build coordinate → cell lookup
+    cell_map: dict[tuple[int, int], Cell] = {}
+    for row_cells in rows:
+        for c in row_cells:
+            cell_map[(c["col"], c["row"])] = c
+
+    for hl in hyperlinks.findall(f"{{{NS_S}}}hyperlink"):
+        ref = hl.get("ref", "")
+        location = hl.get("location", "")
+        r_id = hl.get(f"{{{NS_R}}}id", "")
+
+        col, row = _parse_ref(ref)
+        cell = cell_map.get((col, row))
+        if cell is None:
+            continue
+
+        # External URL takes precedence; fallback to internal location.
+        target = rel_targets.get(r_id) if r_id else None
+        if target:
+            if location:
+                # External link with internal location fragment
+                cell["hyperlink"] = f"{target}#{location}"
+            else:
+                cell["hyperlink"] = target
+        elif location:
+            cell["hyperlink"] = f"#{location}"
 
 
 def _parse_ref(ref: str) -> tuple[int, int]:

@@ -20,6 +20,17 @@ NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 _REL_WORKSHEET = f"{NS_R}/worksheet"
 _REL_CHARTSHEET = f"{NS_R}/chartsheet"
 
+# OOXML cell type codes → LLM-readable semantic names.
+_CELL_TYPE_MAP: dict[str, str] = {
+    "n": "number",
+    "s": "string",
+    "inlineStr": "string",
+    "str": "string",
+    "b": "boolean",
+    "e": "error",
+    "d": "date",
+}
+
 
 def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
     """Parse an XLSX file and return a typed workbook IR."""
@@ -267,8 +278,9 @@ def _parse_sheet(
             if formula is not None:
                 cell["formula"] = formula
             cell.update(formula_meta)
-            if cell_type != "n":
-                cell["type"] = cell_type
+            semantic_type = _CELL_TYPE_MAP.get(cell_type)
+            if semantic_type and semantic_type != "number":
+                cell["type"] = semantic_type
             cells.append(cell)
 
         rows.append(cells)

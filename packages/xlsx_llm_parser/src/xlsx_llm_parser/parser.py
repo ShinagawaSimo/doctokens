@@ -8,6 +8,7 @@ from xml.etree import ElementTree as ET
 from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.package import PackageReader
 
+from .formats import FormatIndex, parse_styles
 from .models import Cell, ParsedWorkbook, SheetInfo
 
 # SpreadsheetML main namespace
@@ -25,13 +26,14 @@ def parse_xlsx(source: str | Path | bytes) -> ParsedWorkbook:
     with PackageReader(source, limits) as pkg:
         pkg.validate(required_part="xl/workbook.xml")
 
-        sheets = _parse_workbook(pkg)
-        # Shared strings table — text cells reference this by index
+        date_1904, sheets = _parse_workbook(pkg)
         sst = _parse_shared_strings(pkg)
+        fmt_index = parse_styles(pkg)
+        fmt_index.set_date_system(date_1904)
 
         for sheet in sheets:
             if sheet.get("kind") != "chartsheet":
-                sheet["rows"] = _parse_sheet(pkg, sheet["part"], sst)
+                sheet["rows"] = _parse_sheet(pkg, sheet["part"], sst, fmt_index)
 
     return {
         "sheets": sheets,
@@ -41,13 +43,17 @@ def parse_xlsx(source: str | Path | bytes) -> ParsedWorkbook:
     }
 
 
-def _parse_workbook(pkg: PackageReader) -> list[SheetInfo]:
-    """Parse xl/workbook.xml to discover sheet names, order, and part targets.
+def _parse_workbook(pkg: PackageReader) -> tuple[bool, list[SheetInfo]]:
+    """Parse xl/workbook.xml for date system, sheet names, and part targets.
 
-    Distinguishes worksheet from chartsheet by relationship type.
+    Returns (date_1904, sheets).
     """
     with pkg.open_entry("xl/workbook.xml") as stream:
         root = ET.parse(stream).getroot()
+
+    # Date system: 1900 (default) or 1904 (Mac)
+    wb_pr = root.find(f"{{{NS_S}}}workbookPr")
+    date_1904 = wb_pr is not None and wb_pr.get("date1904") == "1"
 
     # Build a lookup of rel_id → (resolved_target, rel_type)
     rels = {
@@ -58,7 +64,7 @@ def _parse_workbook(pkg: PackageReader) -> list[SheetInfo]:
     sheets: list[SheetInfo] = []
     sheets_elem = root.find(f"{{{NS_S}}}sheets")
     if sheets_elem is None:
-        return sheets
+        return date_1904, sheets
 
     for sheet_elem in sheets_elem.findall(f"{{{NS_S}}}sheet"):
         name = sheet_elem.get("name", "")
@@ -76,7 +82,7 @@ def _parse_workbook(pkg: PackageReader) -> list[SheetInfo]:
             sheet_info["state"] = state
         sheets.append(sheet_info)
 
-    return sheets
+    return date_1904, sheets
 
 
 def _parse_shared_strings(pkg: PackageReader) -> list[str]:
@@ -110,17 +116,12 @@ def _parse_shared_strings(pkg: PackageReader) -> list[str]:
     return strings
 
 
-def _parse_sheet(pkg: PackageReader, part: str, sst: list[str]) -> list[list[Cell]]:
+def _parse_sheet(
+    pkg: PackageReader, part: str, sst: list[str], fmt_index: FormatIndex | None = None
+) -> list[list[Cell]]:
     """Parse a single worksheet XML into typed cell rows.
 
-    Handles all six ECMA-376 cell types:
-      - n (or absent) — number
-      - s — shared string index into sst
-      - inlineStr — inline string in <is><t>
-      - str — formula result string
-      - b — boolean ("1" → true)
-      - e — error (#DIV/0!, #N/A, etc.)
-      - d — ISO 8601 date
+    Handles all ECMA-376 cell types and applies number formatting.
     """
     if not pkg.exists(part):
         return []
@@ -166,6 +167,15 @@ def _parse_sheet(pkg: PackageReader, part: str, sst: list[str]) -> list[list[Cel
                     text = v_elem.text
                     if cell_type == "b":
                         text = "true" if v_elem.text == "1" else "false"
+
+            # Apply number formatting for numeric cells with a style
+            if fmt_index is not None and cell_type == "n" and text:
+                style_str = cell_elem.get("s")
+                if style_str is not None:
+                    try:
+                        text = fmt_index.format_value(int(style_str), text)
+                    except (ValueError, IndexError):
+                        pass
 
             cell: Cell = {"ref": ref, "row": row_num or row, "col": col, "text": text}
             if cell_type != "n":

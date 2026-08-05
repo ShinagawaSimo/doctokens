@@ -96,6 +96,8 @@ class MinimalParseTests(unittest.TestCase):
         self.assertIn("99", html)
         self.assertIn("sheet name=Sheet1", html)
         self.assertIn("<grid ref=A1:B2>", html)
+        self.assertIn("<tr row=1>", html)
+        self.assertIn("<tr row=2>", html)
 
     def test_empty_sheet(self) -> None:
         """Sheet with no rows produces a sheet tag without grid."""

@@ -4,7 +4,7 @@ import io
 import unittest
 import zipfile
 
-from xlsx_llm_parser import render_workbook
+from xlsx_llm_parser import parse_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -75,7 +75,7 @@ class MergeCellTests(unittest.TestCase):
                 "</row>",
             ],
         )
-        html = render_workbook(data, density="semantic")
+        html = parse_xlsx(data, density="semantic")
         self.assertIn("colspan=2", html)
         self.assertIn("rowspan=2", html)
         # Shadow cells excluded
@@ -92,7 +92,7 @@ class MergeCellTests(unittest.TestCase):
                 "</row>",
             ],
         )
-        html = render_workbook(data, density="structural")
+        html = parse_xlsx(data, density="structural")
         self.assertIn("Wide", html)
         self.assertNotIn("Hidden", html)
         self.assertIn("Next", html)
@@ -108,7 +108,7 @@ class MergeCellTests(unittest.TestCase):
                 "</row>",
             ],
         )
-        html = render_workbook(data, density="semantic")
+        html = parse_xlsx(data, density="semantic")
         self.assertIn("Normal", html)
         self.assertNotIn("colspan", html)
 

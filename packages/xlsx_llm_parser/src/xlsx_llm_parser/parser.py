@@ -21,13 +21,13 @@ _REL_WORKSHEET = f"{NS_R}/worksheet"
 _REL_CHARTSHEET = f"{NS_R}/chartsheet"
 
 
-def parse_xlsx(source: str | Path | bytes) -> ParsedWorkbook:
+def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
     """Parse an XLSX file and return a typed workbook IR."""
     limits = PackageLimits()
     with PackageReader(source, limits) as pkg:
         pkg.validate(required_part="xl/workbook.xml")
 
-        date_1904, sheets = _parse_workbook(pkg)
+        date_1904, sheets = _parse_workbook_xml(pkg)
         sst, rich_map = _parse_shared_strings(pkg)
         fmt_index = parse_styles(pkg)
         fmt_index.set_date_system(date_1904)
@@ -48,7 +48,7 @@ def parse_xlsx(source: str | Path | bytes) -> ParsedWorkbook:
     }
 
 
-def _parse_workbook(pkg: PackageReader) -> tuple[bool, list[SheetInfo]]:
+def _parse_workbook_xml(pkg: PackageReader) -> tuple[bool, list[SheetInfo]]:
     """Parse xl/workbook.xml for date system, sheet names, and part targets.
 
     Returns (date_1904, sheets).

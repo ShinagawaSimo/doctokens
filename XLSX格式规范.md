@@ -92,7 +92,7 @@ XLSX 默认密度为 structural。输出首行标记密度（如 `density=struct
 
 ## 范围读取
 
-`render_range(source, sheet, range_spec, *, density)` 解析源文件并按 A1 范围筛选单元格，返回 `<grid ref=...>` 块：
+`render_range(source, sheet, range_spec, *, density)` 解析源文件并按 A1 范围筛选单元格，返回 `<grid ref=...>` 块。不输出密度标记。
 
 ```python
 from xlsx_llm_parser import render_range
@@ -102,30 +102,26 @@ html = render_range("workbook.xlsx", "Sheet1", "B2:D10")
 
 ## 公共 API
 
-所有函数直接接受源文件路径或 bytes，内部完成解析和渲染：
+所有函数直接接受源文件路径或 bytes，内部完成解析和渲染。内部 IR（`ParsedWorkbook`）不暴露为公开 API。
 
 ```python
-from xlsx_llm_parser import parse_xlsx, render_workbook, render_range, iter_workbook
+from xlsx_llm_parser import parse_xlsx, render_range, iter_workbook
 
-# 直接渲染（内部自动解析）
-html = render_workbook("workbook.xlsx")                        # structural（默认）
-html = render_workbook("workbook.xlsx", density="semantic")    # 语义级
-html = render_workbook("workbook.xlsx", density="plain")       # 纯文本
+# 主入口：解析并渲染完整工作簿
+html = parse_xlsx("workbook.xlsx")                             # structural（默认）
+html = parse_xlsx("workbook.xlsx", density="semantic")         # 语义级
+html = parse_xlsx("workbook.xlsx", density="plain")            # 纯文本
 
 # 流式迭代
 for chunk in iter_workbook("workbook.xlsx", density="structural"):
     ...
 
 # 范围读取
-html = render_range("workbook.xlsx", "Sheet1", "A1:H30")      # structural（默认）
+html = render_range("workbook.xlsx", "Sheet1", "A1:H30")       # structural（默认）
 html = render_range("workbook.xlsx", "Sheet1", "A1:H30", density="semantic")
-
-# 解析中间模型（如需访问 IR）
-wb = parse_xlsx("workbook.xlsx")
 ```
 
-- `parse_xlsx(source)` — 解析 `.xlsx` 文件路径或 bytes，返回 `ParsedWorkbook`
-- `render_workbook(source, *, density)` — 解析并渲染完整工作簿
+- `parse_xlsx(source, *, density)` — 解析并渲染完整工作簿
 - `render_range(source, sheet, range_spec, *, density)` — 解析并渲染指定 A1 范围
 - `iter_workbook(source, *, density)` — 解析并流式渲染
 
@@ -161,6 +157,16 @@ semantic 密度下，左上角单元格输出 `colspan=N rowspan=N`，shadow 格
 `<td>` 可带 `bold`、`italic`、`underline`、`color=#RRGGBB`、`fill=#RRGGBB` 属性。
 
 颜色来源包括显式 RGB 值和主题色引用：`xl/styles.xml` 中的 `<color theme="N"/>` 通过解析 `xl/theme/theme1.xml` 的 `clrScheme` 映射为 RGB；`tint` 属性按 OOXML 规范线性插值亮/暗变化。theme1.xml 缺失时降级为 Office 默认主题色。
+
+## 隐藏行与隐藏列
+
+`<row hidden="1">` 在 structural 和 semantic 中输出 `<tr row=N hidden>`。
+
+隐藏列通过 `<cols><col hidden="1"/>` 解析，以 `<columns ref=C:D hidden/>` 标注在 `<grid>` 之前。隐藏列中的单元格照常输出，不另加标记。
+
+## 大纲分组（仅 semantic）
+
+`<row outlineLevel="1" collapsed="1">` 在 semantic 中输出 `<tr outlineLevel=N collapsed>`，structural 忽略。
 
 ## 富文本（仅 semantic）
 

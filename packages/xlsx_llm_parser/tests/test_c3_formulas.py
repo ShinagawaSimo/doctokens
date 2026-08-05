@@ -4,7 +4,7 @@ import io
 import unittest
 import zipfile
 
-from xlsx_llm_parser import render_workbook
+from xlsx_llm_parser import parse_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -69,7 +69,7 @@ class SharedFormulaTests(unittest.TestCase):
                 ),
             },
         )
-        html = render_workbook(data, density="semantic")
+        html = parse_xlsx(data, density="semantic")
         # Master formula unchanged
         self.assertIn('formula="B2+C2"', html)
         # Slave formulas expanded
@@ -120,7 +120,7 @@ class SharedFormulaTests(unittest.TestCase):
                 ),
             },
         )
-        html = render_workbook(data, density="semantic")
+        html = parse_xlsx(data, density="semantic")
         # $B$1 stays absolute
         self.assertIn('formula="A2*$B$1"', html)
         self.assertIn('formula="A3*$B$1"', html)
@@ -170,7 +170,7 @@ class SharedFormulaTests(unittest.TestCase):
                 ),
             },
         )
-        html = render_workbook(data, density="semantic")
+        html = parse_xlsx(data, density="semantic")
         # Cross-sheet refs preserved verbatim
         self.assertIn('formula="Sheet2!A1+Sheet2!B1"', html)
 
@@ -221,7 +221,7 @@ class ArrayFormulaTests(unittest.TestCase):
                 ),
             },
         )
-        html = render_workbook(data, density="semantic")
+        html = parse_xlsx(data, density="semantic")
         self.assertIn("formulaType=array", html)
         self.assertIn("formulaRange=A1:C3", html)
 
@@ -273,13 +273,13 @@ class ArrayFormulaTests(unittest.TestCase):
                 ),
             },
         )
-        html = render_workbook(data, density="semantic")
+        html = parse_xlsx(data, density="semantic")
 
         # Source cell has both formulaRange and spillRange
         self.assertIn("spillRange=B1:B3", html)
 
         # structural omits spill attributes
-        structural = render_workbook(data, density="structural")
+        structural = parse_xlsx(data, density="structural")
         self.assertNotIn("spillRange", structural)
         self.assertNotIn("spillFrom", structural)
 

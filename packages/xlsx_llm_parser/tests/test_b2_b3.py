@@ -4,7 +4,7 @@ import io
 import unittest
 import zipfile
 
-from xlsx_llm_parser import render_workbook
+from xlsx_llm_parser import parse_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -91,7 +91,7 @@ class MultiSheetTests(unittest.TestCase):
                 "xl/worksheets/sheet3.xml": _sheet_xml([]),
             },
         )
-        html = render_workbook(data)
+        html = parse_xlsx(data)
         # Verify order
         first_idx = html.index("First")
         second_idx = html.index("Second")
@@ -131,7 +131,7 @@ class MultiSheetTests(unittest.TestCase):
                 "xl/worksheets/sheet2.xml": _sheet_xml([]),
             },
         )
-        html = render_workbook(data)
+        html = parse_xlsx(data)
         self.assertIn("sheet name=Hidden hidden>", html)
         self.assertNotIn("hidden", html.split("Hidden")[0])  # Visible has no hidden
 
@@ -172,7 +172,7 @@ class SharedStringsTests(unittest.TestCase):
                 ),
             },
         )
-        html = render_workbook(data)
+        html = parse_xlsx(data)
         self.assertIn("Product", html)
         self.assertIn("Price", html)
 
@@ -205,7 +205,7 @@ class SharedStringsTests(unittest.TestCase):
                 ),
             },
         )
-        html = render_workbook(data)
+        html = parse_xlsx(data)
         self.assertIn("BoldNormal", html)
 
     def test_shared_string_index_out_of_range(self) -> None:
@@ -235,7 +235,7 @@ class SharedStringsTests(unittest.TestCase):
                 ),
             },
         )
-        html = render_workbook(data)
+        html = parse_xlsx(data)
         # Cell with out-of-range SST index: empty text
         self.assertIn("<td>", html)
 
@@ -265,7 +265,7 @@ class SharedStringsTests(unittest.TestCase):
                 ),
             },
         )
-        html = render_workbook(data)
+        html = parse_xlsx(data)
         self.assertIn("<td>", html)
 
     def test_formula_string_cell(self) -> None:
@@ -300,7 +300,7 @@ class SharedStringsTests(unittest.TestCase):
                 ),
             },
         )
-        html = render_workbook(data)
+        html = parse_xlsx(data)
         self.assertIn("Total: 42", html)
 
     def test_formula_text_in_semantic(self) -> None:
@@ -345,8 +345,8 @@ class SharedStringsTests(unittest.TestCase):
                 ),
             },
         )
-        structural = render_workbook(data, density="structural")
-        semantic = render_workbook(data, density="semantic")
+        structural = parse_xlsx(data, density="structural")
+        semantic = parse_xlsx(data, density="semantic")
         # Structural: formula hidden
         self.assertNotIn("formula", structural)
         self.assertIn("42", structural)
@@ -379,7 +379,7 @@ class SharedStringsTests(unittest.TestCase):
                 ),
             },
         )
-        html = render_workbook(data)
+        html = parse_xlsx(data)
         self.assertIn("2024-01-15", html)
 
 

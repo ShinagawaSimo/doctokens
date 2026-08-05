@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
-from .parser import parse_xlsx
+from .parser import _parse_workbook
 from .renderers.structural import (
     _find_sheet,
     _parse_range,
@@ -14,9 +14,9 @@ from .renderers.structural import (
 )
 
 
-def render_workbook(source: str | Path | bytes, *, density: str = "structural") -> str:
+def parse_xlsx(source: str | Path | bytes, *, density: str = "structural") -> str:
     """Parse *source* and render the entire workbook at the given density."""
-    wb = parse_xlsx(source)
+    wb = _parse_workbook(source)
     parts = [f"density={density}\n"]
     for sheet in wb["sheets"]:
         parts.extend(_render_sheet(sheet, density, wb))
@@ -25,7 +25,7 @@ def render_workbook(source: str | Path | bytes, *, density: str = "structural") 
 
 def iter_workbook(source: str | Path | bytes, *, density: str = "structural") -> Iterator[str]:
     """Stream workbook rendering chunks from *source*."""
-    wb = parse_xlsx(source)
+    wb = _parse_workbook(source)
     yield f"density={density}\n"
     for sheet in wb["sheets"]:
         yield from _render_sheet(sheet, density, wb)
@@ -39,7 +39,7 @@ def render_range(
     density: str = "structural",
 ) -> str:
     """Render cells within an A1-style range from *source*."""
-    wb = parse_xlsx(source)
+    wb = _parse_workbook(source)
     sheet_info = _find_sheet(wb, sheet)
     start_col, start_row, end_col, end_row = _parse_range(range_spec)
 

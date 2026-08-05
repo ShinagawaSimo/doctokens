@@ -4,7 +4,7 @@ import io
 import unittest
 import zipfile
 
-from xlsx_llm_parser import render_workbook
+from xlsx_llm_parser import parse_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -68,8 +68,8 @@ class StyleTests(unittest.TestCase):
                 ),
             },
         )
-        structural = render_workbook(data, density="structural")
-        semantic = render_workbook(data, density="semantic")
+        structural = parse_xlsx(data, density="structural")
+        semantic = parse_xlsx(data, density="semantic")
         self.assertNotIn("bold", structural)
         self.assertIn("bold", semantic)
         self.assertIn("color=#FF0000", semantic)
@@ -122,7 +122,7 @@ class StyleTests(unittest.TestCase):
                 ),
             },
         )
-        semantic = render_workbook(data, density="semantic")
+        semantic = parse_xlsx(data, density="semantic")
         self.assertIn("fill=#FFFF00", semantic)
 
     def test_no_styles_file(self) -> None:
@@ -165,7 +165,7 @@ class StyleTests(unittest.TestCase):
                 ),
             },
         )
-        semantic = render_workbook(data, density="semantic")
+        semantic = parse_xlsx(data, density="semantic")
         self.assertIn("Hi", semantic)
         self.assertNotIn("bold", semantic)
 
@@ -240,7 +240,7 @@ class StyleTests(unittest.TestCase):
                 ),
             },
         )
-        semantic = render_workbook(data, density="semantic")
+        semantic = parse_xlsx(data, density="semantic")
         self.assertIn("color=#ED7D31", semantic)
 
     def test_theme_fill_color_resolved(self) -> None:
@@ -293,7 +293,7 @@ class StyleTests(unittest.TestCase):
                 ),
             },
         )
-        semantic = render_workbook(data, density="semantic")
+        semantic = parse_xlsx(data, density="semantic")
         # accent4=FFC000 (gold), tint=0.8 lightens toward white
         # Expected: each channel: c' = c*(1-0.8) + 255*0.8
         # R: 0xFF=255 → 255*0.2 + 255*0.8 = 51+204 = 255=FF

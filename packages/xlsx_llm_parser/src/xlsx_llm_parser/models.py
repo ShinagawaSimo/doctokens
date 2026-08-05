@@ -22,6 +22,7 @@ class Cell(TypedDict, total=False):
     rowspan: int      # merge: row span for anchor cell
     shadow: bool      # merge: true for cells covered by a merge anchor
     style: int        # index into cellXfs for style lookup
+    rich: list[dict]  # formatted text runs [{text, bold, italic, color}]
 
 
 class SheetInfo(TypedDict, total=False):

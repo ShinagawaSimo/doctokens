@@ -170,7 +170,10 @@ def _render_row(row_cells: list[Cell], grid_min_col: int, density: Density,
         if c != next_col:
             tag_attrs += f" col={_col_letter(c)}"
         parts.append(f"<{tag_attrs}>")
-        parts.append(escape(cell["text"]))
+        if density == "semantic" and cell.get("rich"):
+            parts.append(_render_rich_text(cell["rich"]))
+        else:
+            parts.append(escape(cell["text"]))
         next_col = c + (cell.get("colspan", 1))
 
     parts.append("\n")
@@ -261,6 +264,23 @@ def _filter_rows(
         if kept:
             result.append(kept)
     return result
+
+
+def _render_rich_text(runs: list[dict]) -> str:
+    """Render formatted text runs as inline HTML tags."""
+    parts: list[str] = []
+    for run in runs:
+        txt = escape(run.get("text", ""))
+        if run.get("bold"):
+            txt = f"<b>{txt}</b>"
+        if run.get("italic"):
+            txt = f"<i>{txt}</i>"
+        if run.get("underline"):
+            txt = f"<u>{txt}</u>"
+        if run.get("color"):
+            txt = f'<color value={run["color"]}>{txt}</color>'
+        parts.append(txt)
+    return "".join(parts)
 
 
 def _col_letter(col: int) -> str:

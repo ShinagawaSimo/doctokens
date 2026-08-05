@@ -28,13 +28,13 @@ def parse_xlsx(source: str | Path | bytes) -> ParsedWorkbook:
         pkg.validate(required_part="xl/workbook.xml")
 
         date_1904, sheets = _parse_workbook(pkg)
-        sst = _parse_shared_strings(pkg)
+        sst, rich_map = _parse_shared_strings(pkg)
         fmt_index = parse_styles(pkg)
         fmt_index.set_date_system(date_1904)
 
         for sheet in sheets:
             if sheet.get("kind") != "chartsheet":
-                sheet["rows"] = _parse_sheet(pkg, sheet["part"], sst, fmt_index)
+                sheet["rows"] = _parse_sheet(pkg, sheet["part"], sst, rich_map, fmt_index)
 
     return {
         "sheets": sheets,
@@ -87,44 +87,61 @@ def _parse_workbook(pkg: PackageReader) -> tuple[bool, list[SheetInfo]]:
     return date_1904, sheets
 
 
-def _parse_shared_strings(pkg: PackageReader) -> list[str]:
-    """Parse xl/sharedStrings.xml into an ordered list of string values.
+def _parse_shared_strings(pkg: PackageReader) -> tuple[list[str], dict[int, list[dict]]]:
+    """Parse xl/sharedStrings.xml into plain strings and rich-text run info.
 
-    Each <si> element may contain a plain <t> or rich-text <r> runs.
-    For rich text only the concatenated text is kept; formatting is ignored.
+    Returns (strings, rich_map) where rich_map maps SST index to formatted runs.
     """
     if not pkg.exists("xl/sharedStrings.xml"):
-        return []
+        return [], {}
 
     with pkg.open_entry("xl/sharedStrings.xml") as stream:
         root = ET.parse(stream).getroot()
 
     strings: list[str] = []
-    for si in root.findall(f"{{{NS_S}}}si"):
-        # Plain text: <si><t>value</t></si>
+    rich_map: dict[int, list[dict]] = {}
+
+    for idx, si in enumerate(root.findall(f"{{{NS_S}}}si")):
         t_elem = si.find(f"{{{NS_S}}}t")
         if t_elem is not None:
             strings.append(t_elem.text or "")
         else:
-            # Rich text: <si><r><t>part1</t></r><r><t>part2</t></r></si>
-            parts = [
-                rt.text or ""
-                for r_elem in si.findall(f"{{{NS_S}}}r")
-                for rt in r_elem.findall(f"{{{NS_S}}}t")
-                if rt.text
-            ]
-            strings.append("".join(parts))
+            texts: list[str] = []
+            runs: list[dict] = []
+            for r_elem in si.findall(f"{{{NS_S}}}r"):
+                rt = r_elem.find(f"{{{NS_S}}}t")
+                txt = rt.text if rt is not None and rt.text else ""
+                texts.append(txt)
+                rp = r_elem.find(f"{{{NS_S}}}rPr")
+                if rp is not None:
+                    run: dict = {"text": txt}
+                    if rp.find(f"{{{NS_S}}}b") is not None:
+                        run["bold"] = True
+                    if rp.find(f"{{{NS_S}}}i") is not None:
+                        run["italic"] = True
+                    if rp.find(f"{{{NS_S}}}u") is not None:
+                        run["underline"] = True
+                    color = rp.find(f"{{{NS_S}}}color")
+                    if color is not None:
+                        rgb = color.get("rgb", "")
+                        if rgb and rgb != "00000000":
+                            run["color"] = f"#{rgb[2:]}" if len(rgb) == 8 else f"#{rgb}"
+                    runs.append(run)
+                else:
+                    runs.append({"text": txt})
+            strings.append("".join(texts))
+            if any(len(r) > 1 for r in runs):  # has formatting beyond just text
+                rich_map[idx] = runs
 
-    return strings
+    return strings, rich_map
 
 
 def _parse_sheet(
-    pkg: PackageReader, part: str, sst: list[str], fmt_index: FormatIndex | None = None
+    pkg: PackageReader, part: str, sst: list[str],
+    rich_map: dict[int, list[dict]] | None = None,
+    fmt_index: FormatIndex | None = None,
 ) -> list[list[Cell]]:
-    """Parse a single worksheet XML into typed cell rows.
-
-    Handles all ECMA-376 cell types and applies number formatting.
-    """
+    """Parse a single worksheet XML into typed cell rows."""
     if not pkg.exists(part):
         return []
 
@@ -160,6 +177,8 @@ def _parse_sheet(
                         idx = int(v_elem.text)
                         if 0 <= idx < len(sst):
                             text = sst[idx]
+                            if rich_map is not None and idx in rich_map:
+                                rich_runs = rich_map[idx]
                     except ValueError:
                         pass
             else:
@@ -210,6 +229,14 @@ def _parse_sheet(
                     formula = f_elem.text
 
             cell: Cell = {"ref": ref, "row": row_num or row, "col": col, "text": text}
+            # Attach rich text runs for semantic rendering
+            if rich_map is not None and cell_type == "s" and v_elem is not None and v_elem.text:
+                try:
+                    idx = int(v_elem.text)
+                    if idx in rich_map:
+                        cell["rich"] = rich_map[idx]
+                except ValueError:
+                    pass
             # Store style index for semantic rendering
             style_str = cell_elem.get("s")
             if style_str is not None:

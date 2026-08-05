@@ -258,6 +258,9 @@ def _parse_sheet(
     # Parse merge cells and mark shadow cells
     _apply_merge_cells(root, rows)
 
+    # Mark dynamic array spill relationships
+    _apply_spill_ranges(rows)
+
     return rows
 
 
@@ -295,6 +298,46 @@ def _apply_merge_cells(root: ET.Element, rows: list[list[Cell]]) -> None:
                 shadow = cell_map.get((c, r))
                 if shadow is not None:
                     shadow["shadow"] = True
+
+
+def _apply_spill_ranges(rows: list[list[Cell]]) -> None:
+    """Detect dynamic-array spill ranges and mark source/recipient relationships.
+
+    An array formula with a ``ref`` range larger than its own cell is a spill
+    source.  Cells inside that range that carry no independent formula are
+    marked as spill recipients pointing back to the source via ``spillFrom``.
+    """
+    # Build coordinate → cell lookup
+    cell_map: dict[tuple[int, int], Cell] = {}
+    for row_cells in rows:
+        for c in row_cells:
+            cell_map[(c["col"], c["row"])] = c
+
+    for row_cells in rows:
+        for cell in row_cells:
+            formula_range = cell.get("formulaRange")
+            if not formula_range:
+                continue
+            if ":" not in formula_range:
+                continue
+            start_ref, end_ref = formula_range.split(":", 1)
+            sc, sr = _parse_ref(start_ref)
+            ec, er = _parse_ref(end_ref)
+
+            # Skip if the range covers only the cell itself
+            if sc == cell["col"] and sr == cell["row"] and ec == cell["col"] and er == cell["row"]:
+                continue
+
+            cell["spillRange"] = formula_range
+
+            # Mark spill recipients: cells inside the range without their own formula
+            for r in range(sr, er + 1):
+                for col in range(sc, ec + 1):
+                    if col == cell["col"] and r == cell["row"]:
+                        continue
+                    recipient = cell_map.get((col, r))
+                    if recipient is not None and "formula" not in recipient and "si" not in recipient:
+                        recipient["spillFrom"] = cell["ref"]
 
 
 def _parse_ref(ref: str) -> tuple[int, int]:

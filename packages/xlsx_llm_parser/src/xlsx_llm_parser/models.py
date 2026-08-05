@@ -21,6 +21,8 @@ class Cell(TypedDict, total=False):
     colspan: int      # merge: column span for anchor cell
     rowspan: int      # merge: row span for anchor cell
     shadow: bool      # merge: true for cells covered by a merge anchor
+    spillRange: str   # dynamic array: A1-style spill range on the anchor cell
+    spillFrom: str    # dynamic array: A1 ref of the source cell on spill recipients
     style: int        # index into cellXfs for style lookup
     rich: list[dict]  # formatted text runs [{text, bold, italic, color}]
 

@@ -225,6 +225,64 @@ class ArrayFormulaTests(unittest.TestCase):
         self.assertIn("formulaType=array", html)
         self.assertIn("formulaRange=A1:C3", html)
 
+    def test_dynamic_array_spill(self) -> None:
+        """Dynamic array: anchor cell marks spillRange, cached recipients get spillFrom."""
+        data = _make_xlsx(
+            {
+                "[Content_Types].xml": (
+                    f'<Types xmlns="{NS_CT}">'
+                    '<Default Extension="xml" ContentType="application/xml"/>'
+                    '<Default Extension="rels" ContentType='
+                    '"application/vnd.openxmlformats-package.relationships+xml"/>'
+                    '<Override PartName="/xl/workbook.xml" '
+                    'ContentType="application/vnd.openxmlformats-officedocument.'
+                    'spreadsheetml.sheet.main+xml"/>'
+                    "</Types>"
+                ),
+                "_rels/.rels": (
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    f'<Relationship Id="r1" Type="{NS_O}/officeDocument" Target="xl/workbook.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/workbook.xml": (
+                    f'<workbook xmlns="{NS_S}" '
+                    'xmlns:r="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    "<sheets>"
+                    '<sheet name="Data" sheetId="1" r:id="rSheet1"/>'
+                    "</sheets>"
+                    "</workbook>"
+                ),
+                "xl/_rels/workbook.xml.rels": (
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    f'<Relationship Id="rSheet1" Type="{NS_O}/worksheet" '
+                    'Target="worksheets/sheet1.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/worksheets/sheet1.xml": (
+                    f'<worksheet xmlns="{NS_S}"><sheetData>'
+                    # Anchor: B1 contains the dynamic array formula SORT
+                    '<row r="1">'
+                    '<c r="B1">'
+                    '<f t="array" ref="B1:B3">_xlfn.SORT(A1:A3)</f><v>Alice</v>'
+                    "</c>"
+                    "</row>"
+                    # Spill recipients: B2, B3 have cached values but no formula
+                    '<row r="2"><c r="B2"><v>Bob</v></c></row>'
+                    '<row r="3"><c r="B3"><v>Carol</v></c></row>'
+                    "</sheetData></worksheet>"
+                ),
+            },
+        )
+        html = render_workbook(data, density="semantic")
+
+        # Source cell has both formulaRange and spillRange
+        self.assertIn("spillRange=B1:B3", html)
+
+        # structural omits spill attributes
+        structural = render_workbook(data, density="structural")
+        self.assertNotIn("spillRange", structural)
+        self.assertNotIn("spillFrom", structural)
+
 
 if __name__ == "__main__":
     unittest.main()

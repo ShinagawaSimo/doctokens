@@ -43,6 +43,8 @@ class FormatIndex:
         self._cell_formats: list[tuple[int, str, int, int]] = []
         # numFmtId → (is_date, is_pct)
         self._fmt_cache: dict[int, tuple[bool, bool]] = {}
+        # style_index → resolved attribute string ("" = no styles)
+        self._style_attrs_cache: dict[int, str] = {}
         # fontId → {"bold": bool, "italic": bool, "color": str | None}
         self._fonts: list[dict] = []
         # fillId → {"fill": str | None}
@@ -84,23 +86,25 @@ class FormatIndex:
         """Return semantic style attributes for a cell, or empty string."""
         if style_index is None or style_index >= len(self._cell_formats):
             return ""
-        _num_fmt_id, _fmt_code, font_id, fill_id = self._cell_formats[style_index]
-        parts = []
-        if font_id < len(self._fonts):
-            font = self._fonts[font_id]
-            if font.get("bold"):
-                parts.append("bold")
-            if font.get("italic"):
-                parts.append("italic")
-            if font.get("underline"):
-                parts.append("underline")
-            if font.get("color"):
-                parts.append(f"color={font['color']}")
-        if fill_id < len(self._fills):
-            fill = self._fills[fill_id]
-            if fill.get("fill"):
-                parts.append(f"fill={fill['fill']}")
-        return " ".join(parts)
+        if style_index not in self._style_attrs_cache:
+            _num_fmt_id, _fmt_code, font_id, fill_id = self._cell_formats[style_index]
+            parts = []
+            if font_id < len(self._fonts):
+                font = self._fonts[font_id]
+                if font.get("bold"):
+                    parts.append("bold")
+                if font.get("italic"):
+                    parts.append("italic")
+                if font.get("underline"):
+                    parts.append("underline")
+                if font.get("color"):
+                    parts.append(f"color={font['color']}")
+            if fill_id < len(self._fills):
+                fill = self._fills[fill_id]
+                if fill.get("fill"):
+                    parts.append(f"fill={fill['fill']}")
+            self._style_attrs_cache[style_index] = " ".join(parts)
+        return self._style_attrs_cache[style_index]
 
     def _resolve(self, num_fmt_id: int, fmt_code: str) -> tuple[bool, bool]:
         if num_fmt_id not in self._fmt_cache:

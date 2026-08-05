@@ -155,6 +155,10 @@ def _render_row(row_cells: list[Cell], grid_min_col: int, density: Density,
                 tag_attrs += f" formulaType={escape(cell['formulaType'], quote=True)}"
             if cell.get("formulaRange"):
                 tag_attrs += f" formulaRange={escape(cell['formulaRange'], quote=True)}"
+            if cell.get("spillRange"):
+                tag_attrs += f" spillRange={escape(cell['spillRange'], quote=True)}"
+            if cell.get("spillFrom"):
+                tag_attrs += f' spillFrom="{escape(cell["spillFrom"], quote=True)}"'
             if fmt_index is not None and "style" in cell:
                 style = fmt_index.style_attrs(cell["style"])
                 if style:

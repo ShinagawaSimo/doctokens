@@ -10,6 +10,7 @@ from ooxml_llm_core.package import PackageReader
 
 from .formats import FormatIndex, parse_styles
 from .models import Cell, ParsedWorkbook, SheetInfo
+from .share_formulas import expand_shared_formulas
 
 # SpreadsheetML main namespace
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -177,12 +178,50 @@ def _parse_sheet(
                     except (ValueError, IndexError):
                         pass
 
+            # Extract formula if present
+            f_elem = cell_elem.find(f"{{{NS_S}}}f")
+            formula = None
+            formula_meta: dict = {}
+            if f_elem is not None:
+                f_type = f_elem.get("t", "")
+                if f_type == "shared":
+                    si = f_elem.get("si")
+                    ref_range = f_elem.get("ref")
+                    if ref_range:
+                        formula_meta["shared_ref"] = ref_range
+                        formula_meta["si"] = si
+                    elif si is not None:
+                        formula_meta["si"] = si
+                    if f_elem.text:
+                        formula = f_elem.text
+                elif f_type == "array":
+                    formula_meta["formulaType"] = "array"
+                    ref_range = f_elem.get("ref", "")
+                    if ref_range:
+                        formula_meta["formulaRange"] = ref_range
+                    if f_elem.text:
+                        formula = f_elem.text
+                elif f_type == "dataTable":
+                    formula_meta["formulaType"] = "dataTable"
+                    if f_elem.text:
+                        formula = f_elem.text
+                elif f_elem.text:
+                    formula = f_elem.text
+
             cell: Cell = {"ref": ref, "row": row_num or row, "col": col, "text": text}
+            if formula is not None:
+                cell["formula"] = formula
+            cell.update(formula_meta)
             if cell_type != "n":
                 cell["type"] = cell_type
             cells.append(cell)
 
         rows.append(cells)
+
+    # Expand shared formulas: resolve si references to actual formula text
+    all_cells = [c for row_cells in rows for c in row_cells if "si" in c]
+    if all_cells:
+        expand_shared_formulas(all_cells)
 
     return rows
 

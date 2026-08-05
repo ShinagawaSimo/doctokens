@@ -310,6 +310,57 @@ class SharedStringsTests(unittest.TestCase):
         html = render_workbook(wb)
         self.assertIn("Total: 42", html)
 
+    def test_formula_text_in_semantic(self) -> None:
+        """Semantic density outputs formula= attribute on <td>."""
+        data = _make_xlsx(
+            {
+                "[Content_Types].xml": (
+                    f'<Types xmlns="{NS_CT}">'
+                    '<Default Extension="xml" ContentType="application/xml"/>'
+                    '<Default Extension="rels" ContentType='
+                    '"application/vnd.openxmlformats-package.relationships+xml"/>'
+                    '<Override PartName="/xl/workbook.xml" '
+                    'ContentType="application/vnd.openxmlformats-officedocument.'
+                    'spreadsheetml.sheet.main+xml"/>'
+                    "</Types>"
+                ),
+                "_rels/.rels": (
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    f'<Relationship Id="r1" Type="{NS_O}/officeDocument" Target="xl/workbook.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/workbook.xml": (
+                    f'<workbook xmlns="{NS_S}" '
+                    'xmlns:r="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    "<sheets>"
+                    '<sheet name="Data" sheetId="1" r:id="rSheet1"/>'
+                    "</sheets>"
+                    "</workbook>"
+                ),
+                "xl/_rels/workbook.xml.rels": (
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    f'<Relationship Id="rSheet1" Type="{NS_O}/worksheet" '
+                    'Target="worksheets/sheet1.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/worksheets/sheet1.xml": (
+                    f'<worksheet xmlns="{NS_S}"><sheetData>'
+                    '<row r="1">'
+                    '<c r="A1"><f>SUM(B1:B10)</f><v>42</v></c>'
+                    "</row>"
+                    "</sheetData></worksheet>"
+                ),
+            },
+        )
+        wb = parse_xlsx(data)
+        structural = render_workbook(wb, density="structural")
+        semantic = render_workbook(wb, density="semantic")
+        # Structural: formula hidden
+        self.assertNotIn("formula", structural)
+        self.assertIn("42", structural)
+        # Semantic: formula visible
+        self.assertIn('formula="SUM(B1:B10)"', semantic)
+
     def test_date_cell(self) -> None:
         """t='d' cells are ISO 8601 dates."""
         data = _make_xlsx(

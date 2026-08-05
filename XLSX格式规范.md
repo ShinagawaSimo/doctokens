@@ -10,9 +10,9 @@
 |---|---|---|
 | 语义级 | `semantic` | 完整网格 + 单元格坐标 + 数据类型 + 样式语义（待开发） |
 | 结构级 | `structural`（默认） | sheet 边界 + 坐标 + 单元格可读值 |
-| 纯文本 | `plain` | 制表符分隔的单元格值（待开发） |
+| 纯文本 | `plain` | 制表符分隔的单元格值，无坐标 |
 
-XLSX 默认密度为 structural，因为大型工作簿常见。
+XLSX 默认密度为 structural。输出首行标记密度（如 `density=structural`）。
 
 ## 隐式闭合规则
 
@@ -50,42 +50,55 @@ XLSX 默认密度为 structural，因为大型工作簿常见。
 - `<td>`：单元格。列在 `<td>` 间隐式连续推进
 - `col=`：仅当列号不连续时输出（恢复真实 Excel 列位置）
 
+### 大表格截断
+
+超出预算（200 格 / 20 行 / 12 列）时保留 head + tail 样本，`grid ref` 显示完整范围并标记 `truncated`：
+
+```
+<grid ref=A1:A50000 truncated>
+<tr row=1><td>Header
+...
+<tr row=8><td>Row8
+<tr row=49997><td>Row49997
+...
+<tr row=50000><td>Row50000
+```
+
 ### 坐标规则
 
-`row=N` 始终输出真实 Excel 行号。`col=` 仅当列跳跃时出现，从左到右的连续列无需标注：
-
-```
-<grid ref=A1:D4>
-<tr row=1><td>产品<td>地区<td>销量<td>金额
-<tr row=2><td>A<td>华东<td>12<td>3600
-```
-
-列跳跃示例：
+`row=N` 始终输出真实 Excel 行号。`col=` 仅当列跳跃时出现：
 
 ```
 <grid ref=A1:F10>
 <tr row=3><td>折现率<td col=F>8.0%
 ```
 
-### 全部 7 种单元格类型
+### 单元格值
 
-| `t=` | 含义 | 值来源 |
-|------|------|--------|
-| 无 / `n` | 数字 | `<v>` 原文 |
-| `s` | 共享字符串 | `<v>` 为 `xl/sharedStrings.xml` 的 0-based 索引 |
-| `inlineStr` | 内联字符串 | `<is><t>` 内嵌文本 |
+所有单元格输出可读显示值：
+
+| `t=` | 含义 | 输出 |
+|------|------|------|
+| 无 / `n` | 数字 | 日期格式 → ISO 8601；百分比格式 → `12.5%`；否则原文 |
+| `s` | 共享字符串 | `xl/sharedStrings.xml` 索引查找 |
+| `inlineStr` | 内联字符串 | `<is><t>` 原文 |
 | `str` | 公式结果字符串 | `<v>` 缓存结果 |
 | `b` | 布尔 | `"1"` → `true`，`"0"` → `false` |
 | `e` | 错误 | 保留原值如 `#DIV/0!` |
-| `d` | ISO 日期 | `<v>` 即 ISO 8601 日期字符串 |
+| `d` | ISO 日期 | `<v>` 原文 |
 
-### 共享字符串
+### 数字格式化
 
-`xl/sharedStrings.xml` 存储工作簿中所有文本字符串。简单文本使用 `<si><t>`；富文本使用 `<si><r><t>`（仅提取文本内容，忽略格式标记）。
+解析 `xl/styles.xml` 中的数字格式定义，对 `t="n"` 且带 `s` 属性的单元格应用格式化：
+
+- **日期**：numFmtId 14–81 或自定义格式含日期 token（`y`/`m`/`d`/`h`/`s`）→ 解码序列号为 ISO 8601 日期
+- **百分比**：numFmtId 9/10 或格式含 `%` → 乘以 100 追加 `%`
+- 支持 1900 和 1904（Mac）双日期系统
+- 无 `styles.xml` 时安全降级为原始数值
 
 ## 范围读取
 
-`render_range(wb, sheet, range)` 按 A1 范围筛选单元格，返回 `<grid ref=...>` 块，行号保留真实 Excel 编号：
+`render_range(wb, sheet, range, density=...)` 按 A1 范围筛选单元格，返回 `<grid ref=...>` 块：
 
 ```python
 from xlsx_llm_parser import render_range
@@ -99,19 +112,19 @@ html = render_range(wb, "Sheet1", "B2:D10")
 from xlsx_llm_parser import parse_xlsx, render_workbook, render_range, iter_workbook
 
 wb = parse_xlsx("workbook.xlsx")
-html = render_workbook(wb)            # 完整工作簿 structural 渲染
-part = render_range(wb, "Sheet1", "A1:H30")  # 按范围筛选
+html = render_workbook(wb)                      # structural（默认）
+html = render_workbook(wb, density="plain")     # 纯文本
+part = render_range(wb, "Sheet1", "A1:H30")     # 按范围筛选
 ```
 
 - `parse_xlsx(source)` — 解析 `.xlsx` 文件或 bytes
-- `render_workbook(wb)` — 渲染完整 structural HTML5 字符串
-- `render_range(wb, sheet, range)` — 渲染指定 A1 范围
-- `iter_workbook(wb)` — 流式渲染，供大工作簿使用
+- `render_workbook(wb, *, density)` — 渲染完整工作簿
+- `render_range(wb, sheet, range, *, density)` — 渲染指定 A1 范围
+- `iter_workbook(wb, *, density)` — 流式渲染
 
 ## 尚未支持
 
-- 日期序列解码与数字格式化
-- 公式原文保存与公式类型
+- 公式原文保存
 - 合并单元格
-- 样式、富文本格式、超链接、批注
+- 富文本格式、超链接、批注
 - 图表、数据透视表、图片

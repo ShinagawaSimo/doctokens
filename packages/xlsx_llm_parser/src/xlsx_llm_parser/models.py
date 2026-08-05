@@ -13,6 +13,11 @@ class Cell(TypedDict, total=False):
     col: int          # 1-based column number
     text: str         # resolved display text
     type: str         # "n", "s", "inlineStr", "str", "b", "e", "d"
+    formula: str      # formula text from <f> element (e.g. "SUM(A1:A10)")
+    si: str           # shared formula index for slave cells
+    shared_ref: str   # shared formula range (master cell only)
+    formulaType: str  # "array" | "dataTable"
+    formulaRange: str # array/dataTable range from <f ref=...>
 
 
 class SheetInfo(TypedDict, total=False):

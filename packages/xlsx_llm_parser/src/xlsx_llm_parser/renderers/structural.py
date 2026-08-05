@@ -143,10 +143,17 @@ def _render_row(row_cells: list[Cell], grid_min_col: int, density: Density) -> s
     next_col = grid_min_col
     for cell in row_cells:
         c = cell["col"]
+        tag_attrs = "td"
+        if density == "semantic":
+            if cell.get("formula"):
+                tag_attrs += f' formula="{escape(cell["formula"], quote=True)}"'
+            if cell.get("formulaType"):
+                tag_attrs += f" formulaType={escape(cell['formulaType'], quote=True)}"
+            if cell.get("formulaRange"):
+                tag_attrs += f" formulaRange={escape(cell['formulaRange'], quote=True)}"
         if c != next_col:
-            parts.append(f"<td col={_col_letter(c)}>")
-        else:
-            parts.append("<td>")
+            tag_attrs += f" col={_col_letter(c)}"
+        parts.append(f"<{tag_attrs}>")
         parts.append(escape(cell["text"]))
         next_col = c + 1
 

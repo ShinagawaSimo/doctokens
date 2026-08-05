@@ -36,20 +36,31 @@ _PCT_RE = re.compile(r"%")
 
 
 class FormatIndex:
-    """Cell → display-value resolver built from styles.xml."""
+    """Cell → display-value and style resolver built from styles.xml."""
 
     def __init__(self) -> None:
-        # cellXfs index → (numFmtId, formatCode)
-        self._cell_formats: list[tuple[int, str]] = []
+        # cellXfs index → (numFmtId, formatCode, fontId, fillId)
+        self._cell_formats: list[tuple[int, str, int, int]] = []
         # numFmtId → (is_date, is_pct)
         self._fmt_cache: dict[int, tuple[bool, bool]] = {}
+        # fontId → {"bold": bool, "italic": bool, "color": str | None}
+        self._fonts: list[dict] = []
+        # fillId → {"fill": str | None}
+        self._fills: list[dict] = []
         self.date_1904 = False
 
     def set_date_system(self, date_1904: bool) -> None:
         self.date_1904 = date_1904
 
-    def register_cell_format(self, num_fmt_id: int, format_code: str) -> None:
-        self._cell_formats.append((num_fmt_id, format_code))
+    def register_font(self, font_info: dict) -> None:
+        self._fonts.append(font_info)
+
+    def register_fill(self, fill_info: dict) -> None:
+        self._fills.append(fill_info)
+
+    def register_cell_format(self, num_fmt_id: int, format_code: str,
+                             font_id: int = 0, fill_id: int = 0) -> None:
+        self._cell_formats.append((num_fmt_id, format_code, font_id, fill_id))
 
     def format_value(self, style_index: int | None, raw: str) -> str:
         """Apply number formatting to a raw cell value string."""
@@ -60,7 +71,7 @@ class FormatIndex:
         except ValueError:
             return raw
 
-        num_fmt_id, fmt_code = self._cell_formats[style_index]
+        num_fmt_id, fmt_code, _font_id, _fill_id = self._cell_formats[style_index]
         is_date, is_pct = self._resolve(num_fmt_id, fmt_code)
 
         if is_date:
@@ -68,6 +79,28 @@ class FormatIndex:
         if is_pct:
             return f"{num * 100:g}%"
         return raw
+
+    def style_attrs(self, style_index: int | None) -> str:
+        """Return semantic style attributes for a cell, or empty string."""
+        if style_index is None or style_index >= len(self._cell_formats):
+            return ""
+        _num_fmt_id, _fmt_code, font_id, fill_id = self._cell_formats[style_index]
+        parts = []
+        if font_id < len(self._fonts):
+            font = self._fonts[font_id]
+            if font.get("bold"):
+                parts.append("bold")
+            if font.get("italic"):
+                parts.append("italic")
+            if font.get("underline"):
+                parts.append("underline")
+            if font.get("color"):
+                parts.append(f"color={font['color']}")
+        if fill_id < len(self._fills):
+            fill = self._fills[fill_id]
+            if fill.get("fill"):
+                parts.append(f"fill={fill['fill']}")
+        return " ".join(parts)
 
     def _resolve(self, num_fmt_id: int, fmt_code: str) -> tuple[bool, bool]:
         if num_fmt_id not in self._fmt_cache:
@@ -100,15 +133,56 @@ def parse_styles(pkg: PackageReader) -> FormatIndex:
             code = nf.get("formatCode", "")
             custom_fmts[fid] = code
 
-    # Cell formats: each references a numFmtId
+    # Fonts: indexed by position
+    fonts_elem = root.find(f"{{{NS_S}}}fonts")
+    if fonts_elem is not None:
+        for font in fonts_elem.findall(f"{{{NS_S}}}font"):
+            info: dict = {"bold": False, "italic": False, "underline": False}
+            if font.find(f"{{{NS_S}}}b") is not None:
+                info["bold"] = True
+            if font.find(f"{{{NS_S}}}i") is not None:
+                info["italic"] = True
+            if font.find(f"{{{NS_S}}}u") is not None:
+                info["underline"] = True
+            color = font.find(f"{{{NS_S}}}color")
+            if color is not None:
+                rgb = color.get("rgb")
+                if rgb and rgb != "00000000":
+                    info["color"] = f"#{_rgb_hex(rgb)}"
+            index.register_font(info)
+
+    # Fills: indexed by position
+    fills_elem = root.find(f"{{{NS_S}}}fills")
+    if fills_elem is not None:
+        for fill in fills_elem.findall(f"{{{NS_S}}}fill"):
+            fill_info: dict = {}
+            pf = fill.find(f"{{{NS_S}}}patternFill")
+            if pf is not None:
+                fg = pf.find(f"{{{NS_S}}}fgColor")
+                if fg is not None:
+                    rgb = fg.get("rgb")
+                    if rgb and rgb != "00000000":
+                        fill_info["fill"] = f"#{_rgb_hex(rgb)}"
+            index.register_fill(fill_info)
+
+    # Cell formats: each references numFmtId, fontId, fillId
     cell_xfs = root.find(f"{{{NS_S}}}cellXfs")
     if cell_xfs is not None:
         for xf in cell_xfs.findall(f"{{{NS_S}}}xf"):
             fid = int(xf.get("numFmtId", "0"))
+            font_id = int(xf.get("fontId", "0"))
+            fill_id = int(xf.get("fillId", "0"))
             code = custom_fmts.get(fid, "")
-            index.register_cell_format(fid, code)
+            index.register_cell_format(fid, code, font_id, fill_id)
 
     return index
+
+
+def _rgb_hex(rgb: str) -> str:
+    """Normalize OOXML color (AARRGGBB or RRGGBB) to RRGGBB."""
+    if len(rgb) == 8:
+        return rgb[2:]  # strip alpha
+    return rgb
 
 
 def _decode_date(serial: float, date_1904: bool) -> str:

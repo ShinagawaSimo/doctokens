@@ -32,7 +32,7 @@ def iter_workbook(wb: ParsedWorkbook, *, density: Density = "structural") -> Ite
     """Stream workbook rendering chunks — concatenation matches render_workbook."""
     yield f"density={density}\n"
     for sheet in wb["sheets"]:
-        yield from _render_sheet(sheet, density)
+        yield from _render_sheet(sheet, density, wb)
 
 
 def render_range(
@@ -58,7 +58,7 @@ def render_range(
 # ── Per-sheet rendering ──
 
 
-def _render_sheet(sheet, density: Density) -> Iterator[str]:
+def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None) -> Iterator[str]:
     name = sheet["name"]
     state = sheet.get("state", "visible")
     kind = sheet.get("kind", "worksheet")
@@ -81,7 +81,7 @@ def _render_sheet(sheet, density: Density) -> Iterator[str]:
     if density == "plain":
         yield from _render_plain(rows)
     else:
-        yield _render_grid(rows, density)
+        yield _render_grid(rows, density, wb)
 
 
 # ── Plain text ──
@@ -99,7 +99,8 @@ def _render_plain(rows: list[list[Cell]]) -> Iterator[str]:
 # ── Grid rendering (structural / semantic) ──
 
 
-def _render_grid(rows: list[list[Cell]], density: Density) -> str:
+def _render_grid(rows: list[list[Cell]], density: Density,
+                 wb: ParsedWorkbook | None = None) -> str:
     if not rows:
         return ""
 
@@ -131,14 +132,17 @@ def _render_grid(rows: list[list[Cell]], density: Density) -> str:
     parts = [tag + ">\n"]
 
     for row_cells in all_rows:
-        parts.append(_render_row(row_cells, min_col, density))
+        parts.append(_render_row(row_cells, min_col, density, wb))
 
     return "".join(parts)
 
 
-def _render_row(row_cells: list[Cell], grid_min_col: int, density: Density) -> str:
+def _render_row(row_cells: list[Cell], grid_min_col: int, density: Density,
+                wb: ParsedWorkbook | None = None) -> str:
     actual_row = row_cells[0]["row"]
     parts = [f"<tr row={actual_row}>"]
+
+    fmt_index = wb.get("fmt_index") if wb is not None else None
 
     next_col = grid_min_col
     for cell in row_cells:
@@ -159,6 +163,10 @@ def _render_row(row_cells: list[Cell], grid_min_col: int, density: Density) -> s
                 tag_attrs += f" formulaType={escape(cell['formulaType'], quote=True)}"
             if cell.get("formulaRange"):
                 tag_attrs += f" formulaRange={escape(cell['formulaRange'], quote=True)}"
+            if fmt_index is not None and "style" in cell:
+                style = fmt_index.style_attrs(cell["style"])
+                if style:
+                    tag_attrs += f" {style}"
         if c != next_col:
             tag_attrs += f" col={_col_letter(c)}"
         parts.append(f"<{tag_attrs}>")

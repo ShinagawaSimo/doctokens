@@ -21,6 +21,7 @@ class Cell(TypedDict, total=False):
     colspan: int      # merge: column span for anchor cell
     rowspan: int      # merge: row span for anchor cell
     shadow: bool      # merge: true for cells covered by a merge anchor
+    style: int        # index into cellXfs for style lookup
 
 
 class SheetInfo(TypedDict, total=False):
@@ -38,3 +39,4 @@ class ParsedWorkbook(TypedDict):
 
     sheets: list[SheetInfo]
     metadata: dict
+    fmt_index: object  # FormatIndex from formats.py

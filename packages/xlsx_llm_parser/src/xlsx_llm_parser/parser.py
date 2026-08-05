@@ -38,6 +38,7 @@ def parse_xlsx(source: str | Path | bytes) -> ParsedWorkbook:
 
     return {
         "sheets": sheets,
+        "fmt_index": fmt_index,
         "metadata": {
             "source": str(source) if isinstance(source, (str, Path)) else "<bytes>",
         },
@@ -209,6 +210,10 @@ def _parse_sheet(
                     formula = f_elem.text
 
             cell: Cell = {"ref": ref, "row": row_num or row, "col": col, "text": text}
+            # Store style index for semantic rendering
+            style_str = cell_elem.get("s")
+            if style_str is not None:
+                cell["style"] = int(style_str)
             if formula is not None:
                 cell["formula"] = formula
             cell.update(formula_meta)

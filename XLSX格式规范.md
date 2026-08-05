@@ -8,7 +8,7 @@
 
 | 密度 | 枚举值 | 内容 |
 |---|---|---|
-| 语义级 | `semantic` | 完整网格 + 单元格坐标 + 数据类型 + 样式语义（待开发） |
+| 语义级 | `semantic` | 完整网格 + 单元格坐标 + 样式语义 + 公式 + 合并 + 溢出 |
 | 结构级 | `structural`（默认） | sheet 边界 + 坐标 + 单元格可读值 |
 | 纯文本 | `plain` | 制表符分隔的单元格值，无坐标 |
 
@@ -92,29 +92,42 @@ XLSX 默认密度为 structural。输出首行标记密度（如 `density=struct
 
 ## 范围读取
 
-`render_range(wb, sheet, range, density=...)` 按 A1 范围筛选单元格，返回 `<grid ref=...>` 块：
+`render_range(source, sheet, range_spec, *, density)` 解析源文件并按 A1 范围筛选单元格，返回 `<grid ref=...>` 块：
 
 ```python
 from xlsx_llm_parser import render_range
 
-html = render_range(wb, "Sheet1", "B2:D10")
+html = render_range("workbook.xlsx", "Sheet1", "B2:D10")
 ```
 
 ## 公共 API
 
+所有函数直接接受源文件路径或 bytes，内部完成解析和渲染：
+
 ```python
 from xlsx_llm_parser import parse_xlsx, render_workbook, render_range, iter_workbook
 
+# 直接渲染（内部自动解析）
+html = render_workbook("workbook.xlsx")                        # structural（默认）
+html = render_workbook("workbook.xlsx", density="semantic")    # 语义级
+html = render_workbook("workbook.xlsx", density="plain")       # 纯文本
+
+# 流式迭代
+for chunk in iter_workbook("workbook.xlsx", density="structural"):
+    ...
+
+# 范围读取
+html = render_range("workbook.xlsx", "Sheet1", "A1:H30")      # structural（默认）
+html = render_range("workbook.xlsx", "Sheet1", "A1:H30", density="semantic")
+
+# 解析中间模型（如需访问 IR）
 wb = parse_xlsx("workbook.xlsx")
-html = render_workbook(wb)                      # structural（默认）
-html = render_workbook(wb, density="plain")     # 纯文本
-part = render_range(wb, "Sheet1", "A1:H30")     # 按范围筛选
 ```
 
-- `parse_xlsx(source)` — 解析 `.xlsx` 文件或 bytes
-- `render_workbook(wb, *, density)` — 渲染完整工作簿
-- `render_range(wb, sheet, range, *, density)` — 渲染指定 A1 范围
-- `iter_workbook(wb, *, density)` — 流式渲染
+- `parse_xlsx(source)` — 解析 `.xlsx` 文件路径或 bytes，返回 `ParsedWorkbook`
+- `render_workbook(source, *, density)` — 解析并渲染完整工作簿
+- `render_range(source, sheet, range_spec, *, density)` — 解析并渲染指定 A1 范围
+- `iter_workbook(source, *, density)` — 解析并流式渲染
 
 ## 公式
 
@@ -127,6 +140,18 @@ semantic 密度下，`<td>` 可带公式属性：
 
 共享公式自动展开：slave 单元格通过 `si` 索引找到 master，应用行列偏移量生成各自公式文本。
 
+### 动态数组溢出（仅 semantic）
+
+array 公式 `ref` 范围大于锚点单元格自身时，标记溢出关系：
+
+```
+<tr row=1><td formula="SORT(A1:A3)" formulaType=array formulaRange=B1:B3 spillRange=B1:B3>Alice
+<tr row=2><td spillFrom="B1">Bob
+```
+
+- `spillRange`：锚点公式的溢出范围（A1 格式）
+- `spillFrom`：溢出从属单元格，值为源公式的 A1 地址
+
 ## 合并单元格
 
 semantic 密度下，左上角单元格输出 `colspan=N rowspan=N`，shadow 格跳过：
@@ -134,6 +159,8 @@ semantic 密度下，左上角单元格输出 `colspan=N rowspan=N`，shadow 格
 ## 样式（仅 semantic）
 
 `<td>` 可带 `bold`、`italic`、`underline`、`color=#RRGGBB`、`fill=#RRGGBB` 属性。
+
+颜色来源包括显式 RGB 值和主题色引用：`xl/styles.xml` 中的 `<color theme="N"/>` 通过解析 `xl/theme/theme1.xml` 的 `clrScheme` 映射为 RGB；`tint` 属性按 OOXML 规范线性插值亮/暗变化。theme1.xml 缺失时降级为 Office 默认主题色。
 
 ## 富文本（仅 semantic）
 

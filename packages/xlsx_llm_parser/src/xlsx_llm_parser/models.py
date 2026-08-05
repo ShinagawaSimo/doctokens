@@ -23,6 +23,9 @@ class Cell(TypedDict, total=False):
     shadow: bool      # merge: true for cells covered by a merge anchor
     spillRange: str   # dynamic array: A1-style spill range on the anchor cell
     spillFrom: str    # dynamic array: A1 ref of the source cell on spill recipients
+    hidden: bool      # row hidden state
+    outlineLevel: int # row outline level (0 = none)
+    collapsed: bool   # row collapsed state
     style: int        # index into cellXfs for style lookup
     rich: list[dict]  # formatted text runs [{text, bold, italic, color}]
 
@@ -35,6 +38,7 @@ class SheetInfo(TypedDict, total=False):
     kind: str      # "worksheet" | "chartsheet"
     rows: list[list[Cell]]
     state: str     # "visible" | "hidden" | "veryHidden"
+    hidden_cols: list[tuple[int, int]]  # (min_col, max_col) ranges from <cols>
 
 
 class ParsedWorkbook(TypedDict):

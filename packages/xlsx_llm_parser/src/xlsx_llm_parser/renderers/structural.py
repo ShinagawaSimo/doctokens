@@ -74,6 +74,14 @@ def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None) -> 
     if not rows:
         return
 
+    if density != "plain":
+        # Hidden column ranges from <cols> — output before <grid>
+        hidden_cols = sheet.get("hidden_cols")
+        if hidden_cols:
+            for cmin, cmax in hidden_cols:
+                col_range = _col_letter(cmin) if cmin == cmax else f"{_col_letter(cmin)}:{_col_letter(cmax)}"
+                yield f"<columns ref={col_range} hidden>\n"
+
     if density == "plain":
         yield from _render_plain(rows)
     else:
@@ -132,7 +140,14 @@ def _render_grid(rows: list[list[Cell]], density: Density,
 def _render_row(row_cells: list[Cell], grid_min_col: int, density: Density,
                 wb: ParsedWorkbook | None = None) -> str:
     actual_row = row_cells[0]["row"]
-    parts = [f"<tr row={actual_row}>"]
+    first_cell = row_cells[0]
+    row_hidden = " hidden" if first_cell.get("hidden") else ""
+    parts = [f"<tr row={actual_row}{row_hidden}"]
+    if density == "semantic" and first_cell.get("outlineLevel"):
+        parts.append(f" outlineLevel={first_cell['outlineLevel']}")
+        if first_cell.get("collapsed"):
+            parts.append(" collapsed")
+    parts.append(">")
 
     fmt_index = wb.get("fmt_index") if wb is not None else None
 

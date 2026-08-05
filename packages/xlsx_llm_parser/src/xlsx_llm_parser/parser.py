@@ -34,7 +34,10 @@ def parse_xlsx(source: str | Path | bytes) -> ParsedWorkbook:
 
         for sheet in sheets:
             if sheet.get("kind") != "chartsheet":
-                sheet["rows"] = _parse_sheet(pkg, sheet["part"], sst, rich_map, fmt_index)
+                rows, hidden_cols = _parse_sheet(pkg, sheet["part"], sst, rich_map, fmt_index)
+                sheet["rows"] = rows
+                if hidden_cols:
+                    sheet["hidden_cols"] = hidden_cols
 
     return {
         "sheets": sheets,
@@ -140,21 +143,35 @@ def _parse_sheet(
     pkg: PackageReader, part: str, sst: list[str],
     rich_map: dict[int, list[dict]] | None = None,
     fmt_index: FormatIndex | None = None,
-) -> list[list[Cell]]:
-    """Parse a single worksheet XML into typed cell rows."""
+) -> tuple[list[list[Cell]], list[tuple[int, int]]]:
+    """Parse a single worksheet XML into typed cell rows and hidden-col ranges."""
     if not pkg.exists(part):
-        return []
+        return [], []
 
     with pkg.open_entry(part) as stream:
         root = ET.parse(stream).getroot()
 
+    # Column definitions (hidden, width, outline) — parsed before sheetData.
+    hidden_cols: list[tuple[int, int]] = []
+    cols_elem = root.find(f"{{{NS_S}}}cols")
+    if cols_elem is not None:
+        for col_elem in cols_elem.findall(f"{{{NS_S}}}col"):
+            if col_elem.get("hidden") == "1":
+                cmin = int(col_elem.get("min", "1"))
+                cmax = int(col_elem.get("max", cmin))
+                hidden_cols.append((cmin, cmax))
+
     sheet_data = root.find(f"{{{NS_S}}}sheetData")
     if sheet_data is None:
-        return []
+        return [], hidden_cols
 
     rows: list[list[Cell]] = []
     for row_elem in sheet_data.findall(f"{{{NS_S}}}row"):
         row_num = int(row_elem.get("r", "0"))
+        row_hidden = row_elem.get("hidden") == "1"
+        outline_level_str = row_elem.get("outlineLevel")
+        outline_level = int(outline_level_str) if outline_level_str else 0
+        collapsed = row_elem.get("collapsed") == "1"
         cells: list[Cell] = []
         for cell_elem in row_elem.findall(f"{{{NS_S}}}c"):
             ref = cell_elem.get("r", "")
@@ -229,6 +246,12 @@ def _parse_sheet(
                     formula = f_elem.text
 
             cell: Cell = {"ref": ref, "row": row_num or row, "col": col, "text": text}
+            if row_hidden:
+                cell["hidden"] = True
+            if outline_level:
+                cell["outlineLevel"] = outline_level
+                if collapsed:
+                    cell["collapsed"] = True
             # Attach rich text runs for semantic rendering
             if rich_map is not None and cell_type == "s" and v_elem is not None and v_elem.text:
                 try:
@@ -261,7 +284,7 @@ def _parse_sheet(
     # Mark dynamic array spill relationships
     _apply_spill_ranges(rows)
 
-    return rows
+    return rows, hidden_cols
 
 
 def _apply_merge_cells(root: ET.Element, rows: list[list[Cell]]) -> None:

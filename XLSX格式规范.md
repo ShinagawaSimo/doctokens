@@ -122,9 +122,30 @@ part = render_range(wb, "Sheet1", "A1:H30")     # 按范围筛选
 - `render_range(wb, sheet, range, *, density)` — 渲染指定 A1 范围
 - `iter_workbook(wb, *, density)` — 流式渲染
 
+## 公式
+
+semantic 密度下，`<td>` 可带公式属性：
+
+```
+<tr row=1><td formula="SUM(B1:B10)">42
+<tr row=2><td formulaType=array formulaRange=A1:C3>1
+```
+
+共享公式自动展开：slave 单元格通过 `si` 索引找到 master，应用行列偏移量生成各自公式文本。
+
+## 合并单元格
+
+semantic 密度下，左上角单元格输出 `colspan=N rowspan=N`，shadow 格跳过：
+
+## 样式（仅 semantic）
+
+`<td>` 可带 `bold`、`italic`、`underline`、`color=#RRGGBB`、`fill=#RRGGBB` 属性。
+
+## 富文本（仅 semantic）
+
+共享字符串中的格式化 run 展开为内联 `<b>`、`<i>`、`<u>`、`<color>` 标记。
+
 ## 尚未支持
 
-- 公式原文保存
-- 合并单元格
-- 富文本格式、超链接、批注
+- 超链接、批注
 - 图表、数据透视表、图片

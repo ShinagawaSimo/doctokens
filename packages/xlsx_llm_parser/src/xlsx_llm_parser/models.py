@@ -39,6 +39,7 @@ class SheetInfo(TypedDict, total=False):
     rows: list[list[Cell]]
     state: str     # "visible" | "hidden" | "veryHidden"
     hidden_cols: list[tuple[int, int]]  # (min_col, max_col) ranges from <cols>
+    sheet_protection: bool  # True when <sheetProtection> is present
 
 
 class ParsedWorkbook(TypedDict):

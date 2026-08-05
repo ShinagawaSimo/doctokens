@@ -45,10 +45,12 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
 
         for sheet in sheets:
             if sheet.get("kind") != "chartsheet":
-                rows, hidden_cols = _parse_sheet(pkg, sheet["part"], sst, rich_map, fmt_index)
+                rows, hidden_cols, sheet_protection = _parse_sheet(pkg, sheet["part"], sst, rich_map, fmt_index)
                 sheet["rows"] = rows
                 if hidden_cols:
                     sheet["hidden_cols"] = hidden_cols
+                if sheet_protection:
+                    sheet["sheet_protection"] = True
 
     return {
         "sheets": sheets,
@@ -154,13 +156,17 @@ def _parse_sheet(
     pkg: PackageReader, part: str, sst: list[str],
     rich_map: dict[int, list[dict]] | None = None,
     fmt_index: FormatIndex | None = None,
-) -> tuple[list[list[Cell]], list[tuple[int, int]]]:
-    """Parse a single worksheet XML into typed cell rows and hidden-col ranges."""
+) -> tuple[list[list[Cell]], list[tuple[int, int]], bool]:
+    """Parse a single worksheet XML into typed cell rows, hidden-col ranges,
+    and sheet-protection flag."""
     if not pkg.exists(part):
-        return [], []
+        return [], [], False
 
     with pkg.open_entry(part) as stream:
         root = ET.parse(stream).getroot()
+
+    # Sheet protection (presence only — details stay in IR).
+    sheet_protection = root.find(f"{{{NS_S}}}sheetProtection") is not None
 
     # Column definitions (hidden, width, outline) — parsed before sheetData.
     hidden_cols: list[tuple[int, int]] = []
@@ -174,7 +180,7 @@ def _parse_sheet(
 
     sheet_data = root.find(f"{{{NS_S}}}sheetData")
     if sheet_data is None:
-        return [], hidden_cols
+        return [], hidden_cols, sheet_protection
 
     rows: list[list[Cell]] = []
     for row_elem in sheet_data.findall(f"{{{NS_S}}}row"):
@@ -296,7 +302,7 @@ def _parse_sheet(
     # Mark dynamic array spill relationships
     _apply_spill_ranges(rows)
 
-    return rows, hidden_cols
+    return rows, hidden_cols, sheet_protection
 
 
 def _apply_merge_cells(root: ET.Element, rows: list[list[Cell]]) -> None:

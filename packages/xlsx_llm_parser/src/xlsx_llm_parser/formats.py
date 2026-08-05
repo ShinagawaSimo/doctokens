@@ -57,8 +57,8 @@ class FormatIndex:
     """Cell → display-value and style resolver built from styles.xml."""
 
     def __init__(self) -> None:
-        # cellXfs index → (numFmtId, formatCode, fontId, fillId)
-        self._cell_formats: list[tuple[int, str, int, int]] = []
+        # cellXfs index → (numFmtId, formatCode, fontId, fillId, locked, formulaHidden)
+        self._cell_formats: list[tuple[int, str, int, int, bool, bool]] = []
         # numFmtId → (is_date, is_pct)
         self._fmt_cache: dict[int, tuple[bool, bool]] = {}
         # style_index → resolved attribute string ("" = no styles)
@@ -79,8 +79,12 @@ class FormatIndex:
         self._fills.append(fill_info)
 
     def register_cell_format(self, num_fmt_id: int, format_code: str,
-                             font_id: int = 0, fill_id: int = 0) -> None:
-        self._cell_formats.append((num_fmt_id, format_code, font_id, fill_id))
+                             font_id: int = 0, fill_id: int = 0,
+                             locked: bool = True,
+                             formula_hidden: bool = False) -> None:
+        self._cell_formats.append(
+            (num_fmt_id, format_code, font_id, fill_id, locked, formula_hidden)
+        )
 
     def format_value(self, style_index: int | None, raw: str) -> str:
         """Apply number formatting to a raw cell value string."""
@@ -91,7 +95,7 @@ class FormatIndex:
         except ValueError:
             return raw
 
-        num_fmt_id, fmt_code, _font_id, _fill_id = self._cell_formats[style_index]
+        num_fmt_id, fmt_code, _font_id, _fill_id, _locked, _hidden = self._cell_formats[style_index]
         is_date, is_pct = self._resolve(num_fmt_id, fmt_code)
 
         if is_date:
@@ -105,7 +109,7 @@ class FormatIndex:
         if style_index is None or style_index >= len(self._cell_formats):
             return ""
         if style_index not in self._style_attrs_cache:
-            _num_fmt_id, _fmt_code, font_id, fill_id = self._cell_formats[style_index]
+            _num_fmt_id, _fmt_code, font_id, fill_id, _locked, _hidden = self._cell_formats[style_index]
             parts = []
             if font_id < len(self._fonts):
                 font = self._fonts[font_id]
@@ -123,6 +127,23 @@ class FormatIndex:
                     parts.append(f"fill={fill['fill']}")
             self._style_attrs_cache[style_index] = " ".join(parts)
         return self._style_attrs_cache[style_index]
+
+    def protection_attrs(self, style_index: int | None) -> str:
+        """Return protection-related attributes (''unlocked'' / ''formulaHidden'')
+        when the cell deviates from the Excel default (locked, formula visible).
+
+        Only meaningful when sheet protection is active; callers must check that
+        separately.
+        """
+        if style_index is None or style_index >= len(self._cell_formats):
+            return ""
+        _num_fmt_id, _fmt_code, _font_id, _fill_id, locked, formula_hidden = self._cell_formats[style_index]
+        parts = []
+        if not locked:
+            parts.append("unlocked")
+        if formula_hidden:
+            parts.append("formulaHidden")
+        return " ".join(parts)
 
     def _resolve(self, num_fmt_id: int, fmt_code: str) -> tuple[bool, bool]:
         if num_fmt_id not in self._fmt_cache:
@@ -198,7 +219,15 @@ def parse_styles(pkg: PackageReader) -> FormatIndex:
             font_id = int(xf.get("fontId", "0"))
             fill_id = int(xf.get("fillId", "0"))
             code = custom_fmts.get(fid, "")
-            index.register_cell_format(fid, code, font_id, fill_id)
+            locked = True
+            formula_hidden = False
+            protection = xf.find(f"{{{NS_S}}}protection")
+            if protection is not None:
+                if protection.get("locked") == "0":
+                    locked = False
+                if protection.get("hidden") == "1":
+                    formula_hidden = True
+            index.register_cell_format(fid, code, font_id, fill_id, locked, formula_hidden)
 
     return index
 

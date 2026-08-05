@@ -82,6 +82,9 @@ def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None) -> 
                 col_range = _col_letter(cmin) if cmin == cmax else f"{_col_letter(cmin)}:{_col_letter(cmax)}"
                 yield f"<columns ref={col_range} hidden>\n"
 
+    if density == "semantic" and sheet.get("sheet_protection"):
+        yield "<sheetProtection/>\n"
+
     if density == "plain":
         yield from _render_plain(rows)
     else:
@@ -178,6 +181,9 @@ def _render_row(row_cells: list[Cell], grid_min_col: int, density: Density,
                 style = fmt_index.style_attrs(cell["style"])
                 if style:
                     tag_attrs += f" {style}"
+                prot = fmt_index.protection_attrs(cell["style"])
+                if prot:
+                    tag_attrs += f" {prot}"
         if c != next_col:
             tag_attrs += f" col={_col_letter(c)}"
         parts.append(f"<{tag_attrs}>")

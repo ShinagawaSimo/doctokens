@@ -4,7 +4,7 @@ import io
 import unittest
 import zipfile
 
-from xlsx_llm_parser import parse_xlsx, render_workbook
+from xlsx_llm_parser import render_workbook
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_R = "http://schemas.openxmlformats.org/package/2006/relationships"
@@ -90,8 +90,7 @@ class MinimalParseTests(unittest.TestCase):
             },
         )
 
-        wb = parse_xlsx(data)
-        html = render_workbook(wb)
+        html = render_workbook(data)
         self.assertIn("Widget", html)
         self.assertIn("99", html)
         self.assertIn("sheet name=Sheet1", html)
@@ -110,8 +109,7 @@ class MinimalParseTests(unittest.TestCase):
                 "xl/worksheets/sheet1.xml": _sheet_xml([]),
             },
         )
-        wb = parse_xlsx(data)
-        html = render_workbook(wb)
+        html = render_workbook(data)
         self.assertIn("<sheet name=Empty>", html)
         self.assertNotIn("<grid", html)
 
@@ -133,8 +131,7 @@ class MinimalParseTests(unittest.TestCase):
                 ),
             },
         )
-        wb = parse_xlsx(data)
-        html = render_workbook(wb)
+        html = render_workbook(data)
         self.assertIn("true", html)
         self.assertIn("#N/A", html)
 

@@ -4,7 +4,7 @@ import io
 import unittest
 import zipfile
 
-from xlsx_llm_parser import parse_xlsx, render_workbook
+from xlsx_llm_parser import render_workbook
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -94,8 +94,7 @@ class DateDecodingTests(unittest.TestCase):
                 '<row r="1"><c r="A1" s="0"><v>44927</v></c></row>'
             ],
         )
-        wb = parse_xlsx(data)
-        html = render_workbook(wb)
+        html = render_workbook(data)
         # 44927 = 2023-01-01
         self.assertIn("2023-01-01", html)
 
@@ -107,8 +106,7 @@ class DateDecodingTests(unittest.TestCase):
                 '<row r="1"><c r="A1" s="0"><v>44927.5</v></c></row>'
             ],
         )
-        wb = parse_xlsx(data)
-        html = render_workbook(wb)
+        html = render_workbook(data)
         self.assertIn("2023-01-01", html)
 
     def test_date_1904_system(self) -> None:
@@ -120,8 +118,7 @@ class DateDecodingTests(unittest.TestCase):
             ],
             date_1904=True,
         )
-        wb = parse_xlsx(data)
-        html = render_workbook(wb)
+        html = render_workbook(data)
         self.assertIn("1904-01-02", html)
 
     def test_plain_number_not_formatted(self) -> None:
@@ -132,8 +129,7 @@ class DateDecodingTests(unittest.TestCase):
                 '<row r="1"><c r="A1" s="0"><v>123.456</v></c></row>'
             ],
         )
-        wb = parse_xlsx(data)
-        html = render_workbook(wb)
+        html = render_workbook(data)
         self.assertIn("123.456", html)
 
     def test_missing_styles_file(self) -> None:
@@ -176,8 +172,7 @@ class DateDecodingTests(unittest.TestCase):
                 ),
             },
         )
-        wb = parse_xlsx(data)
-        html = render_workbook(wb)
+        html = render_workbook(data)
         self.assertIn("44927", html)
 
     def test_percentage_format(self) -> None:
@@ -188,8 +183,7 @@ class DateDecodingTests(unittest.TestCase):
                 '<row r="1"><c r="A1" s="0"><v>0.125</v></c></row>'
             ],
         )
-        wb = parse_xlsx(data)
-        html = render_workbook(wb)
+        html = render_workbook(data)
         self.assertIn("12.5%", html)
 
     def test_custom_date_format(self) -> None:
@@ -201,8 +195,7 @@ class DateDecodingTests(unittest.TestCase):
             ],
             custom_fmts=['<numFmt numFmtId="164" formatCode="yyyy-mm-dd"/>'],
         )
-        wb = parse_xlsx(data)
-        html = render_workbook(wb)
+        html = render_workbook(data)
         self.assertIn("2023-01-01", html)
 
 

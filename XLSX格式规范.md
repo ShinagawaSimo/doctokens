@@ -39,7 +39,7 @@ XLSX 默认密度为 structural。输出首行标记密度（如 `density=struct
 ### 网格 `<grid>`
 
 ```
-<grid ref=A1:D5>
+<grid ref=A1:E5>
 <tr row=1><td>Product<td>Q1<td>Q2<td>Q3
 <tr row=2><td>Widget<td>99<td col=E>150
 <tr row=5><td>Gadget<td col=D>42
@@ -52,16 +52,10 @@ XLSX 默认密度为 structural。输出首行标记密度（如 `density=struct
 
 ### 大表格截断
 
-超出预算（200 格 / 20 行 / 12 列）时保留 head + tail 样本，`grid ref` 显示完整范围并标记 `truncated`：
+超出预算（500 格 / 50 行 / 30 列）时不输出行数据，仅标记 `truncated`，由模型通过 `render_range` 按需读取：
 
 ```
-<grid ref=A1:A50000 truncated>
-<tr row=1><td>Header
-...
-<tr row=8><td>Row8
-<tr row=49997><td>Row49997
-...
-<tr row=50000><td>Row50000
+<grid ref=A1:Z1000 truncated>
 ```
 
 ### 坐标规则

@@ -4,7 +4,7 @@ import io
 import unittest
 import zipfile
 
-from xlsx_llm_parser import parse_xlsx, render_workbook
+from xlsx_llm_parser import render_workbook
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -68,9 +68,8 @@ class StyleTests(unittest.TestCase):
                 ),
             },
         )
-        wb = parse_xlsx(data)
-        structural = render_workbook(wb, density="structural")
-        semantic = render_workbook(wb, density="semantic")
+        structural = render_workbook(data, density="structural")
+        semantic = render_workbook(data, density="semantic")
         self.assertNotIn("bold", structural)
         self.assertIn("bold", semantic)
         self.assertIn("color=#FF0000", semantic)
@@ -123,8 +122,7 @@ class StyleTests(unittest.TestCase):
                 ),
             },
         )
-        wb = parse_xlsx(data)
-        semantic = render_workbook(wb, density="semantic")
+        semantic = render_workbook(data, density="semantic")
         self.assertIn("fill=#FFFF00", semantic)
 
     def test_no_styles_file(self) -> None:
@@ -167,8 +165,7 @@ class StyleTests(unittest.TestCase):
                 ),
             },
         )
-        wb = parse_xlsx(data)
-        semantic = render_workbook(wb, density="semantic")
+        semantic = render_workbook(data, density="semantic")
         self.assertIn("Hi", semantic)
         self.assertNotIn("bold", semantic)
 

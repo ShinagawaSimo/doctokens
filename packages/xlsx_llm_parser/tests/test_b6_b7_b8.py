@@ -4,7 +4,7 @@ import io
 import unittest
 import zipfile
 
-from xlsx_llm_parser import iter_workbook, parse_xlsx, render_range, render_workbook
+from xlsx_llm_parser import iter_workbook, render_range, render_workbook
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -69,9 +69,8 @@ class StreamingTests(unittest.TestCase):
                 ),
             },
         )
-        wb = parse_xlsx(data)
-        full = render_workbook(wb)
-        streamed = "".join(iter_workbook(wb))
+        full = render_workbook(data)
+        streamed = "".join(iter_workbook(data))
         self.assertEqual(full, streamed)
         self.assertIn("density=structural", full)
 
@@ -109,10 +108,9 @@ class StreamingTests(unittest.TestCase):
                 ),
             },
         )
-        wb = parse_xlsx(data)
         for density in ("plain", "structural"):
             with self.subTest(density=density):
-                html = render_workbook(wb, density=density)
+                html = render_workbook(data, density=density)
                 self.assertTrue(html.startswith(f"density={density}"))
 
 
@@ -169,37 +167,27 @@ class TruncationTests(unittest.TestCase):
     def test_small_sheet_not_truncated(self) -> None:
         """10 rows within budget: no truncation."""
         data = self._make_sheet(10)
-        wb = parse_xlsx(data)
-        html = render_workbook(wb)
+        html = render_workbook(data)
         self.assertNotIn("truncated", html)
 
     def test_large_sheet_truncated(self) -> None:
-        """30 rows exceeds _ROW_BUDGET (20): truncated with head+tail."""
-        data = self._make_sheet(30)
-        wb = parse_xlsx(data)
-        html = render_workbook(wb)
+        """60 rows exceeds _ROW_BUDGET (50): truncated, no data rows."""
+        data = self._make_sheet(60)
+        html = render_workbook(data)
         self.assertIn("truncated", html)
-        # Head rows present
-        self.assertIn("Row1", html)
-        self.assertIn("Row8", html)
-        # Tail rows present (from end)
-        self.assertIn("Row27", html)
-        self.assertIn("Row30", html)
-        # Middle rows absent
-        self.assertNotIn("Row15", html)
+        # No data rows — only grid ref
+        self.assertNotIn("<tr", html)
 
     def test_truncated_grid_ref_shows_full_range(self) -> None:
-        """Grid ref must always show the full data bounds, not the sample."""
-        data = self._make_sheet(30)
-        wb = parse_xlsx(data)
-        html = render_workbook(wb)
-        self.assertIn("<grid ref=A1:A30 truncated>", html)
+        """Grid ref must always show the full data bounds."""
+        data = self._make_sheet(60)
+        html = render_workbook(data)
+        self.assertIn("<grid ref=A1:A60 truncated>", html)
 
     def test_range_reading_not_truncated(self) -> None:
         """render_range always shows full results, no truncation."""
         data = self._make_sheet(50)
-        wb = parse_xlsx(data)
-        html = render_range(wb, "Data", "A1:A5")
+        html = render_range(data, "Data", "A1:A5")
         self.assertNotIn("truncated", html)
         self.assertIn("Row1", html)
         self.assertIn("Row5", html)
@@ -254,8 +242,7 @@ class PlainDensityTests(unittest.TestCase):
                 ),
             },
         )
-        wb = parse_xlsx(data)
-        html = render_workbook(wb, density="plain")
+        html = render_workbook(data, density="plain")
         self.assertIn("density=plain", html)
         self.assertNotIn("<tr", html)
         self.assertNotIn("<td", html)

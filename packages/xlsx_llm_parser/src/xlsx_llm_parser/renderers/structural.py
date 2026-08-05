@@ -10,11 +10,7 @@ from ._constants import (
     _CELL_BUDGET,
     _COL_BUDGET,
     _GRID_BOUND_SENTINEL,
-    _HEAD_COLS,
-    _HEAD_ROWS,
     _ROW_BUDGET,
-    _TAIL_COLS,
-    _TAIL_ROWS,
 )
 
 Density = str  # "plain" | "structural" | "semantic"
@@ -104,12 +100,7 @@ def _render_grid(rows: list[list[Cell]], density: Density,
     if not rows:
         return ""
 
-    all_rows = rows
-    truncated = _should_truncate(rows)
-    if truncated:
-        all_rows = _head_tail_rows(rows)
-
-    # Compute grid ref from ALL rows (full range), not the sampled subset
+    # Compute grid ref from all rows
     min_col = _GRID_BOUND_SENTINEL
     max_col = 0
     min_row = _GRID_BOUND_SENTINEL
@@ -127,11 +118,12 @@ def _render_grid(rows: list[list[Cell]], density: Density,
 
     ref = f"{_col_letter(min_col)}{min_row}:{_col_letter(max_col)}{max_row}"
     tag = f"<grid ref={ref}"
-    if truncated:
-        tag += " truncated"
-    parts = [tag + ">\n"]
+    if _should_truncate(rows):
+        # Large sheet: only show the range, no data rows
+        return tag + " truncated>\n"
 
-    for row_cells in all_rows:
+    parts = [tag + ">\n"]
+    for row_cells in rows:
         parts.append(_render_row(row_cells, min_col, density, wb))
 
     return "".join(parts)
@@ -191,39 +183,6 @@ def _should_truncate(rows: list[list[Cell]]) -> bool:
         for cell in row_cells:
             col_set.add(cell["col"])
     return cell_count > _CELL_BUDGET or len(rows) > _ROW_BUDGET or len(col_set) > _COL_BUDGET
-
-
-def _head_tail_rows(rows: list[list[Cell]]) -> list[list[Cell]]:
-    """Keep head + tail rows. For wide tables, also restrict columns per row."""
-    if len(rows) <= _HEAD_ROWS + _TAIL_ROWS:
-        return rows
-
-    # Compute column set for truncation
-    col_set: set[int] = set()
-    for row_cells in rows:
-        for cell in row_cells:
-            col_set.add(cell["col"])
-    cols = sorted(col_set)
-
-    should_truncate_cols = len(cols) > _COL_BUDGET
-    keep_cols: set[int] = set()
-    if should_truncate_cols:
-        keep_cols = set(cols[:_HEAD_COLS]) | set(cols[-_TAIL_COLS:])
-    else:
-        keep_cols = set(cols)
-
-    result: list[list[Cell]] = []
-    for row_cells in rows[:_HEAD_ROWS]:
-        if should_truncate_cols:
-            row_cells = [c for c in row_cells if c["col"] in keep_cols]
-        result.append(row_cells)
-
-    for row_cells in rows[-_TAIL_ROWS:]:
-        if should_truncate_cols:
-            row_cells = [c for c in row_cells if c["col"] in keep_cols]
-        result.append(row_cells)
-
-    return result
 
 
 # ── Helpers ──

@@ -4,7 +4,7 @@ import io
 import unittest
 import zipfile
 
-from xlsx_llm_parser import parse_xlsx, render_range
+from xlsx_llm_parser import render_range
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -64,8 +64,7 @@ class RangeReadingTests(unittest.TestCase):
                 ),
             },
         )
-        wb = parse_xlsx(data)
-        html = render_range(wb, "Data", "A1:A1")
+        html = render_range(data, "Data", "A1:A1")
         self.assertIn("Name", html)
         self.assertNotIn("Age", html)
         self.assertNotIn("City", html)
@@ -112,8 +111,7 @@ class RangeReadingTests(unittest.TestCase):
                 ),
             },
         )
-        wb = parse_xlsx(data)
-        html = render_range(wb, "Data", "A2:A3")
+        html = render_range(data, "Data", "A2:A3")
         self.assertNotIn("H1", html)
         self.assertIn("D1", html)
         self.assertIn("D2", html)
@@ -159,8 +157,7 @@ class RangeReadingTests(unittest.TestCase):
                 ),
             },
         )
-        wb = parse_xlsx(data)
-        html = render_range(wb, "Data", "A5:A10")
+        html = render_range(data, "Data", "A5:A10")
         self.assertIn("<tr row=5>", html)
         self.assertIn("<tr row=10>", html)
 
@@ -199,9 +196,8 @@ class RangeReadingTests(unittest.TestCase):
                 ),
             },
         )
-        wb = parse_xlsx(data)
         with self.assertRaises(ValueError):
-            render_range(wb, "NoSuch", "A1:B2")
+            render_range(data, "NoSuch", "A1:B2")
 
     def test_invalid_range_raises(self) -> None:
         data = _make_xlsx(
@@ -237,9 +233,8 @@ class RangeReadingTests(unittest.TestCase):
                 ),
             },
         )
-        wb = parse_xlsx(data)
         with self.assertRaises(ValueError):
-            render_range(wb, "S", "A1")  # no colon
+            render_range(data, "S", "A1")  # no colon
 
 
 if __name__ == "__main__":

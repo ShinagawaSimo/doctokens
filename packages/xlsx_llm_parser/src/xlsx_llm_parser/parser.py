@@ -218,12 +218,51 @@ def _parse_sheet(
 
         rows.append(cells)
 
-    # Expand shared formulas: resolve si references to actual formula text
-    all_cells = [c for row_cells in rows for c in row_cells if "si" in c]
-    if all_cells:
-        expand_shared_formulas(all_cells)
+    # Expand shared formulas
+    all_formula_cells = [c for row_cells in rows for c in row_cells if "si" in c]
+    if all_formula_cells:
+        expand_shared_formulas(all_formula_cells)
+
+    # Parse merge cells and mark shadow cells
+    _apply_merge_cells(root, rows)
 
     return rows
+
+
+def _apply_merge_cells(root: ET.Element, rows: list[list[Cell]]) -> None:
+    """Parse <mergeCells> and mark anchor cells with colspan/rowspan,
+    shadow cells with shadow=True (excluded from rendering)."""
+    merge_cells = root.find(f"{{{NS_S}}}mergeCells")
+    if merge_cells is None:
+        return
+
+    # Build coordinate → cell lookup
+    cell_map: dict[tuple[int, int], Cell] = {}
+    for row_cells in rows:
+        for c in row_cells:
+            cell_map[(c["col"], c["row"])] = c
+
+    for mc in merge_cells.findall(f"{{{NS_S}}}mergeCell"):
+        ref = mc.get("ref", "")
+        if ":" not in ref:
+            continue
+        start_ref, end_ref = ref.split(":", 1)
+        sc, sr = _parse_ref(start_ref)
+        ec, er = _parse_ref(end_ref)
+
+        anchor = cell_map.get((sc, sr))
+        if anchor is not None:
+            anchor["colspan"] = ec - sc + 1
+            anchor["rowspan"] = er - sr + 1
+
+        # Mark shadow cells
+        for r in range(sr, er + 1):
+            for c in range(sc, ec + 1):
+                if c == sc and r == sr:
+                    continue
+                shadow = cell_map.get((c, r))
+                if shadow is not None:
+                    shadow["shadow"] = True
 
 
 def _parse_ref(ref: str) -> tuple[int, int]:

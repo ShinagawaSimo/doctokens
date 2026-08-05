@@ -142,9 +142,17 @@ def _render_row(row_cells: list[Cell], grid_min_col: int, density: Density) -> s
 
     next_col = grid_min_col
     for cell in row_cells:
+        if cell.get("shadow"):
+            next_col = cell["col"] + (cell.get("colspan", 1))
+            continue
+
         c = cell["col"]
         tag_attrs = "td"
         if density == "semantic":
+            if cell.get("colspan", 1) > 1:
+                tag_attrs += f" colspan={cell['colspan']}"
+            if cell.get("rowspan", 1) > 1:
+                tag_attrs += f" rowspan={cell['rowspan']}"
             if cell.get("formula"):
                 tag_attrs += f' formula="{escape(cell["formula"], quote=True)}"'
             if cell.get("formulaType"):
@@ -155,7 +163,7 @@ def _render_row(row_cells: list[Cell], grid_min_col: int, density: Density) -> s
             tag_attrs += f" col={_col_letter(c)}"
         parts.append(f"<{tag_attrs}>")
         parts.append(escape(cell["text"]))
-        next_col = c + 1
+        next_col = c + (cell.get("colspan", 1))
 
     parts.append("\n")
     return "".join(parts)

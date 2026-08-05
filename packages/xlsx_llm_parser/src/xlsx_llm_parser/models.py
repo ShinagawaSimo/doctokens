@@ -18,6 +18,9 @@ class Cell(TypedDict, total=False):
     shared_ref: str   # shared formula range (master cell only)
     formulaType: str  # "array" | "dataTable"
     formulaRange: str # array/dataTable range from <f ref=...>
+    colspan: int      # merge: column span for anchor cell
+    rowspan: int      # merge: row span for anchor cell
+    shadow: bool      # merge: true for cells covered by a merge anchor
 
 
 class SheetInfo(TypedDict, total=False):

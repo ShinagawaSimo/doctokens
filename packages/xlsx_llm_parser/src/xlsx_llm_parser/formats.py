@@ -13,6 +13,24 @@ from xml.etree import ElementTree as ET
 from ooxml_llm_core.package import PackageReader
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+
+# Theme color slot order (ECMA-376 §20.1.6.2).
+_THEME_SLOTS = [
+    "dk1", "lt1", "dk2", "lt2",
+    "accent1", "accent2", "accent3", "accent4", "accent5", "accent6",
+    "hlink", "folHlink",
+]
+
+# Office default theme colors (fallback when theme1.xml is absent).
+_DEFAULT_THEME: dict[int, str] = {
+    idx: rgb
+    for idx, rgb in enumerate([
+        "000000", "FFFFFF", "44546A", "E7E6E6",
+        "4472C4", "ED7D31", "A5A5A5", "FFC000",
+        "5B9BD5", "70AD47", "0563C1", "954F72",
+    ])
+}
 
 # numFmtId ranges for built-in date / time formats (ECMA-376 §18.8.30).
 _BUILTIN_DATE_IDS: set[int] = set()
@@ -125,6 +143,9 @@ def parse_styles(pkg: PackageReader) -> FormatIndex:
     if not pkg.exists("xl/styles.xml"):
         return index
 
+    # Resolve theme colors so that theme="N" can be mapped to RGB.
+    theme = _parse_theme(pkg)
+
     with pkg.open_entry("xl/styles.xml") as stream:
         root = ET.parse(stream).getroot()
 
@@ -150,9 +171,9 @@ def parse_styles(pkg: PackageReader) -> FormatIndex:
                 info["underline"] = True
             color = font.find(f"{{{NS_S}}}color")
             if color is not None:
-                rgb = color.get("rgb")
-                if rgb and rgb != "00000000":
-                    info["color"] = f"#{_rgb_hex(rgb)}"
+                resolved = _resolve_color(color, theme)
+                if resolved:
+                    info["color"] = f"#{resolved}"
             index.register_font(info)
 
     # Fills: indexed by position
@@ -164,9 +185,9 @@ def parse_styles(pkg: PackageReader) -> FormatIndex:
             if pf is not None:
                 fg = pf.find(f"{{{NS_S}}}fgColor")
                 if fg is not None:
-                    rgb = fg.get("rgb")
-                    if rgb and rgb != "00000000":
-                        fill_info["fill"] = f"#{_rgb_hex(rgb)}"
+                    resolved = _resolve_color(fg, theme)
+                    if resolved:
+                        fill_info["fill"] = f"#{resolved}"
             index.register_fill(fill_info)
 
     # Cell formats: each references numFmtId, fontId, fillId
@@ -187,6 +208,88 @@ def _rgb_hex(rgb: str) -> str:
     if len(rgb) == 8:
         return rgb[2:]  # strip alpha
     return rgb
+
+
+def _parse_theme(pkg: PackageReader) -> dict[int, str]:
+    """Parse xl/theme/theme1.xml into index → RRGGBB hex mapping.
+
+    Returns the Office default theme when the part is missing.
+    """
+    if not pkg.exists("xl/theme/theme1.xml"):
+        return _DEFAULT_THEME.copy()
+
+    with pkg.open_entry("xl/theme/theme1.xml") as stream:
+        root = ET.parse(stream).getroot()
+
+    scheme = root.find(f"{{{NS_A}}}themeElements/{{{NS_A}}}clrScheme")
+    if scheme is None:
+        return _DEFAULT_THEME.copy()
+
+    mapping: dict[int, str] = {}
+    for idx, slot in enumerate(_THEME_SLOTS):
+        elem = scheme.find(f"{{{NS_A}}}{slot}")
+        if elem is not None:
+            srgb = elem.find(f"{{{NS_A}}}srgbClr")
+            if srgb is not None:
+                val = srgb.get("val", "")
+                if val:
+                    mapping[idx] = val
+                    continue
+        mapping[idx] = _DEFAULT_THEME.get(idx, "000000")
+    return mapping
+
+
+def _resolve_color(color_elem: ET.Element, theme: dict[int, str]) -> str | None:
+    """Extract a RRGGBB hex string from an OOXML <color> element.
+
+    Handles ``rgb`` attribute (explicit), ``theme`` attribute (resolved
+    against the current theme), and optional ``tint`` for light/dark
+    variations.
+    """
+    # Explicit RGB — the common case; black placeholder is skipped.
+    rgb = color_elem.get("rgb")
+    if rgb and rgb != "00000000":
+        return _rgb_hex(rgb)
+
+    # Theme color reference
+    theme_str = color_elem.get("theme")
+    if theme_str is not None:
+        try:
+            idx = int(theme_str)
+            base = theme.get(idx)
+            if base is None:
+                return None
+            tint_str = color_elem.get("tint")
+            if tint_str is not None:
+                try:
+                    return _apply_tint(base, float(tint_str))
+                except ValueError:
+                    pass
+            return base
+        except ValueError:
+            pass
+
+    return None
+
+
+def _apply_tint(rgb_hex: str, tint: float) -> str:
+    """Mix an OOXML tint value into a RRGGBB hex colour.
+
+    Negative *tint* darkens (moves toward black), positive *tint* lightens
+    (moves toward white).  The linear interpolation is defined in
+    ECMA-376 §20.1.2.3.29.
+    """
+    if tint == 0:
+        return rgb_hex
+
+    channels = (int(rgb_hex[i : i + 2], 16) for i in (0, 2, 4))
+    if tint < 0:
+        factor = 1 + tint  # tint is negative → darken
+        result = (max(0, min(255, int(c * factor))) for c in channels)
+    else:
+        # tint > 0 → lighten toward white
+        result = (max(0, min(255, int(c * (1 - tint) + 255 * tint))) for c in channels)
+    return "".join(f"{c:02X}" for c in result)
 
 
 def _decode_date(serial: float, date_1904: bool) -> str:

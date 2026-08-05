@@ -169,6 +169,138 @@ class StyleTests(unittest.TestCase):
         self.assertIn("Hi", semantic)
         self.assertNotIn("bold", semantic)
 
+    def test_theme_font_color_resolved(self) -> None:
+        """Font colour specified via theme accent2 → resolved to RGB."""
+        data = _make_xlsx(
+            {
+                "[Content_Types].xml": (
+                    f'<Types xmlns="{NS_CT}">'
+                    '<Default Extension="xml" ContentType="application/xml"/>'
+                    '<Default Extension="rels" ContentType='
+                    '"application/vnd.openxmlformats-package.relationships+xml"/>'
+                    '<Override PartName="/xl/workbook.xml" '
+                    'ContentType="application/vnd.openxmlformats-officedocument.'
+                    'spreadsheetml.sheet.main+xml"/>'
+                    "</Types>"
+                ),
+                "_rels/.rels": (
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    f'<Relationship Id="r1" Type="{NS_O}/officeDocument" Target="xl/workbook.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/workbook.xml": (
+                    f'<workbook xmlns="{NS_S}" '
+                    'xmlns:r="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    "<sheets>"
+                    '<sheet name="Data" sheetId="1" r:id="rSheet1"/>'
+                    "</sheets>"
+                    "</workbook>"
+                ),
+                "xl/_rels/workbook.xml.rels": (
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    f'<Relationship Id="rSheet1" Type="{NS_O}/worksheet" '
+                    'Target="worksheets/sheet1.xml"/>'
+                    "</Relationships>"
+                ),
+                # Theme file: accent2=ED7D31 (orange)
+                "xl/theme/theme1.xml": (
+                    '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+                    "<a:themeElements>"
+                    '<a:clrScheme name="Office">'
+                    '<a:dk1><a:srgbClr val="000000"/></a:dk1>'
+                    '<a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>'
+                    '<a:dk2><a:srgbClr val="44546A"/></a:dk2>'
+                    '<a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>'
+                    '<a:accent1><a:srgbClr val="4472C4"/></a:accent1>'
+                    '<a:accent2><a:srgbClr val="ED7D31"/></a:accent2>'
+                    '<a:accent3><a:srgbClr val="A5A5A5"/></a:accent3>'
+                    '<a:accent4><a:srgbClr val="FFC000"/></a:accent4>'
+                    '<a:accent5><a:srgbClr val="5B9BD5"/></a:accent5>'
+                    '<a:accent6><a:srgbClr val="70AD47"/></a:accent6>'
+                    '<a:hlink><a:srgbClr val="0563C1"/></a:hlink>'
+                    '<a:folHlink><a:srgbClr val="954F72"/></a:folHlink>'
+                    "</a:clrScheme>"
+                    "</a:themeElements>"
+                    "</a:theme>"
+                ),
+                "xl/styles.xml": (
+                    f'<styleSheet xmlns="{NS_S}">'
+                    '<fonts count="1">'
+                    # theme=5 → accent2 → #ED7D31
+                    '<font><color theme="5"/></font>'
+                    "</fonts>"
+                    '<fills count="1"><fill><patternFill/></fill></fills>'
+                    '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0"/></cellXfs>'
+                    "</styleSheet>"
+                ),
+                "xl/worksheets/sheet1.xml": (
+                    f'<worksheet xmlns="{NS_S}"><sheetData>'
+                    '<row r="1"><c r="A1" s="0" t="inlineStr"><is><t>Orange</t></is></c></row>'
+                    "</sheetData></worksheet>"
+                ),
+            },
+        )
+        semantic = render_workbook(data, density="semantic")
+        self.assertIn("color=#ED7D31", semantic)
+
+    def test_theme_fill_color_resolved(self) -> None:
+        """Fill colour via theme accent4 with tint → resolved to tinted RGB."""
+        data = _make_xlsx(
+            {
+                "[Content_Types].xml": (
+                    f'<Types xmlns="{NS_CT}">'
+                    '<Default Extension="xml" ContentType="application/xml"/>'
+                    '<Default Extension="rels" ContentType='
+                    '"application/vnd.openxmlformats-package.relationships+xml"/>'
+                    '<Override PartName="/xl/workbook.xml" '
+                    'ContentType="application/vnd.openxmlformats-officedocument.'
+                    'spreadsheetml.sheet.main+xml"/>'
+                    "</Types>"
+                ),
+                "_rels/.rels": (
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    f'<Relationship Id="r1" Type="{NS_O}/officeDocument" Target="xl/workbook.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/workbook.xml": (
+                    f'<workbook xmlns="{NS_S}" '
+                    'xmlns:r="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    "<sheets>"
+                    '<sheet name="Data" sheetId="1" r:id="rSheet1"/>'
+                    "</sheets>"
+                    "</workbook>"
+                ),
+                "xl/_rels/workbook.xml.rels": (
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    f'<Relationship Id="rSheet1" Type="{NS_O}/worksheet" '
+                    'Target="worksheets/sheet1.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/styles.xml": (
+                    f'<styleSheet xmlns="{NS_S}">'
+                    '<fonts count="1"><font/></fonts>'
+                    '<fills count="1">'
+                    # theme=7 → accent4 → FFC000, tint=0.8 → lighten
+                    '<fill><patternFill><fgColor theme="7" tint="0.8"/></patternFill></fill>'
+                    "</fills>"
+                    '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0"/></cellXfs>'
+                    "</styleSheet>"
+                ),
+                "xl/worksheets/sheet1.xml": (
+                    f'<worksheet xmlns="{NS_S}"><sheetData>'
+                    '<row r="1"><c r="A1" s="0" t="inlineStr"><is><t>Tinted</t></is></c></row>'
+                    "</sheetData></worksheet>"
+                ),
+            },
+        )
+        semantic = render_workbook(data, density="semantic")
+        # accent4=FFC000 (gold), tint=0.8 lightens toward white
+        # Expected: each channel: c' = c*(1-0.8) + 255*0.8
+        # R: 0xFF=255 → 255*0.2 + 255*0.8 = 51+204 = 255=FF
+        # G: 0xC0=192 → 192*0.2 + 255*0.8 = 38.4+204 = 242.4 → F2
+        # B: 0x00=0 → 0*0.2 + 255*0.8 = 0+204 = 204=CC
+        self.assertIn("fill=#FFF2CC", semantic)
+
 
 if __name__ == "__main__":
     unittest.main()

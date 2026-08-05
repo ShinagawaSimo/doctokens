@@ -6,13 +6,10 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from docx_llm_parser import (
-    Density,
-    ParseOptions,
-    RevisionMode,
-    parse_docx,
-    render_document,
-)
+from docx_llm_parser import Density, render_document
+from docx_llm_parser.core.models import ParseOptions
+from docx_llm_parser.core.enums import RevisionMode
+from docx_llm_parser.parser import DocxParser
 
 from _fixtures import write_rich_docx
 
@@ -51,7 +48,7 @@ class GoldenOutputTests(unittest.TestCase):
             docx_path = temp / "rich.docx"
             output_dir = temp / "out"
             write_rich_docx(docx_path)
-            parse_docx(docx_path, ParseOptions(debug=True, output_dir=output_dir))
+            DocxParser().parse(docx_path, ParseOptions(debug=True, output_dir=output_dir))
             debug_dir = output_dir / ".debug"
 
             for json_file in sorted(debug_dir.glob("*.json")):
@@ -80,8 +77,7 @@ def _render_density(density: Density) -> str:
         temp = Path(temp_dir)
         docx_path = temp / "rich.docx"
         write_rich_docx(docx_path)
-        parsed = parse_docx(docx_path, ParseOptions(revision_mode=RevisionMode.REVIEW))
-        return render_document(parsed, density=density)
+        return render_document(docx_path, density=density)
 
 
 def _read_golden(path: Path) -> str:

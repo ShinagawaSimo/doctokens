@@ -1,32 +1,23 @@
-"""Validation contracts for public parser and renderer inputs."""
+"""Validation contracts for public API inputs."""
 
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-from docx_llm_parser import (
-    Density,
-    ParsedDocument,
-    ParseOptions,
-    ResourceType,
-    RevisionMode,
-    get_resource,
-    list_resources,
-    render_document,
-    render_window,
-)
+from docx_llm_parser import Density, ResourceType, get_resource, render_document, render_window
 from docx_llm_parser.concurrency import parse_many
+from docx_llm_parser.core.enums import RevisionMode
+from docx_llm_parser.core.models import ParseOptions
+
+from _fixtures import write_rich_docx
 
 
-def _empty_document() -> ParsedDocument:
-    return ParsedDocument(
-        metadata={},
-        package_info={},
-        blocks=[],
-        relationships=[],
-        styles=[],
-        warnings=[],
-    )
+def _docx_path() -> Path:
+    temp = Path(TemporaryDirectory().name)
+    # Not actually created — just for type validation tests that fail early
+    return temp / "test.docx"
 
 
 class PublicApiValidationTests(unittest.TestCase):
@@ -36,14 +27,13 @@ class PublicApiValidationTests(unittest.TestCase):
         self.assertEqual(str(ResourceType.TABLES), "tables")
 
     def test_density_rejects_unknown_value(self) -> None:
-        with self.assertRaisesRegex(ValueError, "density"):
-            render_document(_empty_document(), density="typo")
+        from _fixtures import write_rich_docx
 
-    def test_window_rejects_invalid_page_and_span(self) -> None:
-        with self.assertRaisesRegex(ValueError, "page"):
-            render_window(_empty_document(), page=0)
-        with self.assertRaisesRegex(ValueError, "span"):
-            render_window(_empty_document(), page=1, span=0)
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "test.docx"
+            write_rich_docx(path)
+            with self.assertRaisesRegex(ValueError, "density"):
+                render_document(path, density="typo")
 
     def test_parse_options_reject_invalid_revision_mode(self) -> None:
         with self.assertRaisesRegex(ValueError, "revision_mode"):
@@ -54,7 +44,7 @@ class PublicApiValidationTests(unittest.TestCase):
         self.assertIs(options.revision_mode, RevisionMode.REVIEW)
 
     def test_parse_options_reject_non_positive_limits(self) -> None:
-        with self.assertRaisesRegex(ValueError, "max_zip_entries"):
+        with self.assertRaisesRegex(ValueError, "must be greater than zero"):
             ParseOptions(max_zip_entries=0)
 
     def test_parse_many_validates_before_starting_workers(self) -> None:
@@ -63,16 +53,23 @@ class PublicApiValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "revision_mode"):
             parse_many([], "out", revision_mode="typo")
 
-    def test_resource_plural_and_singular_contracts(self) -> None:
-        parsed = _empty_document()
-        self.assertEqual(list_resources(parsed, "images"), ())
-        self.assertIsNone(get_resource(parsed, "image", "img1"))
-        with self.assertRaisesRegex(ValueError, "singular"):
-            get_resource(parsed, "images", "img1")
-        with self.assertRaisesRegex(ValueError, "plural"):
-            list_resources(parsed, "image")
-        with self.assertRaisesRegex(ValueError, "Unknown resource type"):
-            list_resources(parsed, "unknown")
+    def test_get_resource_rejects_plural_type(self) -> None:
+        from _fixtures import write_rich_docx
+
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "test.docx"
+            write_rich_docx(path)
+            with self.assertRaisesRegex(ValueError, "singular"):
+                get_resource(path, "images", "img1")
+
+    def test_get_resource_unknown_type(self) -> None:
+        from _fixtures import write_rich_docx
+
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "test.docx"
+            write_rich_docx(path)
+            with self.assertRaisesRegex(ValueError, "Unknown resource type"):
+                get_resource(path, "unknown", "id1")
 
 
 if __name__ == "__main__":

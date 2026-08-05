@@ -8,17 +8,15 @@ from tempfile import TemporaryDirectory
 
 from docx_llm_parser import (
     Density,
-    ParseOptions,
-    RevisionMode,
-    build_manifest,
     get_resource,
-    list_resources,
-    parse_docx,
     render_document,
     render_window,
+    write_document,
 )
-from docx_llm_parser.api import write_document
 from docx_llm_parser.concurrency import parse_many
+from docx_llm_parser.core.models import ParseOptions
+from docx_llm_parser.core.enums import RevisionMode
+from docx_llm_parser.parser import DocxParser
 
 from _fixtures import write_rich_docx
 
@@ -31,7 +29,8 @@ class DocxPipelineTests(unittest.TestCase):
             output_dir = temp / "out"
             write_rich_docx(docx_path)
 
-            parsed = parse_docx(
+            # Internal parse for structure assertions
+            parsed = DocxParser().parse(
                 docx_path,
                 ParseOptions(
                     debug=True,
@@ -54,7 +53,8 @@ class DocxPipelineTests(unittest.TestCase):
             self.assertEqual(parsed.comments[0]["author"], "Reviewer")
             self.assertIn("paragraphCount", parsed.metrics["counters"])
 
-            html = render_document(parsed, density=Density.SEMANTIC)
+            # Public API: render
+            html = render_document(docx_path, density=Density.SEMANTIC)
             self.assertIn("<h1>Document Title", html)
             self.assertIn("<a href=https://example.test>link</a>", html)
             self.assertIn("<chart id=chart1 type=bar", html)
@@ -62,27 +62,24 @@ class DocxPipelineTests(unittest.TestCase):
             self.assertIn("<img id=img1", html)
             self.assertIn("<!-- supplemental -->", html)
 
-            l1 = render_document(parsed, density=Density.STRUCTURAL)
-            l0 = render_document(parsed, density=Density.PLAIN)
+            l1 = render_document(docx_path, density=Density.STRUCTURAL)
+            l0 = render_document(docx_path, density=Density.PLAIN)
             self.assertIn("<chart id=chart1 type=bar", l1)
             self.assertIn("Footnote text", l0)
-            self.assertIn("Last page", render_window(parsed, page=-1))
+            self.assertIn("Last page", render_window(docx_path, page=-1))
 
-            manifest = build_manifest(parsed)
-            self.assertGreaterEqual(manifest["pages"], 2)
-            self.assertEqual(manifest["tables"], 1)
-            self.assertEqual(manifest["images"], 1)
-            self.assertEqual(len(list_resources(parsed, "images")), 1)
-            self.assertEqual(get_resource(parsed, "chart", "chart1")["chartType"], "bar")
-            table = get_resource(parsed, "table", "t1")
+            # Public API: resource extraction
+            self.assertEqual(get_resource(docx_path, "chart", "chart1")["chartType"], "bar")
+            table = get_resource(docx_path, "table", "t1")
             self.assertIsNotNone(table)
             assert table is not None
             self.assertEqual(table["rowCount"], 2)
 
+            # Public API: atomic write
             stale = output_dir / "readable.md"
             stale.write_text("keep", encoding="utf-8")
-            html_path = write_document(parsed, output_dir, density=Density.SEMANTIC)
-            text_path = write_document(parsed, output_dir, density=Density.PLAIN)
+            html_path = write_document(docx_path, output_dir, density=Density.SEMANTIC)
+            text_path = write_document(docx_path, output_dir, density=Density.PLAIN)
             self.assertEqual(html_path.name, "parsed.html")
             self.assertEqual(text_path.name, "l0.txt")
             self.assertEqual(stale.read_text(encoding="utf-8"), "keep")

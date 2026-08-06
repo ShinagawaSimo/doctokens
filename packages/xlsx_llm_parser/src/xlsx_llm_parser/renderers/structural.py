@@ -85,6 +85,29 @@ def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None) -> 
     if density == "semantic" and sheet.get("sheet_protection"):
         yield "<sheetProtection/>\n"
 
+    # Defined names (semantic only, user names scoped to this sheet or global)
+    if density == "semantic" and wb is not None:
+        defined_names = wb.get("metadata", {}).get("defined_names", [])
+        for dn in defined_names:
+            if dn.get("hidden"):
+                continue
+            scope = dn.get("scopeSheet")
+            if scope and scope != name:
+                continue
+            # Skip built-in names unless they affect the current window
+            if dn["name"].startswith("_xlnm."):
+                continue
+            yield f'<definedName name={escape(dn["name"], quote=True)} refersTo="{escape(dn["ref"], quote=True)}">\n'
+
+    # AutoFilter (structural: range only; semantic: conditions)
+    filter_ref = sheet.get("filter_range")
+    if filter_ref:
+        yield f"<filter ref={filter_ref}>\n"
+        if density == "semantic":
+            for fc in sheet.get("filter_cols", []):
+                vals = ",".join(escape(v, quote=True) for v in fc.get("values", []))
+                yield f'<condition col={fc["col"]} type={fc["type"]} values="{vals}"/>\n'
+
     # Table summaries before grid
     for t in sheet.get("tables", []):
         attrs = f"id={t['id']} name={escape(t['name'], quote=True)} ref={t['ref']}"

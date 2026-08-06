@@ -198,6 +198,19 @@ semantic 密度下，左上角单元格输出 `colspan=N rowspan=N`，shadow 格
 
 `xl/tables/tableN.xml` 中声明的 ListObject 在 structural 中输出 `<table id=... name=... ref=...>`；semantic 额外输出 `cols="Col1,Col2"` 和 `totalsRow`。Table 定位不复制 grid 中的实际数据。
 
+## Defined Name（仅 semantic）
+
+`<definedNames>` 中的用户定义名称（非 `_xlnm.*` 内置名）在 semantic 中输出：
+
+```
+<definedName name=DiscountRate refersTo="0.08">
+<definedName name=TaxRate refersTo="'Data'!$B$1">
+```
+
+## 筛选与排序
+
+`<autoFilter>` 在 structural 中输出 `<filter ref=A1:K50>`；semantic 额外输出 `<condition>` 条件。
+
 ## 尚未支持
 
 - 图表、数据透视表、图片

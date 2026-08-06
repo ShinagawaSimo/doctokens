@@ -38,19 +38,25 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
     with PackageReader(source, limits) as pkg:
         pkg.validate(required_part="xl/workbook.xml")
 
-        date_1904, sheets = _parse_workbook_xml(pkg)
+        date_1904, sheets, defined_names = _parse_workbook_xml(pkg)
         sst, rich_map = _parse_shared_strings(pkg)
         fmt_index = parse_styles(pkg)
         fmt_index.set_date_system(date_1904)
 
         for sheet in sheets:
             if sheet.get("kind") != "chartsheet":
-                rows, hidden_cols, sheet_protection = _parse_sheet(pkg, sheet["part"], sst, rich_map, fmt_index)
+                rows, hidden_cols, sheet_protection, filter_range, filter_cols = _parse_sheet(
+                    pkg, sheet["part"], sst, rich_map, fmt_index
+                )
                 sheet["rows"] = rows
                 if hidden_cols:
                     sheet["hidden_cols"] = hidden_cols
                 if sheet_protection:
                     sheet["sheet_protection"] = True
+                if filter_range:
+                    sheet["filter_range"] = filter_range
+                if filter_cols:
+                    sheet["filter_cols"] = filter_cols
 
                 # Parse tables (ListObject) associated with this sheet
                 sheet["tables"] = _parse_tables(pkg, sheet["part"])
@@ -60,14 +66,16 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
         "fmt_index": fmt_index,
         "metadata": {
             "source": str(source) if isinstance(source, (str, Path)) else "<bytes>",
+            "defined_names": defined_names,
         },
     }
 
 
 def _parse_workbook_xml(pkg: PackageReader) -> tuple[bool, list[SheetInfo]]:
-    """Parse xl/workbook.xml for date system, sheet names, and part targets.
+    """Parse xl/workbook.xml for date system, sheet names, part targets,
+    and defined names.
 
-    Returns (date_1904, sheets).
+    Returns (date_1904, sheets, defined_names).
     """
     with pkg.open_entry("xl/workbook.xml") as stream:
         root = ET.parse(stream).getroot()
@@ -103,7 +111,32 @@ def _parse_workbook_xml(pkg: PackageReader) -> tuple[bool, list[SheetInfo]]:
             sheet_info["state"] = state
         sheets.append(sheet_info)
 
-    return date_1904, sheets
+    # Defined names (global + sheet-scoped)
+    defined_names: list[dict] = []
+    dn_elem = root.find(f"{{{NS_S}}}definedNames")
+    if dn_elem is not None:
+        for dn in dn_elem.findall(f"{{{NS_S}}}definedName"):
+            name = dn.get("name", "")
+            if not name:
+                continue
+            is_hidden = dn.get("hidden") == "1"
+            scope_sheet_id_str = dn.get("localSheetId")
+            scope_sheet: str | None = None
+            if scope_sheet_id_str is not None:
+                try:
+                    si = int(scope_sheet_id_str)
+                    if 0 <= si < len(sheets):
+                        scope_sheet = sheets[si]["name"]
+                except ValueError:
+                    pass
+            defined_names.append({
+                "name": name,
+                "ref": dn.text or "",
+                "scopeSheet": scope_sheet,
+                "hidden": is_hidden,
+            })
+
+    return date_1904, sheets, defined_names
 
 
 def _parse_shared_strings(pkg: PackageReader) -> tuple[list[str], dict[int, list[dict]]]:
@@ -159,17 +192,31 @@ def _parse_sheet(
     pkg: PackageReader, part: str, sst: list[str],
     rich_map: dict[int, list[dict]] | None = None,
     fmt_index: FormatIndex | None = None,
-) -> tuple[list[list[Cell]], list[tuple[int, int]], bool]:
+) -> tuple[list[list[Cell]], list[tuple[int, int]], bool, str, list[dict]]:
     """Parse a single worksheet XML into typed cell rows, hidden-col ranges,
-    and sheet-protection flag."""
+    sheet-protection flag, filter range, and filter columns."""
     if not pkg.exists(part):
-        return [], [], False
+        return [], [], False, "", []
 
     with pkg.open_entry(part) as stream:
         root = ET.parse(stream).getroot()
 
     # Sheet protection (presence only — details stay in IR).
     sheet_protection = root.find(f"{{{NS_S}}}sheetProtection") is not None
+
+    # AutoFilter (D7: range for structural, conditions for semantic).
+    filter_range: str = ""
+    filter_cols: list[dict] = []
+    af = root.find(f"{{{NS_S}}}autoFilter")
+    if af is not None:
+        filter_range = af.get("ref", "")
+        for fc in af.findall(f"{{{NS_S}}}filterColumn"):
+            col_id_str = fc.get("colId", "0")
+            filters = fc.find(f"{{{NS_S}}}filters")
+            if filters is not None:
+                vals = [f.get("val", "") for f in filters.findall(f"{{{NS_S}}}filter") if f.get("val")]
+                if vals:
+                    filter_cols.append({"col": int(col_id_str), "type": "values", "values": vals})
 
     # Column definitions (hidden, width, outline) — parsed before sheetData.
     hidden_cols: list[tuple[int, int]] = []
@@ -183,7 +230,7 @@ def _parse_sheet(
 
     sheet_data = root.find(f"{{{NS_S}}}sheetData")
     if sheet_data is None:
-        return [], hidden_cols, sheet_protection
+        return [], hidden_cols, sheet_protection, filter_range, filter_cols
 
     rows: list[list[Cell]] = []
     for row_elem in sheet_data.findall(f"{{{NS_S}}}row"):
@@ -311,7 +358,7 @@ def _parse_sheet(
     # Attach legacy comments to cells
     _apply_comments(rows, pkg, part)
 
-    return rows, hidden_cols, sheet_protection
+    return rows, hidden_cols, sheet_protection, filter_range, filter_cols
 
 
 def _apply_merge_cells(root: ET.Element, rows: list[list[Cell]]) -> None:

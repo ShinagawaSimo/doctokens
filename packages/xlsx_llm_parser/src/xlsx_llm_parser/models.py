@@ -44,6 +44,8 @@ class SheetInfo(TypedDict, total=False):
     hidden_cols: list[tuple[int, int]]  # (min_col, max_col) ranges from <cols>
     sheet_protection: bool  # True when <sheetProtection> is present
     tables: list[dict]  # [{id, name, ref, columns, totalsRow}]
+    filter_range: str   # A1 range from <autoFilter> (structural only)
+    filter_cols: list[dict]  # [{col, type, values}] from filter columns (semantic)
 
 
 class TableInfo(TypedDict, total=False):

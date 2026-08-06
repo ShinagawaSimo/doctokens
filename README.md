@@ -82,9 +82,8 @@
 
 `docx-llm-parser` 的 API 是围绕 LLM 的工作模式设计的：
 
-- `build_manifest(parsed)` — LLM 在首次接触文档前先了解文档规模（多少页、多少表格、多少脚注），再决定用什么密度、读多少页。
 - `render_window(parsed, page=..., span=..., density=...)` — 按页码范围精确读取，`page=-1` 语法糖直接读取最后一页。
-- `list_resources(parsed, type)` / `get_resource(parsed, type, id)` — 无需读取全文即可获取图片、图表、SmartArt 和表格资源，LLM 按需精读。
+- `get_resource(parsed, type, id)` — 无需读取全文即可获取图片、图表、SmartArt 和表格资源，LLM 按需精读。
 
 ### 设计哲学
 
@@ -92,7 +91,7 @@
 
 1. **只输出 OOXML 中确凿存在的信息**。不根据字号、加粗、文本长度等信号猜测标题或结构。Word 文档中看起来像标题但缺少 `w:outlineLvl` 的段落，会被当作普通段落处理——因为那正是 OOXML 认为它是什么。
 
-2. **LLM 是能推断结构的读者**。解析器的职责是忠实提取，不是替 LLM 做语义判断。如果文档没有使用 Heading 样式，`build_manifest()` 返回的标题数为 0——这本身就是有用信息（告诉 LLM "此文档无结构化层级，需要自行理解"）。
+2. **LLM 是能推断结构的读者**。解析器的职责是忠实提取，不是替 LLM 做语义判断。
 
 3. **错误的结构标记比没有结构标记更糟糕**。漏掉一个标题，LLM 仍能从上下文和文本内容推断；错误地把一段普通文本标记为标题，会污染整个文档的结构理解。
 
@@ -177,15 +176,6 @@ for result in results:
 
 ## 高级 API
 
-### `build_manifest(parsed)` — 文档元信息
-
-```python
-from docx_llm_parser import build_manifest
-
-info = build_manifest(parsed)
-# {"pages": 23, "tables": 5, "images": 12, "footnotes": 45, "endnotes": 3, "comments": 7}
-```
-
 ### `render_window(parsed, page, span, density)` — 页码范围窗口
 
 ```python
@@ -198,19 +188,16 @@ last_page = render_window(parsed, page=-1)                       # 最后一页�
 
 页码来自 OOXML 中的显式分页标记（`w:br w:type="page"` + `w:lastRenderedPageBreak`）。
 
-### `list_resources()` / `get_resource()` — 独立资源提取
+### `get_resource(parsed, type, id)` — 独立资源提取
 
 ```python
-from docx_llm_parser import get_resource, list_resources
+from docx_llm_parser import get_resource
 
-images = list_resources(parsed, "images")          # 所有图片清单
-charts = list_resources(parsed, "charts")          # 所有图表摘要
-tables = list_resources(parsed, "tables")          # 所有逻辑表格摘要
 image = get_resource(parsed, "image", "img3")      # 单张图片详情
 table = get_resource(parsed, "table", "t2")        # 完整逻辑表格
 ```
 
-无需读取全文即可获取资源列表，供 LLM 按需精读。
+无需读取全文即可获取资源详情，供 LLM 按需精读。
 
 ## 解析能力
 
@@ -277,8 +264,6 @@ out/<docx_stem>/
 | `iter_document(parsed, *, density?)`                           | 流式迭代渲染片段                      |
 | `write_document(parsed, output_dir, *, density?)`              | 原子写出目标密度文件                    |
 | `render_window(parsed, *, page, span?, density?)`              | 返回指定页码范围的内容片段                 |
-| `build_manifest(parsed)`                                       | 返回文档元信息（页数、表格数、图片数等）          |
-| `list_resources(parsed, type)`                                 | 列出指定复数资源（图片/图表/SmartArt/表格）   |
 | `get_resource(parsed, type, id)`                               | 获取单个资源详情                      |
 | `parse_many(paths, output_base)`                               | 多文档并发解析（`ThreadPoolExecutor`） |
 

@@ -49,6 +49,9 @@ class SheetInfo(TypedDict, total=False):
     data_validations: list[dict]  # [{ranges, type, formula1, allowBlank}]
     conditional_formats: list[dict]  # [{ranges, priority, rule_type, formula}]
     external_links: list[str]  # detected external workbook references
+    images: list[dict]      # [{id, ref, alt}] from drawing anchors
+    charts: list[dict]      # [{id, ref, type, title, series_count}]
+    pivot_tables: list[dict]  # [{id, ref, name}] detected pivot tables
 
 
 class TableInfo(TypedDict, total=False):

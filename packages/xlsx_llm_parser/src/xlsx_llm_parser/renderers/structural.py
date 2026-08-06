@@ -129,6 +129,18 @@ def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None) -> 
         for link in ext:
             yield f"<externalLink target={escape(link, quote=True)}/>\n"
 
+    # Images (structural + semantic)
+    for img in sheet.get("images", []):
+        yield f'<image id={img["id"]} ref={img["ref"]}/>\n'
+
+    # Charts (structural: locator; semantic: details)
+    for ch in sheet.get("charts", []):
+        yield f'<chart id={ch["id"]} ref={ch["ref"]} type={ch["type"]} series={ch["series_count"]}/>\n'
+
+    # Pivot tables (structural locator only)
+    for pv in sheet.get("pivot_tables", []):
+        yield f"<pivotTable id={pv['id']} name={escape(pv['name'], quote=True)}/>\n"
+
     # Table summaries before grid
     for t in sheet.get("tables", []):
         attrs = f"id={t['id']} name={escape(t['name'], quote=True)} ref={t['ref']}"

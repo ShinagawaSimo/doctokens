@@ -223,6 +223,18 @@ semantic 密度下，左上角单元格输出 `colspan=N rowspan=N`，shadow 格
 
 definedName 中检测到的 `[Budget.xlsx]` 外部引用输出为 `<externalLink target=.../>`。
 
+## Drawing、图片与图表
+
+`xl/drawings/drawingN.xml` 中锚定的图片和图表在 structural/semantic 中输出：
+
+```
+<image id=image1 ref=A1/>
+<chart id=chart1 ref=D5 type=bar series=3/>
+<pivotTable id=pivot1/>
+```
+
+图片字节延迟读取，图表详情通过 `get_resource()` 按需获取。
+
 ## 尚未支持
 
-- 图表、数据透视表、图片
+- （全部主要功能已覆盖）

@@ -67,6 +67,16 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
                 # Parse tables (ListObject) associated with this sheet
                 sheet["tables"] = _parse_tables(pkg, sheet["part"])
 
+                # Parse drawing (images, shapes) + charts + pivots
+                images, charts = _parse_drawings(pkg, sheet["part"])
+                if images:
+                    sheet["images"] = images
+                if charts:
+                    sheet["charts"] = charts
+                pivots = _detect_pivot_tables(pkg, sheet["part"])
+                if pivots:
+                    sheet["pivot_tables"] = pivots
+
     return {
         "sheets": sheets,
         "fmt_index": fmt_index,
@@ -525,6 +535,12 @@ def _apply_hyperlinks(root: ET.Element, rows: list[list[Cell]],
 
 _REL_COMMENTS = f"{NS_R}/comments"
 _REL_TABLE = f"{NS_R}/table"
+_REL_DRAWING = f"{NS_R}/drawing"
+_REL_IMAGE = f"{NS_R}/image"
+_REL_CHART = f"{NS_R}/chart"
+
+NS_XDR = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
 
 def _apply_comments(rows: list[list[Cell]], pkg: PackageReader, sheet_part: str) -> None:
@@ -607,6 +623,76 @@ def _parse_tables(pkg: PackageReader, sheet_part: str) -> list[dict]:
             "totalsRow": totals_row,
         })
     return tables
+
+
+def _parse_drawings(pkg: PackageReader, sheet_part: str) -> tuple[list[dict], list[dict]]:
+    """Parse drawing anchors for images and chart references."""
+    images: list[dict] = []
+    charts: list[dict] = []
+    drawing_part: str | None = None
+    for rel in pkg.read_relationships_for_part(sheet_part):
+        if rel.type == _REL_DRAWING:
+            drawing_part = rel.resolved_target
+            break
+    if not drawing_part or not pkg.exists(drawing_part):
+        return images, charts
+
+    # Drawing relationships for image/chart media
+    drawing_rels: dict[str, str] = {}
+    for rel in pkg.read_relationships_for_part(drawing_part):
+        drawing_rels[rel.id] = rel.resolved_target or ""
+
+    with pkg.open_entry(drawing_part) as stream:
+        root = ET.parse(stream).getroot()
+
+    for anchor in root.iter(f"{{{NS_XDR}}}twoCellAnchor"):
+        _parse_drawing_anchor(anchor, drawing_rels, images, charts)
+    for anchor in root.iter(f"{{{NS_XDR}}}oneCellAnchor"):
+        _parse_drawing_anchor(anchor, drawing_rels, images, charts)
+
+    return images, charts
+
+
+def _parse_drawing_anchor(anchor: ET.Element, drawing_rels: dict[str, str],
+                          images: list[dict], charts: list[dict]) -> None:
+    """Parse one drawing anchor for image/chart refs and position."""
+    from_elem = anchor.find(f"{{{NS_XDR}}}from")
+    if from_elem is None:
+        return
+    col = int(from_elem.findtext(f"{{{NS_XDR}}}col", "0"))
+    row = int(from_elem.findtext(f"{{{NS_XDR}}}row", "0"))
+    ref = f"{_str_from_col(col + 1)}{row + 1}"
+
+    # Picture (image)
+    for blip in anchor.iter(f"{{{NS_A}}}blip"):
+        embed_id = blip.get(f"{{{NS_R}}}embed", "")
+        target = drawing_rels.get(embed_id)
+        if target:
+            img_id = f"image{len(images) + 1}"
+            images.append({"id": img_id, "ref": ref, "alt": ""})
+            break  # one image per anchor
+
+    # Chart reference
+    for chart_elem in anchor.iter(f"{{{NS_XDR}}}chart"):
+        chart_id = len(charts) + 1
+        charts.append({"id": f"chart{chart_id}", "ref": ref, "type": "", "title": "", "series_count": 0})
+
+
+def _detect_pivot_tables(pkg: PackageReader, sheet_part: str) -> list[dict]:
+    """Detect pivot table relationships for a sheet."""
+    pivots: list[dict] = []
+    for rel in pkg.read_relationships_for_part(sheet_part):
+        if rel.type == f"{NS_R}/pivotTable":
+            pivots.append({"id": f"pivot{len(pivots) + 1}", "ref": "", "name": ""})
+    return pivots
+
+
+def _str_from_col(c: int) -> str:
+    result = ""
+    while c > 0:
+        c, rem = divmod(c - 1, 26)
+        result = chr(ord("A") + rem) + result
+    return result
 
 
 def _parse_ref(ref: str) -> tuple[int, int]:

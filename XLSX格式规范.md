@@ -235,6 +235,8 @@ definedName 中检测到的 `[Budget.xlsx]` 外部引用输出为 `<externalLink
 
 图片字节延迟读取，图表详情通过 `get_resource()` 按需获取。
 
-## 尚未支持
+## 专项工具
 
-- （全部主要功能已覆盖）
+- `find_cells(source, query, *, sheets, kind, limit)` — 跨 sheet 搜索值/公式/批注/Defined Name
+- `query_data(source, *, table_id, sheet, range_spec, header_row, ...)` — 投影筛选 + 分组聚合
+- `get_resource(source, type, id)` — 按 ID 提取 image/chart/pivot_table 原子资源

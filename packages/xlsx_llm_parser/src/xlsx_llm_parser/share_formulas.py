@@ -18,6 +18,7 @@ _CELL_REF_RE = re.compile(
 # Full single-cell or range reference captured greedily inside a formula.
 # Matches optional sheet prefix, then two cell refs optionally separated by ":".
 _A1_REF_RE = re.compile(
+    r"(?<![A-Za-z])"
     r"(?:(?P<sheet>[A-Za-z0-9_ ]+)!)?"
     r"(?P<start_col_abs>\$)?(?P<start_col>[A-Z]{1,3})(?P<start_row_abs>\$)?(?P<start_row>[0-9]+)"
     r"(?::"

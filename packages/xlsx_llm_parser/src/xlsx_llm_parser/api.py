@@ -83,12 +83,16 @@ def find_cells(
     *kind* narrows to one of ``value``, ``formula``, ``comment``, ``definedName``.
     """
     import re as _re
+    if not query:
+        return "<matches>\n"
     wb = _parse_workbook(source)
     pattern = _re.compile(_re.escape(query))  # exact match by default
     matches: list[str] = []
     sheets_to_search = sheets or [s["name"] for s in wb["sheets"]]
 
     for sheet_name in sheets_to_search:
+        if len(matches) >= limit:
+            break
         sheet = _find_sheet(wb, sheet_name)
         for row_cells in sheet.get("rows", []):
             for cell in row_cells:
@@ -105,18 +109,20 @@ def find_cells(
                     if pattern.search(cell.get("formula", "")):
                         matches.append(
                             f'<match cell="{escape(sheet_name, quote=True)}!{cell["ref"]}" field=formula>'
-                            f"{escape(cell['formula'])}"
+                            f"{escape(cell.get('formula', ''))}"
                         )
                         continue
                 if kind is None or kind == "comment":
                     if pattern.search(cell.get("comment", "")):
                         matches.append(
                             f'<match cell="{escape(sheet_name, quote=True)}!{cell["ref"]}" field=comment>'
-                            f"{escape(cell['comment'])}"
+                            f"{escape(cell.get('comment', ''))}"
                         )
+            if len(matches) >= limit:
+                break
 
         # Defined names
-        if kind is None or kind == "definedName":
+        if (kind is None or kind == "definedName") and len(matches) < limit:
             for dn in wb.get("metadata", {}).get("defined_names", []):
                 if len(matches) >= limit:
                     break
@@ -179,7 +185,9 @@ def query_data(
     # Collect rows (header + data)
     typed_rows: list[dict[str, object]] = []
     for row_cells in sheet_obj.get("rows", []):
-        row_num = row_cells[0]["row"] if row_cells else 0
+        if not row_cells:
+            continue
+        row_num = row_cells[0]["row"]
         if row_num < start_row:
             continue
         if row_num > end_row:
@@ -189,7 +197,6 @@ def query_data(
             if start_col <= c["col"] <= end_col:
                 col_idx = c["col"] - start_col
                 col_name = columns[col_idx] if col_idx < len(columns) else f"Col{c['col']}"
-                # Attempt typed value for aggregation
                 raw = c.get("text", "")
                 try:
                     if "." in str(raw):
@@ -199,13 +206,14 @@ def query_data(
                 except (ValueError, TypeError):
                     row_dict[col_name] = str(raw)
         if row_dict:
+            row_dict["__row"] = row_num
             typed_rows.append(row_dict)
 
-    # Header row detected — extract column names if not from Table
+    # Header row detection — extract column names from data
     if not columns and header_row:
         for r in typed_rows:
             if r.get("__row") == header_row:
-                columns = [str(v) for v in r.values()]
+                columns = [str(v) for k, v in r.items() if k != "__row"]
                 break
 
     # Filtering
@@ -222,13 +230,26 @@ def query_data(
                     match = False
                 elif op == "contains" and str(val).lower() not in str(cell_val).lower():
                     match = False
-                elif op == "gt" and (not isinstance(cell_val, (int, float)) or cell_val <= float(val)):
-                    match = False
-                elif op == "lt" and (not isinstance(cell_val, (int, float)) or cell_val >= float(val)):
-                    match = False
+                elif op in ("gt", "lt"):
+                    if not isinstance(cell_val, (int, float)):
+                        match = False
+                    else:
+                        try:
+                            num_val = float(str(val))
+                        except (ValueError, TypeError):
+                            match = False
+                        else:
+                            if op == "gt" and cell_val <= num_val:
+                                match = False
+                            elif op == "lt" and cell_val >= num_val:
+                                match = False
             if match:
                 filtered.append(row)
         typed_rows = filtered
+
+    # Column projection (select)
+    if select and typed_rows:
+        keep_cols = [str(s) for s in select]
 
     # Aggregation
     if group_by and aggregates:
@@ -242,12 +263,13 @@ def query_data(
                 col = str(agg.get("column", ""))
                 as_name = agg.get("as", f"{op}_{col}")
                 val = row.get(col)
+                if op == "count":
+                    groups[key][as_name] = groups[key].get(as_name, 0) + 1
+                    continue
                 if not isinstance(val, (int, float)):
                     continue
                 if op == "sum":
                     groups[key][as_name] = groups[key].get(as_name, 0) + val
-                elif op == "count":
-                    groups[key][as_name] = groups[key].get(as_name, 0) + 1
                 elif op == "avg":
                     cur = groups[key].get(as_name, (0, 0))
                     groups[key][as_name] = (cur[0] + val, cur[1] + 1)
@@ -260,17 +282,24 @@ def query_data(
             for agg in aggregates:
                 if agg.get("op") == "avg":
                     as_name = agg.get("as", f"avg_{agg['column']}")
-                    cur = groups[key][as_name]
+                    cur = groups[key].get(as_name)
                     if isinstance(cur, tuple):
                         groups[key][as_name] = round(cur[0] / cur[1], 4) if cur[1] else 0
+                    elif cur is None:
+                        groups[key][as_name] = 0
         typed_rows = list(groups.values())
+
+    # Column projection applied after aggregation too
+    if select and typed_rows:
+        keep_cols = [str(s) for s in select]
+        typed_rows = [{c: r.get(c, "") for c in keep_cols if c in r} for r in typed_rows]
 
     # Sorting
     if order_by:
         for ob in reversed(order_by):
             col = str(ob.get("column", ""))
             desc = ob.get("direction") == "desc"
-            typed_rows.sort(key=lambda r, c=col: (r.get(c, "") is None, r.get(c, "")), reverse=desc)
+            typed_rows.sort(key=lambda r, c=col: str(r.get(c, "")), reverse=desc)
 
     # Limit
     if limit and limit > 0:
@@ -280,6 +309,7 @@ def query_data(
     if not typed_rows:
         return "<table>\n"
     all_cols = list(typed_rows[0].keys())
+    all_cols = [c for c in all_cols if c != "__row"]
     parts = ["<table>\n<tr>"]
     for col in all_cols:
         parts.append(f"<th>{escape(str(col))}")

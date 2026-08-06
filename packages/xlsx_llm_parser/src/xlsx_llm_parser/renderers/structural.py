@@ -153,7 +153,7 @@ def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None,
         yield f"<table {attrs}>\n"
 
     if density == "plain":
-        yield from _render_plain(rows)
+        yield from _render_plain(rows, start_row=start_row)
     else:
         yield _render_grid(rows, density, wb, start_row=start_row)
 
@@ -161,10 +161,12 @@ def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None,
 # ── Plain text ──
 
 
-def _render_plain(rows: list[list[Cell]]) -> Iterator[str]:
+def _render_plain(rows: list[list[Cell]], start_row: int = 1) -> Iterator[str]:
     """Tab-separated cell values, no coordinates."""
     for row_cells in rows:
         if not row_cells:
+            continue
+        if row_cells[0]["row"] < start_row:
             continue
         texts = [cell["text"] for cell in row_cells]
         yield "\t".join(texts) + "\n"
@@ -185,6 +187,8 @@ def _render_grid(rows: list[list[Cell]], density: Density,
     min_row = _GRID_BOUND_SENTINEL
     max_row = 0
     for row_cells in rows:
+        if not row_cells:
+            continue
         if row_cells[0]["row"] < start_row:
             continue
         for cell in row_cells:
@@ -197,6 +201,9 @@ def _render_grid(rows: list[list[Cell]], density: Density,
             if cell["row"] > max_row:
                 max_row = cell["row"]
 
+    if min_col == _GRID_BOUND_SENTINEL:
+        return ""  # start_row beyond all data rows
+
     ref = f"{_col_letter(min_col)}{min_row}:{_col_letter(max_col)}{max_row}"
     tag = f"<grid ref={ref}"
 
@@ -204,6 +211,8 @@ def _render_grid(rows: list[list[Cell]], density: Density,
     comments: dict[tuple[int, int], tuple[str, str, str]] = {}  # (col,row) → (ref, author, text)
     cell_count = 0
     for row_cells in rows:
+        if not row_cells:
+            continue
         if row_cells[0]["row"] < start_row:
             continue
         cell_count += len(row_cells)

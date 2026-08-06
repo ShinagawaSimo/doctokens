@@ -88,7 +88,7 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
     }
 
 
-def _parse_workbook_xml(pkg: PackageReader) -> tuple[bool, list[SheetInfo]]:
+def _parse_workbook_xml(pkg: PackageReader) -> tuple[bool, list[SheetInfo], list[dict], list[str]]:
     """Parse xl/workbook.xml for date system, sheet names, part targets,
     and defined names.
 
@@ -222,7 +222,7 @@ def _parse_sheet(
     pkg: PackageReader, part: str, sst: list[str],
     rich_map: dict[int, list[dict]] | None = None,
     fmt_index: FormatIndex | None = None,
-) -> tuple[list[list[Cell]], list[tuple[int, int]], bool, str, list[dict]]:
+) -> tuple[list[list[Cell]], list[tuple[int, int]], bool, str, list[dict], list[dict], list[dict]]:
     """Parse a single worksheet XML into typed cell rows, hidden-col ranges,
     sheet-protection, filter, data validations, and conditional formats."""
     if not pkg.exists(part):
@@ -588,7 +588,19 @@ def _apply_comments(rows: list[list[Cell]], pkg: PackageReader, sheet_part: str)
         except (ValueError, IndexError):
             cell["commentAuthor"] = ""
         text_elem = cmt.find(f"{{{NS_S}}}text")
-        cell["comment"] = text_elem.text if text_elem is not None and text_elem.text else ""
+        if text_elem is not None:
+            if text_elem.text:
+                cell["comment"] = text_elem.text
+            else:
+                # Rich-text body: concatenate <r><t> runs
+                parts = []
+                for r_elem in text_elem.findall(f"{{{NS_S}}}r"):
+                    t = r_elem.find(f"{{{NS_S}}}t")
+                    if t is not None and t.text:
+                        parts.append(t.text)
+                cell["comment"] = "".join(parts)
+        else:
+            cell["comment"] = ""
         idx += 1
 
 

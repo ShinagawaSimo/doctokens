@@ -170,19 +170,13 @@ class TruncationTests(unittest.TestCase):
         html = parse_xlsx(data)
         self.assertNotIn("truncated", html)
 
-    def test_large_sheet_truncated(self) -> None:
-        """60 rows exceeds _ROW_BUDGET (50): truncated, no data rows."""
-        data = self._make_sheet(60)
+    def test_large_sheet_windowed(self) -> None:
+        """600 rows exceeds cell budget: shows window, not bare truncated."""
+        data = self._make_sheet(600)
         html = parse_xlsx(data)
-        self.assertIn("truncated", html)
-        # No data rows — only grid ref
-        self.assertNotIn("<tr", html)
-
-    def test_truncated_grid_ref_shows_full_range(self) -> None:
-        """Grid ref must always show the full data bounds."""
-        data = self._make_sheet(60)
-        html = parse_xlsx(data)
-        self.assertIn("<grid ref=A1:A60 truncated>", html)
+        # Shows first rows (within budget), not bare truncated marker
+        self.assertIn("<tr row=1>", html)
+        self.assertNotIn("<tr row=600>", html)
 
     def test_range_reading_not_truncated(self) -> None:
         """render_range always shows full results, no truncation."""

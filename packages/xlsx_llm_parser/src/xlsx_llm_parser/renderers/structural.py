@@ -54,7 +54,8 @@ def render_range(
 # ── Per-sheet rendering ──
 
 
-def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None) -> Iterator[str]:
+def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None,
+                  start_row: int = 1) -> Iterator[str]:
     name = sheet["name"]
     state = sheet.get("state", "visible")
     kind = sheet.get("kind", "worksheet")
@@ -154,7 +155,7 @@ def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None) -> 
     if density == "plain":
         yield from _render_plain(rows)
     else:
-        yield _render_grid(rows, density, wb)
+        yield _render_grid(rows, density, wb, start_row=start_row)
 
 
 # ── Plain text ──
@@ -173,16 +174,19 @@ def _render_plain(rows: list[list[Cell]]) -> Iterator[str]:
 
 
 def _render_grid(rows: list[list[Cell]], density: Density,
-                 wb: ParsedWorkbook | None = None) -> str:
+                 wb: ParsedWorkbook | None = None,
+                 start_row: int = 1) -> str:
     if not rows:
         return ""
 
-    # Compute grid ref from all rows
+    # Compute grid ref from visible rows (start_row onwards)
     min_col = _GRID_BOUND_SENTINEL
     max_col = 0
     min_row = _GRID_BOUND_SENTINEL
     max_row = 0
     for row_cells in rows:
+        if row_cells[0]["row"] < start_row:
+            continue
         for cell in row_cells:
             if cell["col"] < min_col:
                 min_col = cell["col"]
@@ -195,14 +199,17 @@ def _render_grid(rows: list[list[Cell]], density: Density,
 
     ref = f"{_col_letter(min_col)}{min_row}:{_col_letter(max_col)}{max_row}"
     tag = f"<grid ref={ref}"
-    if _should_truncate(rows):
-        # Large sheet: only show the range, no data rows
-        return tag + " truncated>\n"
 
     parts = [tag + ">\n"]
     comments: dict[tuple[int, int], tuple[str, str, str]] = {}  # (col,row) → (ref, author, text)
+    cell_count = 0
     for row_cells in rows:
+        if row_cells[0]["row"] < start_row:
+            continue
+        cell_count += len(row_cells)
         parts.append(_render_row(row_cells, min_col, density, wb, comments))
+        if cell_count >= _CELL_BUDGET:
+            break
 
     # Output comment blocks after the grid
     for idx, ((_col, _row), (ref, author, text)) in enumerate(sorted(comments.items(), key=lambda x: (x[0][1], x[0][0]))):

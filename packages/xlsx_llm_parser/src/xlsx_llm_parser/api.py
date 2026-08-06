@@ -14,21 +14,33 @@ from .renderers.structural import (
 )
 
 
-def parse_xlsx(source: str | Path | bytes, *, density: str = "structural") -> str:
-    """Parse *source* and render the entire workbook at the given density."""
+def parse_xlsx(source: str | Path | bytes, *, density: str = "structural",
+               start_row: int = 1) -> str:
+    """Parse *source* and render the entire workbook at the given density.
+
+    *start_row* (1-based) begins rendering from the specified row for the
+    first data sheet, enabling paginated window reads of large grids.
+    """
     wb = _parse_workbook(source)
     parts = [f"density={density}\n"]
     for sheet in wb["sheets"]:
-        parts.extend(_render_sheet(sheet, density, wb))
+        parts.extend(_render_sheet(sheet, density, wb, start_row=start_row))
+        # start_row only applies to first non-chartsheet; subsequent sheets
+        # always render from row 1.
+        if sheet.get("kind") != "chartsheet" and start_row != 1:
+            start_row = 1
     return "".join(parts)
 
 
-def iter_workbook(source: str | Path | bytes, *, density: str = "structural") -> Iterator[str]:
+def iter_workbook(source: str | Path | bytes, *, density: str = "structural",
+                  start_row: int = 1) -> Iterator[str]:
     """Stream workbook rendering chunks from *source*."""
     wb = _parse_workbook(source)
     yield f"density={density}\n"
     for sheet in wb["sheets"]:
-        yield from _render_sheet(sheet, density, wb)
+        yield from _render_sheet(sheet, density, wb, start_row=start_row)
+        if sheet.get("kind") != "chartsheet" and start_row != 1:
+            start_row = 1
 
 
 def render_range(

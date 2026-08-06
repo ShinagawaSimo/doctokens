@@ -185,7 +185,15 @@ semantic 密度下，左上角单元格输出 `colspan=N rowspan=N`，shadow 格
 <tr row=2><td><a href="#Sheet2!B5">Go
 ```
 
+## 批注
+
+旧式批注（`xl/commentsN.xml`）解析 authors 和 commentList，通过 sheet 的 relationship 关联。structural 和 semantic 均输出内联 `<commentref id=commentN/>` 和网格后 `<comment>` 块：
+
+```
+<tr row=1><td>8.0%<commentref id=comment0/>
+<comment id=comment0 cell="'Inputs'!B4" author=Alice>采用审计批准的折现率
+```
+
 ## 尚未支持
 
-- 批注
 - 图表、数据透视表、图片

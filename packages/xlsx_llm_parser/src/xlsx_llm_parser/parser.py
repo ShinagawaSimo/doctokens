@@ -305,6 +305,9 @@ def _parse_sheet(
     # Resolve hyperlinks (relationship IDs → URLs)
     _apply_hyperlinks(root, rows, pkg, part)
 
+    # Attach legacy comments to cells
+    _apply_comments(rows, pkg, part)
+
     return rows, hidden_cols, sheet_protection
 
 
@@ -424,6 +427,58 @@ def _apply_hyperlinks(root: ET.Element, rows: list[list[Cell]],
                 cell["hyperlink"] = target
         elif location:
             cell["hyperlink"] = f"#{location}"
+
+
+_REL_COMMENTS = f"{NS_R}/comments"
+
+
+def _apply_comments(rows: list[list[Cell]], pkg: PackageReader, sheet_part: str) -> None:
+    """Parse legacy comments (xl/commentsN.xml) and attach to cells."""
+    # Find comments part via sheet relationships
+    comments_part: str | None = None
+    for rel in pkg.read_relationships_for_part(sheet_part):
+        if rel.type == _REL_COMMENTS:
+            comments_part = rel.resolved_target
+            break
+    if comments_part is None or not pkg.exists(comments_part):
+        return
+
+    with pkg.open_entry(comments_part) as stream:
+        root = ET.parse(stream).getroot()
+
+    # Authors list
+    authors: list[str] = []
+    authors_elem = root.find(f"{{{NS_S}}}authors")
+    if authors_elem is not None:
+        for a in authors_elem.findall(f"{{{NS_S}}}author"):
+            authors.append(a.text or "")
+
+    # Build cell lookup
+    cell_map: dict[tuple[int, int], Cell] = {}
+    for row_cells in rows:
+        for c in row_cells:
+            cell_map[(c["col"], c["row"])] = c
+
+    comment_list = root.find(f"{{{NS_S}}}commentList")
+    if comment_list is None:
+        return
+    idx = 0
+    for cmt in comment_list.findall(f"{{{NS_S}}}comment"):
+        ref = cmt.get("ref", "")
+        author_id_str = cmt.get("authorId", "0")
+        col, row = _parse_ref(ref)
+        cell = cell_map.get((col, row))
+        if cell is None:
+            idx += 1
+            continue
+        try:
+            author_id = int(author_id_str)
+            cell["commentAuthor"] = authors[author_id] if author_id < len(authors) else ""
+        except (ValueError, IndexError):
+            cell["commentAuthor"] = ""
+        text_elem = cmt.find(f"{{{NS_S}}}text")
+        cell["comment"] = text_elem.text if text_elem is not None and text_elem.text else ""
+        idx += 1
 
 
 def _parse_ref(ref: str) -> tuple[int, int]:

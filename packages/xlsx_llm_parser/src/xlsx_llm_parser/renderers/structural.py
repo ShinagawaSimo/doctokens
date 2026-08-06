@@ -134,14 +134,23 @@ def _render_grid(rows: list[list[Cell]], density: Density,
         return tag + " truncated>\n"
 
     parts = [tag + ">\n"]
+    comments: dict[tuple[int, int], tuple[str, str, str]] = {}  # (col,row) → (ref, author, text)
     for row_cells in rows:
-        parts.append(_render_row(row_cells, min_col, density, wb))
+        parts.append(_render_row(row_cells, min_col, density, wb, comments))
+
+    # Output comment blocks after the grid
+    for idx, ((_col, _row), (ref, author, text)) in enumerate(sorted(comments.items(), key=lambda x: (x[0][1], x[0][0]))):
+        attrs = f'id=comment{idx} cell="{escape(ref, quote=True)}"'
+        if author:
+            attrs += f" author={escape(author, quote=True)}"
+        parts.append(f"<comment {attrs}>{escape(text)}\n")
 
     return "".join(parts)
 
 
 def _render_row(row_cells: list[Cell], grid_min_col: int, density: Density,
-                wb: ParsedWorkbook | None = None) -> str:
+                wb: ParsedWorkbook | None = None,
+                comments: dict[tuple[int, int], tuple[str, str, str]] | None = None) -> str:
     actual_row = row_cells[0]["row"]
     first_cell = row_cells[0]
     row_hidden = " hidden" if first_cell.get("hidden") else ""
@@ -190,6 +199,15 @@ def _render_row(row_cells: list[Cell], grid_min_col: int, density: Density,
         body = _render_rich_text(cell["rich"]) if density == "semantic" and cell.get("rich") else escape(cell["text"])
         if cell.get("hyperlink"):
             body = f'<a href="{escape(cell["hyperlink"], quote=True)}">{body}</a>'
+        # Inline comment reference + register for post-grid output
+        if cell.get("comment") and comments is not None:
+            cid = len(comments)
+            body += f"<commentref id=comment{cid}/>"
+            comments[(cell["col"], cell["row"])] = (
+                cell["ref"],
+                cell.get("commentAuthor", ""),
+                cell["comment"],
+            )
         parts.append(body)
         next_col = c + (cell.get("colspan", 1))
 

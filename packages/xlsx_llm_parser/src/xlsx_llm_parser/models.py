@@ -27,6 +27,8 @@ class Cell(TypedDict, total=False):
     outlineLevel: int # row outline level (0 = none)
     collapsed: bool   # row collapsed state
     hyperlink: str    # resolved URL or internal ref from <hyperlink> + rels
+    comment: str      # comment text from legacy or threaded comment
+    commentAuthor: str # author name for the comment
     style: int        # index into cellXfs for style lookup
     rich: list[dict]  # formatted text runs [{text, bold, italic, color}]
 

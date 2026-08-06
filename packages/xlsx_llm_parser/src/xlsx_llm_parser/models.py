@@ -46,6 +46,9 @@ class SheetInfo(TypedDict, total=False):
     tables: list[dict]  # [{id, name, ref, columns, totalsRow}]
     filter_range: str   # A1 range from <autoFilter> (structural only)
     filter_cols: list[dict]  # [{col, type, values}] from filter columns (semantic)
+    data_validations: list[dict]  # [{ranges, type, formula1, allowBlank}]
+    conditional_formats: list[dict]  # [{ranges, priority, rule_type, formula}]
+    external_links: list[str]  # detected external workbook references
 
 
 class TableInfo(TypedDict, total=False):

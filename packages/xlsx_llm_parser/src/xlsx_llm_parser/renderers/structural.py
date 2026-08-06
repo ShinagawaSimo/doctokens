@@ -108,6 +108,27 @@ def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None) -> 
                 vals = ",".join(escape(v, quote=True) for v in fc.get("values", []))
                 yield f'<condition col={fc["col"]} type={fc["type"]} values="{vals}"/>\n'
 
+    # Data validations (semantic only)
+    if density == "semantic":
+        for dv in sheet.get("data_validations", []):
+            yield f'<dataValidation ref={dv["ranges"]} type={dv["type"]}/>\n'
+
+    # Conditional formatting (semantic only)
+    if density == "semantic":
+        for cf in sheet.get("conditional_formats", []):
+            yield f'<conditionalFormatting ref={cf["ranges"]}>\n'
+            parts = [f'<rule type={cf["ruleType"]}']
+            if cf.get("formula"):
+                parts.append(f' formula="{escape(cf["formula"], quote=True)}"')
+            parts.append("/>\n")
+            yield "".join(parts)
+
+    # External links (semantic only, once per workbook)
+    if density == "semantic" and wb is not None:
+        ext = wb.get("metadata", {}).get("external_links", [])
+        for link in ext:
+            yield f"<externalLink target={escape(link, quote=True)}/>\n"
+
     # Table summaries before grid
     for t in sheet.get("tables", []):
         attrs = f"id={t['id']} name={escape(t['name'], quote=True)} ref={t['ref']}"

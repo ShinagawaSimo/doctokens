@@ -211,6 +211,18 @@ semantic 密度下，左上角单元格输出 `colspan=N rowspan=N`，shadow 格
 
 `<autoFilter>` 在 structural 中输出 `<filter ref=A1:K50>`；semantic 额外输出 `<condition>` 条件。
 
+## 数据验证（仅 semantic）
+
+`<dataValidations>` 在 semantic 中输出 `<dataValidation ref=... type=.../>`。
+
+## 条件格式（仅 semantic）
+
+`<conditionalFormatting>` 在 semantic 中输出范围及含公式的 `<rule>`。
+
+## 外部引用（仅 semantic）
+
+definedName 中检测到的 `[Budget.xlsx]` 外部引用输出为 `<externalLink target=.../>`。
+
 ## 尚未支持
 
 - 图表、数据透视表、图片

@@ -38,14 +38,16 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
     with PackageReader(source, limits) as pkg:
         pkg.validate(required_part="xl/workbook.xml")
 
-        date_1904, sheets, defined_names = _parse_workbook_xml(pkg)
+        date_1904, sheets, defined_names, external_links = _parse_workbook_xml(pkg)
         sst, rich_map = _parse_shared_strings(pkg)
         fmt_index = parse_styles(pkg)
         fmt_index.set_date_system(date_1904)
 
         for sheet in sheets:
             if sheet.get("kind") != "chartsheet":
-                rows, hidden_cols, sheet_protection, filter_range, filter_cols = _parse_sheet(
+                (rows, hidden_cols, sheet_protection,
+                 filter_range, filter_cols,
+                 data_validations, conditional_formats) = _parse_sheet(
                     pkg, sheet["part"], sst, rich_map, fmt_index
                 )
                 sheet["rows"] = rows
@@ -57,6 +59,10 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
                     sheet["filter_range"] = filter_range
                 if filter_cols:
                     sheet["filter_cols"] = filter_cols
+                if data_validations:
+                    sheet["data_validations"] = data_validations
+                if conditional_formats:
+                    sheet["conditional_formats"] = conditional_formats
 
                 # Parse tables (ListObject) associated with this sheet
                 sheet["tables"] = _parse_tables(pkg, sheet["part"])
@@ -67,6 +73,7 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
         "metadata": {
             "source": str(source) if isinstance(source, (str, Path)) else "<bytes>",
             "defined_names": defined_names,
+            "external_links": external_links,
         },
     }
 
@@ -93,7 +100,7 @@ def _parse_workbook_xml(pkg: PackageReader) -> tuple[bool, list[SheetInfo]]:
     sheets: list[SheetInfo] = []
     sheets_elem = root.find(f"{{{NS_S}}}sheets")
     if sheets_elem is None:
-        return date_1904, sheets
+        return date_1904, sheets, [], []
 
     for sheet_elem in sheets_elem.findall(f"{{{NS_S}}}sheet"):
         name = sheet_elem.get("name", "")
@@ -136,7 +143,20 @@ def _parse_workbook_xml(pkg: PackageReader) -> tuple[bool, list[SheetInfo]]:
                 "hidden": is_hidden,
             })
 
-    return date_1904, sheets, defined_names
+    # External references (D10: detect via defined names with [N] syntax)
+    external_links: list[str] = []
+    dn_elem2 = root.find(f"{{{NS_S}}}definedNames")
+    if dn_elem2 is not None:
+        for dn in dn_elem2.findall(f"{{{NS_S}}}definedName"):
+            ref_text = dn.text or ""
+            if "[" in ref_text:
+                # Extract up to filename.xlsx] or filename.xlsm]
+                import re
+                m = re.search(r"\[([^\]]+)\]", ref_text)
+                if m and m.group(1) not in external_links:
+                    external_links.append(m.group(1))
+
+    return date_1904, sheets, defined_names, external_links
 
 
 def _parse_shared_strings(pkg: PackageReader) -> tuple[list[str], dict[int, list[dict]]]:
@@ -194,9 +214,9 @@ def _parse_sheet(
     fmt_index: FormatIndex | None = None,
 ) -> tuple[list[list[Cell]], list[tuple[int, int]], bool, str, list[dict]]:
     """Parse a single worksheet XML into typed cell rows, hidden-col ranges,
-    sheet-protection flag, filter range, and filter columns."""
+    sheet-protection, filter, data validations, and conditional formats."""
     if not pkg.exists(part):
-        return [], [], False, "", []
+        return [], [], False, "", [], [], []
 
     with pkg.open_entry(part) as stream:
         root = ET.parse(stream).getroot()
@@ -218,6 +238,30 @@ def _parse_sheet(
                 if vals:
                     filter_cols.append({"col": int(col_id_str), "type": "values", "values": vals})
 
+    # Data validations (D8).
+    data_validations: list[dict] = []
+    dvs = root.find(f"{{{NS_S}}}dataValidations")
+    if dvs is not None:
+        for dv in dvs.findall(f"{{{NS_S}}}dataValidation"):
+            data_validations.append({
+                "ranges": dv.get("sqref", ""),
+                "type": dv.get("type", ""),
+                "formula1": dv.findtext(f"{{{NS_S}}}formula1", ""),
+                "allowBlank": dv.get("allowBlank", "1") == "1",
+            })
+
+    # Conditional formatting (D9).
+    conditional_formats: list[dict] = []
+    for cf in root.findall(f"{{{NS_S}}}conditionalFormatting"):
+        cf_range = cf.get("sqref", "")
+        for rule in cf.findall(f"{{{NS_S}}}cfRule"):
+            conditional_formats.append({
+                "ranges": cf_range,
+                "priority": int(rule.get("priority", "0")),
+                "ruleType": rule.get("type", ""),
+                "formula": rule.findtext(f"{{{NS_S}}}formula", ""),
+            })
+
     # Column definitions (hidden, width, outline) — parsed before sheetData.
     hidden_cols: list[tuple[int, int]] = []
     cols_elem = root.find(f"{{{NS_S}}}cols")
@@ -230,7 +274,7 @@ def _parse_sheet(
 
     sheet_data = root.find(f"{{{NS_S}}}sheetData")
     if sheet_data is None:
-        return [], hidden_cols, sheet_protection, filter_range, filter_cols
+        return [], hidden_cols, sheet_protection, filter_range, filter_cols, data_validations, conditional_formats
 
     rows: list[list[Cell]] = []
     for row_elem in sheet_data.findall(f"{{{NS_S}}}row"):
@@ -358,7 +402,7 @@ def _parse_sheet(
     # Attach legacy comments to cells
     _apply_comments(rows, pkg, part)
 
-    return rows, hidden_cols, sheet_protection, filter_range, filter_cols
+    return rows, hidden_cols, sheet_protection, filter_range, filter_cols, data_validations, conditional_formats
 
 
 def _apply_merge_cells(root: ET.Element, rows: list[list[Cell]]) -> None:

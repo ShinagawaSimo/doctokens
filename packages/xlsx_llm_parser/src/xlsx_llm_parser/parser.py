@@ -52,6 +52,9 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
                 if sheet_protection:
                     sheet["sheet_protection"] = True
 
+                # Parse tables (ListObject) associated with this sheet
+                sheet["tables"] = _parse_tables(pkg, sheet["part"])
+
     return {
         "sheets": sheets,
         "fmt_index": fmt_index,
@@ -430,6 +433,7 @@ def _apply_hyperlinks(root: ET.Element, rows: list[list[Cell]],
 
 
 _REL_COMMENTS = f"{NS_R}/comments"
+_REL_TABLE = f"{NS_R}/table"
 
 
 def _apply_comments(rows: list[list[Cell]], pkg: PackageReader, sheet_part: str) -> None:
@@ -479,6 +483,39 @@ def _apply_comments(rows: list[list[Cell]], pkg: PackageReader, sheet_part: str)
         text_elem = cmt.find(f"{{{NS_S}}}text")
         cell["comment"] = text_elem.text if text_elem is not None and text_elem.text else ""
         idx += 1
+
+
+def _parse_tables(pkg: PackageReader, sheet_part: str) -> list[dict]:
+    """Parse ListObject tables associated with *sheet_part*."""
+    tables: list[dict] = []
+    for rel in pkg.read_relationships_for_part(sheet_part):
+        if rel.type != _REL_TABLE:
+            continue
+        table_part = rel.resolved_target or ""
+        if not table_part or not pkg.exists(table_part):
+            continue
+        with pkg.open_entry(table_part) as stream:
+            root = ET.parse(stream).getroot()
+
+        name = root.get("displayName", root.get("name", ""))
+        ref = root.get("ref", "")
+        table_id = f"table-{len(tables)}"
+        columns: list[str] = []
+        totals_row = root.get("totalsRowCount", "0") == "1"
+        table_cols = root.find(f"{{{NS_S}}}tableColumns")
+        if table_cols is not None:
+            for tc in table_cols.findall(f"{{{NS_S}}}tableColumn"):
+                col_name = tc.get("name", "")
+                if col_name:
+                    columns.append(col_name)
+        tables.append({
+            "id": table_id,
+            "name": name,
+            "ref": ref,
+            "columns": columns,
+            "totalsRow": totals_row,
+        })
+    return tables
 
 
 def _parse_ref(ref: str) -> tuple[int, int]:

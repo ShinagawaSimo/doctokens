@@ -43,6 +43,17 @@ class SheetInfo(TypedDict, total=False):
     state: str     # "visible" | "hidden" | "veryHidden"
     hidden_cols: list[tuple[int, int]]  # (min_col, max_col) ranges from <cols>
     sheet_protection: bool  # True when <sheetProtection> is present
+    tables: list[dict]  # [{id, name, ref, columns, totalsRow}]
+
+
+class TableInfo(TypedDict, total=False):
+    """Excel Table (ListObject) metadata."""
+
+    id: str          # deterministic table id
+    name: str        # displayName from the table definition
+    ref: str         # A1 range e.g. "A5:K250001"
+    columns: list[str]  # declared column names
+    totalsRow: bool  # True when totals row is shown
 
 
 class ParsedWorkbook(TypedDict):

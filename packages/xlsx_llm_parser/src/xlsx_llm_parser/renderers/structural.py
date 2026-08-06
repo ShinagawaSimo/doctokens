@@ -85,6 +85,16 @@ def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None) -> 
     if density == "semantic" and sheet.get("sheet_protection"):
         yield "<sheetProtection/>\n"
 
+    # Table summaries before grid
+    for t in sheet.get("tables", []):
+        attrs = f"id={t['id']} name={escape(t['name'], quote=True)} ref={t['ref']}"
+        if density == "semantic" and t.get("columns"):
+            cols = ",".join(t["columns"])
+            attrs += f' cols="{escape(cols, quote=True)}"'
+        if density == "semantic" and t.get("totalsRow"):
+            attrs += " totalsRow"
+        yield f"<table {attrs}>\n"
+
     if density == "plain":
         yield from _render_plain(rows)
     else:

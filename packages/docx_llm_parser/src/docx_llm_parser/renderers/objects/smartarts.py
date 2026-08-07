@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from html import escape
 
-from ...core.models import InlineObject, ResourceDetail, SmartArt
+from ...core.models import InlineObject, SmartArt
 
 
 def smartart_to_html5(obj: InlineObject) -> str:
@@ -21,29 +21,25 @@ def smartart_to_html5(obj: InlineObject) -> str:
     return f"<smartart {attrs}>{escape(all_text)}\n"
 
 
-def extract_smartart_item(s: SmartArt) -> ResourceDetail:
-    """构建 extract("smartart") 的完整返回项。"""
-    item: ResourceDetail = {
-        "id": s.get("id", ""),
-        "nodeCount": s.get("nodeCount", 0),
-        "linkCount": s.get("linkCount", 0),
-    }
+def render_smartart_resource(s: SmartArt) -> str:
+    """Render SmartArt as an HTML string for get_resource."""
+    sa_id = s.get("id", "?")
+    attrs = f"id={sa_id}"
     if s.get("layoutType"):
-        item["type"] = s["layoutType"]
-    nodes = s.get("nodes") or []
-    item_nodes = []
-    for i, n in enumerate(nodes, start=1):
-        n_item: ResourceDetail = {"index": i, "text": n.get("text", "")}
+        attrs += f" type={s['layoutType']}"
+    attrs += f" nodes={s.get('nodeCount', 0)} links={s.get('linkCount', 0)}"
+    parts = [f"<smartart {attrs}>"]
+
+    for i, n in enumerate(s.get("nodes") or [], start=1):
+        n_attrs = f"index={i} text={escape(n.get('text', ''), quote=True)}"
         if n.get("kind"):
-            n_item["kind"] = n["kind"]
-        item_nodes.append(n_item)
-    item["nodes"] = item_nodes
-    links = s.get("links") or []
-    item_links = []
-    for link in links:
-        link_item: ResourceDetail = {"from": link["from"], "to": link["to"]}
+            n_attrs += f" kind={n['kind']}"
+        parts.append(f"\n<node {n_attrs}/>")
+
+    for link in s.get("links") or []:
+        l_attrs = f'from={link["from"]} to={link["to"]}'
         if link.get("kind"):
-            link_item["kind"] = link["kind"]
-        item_links.append(link_item)
-    item["links"] = item_links
-    return item
+            l_attrs += f" kind={link['kind']}"
+        parts.append(f"\n<link {l_attrs}/>")
+
+    return "".join(parts)

@@ -10,10 +10,10 @@ from tempfile import NamedTemporaryFile
 from time import perf_counter
 
 from ..core.enums import Density, ResourceType
-from ..core.models import DocumentManifest, ParsedDocument, ResourceDetail, TableBlock
+from ..core.models import DocumentManifest, ParsedDocument, TableBlock
 from ._metrics import record_render_metrics, write_metrics_debug
 from ._render import iter_l0, iter_l1, iter_l2
-from .objects import extract_chart_item, extract_smartart_item
+from .objects import render_chart_resource, render_smartart_resource
 
 # ── 公共 API ──
 
@@ -144,7 +144,7 @@ def manifest(parsed: ParsedDocument) -> DocumentManifest:
     }
 
 
-def extract(
+def render_resource(
     parsed: ParsedDocument,
     resource_type: ResourceType | str,
     resource_id: str | None = None,
@@ -153,12 +153,10 @@ def extract(
     columns: list[str] | None = None,
     aggregate: str | None = None,
     aggregate_column: str | None = None,
-) -> list[ResourceDetail]:
-    """独立提取非文本资源，无需先取全文。
+) -> list[str]:
+    """Render a resource as an HTML string for LLM consumption.
 
-    表格支持 ``rows``（行范围 ``"10-25"``，1-based 含两端）、
-    ``columns``（按表头名称筛选）、``aggregate``（sum/count/avg/min/max，
-    需配合 ``aggregate_column``）。
+    Tables support ``rows``, ``columns``, and ``aggregate``.
     """
     resolved_type = ResourceType.parse(resource_type)
     if resolved_type.is_plural and resource_id is not None:
@@ -167,49 +165,17 @@ def extract(
         raise ValueError("resource_id is required with a singular resource type")
 
     if resolved_type in {ResourceType.IMAGES, ResourceType.IMAGE}:
-        source_path = parsed.metadata.get("sourcePath", "")
-        ocr = getattr(parsed, "ocr_results", None) or {}
-        result = []
-        for a in parsed.assets:
-            if a["type"] != "image":
-                continue
-            if resource_id and a["id"] != resource_id:
-                continue
-            item: ResourceDetail = {"id": a["id"], "type": "image"}
-            if a.get("href"):
-                item["href"] = a["href"]
-            if a.get("contentType"):
-                item["contentType"] = a["contentType"]
-            # 从原始 ZIP 中按需读取图片二进制数据
-            zip_path = a.get("zipPath")
-            if zip_path and source_path:
-                with zipfile.ZipFile(source_path, "r") as zf:
-                    item["data"] = zf.read(zip_path)
-            ocr_text = ocr.get(a["id"])
-            if ocr_text is not None:
-                item["ocr_text"] = ocr_text
-            result.append(item)
-        return result
+        return _render_images(parsed, resource_id)
 
     if resolved_type in {ResourceType.CHARTS, ResourceType.CHART}:
-        result = []
-        for c in parsed.charts:
-            if resource_id and c.get("id") != resource_id:
-                continue
-            result.append(extract_chart_item(c))
-        return result
+        return _render_charts(parsed, resource_id)
 
     if resolved_type in {ResourceType.SMARTARTS, ResourceType.SMARTART}:
-        result = []
-        for s in parsed.smartarts:
-            if resource_id and s.get("id") != resource_id:
-                continue
-            result.append(extract_smartart_item(s))
-        return result
+        return _render_smartarts(parsed, resource_id)
 
     if resolved_type is ResourceType.TABLES:
         return [
-            _table_summary(table_id, segments)
+            _render_table_resource(table_id, segments, rows, columns, aggregate, aggregate_column)
             for table_id, segments in _table_groups(parsed).items()
         ]
 
@@ -218,16 +184,91 @@ def extract(
         segments = _table_groups(parsed).get(resource_id)
         if segments is None:
             return []
-        item = _table_summary(resource_id, segments)
-        all_rows = [row for segment in segments for row in segment["rows"]]
-        if aggregate is not None:
-            agg_result = _compute_aggregate(all_rows, aggregate, aggregate_column or "")
-            item.update(agg_result)
-        else:
-            item["rows"] = _slice_and_filter_rows(all_rows, rows, columns)
-        return [item]
+        return [
+            _render_table_resource(resource_id, segments, rows, columns, aggregate, aggregate_column)
+        ]
 
     raise AssertionError("validated resource type was not handled")
+
+
+# ── per-type HTML renderers ──
+
+
+def _render_images(parsed: ParsedDocument, resource_id: str | None) -> list[str]:
+    source_path = parsed.metadata.get("sourcePath", "")
+    ocr = getattr(parsed, "ocr_results", None) or {}
+    result: list[str] = []
+    for a in parsed.assets:
+        if a["type"] != "image":
+            continue
+        if resource_id and a["id"] != resource_id:
+            continue
+        attrs = f"id={a['id']}"
+        if a.get("href"):
+            attrs += f" href={a['href']}"
+        if a.get("contentType"):
+            attrs += f" contentType={a['contentType']}"
+        parts = [f"<image {attrs}>"]
+        zip_path = a.get("zipPath")
+        if zip_path and source_path:
+            import base64
+
+            with zipfile.ZipFile(source_path, "r") as zf:
+                data = zf.read(zip_path)
+            parts.append(base64.b64encode(data).decode())
+        ocr_text = ocr.get(a["id"])
+        if ocr_text is not None:
+            parts.append(f"\n<ocr-text id={a['id']}>{ocr_text}")
+        result.append("".join(parts))
+    return result
+
+
+def _render_charts(parsed: ParsedDocument, resource_id: str | None) -> list[str]:
+    result: list[str] = []
+    for c in parsed.charts:
+        if resource_id and c.get("id") != resource_id:
+            continue
+        result.append(render_chart_resource(c))
+    return result
+
+
+def _render_smartarts(parsed: ParsedDocument, resource_id: str | None) -> list[str]:
+    result: list[str] = []
+    for s in parsed.smartarts:
+        if resource_id and s.get("id") != resource_id:
+            continue
+        result.append(render_smartart_resource(s))
+    return result
+
+
+def _render_table_resource(
+    table_id: str,
+    segments: list[TableBlock],
+    rows: str | None,
+    columns: list[str] | None,
+    aggregate: str | None,
+    aggregate_column: str | None,
+) -> str:
+    all_rows = [row for segment in segments for row in segment["rows"]]
+    column_count = max((seg["columnCount"] for seg in segments), default=0)
+    attrs = f"id={table_id} rows={len(all_rows)} cols={column_count}"
+    parts = [f"<table {attrs}>"]
+
+    if aggregate is not None:
+        agg_result = _compute_aggregate(all_rows, aggregate, aggregate_column or "")
+        op = agg_result.get("aggregate", "")
+        col = agg_result.get("aggregate_column", "")
+        val = agg_result.get("aggregate_value", "")
+        parts.append(f"\n<aggregate op={op} column={col}>{val}")
+    else:
+        filtered = _slice_and_filter_rows(all_rows, rows, columns)
+        for r in filtered:
+            cells = "|".join(c.get("text", "") for c in r["cells"])
+            if r.get("isHeader"):
+                parts.append(f"\n<tr isHeader>{cells}")
+            else:
+                parts.append(f"\n<tr>{cells}")
+    return "".join(parts)
 
 
 def _table_groups(parsed: ParsedDocument) -> dict[str, list[TableBlock]]:

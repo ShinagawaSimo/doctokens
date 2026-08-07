@@ -68,11 +68,14 @@ class DocxPipelineTests(unittest.TestCase):
             self.assertIn("Last page", render_window(docx_path, page=-1))
 
             # Public API: resource extraction
-            self.assertEqual(get_resource(docx_path, "chart", "chart1")["chartType"], "bar")
-            table = get_resource(docx_path, "table", "t1")
-            self.assertIsNotNone(table)
-            assert table is not None
-            self.assertEqual(table["rowCount"], 2)
+            chart_html = get_resource(docx_path, "chart", "chart1")
+            self.assertIsNotNone(chart_html)
+            assert chart_html is not None
+            self.assertIn("type=bar", chart_html)
+            table_html = get_resource(docx_path, "table", "t1")
+            self.assertIsNotNone(table_html)
+            assert table_html is not None
+            self.assertIn("rows=2", table_html)
 
             # Public API: atomic write
             stale = output_dir / "readable.md"

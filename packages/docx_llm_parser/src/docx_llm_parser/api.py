@@ -6,10 +6,10 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from .core.enums import Density, ResourceType
-from .core.models import ParseOptions, ResourceDetail
+from .core.models import ParseOptions
 from .parser import DocxParser
-from .renderers.html5 import extract as _extract_resources
 from .renderers.html5 import iter_html5 as _iter_html5
+from .renderers.html5 import render_resource as _render_resource
 from .renderers.html5 import to_html5 as _to_html5
 from .renderers.html5 import window as _window
 from .renderers.html5 import write_outputs
@@ -73,8 +73,8 @@ def get_resource(
     aggregate: str | None = None,
     aggregate_column: str | None = None,
     options: ParseOptions | None = None,
-) -> ResourceDetail | None:
-    """Extract one resource by ID from *source*.
+) -> str | None:
+    """Extract one resource by ID from *source* as an HTML string.
 
     ``rows`` is a range string like ``"10-25"`` (inclusive, 1-based).
     ``columns`` filters by header name.
@@ -85,7 +85,7 @@ def get_resource(
     if resolved_type.is_plural:
         raise ValueError("resource_type must be singular when getting one resource")
     parsed = DocxParser().parse(source, options)
-    items = _extract_resources(
+    items = _render_resource(
         parsed,
         resolved_type,
         resource_id,

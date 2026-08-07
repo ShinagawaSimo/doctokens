@@ -25,9 +25,9 @@ from docx_llm_parser.ooxml.numbering import (
     NumberingState,
 )
 from docx_llm_parser.ooxml.omml_latex import omath_to_latex
-from docx_llm_parser.renderers.objects.charts import chart_to_html5, extract_chart_item
+from docx_llm_parser.renderers.objects.charts import chart_to_html5, render_chart_resource
 from docx_llm_parser.renderers.objects.smartarts import (
-    extract_smartart_item,
+    render_smartart_resource,
     smartart_to_html5,
 )
 from docx_llm_parser.renderers.tables.render import render_table, table_id
@@ -250,10 +250,12 @@ class RendererBranchTests(unittest.TestCase):
         self.assertIn("categories=Q1,Q2", chart_to_html5({**chart, "chartType": "stock"}))
         self.assertIn("names=S1,S2", chart_to_html5({**chart, "chartType": "surface"}))
         self.assertIn("<chart id=empty type=? series=0 truncated>", chart_to_html5({"id": "empty"}))
-        self.assertEqual(
-            extract_chart_item(chart)["series"][0]["points"],
-            [{"category": "Q1", "value": "1"}, {"category": "Q2", "value": "2"}],
-        )
+        chart_html = render_chart_resource(chart)
+        self.assertIn("id=chartX", chart_html)
+        self.assertIn("type=bar", chart_html)
+        self.assertIn("series=6", chart_html)
+        self.assertIn("name=S1", chart_html)
+        self.assertIn('<point category=Q1 value=1/>', chart_html)
 
         smartart = {
             "id": "sa1",
@@ -274,7 +276,8 @@ class RendererBranchTests(unittest.TestCase):
         self.assertIn("truncated", rendered_sa)
         self.assertIn("Node 1", rendered_sa)
         self.assertIn("Node 14", rendered_sa)
-        self.assertIn("Node 1", extract_smartart_item(smartart)["nodes"][0]["text"])
+        sa_html = render_smartart_resource(smartart)
+        self.assertIn("Node 1", sa_html)
 
         rows = [
             {

@@ -180,8 +180,8 @@ def get_resource(
     source: str | Path | bytes,
     resource_type: str,
     resource_id: str,
-) -> dict | None:
-    """Return a lightweight resource by type and ID.
+) -> str | None:
+    """Return a resource by type and ID as an HTML string for LLM consumption.
 
     *resource_type*: ``image``, ``chart``, ``pivot_table``, ``embedded_object``.
     """
@@ -191,28 +191,47 @@ def get_resource(
         for s in wb["sheets"]:
             for img in s.get("images", []):
                 if img["id"] == resource_id:
-                    return {"type": "image", "id": resource_id, "ref": img["ref"]}
+                    return f"<image id={resource_id} ref={img['ref']}/>"
     elif resource_type == "chart":
         for s in wb["sheets"]:
             for ch in s.get("charts", []):
                 if ch["id"] == resource_id:
-                    result: dict = {
-                        "type": "chart",
-                        "id": ch["id"],
-                        "ref": ch["ref"],
-                        "chartType": ch.get("type", ""),
-                        "seriesCount": ch.get("series_count", 0),
-                    }
-                    if ch.get("title"):
-                        result["title"] = ch["title"]
-                    if ch.get("part"):
-                        result["part"] = ch["part"]
-                    if ch.get("series"):
-                        result["series"] = ch["series"]
-                    return result
+                    return _render_chart_resource(ch)
     elif resource_type == "pivot_table":
         for s in wb["sheets"]:
             for pv in s.get("pivot_tables", []):
                 if pv["id"] == resource_id:
-                    return {"type": "pivot_table", "id": resource_id, "name": pv.get("name", "")}
+                    return f"<pivotTable id={resource_id} name={pv.get('name', '')}/>"
     return None
+
+
+def _render_chart_resource(ch: dict) -> str:
+    """Render a chart as an HTML string — full series data."""
+    from html import escape
+
+    attrs = f"id={ch['id']} ref={ch['ref']} type={ch.get('type', '?')}"
+    attrs += f" series={ch.get('series_count', 0)}"
+    if ch.get("title"):
+        attrs += f" title={escape(ch['title'], quote=True)}"
+    parts = [f"<chart {attrs}>"]
+
+    for s in ch.get("series", []):
+        s_attrs = f"index={s.get('index', 0)}"
+        if s.get("name"):
+            s_attrs += f" name={escape(s['name'], quote=True)}"
+        if "min" in s:
+            s_attrs += f" min={s['min']}"
+        if "max" in s:
+            s_attrs += f" max={s['max']}"
+        parts.append(f"\n<series {s_attrs}>")
+        for pt in s.get("points", []):
+            pt_attrs = ""
+            cat = pt.get("category", "")
+            val = pt.get("value", "")
+            if cat:
+                pt_attrs += f" category={escape(cat, quote=True)}"
+            if val:
+                pt_attrs += f" value={escape(val, quote=True)}"
+            parts.append(f"\n<point{pt_attrs}/>")
+
+    return "".join(parts)

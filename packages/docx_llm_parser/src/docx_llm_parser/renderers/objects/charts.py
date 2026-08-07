@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from html import escape
 
-from ...core.models import Chart, ChartSeries, InlineObject, ResourceDetail
+from ...core.models import Chart, ChartSeries, InlineObject
 from .. import _constants
 
 
@@ -91,46 +91,35 @@ def _all_categories(series: list[ChartSeries]) -> list[str]:
     return cats
 
 
-def extract_chart_item(c: Chart) -> ResourceDetail:
-    """构建 extract("chart") 的完整返回项 — 包含全部数据点。"""
-    item: ResourceDetail = {
-        "id": c.get("id", ""),
-        "chartType": c.get("chartType", "?"),
-        "seriesCount": c.get("seriesCount", 0),
-        "pointCount": c.get("pointCount", 0),
-    }
+def render_chart_resource(c: Chart) -> str:
+    """Render a chart as an HTML string for get_resource — full data points."""
+    chart_id = c.get("id", "?")
+    chart_type = c.get("chartType", "?")
+
+    attrs = f"id={chart_id} type={chart_type}"
     if c.get("title"):
-        item["title"] = c["title"]
+        attrs += f" title={escape(c['title'], quote=True)}"
+    attrs += f" series={c.get('seriesCount', 0)} points={c.get('pointCount', 0)}"
+    parts = [f"<chart {attrs}>"]
 
-    series = c.get("series") or []
-    item_series: list[ResourceDetail] = []
-    for s in series:
-        s_item: ResourceDetail = {
-            "index": s.get("index", 0),
-            "pointCount": s.get("pointCount", 0),
-        }
+    for s in c.get("series") or []:
+        s_attrs = f"index={s.get('index', 0)}"
         if s.get("name"):
-            s_item["name"] = s["name"]
+            s_attrs += f" name={escape(s['name'], quote=True)}"
         if "min" in s:
-            s_item["min"] = s["min"]
+            s_attrs += f" min={s['min']}"
         if "max" in s:
-            s_item["max"] = s["max"]
+            s_attrs += f" max={s['max']}"
+        parts.append(f"\n<series {s_attrs}>")
 
-        # Build full data points from categories + values arrays
         cats = s.get("categories", [])
         vals = s.get("values", [])
-        points: list[dict[str, str]] = []
         for i in range(max(len(cats), len(vals))):
-            pt: dict[str, str] = {}
+            pt_attrs = ""
             if i < len(cats):
-                pt["category"] = cats[i]
+                pt_attrs += f" category={escape(cats[i], quote=True)}"
             if i < len(vals):
-                pt["value"] = vals[i]
-            if pt:
-                points.append(pt)
-        if points:
-            s_item["points"] = points
+                pt_attrs += f" value={escape(vals[i], quote=True)}"
+            parts.append(f"\n<point{pt_attrs}/>")
 
-        item_series.append(s_item)
-    item["series"] = item_series
-    return item
+    return "".join(parts)

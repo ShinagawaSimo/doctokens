@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from xml.etree import ElementTree as ET
 
+from ooxml_llm_core.chart_ml import parse_chart_xml
 from ooxml_llm_core.package import PackageReader
 
 from ._utils import col_letter, parse_ref
@@ -258,12 +259,14 @@ def parse_drawings(sheet_rels: list, pkg: PackageReader) -> tuple[list[dict], li
     # Parse chart parts for richer metadata
     for ch in charts:
         if ch.get("part"):
-            ch_type, ch_title, ch_count = _parse_chart_part(pkg, ch["part"])
-            if ch_type:
-                ch["type"] = ch_type
-            if ch_title:
-                ch["title"] = ch_title
-            ch["series_count"] = ch_count
+            ch_data = _parse_chart_part(pkg, ch["part"])
+            if ch_data.get("type"):
+                ch["type"] = ch_data["type"]
+            if ch_data.get("title"):
+                ch["title"] = ch_data["title"]
+            ch["series_count"] = ch_data.get("series_count", 0)
+            if ch_data.get("series"):
+                ch["series"] = ch_data["series"]
 
     return images, charts
 
@@ -324,47 +327,49 @@ _CHART_TYPE_MAP: dict[str, str] = {
 }
 
 
-def _parse_chart_part(pkg: PackageReader, chart_part: str) -> tuple[str, str, int]:
-    """Extract chart type, title, and series count from a chart XML part."""
+def _parse_chart_part(pkg: PackageReader, chart_part: str) -> dict:
+    """Parse a chart XML part via shared ChartML parser; return structured dict."""
     try:
         with pkg.open_entry(chart_part) as stream:
             root = ET.parse(stream).getroot()
+        info = parse_chart_xml(root)
     except Exception:
-        return "", "", 0
+        return {"type": "", "title": "", "series_count": 0}
 
-    # Chart type: first supported chart element inside c:plotArea
-    chart_type = ""
-    ns_c = "http://schemas.openxmlformats.org/drawingml/2006/chart"
-    plot_area = root.find(f"{{{ns_c}}}chart").find(f"{{{ns_c}}}plotArea") if root.find(f"{{{ns_c}}}chart") is not None else None
-    if plot_area is None:
-        plot_area = root.find(f".//{{{ns_c}}}plotArea")
-    if plot_area is not None:
-        for child in plot_area:
-            tag = child.tag.split("}", 1)[-1] if "}" in child.tag else child.tag
-            if tag in _CHART_TYPE_MAP:
-                chart_type = _CHART_TYPE_MAP[tag]
-                break
+    series_list: list[dict] = []
+    for s in info.get("series", []):
+        s_item: dict = {
+            "index": s["index"],
+            "pointCount": max(len(s.get("categories", [])), len(s.get("values", []))),
+        }
+        if s.get("name"):
+            s_item["name"] = s["name"]
+        if "min" in s:
+            s_item["min"] = s["min"]
+        if "max" in s:
+            s_item["max"] = s["max"]
+        # Full data points
+        cats = s.get("categories", [])
+        vals = s.get("values", [])
+        points: list[dict[str, str]] = []
+        for i in range(max(len(cats), len(vals))):
+            pt: dict[str, str] = {}
+            if i < len(cats):
+                pt["category"] = cats[i]
+            if i < len(vals):
+                pt["value"] = vals[i]
+            if pt:
+                points.append(pt)
+        if points:
+            s_item["points"] = points
+        series_list.append(s_item)
 
-    # Title: text from c:title → a:t elements
-    chart_title = ""
-    title_elem = root.find(f".//{{{ns_c}}}title")
-    if title_elem is not None:
-        title_parts = []
-        for t in title_elem.iter():
-            if t.tag.endswith("}t") and t.text:
-                title_parts.append(t.text)
-        chart_title = "".join(title_parts)
-
-    # Series count
-    series_count = 0
-    if plot_area is not None:
-        for child in plot_area:
-            tag = child.tag.split("}", 1)[-1] if "}" in child.tag else child.tag
-            if tag in _CHART_TYPE_MAP:
-                series_count = len(list(child.iter(f"{{{ns_c}}}ser")))
-                break
-
-    return chart_type, chart_title, series_count
+    return {
+        "type": info.get("chart_type", ""),
+        "title": info.get("title", ""),
+        "series_count": info.get("series_count", 0),
+        "series": series_list,
+    }
 
 
 # ── Pivot tables ──

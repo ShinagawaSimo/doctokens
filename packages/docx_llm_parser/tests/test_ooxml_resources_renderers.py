@@ -228,6 +228,8 @@ class RendererBranchTests(unittest.TestCase):
                 "name": f"S{index}",
                 "min": 1.0,
                 "max": float(index + 2),
+                "categories": [f"Q{index}", f"Q{index + 1}"],
+                "values": ["1", "2"],
             }
             for index in range(1, 7)
         ]
@@ -248,7 +250,10 @@ class RendererBranchTests(unittest.TestCase):
         self.assertIn("categories=Q1,Q2", chart_to_html5({**chart, "chartType": "stock"}))
         self.assertIn("names=S1,S2", chart_to_html5({**chart, "chartType": "surface"}))
         self.assertIn("<chart id=empty type=? series=0 truncated>", chart_to_html5({"id": "empty"}))
-        self.assertEqual(extract_chart_item(chart)["series"][0]["points"], ["Q1=1", "Q2=2"])
+        self.assertEqual(
+            extract_chart_item(chart)["series"][0]["points"],
+            [{"category": "Q1", "value": "1"}, {"category": "Q2", "value": "2"}],
+        )
 
         smartart = {
             "id": "sa1",

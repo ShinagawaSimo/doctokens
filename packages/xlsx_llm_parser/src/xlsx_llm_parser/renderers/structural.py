@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from html import escape
 
+from .._utils import col_letter, parse_ref
 from ..models import Cell, ParsedWorkbook, SheetInfo
 from ._constants import (
     _CELL_BUDGET,
@@ -80,7 +81,7 @@ def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None,
         hidden_cols = sheet.get("hidden_cols")
         if hidden_cols:
             for cmin, cmax in hidden_cols:
-                col_range = _col_letter(cmin) if cmin == cmax else f"{_col_letter(cmin)}:{_col_letter(cmax)}"
+                col_range = col_letter(cmin) if cmin == cmax else f"{col_letter(cmin)}:{col_letter(cmax)}"
                 yield f"<columns ref={col_range} hidden>\n"
 
     if density == "semantic" and sheet.get("sheet_protection"):
@@ -134,9 +135,20 @@ def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None,
     for img in sheet.get("images", []):
         yield f'<image id={img["id"]} ref={img["ref"]}/>\n'
 
-    # Charts (structural: locator; semantic: details)
+    # Charts (structural: summary; semantic: details)
     for ch in sheet.get("charts", []):
-        yield f'<chart id={ch["id"]} ref={ch["ref"]} type={ch["type"]} series={ch["series_count"]}/>\n'
+        attrs = f'id={ch["id"]} ref={ch["ref"]} type={ch.get("type","?")}'
+        attrs += f' series={ch.get("series_count", 0)}'
+        # Series names for quick identification
+        ch_series = ch.get("series", [])
+        if ch_series:
+            names = [s.get("name", f"S{s.get('index','')}") for s in ch_series]
+            if names:
+                attrs += f' names={escape(",".join(names), quote=True)}'
+        if ch.get("title"):
+            attrs += f" title={escape(ch['title'], quote=True)}"
+        attrs += " truncated"
+        yield f"<chart {attrs}/>\n"
 
     # Pivot tables (structural locator only)
     for pv in sheet.get("pivot_tables", []):
@@ -204,7 +216,7 @@ def _render_grid(rows: list[list[Cell]], density: Density,
     if min_col == _GRID_BOUND_SENTINEL:
         return ""  # start_row beyond all data rows
 
-    ref = f"{_col_letter(min_col)}{min_row}:{_col_letter(max_col)}{max_row}"
+    ref = f"{col_letter(min_col)}{min_row}:{col_letter(max_col)}{max_row}"
     tag = f"<grid ref={ref}"
 
     parts = [tag + ">\n"]
@@ -276,7 +288,7 @@ def _render_row(row_cells: list[Cell], grid_min_col: int, density: Density,
                 if prot:
                     tag_attrs += f" {prot}"
         if c != next_col:
-            tag_attrs += f" col={_col_letter(c)}"
+            tag_attrs += f" col={col_letter(c)}"
         parts.append(f"<{tag_attrs}>")
         body = _render_rich_text(cell["rich"]) if density == "semantic" and cell.get("rich") else escape(cell["text"])
         if cell.get("hyperlink"):
@@ -325,8 +337,8 @@ def _parse_range(spec: str) -> tuple[int, int, int, int]:
     if ":" not in spec:
         raise ValueError(f"Invalid range {spec!r}: expected 'A1:B2' format")
     start_ref, end_ref = spec.split(":", 1)
-    sc, sr = _parse_ref(start_ref)
-    ec, er = _parse_ref(end_ref)
+    sc, sr = parse_ref(start_ref)
+    ec, er = parse_ref(end_ref)
     return sc, sr, ec, er
 
 
@@ -365,28 +377,3 @@ def _render_rich_text(runs: list[dict]) -> str:
             txt = f'<color value={run["color"]}>{txt}</color>'
         parts.append(txt)
     return "".join(parts)
-
-
-def _col_letter(col: int) -> str:
-    """Convert 1-based column number to A-Z letter(s)."""
-    result = ""
-    while col > 0:
-        col, rem = divmod(col - 1, 26)
-        result = chr(ord("A") + rem) + result
-    return result
-
-
-def _parse_ref(ref: str) -> tuple[int, int]:
-    """Parse an A1-style reference into (col, row) as 1-based integers."""
-    col_str = ""
-    row_str = ""
-    for ch in ref:
-        if ch.isalpha():
-            col_str += ch
-        else:
-            row_str += ch
-    col = 0
-    for ch in col_str.upper():
-        col = col * 26 + (ord(ch) - ord("A") + 1)
-    row = int(row_str) if row_str else 0
-    return col, row

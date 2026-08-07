@@ -92,7 +92,7 @@ def _all_categories(series: list[ChartSeries]) -> list[str]:
 
 
 def extract_chart_item(c: Chart) -> ResourceDetail:
-    """构建 extract("chart") 的完整返回项。"""
+    """构建 extract("chart") 的完整返回项 — 包含全部数据点。"""
     item: ResourceDetail = {
         "id": c.get("id", ""),
         "chartType": c.get("chartType", "?"),
@@ -103,7 +103,7 @@ def extract_chart_item(c: Chart) -> ResourceDetail:
         item["title"] = c["title"]
 
     series = c.get("series") or []
-    item_series = []
+    item_series: list[ResourceDetail] = []
     for s in series:
         s_item: ResourceDetail = {
             "index": s.get("index", 0),
@@ -115,11 +115,22 @@ def extract_chart_item(c: Chart) -> ResourceDetail:
             s_item["min"] = s["min"]
         if "max" in s:
             s_item["max"] = s["max"]
-        preview = (s.get("preview") or "").split("; ")
-        if preview:
-            s_item["points"] = preview[: _constants._EXTRACT_POINTS_LIMIT]
-            if len(preview) > _constants._EXTRACT_POINTS_LIMIT:
-                s_item["truncated"] = True
+
+        # Build full data points from categories + values arrays
+        cats = s.get("categories", [])
+        vals = s.get("values", [])
+        points: list[dict[str, str]] = []
+        for i in range(max(len(cats), len(vals))):
+            pt: dict[str, str] = {}
+            if i < len(cats):
+                pt["category"] = cats[i]
+            if i < len(vals):
+                pt["value"] = vals[i]
+            if pt:
+                points.append(pt)
+        if points:
+            s_item["points"] = points
+
         item_series.append(s_item)
     item["series"] = item_series
     return item

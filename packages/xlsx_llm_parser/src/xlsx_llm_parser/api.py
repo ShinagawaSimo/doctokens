@@ -205,6 +205,8 @@ def get_resource(
                         result["title"] = ch["title"]
                     if ch.get("part"):
                         result["part"] = ch["part"]
+                    if ch.get("series"):
+                        result["series"] = ch["series"]
                     return result
     elif resource_type == "pivot_table":
         for s in wb["sheets"]:

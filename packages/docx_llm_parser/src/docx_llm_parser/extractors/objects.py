@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from xml.etree import ElementTree as ET
 
+from ooxml_llm_core.chart_ml import parse_chart_xml
+
 from ..core.constants import first_child, local_name, qualified_name
 from ..core.models import (
     Chart,
@@ -24,26 +26,6 @@ DIAGRAM_DATA_REL_TYPE = (
 DIAGRAM_LAYOUT_REL_TYPE = (
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout"
 )
-
-CHART_TYPE_MAP = {
-    "areaChart": "area",
-    "area3DChart": "area3d",
-    "barChart": "bar",
-    "bar3DChart": "bar3d",
-    "bubbleChart": "bubble",
-    "doughnutChart": "doughnut",
-    "lineChart": "line",
-    "line3DChart": "line3d",
-    "ofPieChart": "ofPie",
-    "pieChart": "pie",
-    "pie3DChart": "pie3d",
-    "radarChart": "radar",
-    "scatterChart": "scatter",
-    "surfaceChart": "surface",
-    "surface3DChart": "surface3d",
-}
-
-MAX_PREVIEW_POINTS = 8
 
 
 class EmbeddedObjectExtractor:
@@ -169,21 +151,39 @@ class EmbeddedObjectExtractor:
 
 
 def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> Chart:
-    """从 chart XML 中抽取 LLM 需要的轻量图表信息。"""
-    plot_area = root.find(".//" + qualified_name("c", "plotArea"))
-    chart_type = _chart_type(plot_area) or "unknown"
-    series = _chart_series(plot_area)
-    point_count = sum(item["pointCount"] for item in series)
+    """从 chart XML 中抽取图表信息 — 委托给共享 ChartML 解析器。"""
+    info = parse_chart_xml(root)
+    series: list[ChartSeries] = []
+    for s in info.get("series", []):
+        row: ChartSeries = {
+            "index": s["index"],
+            "pointCount": max(len(s.get("categories", [])), len(s.get("values", []))),
+            "preview": s.get("preview", ""),
+        }
+        if s.get("name"):
+            row["name"] = s["name"]
+        if "min" in s:
+            row["min"] = s["min"]
+        if "max" in s:
+            row["max"] = s["max"]
+        if s.get("formula"):
+            row["formula"] = s["formula"]
+        if s.get("categories"):
+            row["categories"] = s["categories"]
+        if s.get("values"):
+            row["values"] = s["values"]
+        series.append(row)
+
     chart: Chart = {
         "id": chart_id,
         "type": "chart",
-        "chartType": chart_type,
+        "chartType": info.get("chart_type", "unknown"),
         "part": part_name,
-        "seriesCount": len(series),
-        "pointCount": point_count,
+        "seriesCount": info.get("series_count", 0),
+        "pointCount": info.get("point_count", 0),
         "series": series,
     }
-    title = _chart_title(root)
+    title = info.get("title", "")
     if title:
         chart["title"] = title
     return chart
@@ -239,122 +239,10 @@ def parse_smartart_root(root: ET.Element, smartart_id: str, part_name: str) -> S
     }
 
 
-def _chart_type(plot_area: ET.Element | None) -> str | None:
-    """识别 plotArea 下第一个图表类型。"""
-    if plot_area is None:
-        return None
-    for item in plot_area:
-        lname = local_name(item.tag)
-        if lname in CHART_TYPE_MAP:
-            return CHART_TYPE_MAP[lname]
-    return None
-
-
-def _chart_title(root: ET.Element) -> str | None:
-    """读取图表标题富文本。"""
-    title = root.find(".//" + qualified_name("c", "title"))
-    if title is None:
-        return None
-    return _drawing_text(title) or None
-
-
-def _chart_series(plot_area: ET.Element | None) -> list[ChartSeries]:
-    """解析所有 c:ser，并生成轻量数据摘要。"""
-    if plot_area is None:
-        return []
-    rows: list[ChartSeries] = []
-    for ser_index, ser in enumerate(plot_area.iter(qualified_name("c", "ser")), start=1):
-        categories = _cached_values(first_child(ser, "c", "cat")) or _cached_values(
-            first_child(ser, "c", "xVal")
-        )
-        values = _cached_values(first_child(ser, "c", "val")) or _cached_values(
-            first_child(ser, "c", "yVal")
-        )
-        name = _series_name(ser)
-        point_count = max(len(categories), len(values))
-        row: ChartSeries = {
-            "index": ser_index,
-            "pointCount": point_count,
-            "preview": _series_preview(categories, values),
-        }
-        if name:
-            row["name"] = name
-        value_numbers = [number for value in values if (number := _to_float(value)) is not None]
-        if value_numbers:
-            # min/max 支持用户快速理解趋势和范围。
-            row["min"] = min(value_numbers)
-            row["max"] = max(value_numbers)
-        formula = _first_formula(ser)
-        if formula:
-            row["formula"] = formula
-        rows.append(row)
-    return rows
-
-
-def _series_name(ser: ET.Element) -> str | None:
-    """读取系列名，优先使用缓存字符串。"""
-    tx = first_child(ser, "c", "tx")
-    if tx is None:
-        return None
-    values = _cached_values(tx)
-    if values:
-        return values[0]
-    return _first_chart_value(tx)
-
-
-def _cached_values(node: ET.Element | None) -> list[str]:
-    """读取 strCache/numCache 中按点保存的值。"""
-    if node is None:
-        return []
-    points: list[tuple[int, str]] = []
-    for point in node.iter(qualified_name("c", "pt")):
-        value = first_child(point, "c", "v")
-        if value is None:
-            continue
-        idx = int(point.get("idx") or len(points))
-        points.append((idx, value.text or ""))
-    return [value for _idx, value in sorted(points, key=lambda item: item[0])]
-
-
-def _first_chart_value(node: ET.Element) -> str | None:
-    """读取 chart 子树中的第一个 c:v 文本。"""
-    value = node.find(".//" + qualified_name("c", "v"))
-    if value is None:
-        return None
-    return value.text or None
-
-
-def _first_formula(node: ET.Element) -> str | None:
-    """读取系列数据来源公式，仅进入 debug/内部对象。"""
-    formula = node.find(".//" + qualified_name("c", "f"))
-    if formula is None:
-        return None
-    return formula.text or None
-
-
-def _series_preview(categories: list[str], values: list[str]) -> str:
-    """生成少量点预览，避免把大图表全量塞进段落 XML。"""
-    items: list[str] = []
-    count = max(len(categories), len(values))
-    for index in range(min(count, MAX_PREVIEW_POINTS)):
-        category = categories[index] if index < len(categories) else str(index + 1)
-        value = values[index] if index < len(values) else ""
-        items.append(f"{category}={value}" if value else category)
-    return "; ".join(items)
-
-
 def _drawing_text(node: ET.Element) -> str:
     """读取 DrawingML/diagram 富文本中的 a:t 文本。"""
     parts = [item.text or "" for item in node.iter() if item.tag == qualified_name("a", "t")]
     return "".join(parts).strip()
-
-
-def _to_float(value: str) -> float | None:
-    """把 chart cache 中的数值文本转为 float。"""
-    try:
-        return float(value)
-    except ValueError:
-        return None
 
 
 def _layout_type(root: ET.Element) -> str | None:

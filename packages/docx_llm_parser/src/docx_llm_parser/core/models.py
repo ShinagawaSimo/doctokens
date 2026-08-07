@@ -67,12 +67,14 @@ class ChartSeriesRequired(TypedDict):
 
 
 class ChartSeries(ChartSeriesRequired, total=False):
-    """Compact data summary for one chart series."""
+    """Full data for one chart series."""
 
     name: str
     min: float
     max: float
     formula: str
+    categories: list[str]   # full category labels (for get_resource)
+    values: list[str]       # full cached values (for get_resource)
 
 
 class ChartRequired(TypedDict):

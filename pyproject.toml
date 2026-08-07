@@ -25,6 +25,7 @@ testpaths = [
     "packages/ooxml_llm_core/tests",
     "packages/docx_llm_parser/tests",
     "packages/xlsx_llm_parser/tests",
+    "packages/ocr_llm_core/tests",
 ]
 addopts = [
     "-ra",
@@ -33,13 +34,19 @@ addopts = [
     "--cov=ooxml_llm_core",
     "--cov=docx_llm_parser",
     "--cov=xlsx_llm_parser",
+    "--cov=ocr_llm_core",
     "--cov-branch",
     "--cov-fail-under=85",
 ]
 
 [tool.coverage.run]
 branch = true
-source = ["packages/ooxml_llm_core/src", "packages/docx_llm_parser/src", "packages/xlsx_llm_parser/src"]
+source = [
+    "packages/ooxml_llm_core/src",
+    "packages/docx_llm_parser/src",
+    "packages/xlsx_llm_parser/src",
+    "packages/ocr_llm_core/src",
+]
 
 [tool.ruff]
 target-version = "py310"
@@ -56,4 +63,5 @@ files = [
     "packages/ooxml_llm_core/src",
     "packages/docx_llm_parser/src",
     "packages/xlsx_llm_parser/src",
+    "packages/ocr_llm_core/src",
 ]

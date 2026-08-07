@@ -128,7 +128,9 @@ from docx_llm_parser import ParseOptions, parse_docx, write_document
 
 output_dir = Path("out") / "example"
 parsed = parse_docx("example.docx", ParseOptions(debug=True, output_dir=output_dir))
-html_path = write_document(parsed, output_dir, density="semantic")  # "plain" | "structural" | "semantic"
+html_path = write_document(
+    parsed, output_dir, density="semantic"
+)  # "plain" | "structural" | "semantic"
 ```
 
 ### 分步使用
@@ -145,7 +147,7 @@ parsed = parse_docx(
 )
 
 # 渲染
-html_text = render_document(parsed, density="semantic")                 # 返回字符串
+html_text = render_document(parsed, density="semantic")  # 返回字符串
 html_path = write_document(parsed, Path("out/example"), density="semantic")  # 写入 parsed.html
 ```
 
@@ -181,9 +183,9 @@ for result in results:
 ```python
 from docx_llm_parser import render_window
 
-content = render_window(parsed, page=3)                          # 第 3 页，semantic
-content = render_window(parsed, page=5, span=3, density="structural")    # 第 5-7 页，structural
-last_page = render_window(parsed, page=-1)                       # 最后一页（page=-1 语法糖）
+content = render_window(parsed, page=3)  # 第 3 页，semantic
+content = render_window(parsed, page=5, span=3, density="structural")  # 第 5-7 页，structural
+last_page = render_window(parsed, page=-1)  # 最后一页（page=-1 语法糖）
 ```
 
 页码来自 OOXML 中的显式分页标记（`w:br w:type="page"` + `w:lastRenderedPageBreak`）。
@@ -193,8 +195,8 @@ last_page = render_window(parsed, page=-1)                       # 最后一页�
 ```python
 from docx_llm_parser import get_resource
 
-image = get_resource(parsed, "image", "img3")      # 单张图片详情
-table = get_resource(parsed, "table", "t2")        # 完整逻辑表格
+image = get_resource(parsed, "image", "img3")  # 单张图片详情
+table = get_resource(parsed, "table", "t2")  # 完整逻辑表格
 ```
 
 无需读取全文即可获取资源详情，供 LLM 按需精读。

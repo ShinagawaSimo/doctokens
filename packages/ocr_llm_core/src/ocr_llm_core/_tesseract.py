@@ -23,7 +23,7 @@ class TesseractProvider(OcrProvider):
 
     def extract(self, image_bytes: bytes) -> str:
         try:
-            import pytesseract  # type: ignore[import-untyped]
+            import pytesseract  # type: ignore[import-not-found, import-untyped]
         except ImportError:
             return ""
         try:

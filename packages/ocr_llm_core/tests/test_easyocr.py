@@ -36,9 +36,7 @@ class EasyOcrProviderTest(unittest.TestCase):
 
     def test_extract_returns_empty_on_error(self) -> None:
         p = EasyOcrProvider(["en"])
-        with patch(
-            "easyocr.Reader", side_effect=RuntimeError("no GPU")
-        ):
+        with patch("easyocr.Reader", side_effect=RuntimeError("no GPU")):
             result = p.extract(b"fake")
         self.assertEqual(result, "")
 

@@ -64,7 +64,7 @@ class TableTests(unittest.TestCase):
                     f'<table xmlns="{NS_S}" '
                     'name="Sales" displayName="Sales" ref="A1:D5" '
                     'totalsRowCount="1">'
-                    "<tableColumns count=\"3\">"
+                    '<tableColumns count="3">'
                     '<tableColumn name="Product"/>'
                     '<tableColumn name="Q1"/>'
                     '<tableColumn name="Q2"/>'
@@ -83,7 +83,7 @@ class TableTests(unittest.TestCase):
         semantic = parse_xlsx(data, density="semantic")
 
         # structural: basic table locator
-        self.assertIn('<table id=table-0 name=Sales ref=A1:D5>', structural)
+        self.assertIn("<table id=table-0 name=Sales ref=A1:D5>", structural)
         self.assertNotIn("cols=", structural)
         # semantic: adds column names
         self.assertIn("cols=", semantic)

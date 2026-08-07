@@ -35,9 +35,7 @@ class DateDecodingTests(unittest.TestCase):
         custom_fmts_xml = ""
         if custom_fmts:
             items = "".join(custom_fmts)
-            custom_fmts_xml = (
-                f'<numFmts count="{len(custom_fmts)}">{items}</numFmts>'
-            )
+            custom_fmts_xml = f'<numFmts count="{len(custom_fmts)}">{items}</numFmts>'
         return _make_xlsx(
             {
                 "[Content_Types].xml": (
@@ -58,7 +56,7 @@ class DateDecodingTests(unittest.TestCase):
                 "xl/workbook.xml": (
                     f'<workbook xmlns="{NS_S}" '
                     'xmlns:r="http://schemas.openxmlformats.org/package/2006/relationships">'
-                    f'<workbookPr{date_attr}/>'
+                    f"<workbookPr{date_attr}/>"
                     "<sheets>"
                     '<sheet name="Data" sheetId="1" r:id="rSheet1"/>'
                     "</sheets>"
@@ -72,15 +70,15 @@ class DateDecodingTests(unittest.TestCase):
                 ),
                 "xl/styles.xml": (
                     f'<styleSheet xmlns="{NS_S}">'
-                    f'{custom_fmts_xml}'
+                    f"{custom_fmts_xml}"
                     f'<cellXfs count="{len(cell_xfs)}">'
-                    f'{"".join(cell_xfs)}'
+                    f"{''.join(cell_xfs)}"
                     f"</cellXfs>"
                     f"</styleSheet>"
                 ),
                 "xl/worksheets/sheet1.xml": (
                     f'<worksheet xmlns="{NS_S}"><sheetData>'
-                    f'{"".join(sheet_rows)}'
+                    f"{''.join(sheet_rows)}"
                     f"</sheetData></worksheet>"
                 ),
             },
@@ -90,9 +88,7 @@ class DateDecodingTests(unittest.TestCase):
         """numFmtId 14 (m/d/yyyy) is detected as date and decoded."""
         data = self._make_date_xlsx(
             cell_xfs=['<xf numFmtId="14" xfId="0"/>'],
-            sheet_rows=[
-                '<row r="1"><c r="A1" s="0"><v>44927</v></c></row>'
-            ],
+            sheet_rows=['<row r="1"><c r="A1" s="0"><v>44927</v></c></row>'],
         )
         html = parse_xlsx(data)
         # 44927 = 2023-01-01
@@ -102,9 +98,7 @@ class DateDecodingTests(unittest.TestCase):
         """numFmtId 22 (m/d/yyyy h:mm) includes time."""
         data = self._make_date_xlsx(
             cell_xfs=['<xf numFmtId="22" xfId="0"/>'],
-            sheet_rows=[
-                '<row r="1"><c r="A1" s="0"><v>44927.5</v></c></row>'
-            ],
+            sheet_rows=['<row r="1"><c r="A1" s="0"><v>44927.5</v></c></row>'],
         )
         html = parse_xlsx(data)
         self.assertIn("2023-01-01", html)
@@ -113,9 +107,7 @@ class DateDecodingTests(unittest.TestCase):
         """Mac date system (1904-based) decodes differently."""
         data = self._make_date_xlsx(
             cell_xfs=['<xf numFmtId="14" xfId="0"/>'],
-            sheet_rows=[
-                '<row r="1"><c r="A1" s="0"><v>1</v></c></row>'
-            ],
+            sheet_rows=['<row r="1"><c r="A1" s="0"><v>1</v></c></row>'],
             date_1904=True,
         )
         html = parse_xlsx(data)
@@ -125,9 +117,7 @@ class DateDecodingTests(unittest.TestCase):
         """numFmtId 0 (General) leaves raw number unchanged."""
         data = self._make_date_xlsx(
             cell_xfs=['<xf numFmtId="0" xfId="0"/>'],
-            sheet_rows=[
-                '<row r="1"><c r="A1" s="0"><v>123.456</v></c></row>'
-            ],
+            sheet_rows=['<row r="1"><c r="A1" s="0"><v>123.456</v></c></row>'],
         )
         html = parse_xlsx(data)
         self.assertIn("123.456", html)
@@ -179,9 +169,7 @@ class DateDecodingTests(unittest.TestCase):
         """numFmtId 9 (0%) is detected as percentage."""
         data = self._make_date_xlsx(
             cell_xfs=['<xf numFmtId="9" xfId="0"/>'],
-            sheet_rows=[
-                '<row r="1"><c r="A1" s="0"><v>0.125</v></c></row>'
-            ],
+            sheet_rows=['<row r="1"><c r="A1" s="0"><v>0.125</v></c></row>'],
         )
         html = parse_xlsx(data)
         self.assertIn("12.5%", html)
@@ -190,9 +178,7 @@ class DateDecodingTests(unittest.TestCase):
         """Custom format containing 'yyyy' is detected as date."""
         data = self._make_date_xlsx(
             cell_xfs=['<xf numFmtId="164" xfId="0"/>'],
-            sheet_rows=[
-                '<row r="1"><c r="A1" s="0"><v>44927</v></c></row>'
-            ],
+            sheet_rows=['<row r="1"><c r="A1" s="0"><v>44927</v></c></row>'],
             custom_fmts=['<numFmt numFmtId="164" formatCode="yyyy-mm-dd"/>'],
         )
         html = parse_xlsx(data)

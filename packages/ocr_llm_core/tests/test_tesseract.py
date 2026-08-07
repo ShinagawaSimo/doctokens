@@ -32,9 +32,7 @@ class TesseractProviderTest(unittest.TestCase):
 
     def test_extract_calls_image_to_string(self) -> None:
         p = TesseractProvider(lang="eng+chi_sim")
-        with patch(
-            "pytesseract.image_to_string", return_value="hello world"
-        ):
+        with patch("pytesseract.image_to_string", return_value="hello world"):
             result = p.extract(b"fake-image-bytes")
         self.assertEqual(result, "hello world")
 

@@ -9,7 +9,9 @@ from .._text_utils import filter_format, merge_text_runs
 from ..objects import chart_to_html5, smartart_to_html5
 
 
-def inline_content(block: InlineContainer, density: str, ocr_results: dict[str, str] | None = None) -> str:
+def inline_content(
+    block: InlineContainer, density: str, ocr_results: dict[str, str] | None = None
+) -> str:
     """把 run 文本、链接、图片、脚注引用等合成为 inline HTML5。"""
     if "runs" not in block:
         return escape(block["text"])
@@ -73,7 +75,9 @@ def apply_inline_format(text: str, fmt: RunFormat, density: str) -> str:
     return text
 
 
-def inline_object(obj: InlineObject, density: str, ocr_results: dict[str, str] | None = None) -> str:
+def inline_object(
+    obj: InlineObject, density: str, ocr_results: dict[str, str] | None = None
+) -> str:
     """渲染段落内的非纯文本对象引用。"""
     obj_type = obj["type"]
 
@@ -115,7 +119,7 @@ def inline_object(obj: InlineObject, density: str, ocr_results: dict[str, str] |
 
 def image_object(obj: InlineObject, density: str, ocr_results: dict[str, str] | None = None) -> str:
     """Render an embedded image reference with optional OCR text."""
-    asset_id = obj.get('assetId', '')
+    asset_id = obj.get("assetId", "")
     if density == "structural":
         img_tag = "<img>"
     else:

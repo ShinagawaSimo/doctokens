@@ -6,7 +6,7 @@ from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.chart_ml import parse_chart_xml
 
-from ..core.constants import first_child, local_name, qualified_name
+from ..core.constants import qualified_name
 from ..core.models import (
     Chart,
     ChartSeries,

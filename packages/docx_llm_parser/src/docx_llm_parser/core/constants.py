@@ -10,14 +10,22 @@ from xml.etree import ElementTree as ET
 
 # 共享 helper 实现（带别名避免与本地 wrapper 冲突）
 # isort: split
+from ooxml_llm_core.xml import NS as _NS_OPC
 from ooxml_llm_core.xml import (
     attr as _core_attr,
+)
+from ooxml_llm_core.xml import (
     child_elements as _core_child_elements,
+)
+from ooxml_llm_core.xml import (
     first_child as _core_first_child,
+)
+from ooxml_llm_core.xml import (
     local_name,
+)
+from ooxml_llm_core.xml import (
     qualified_name as _core_qualified_name,
 )
-from ooxml_llm_core.xml import NS as _NS_OPC
 
 # ── DOCX 完整命名空间映射 ──
 

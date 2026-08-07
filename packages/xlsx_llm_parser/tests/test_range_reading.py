@@ -191,9 +191,7 @@ class RangeReadingTests(unittest.TestCase):
                     'Target="worksheets/sheet1.xml"/>'
                     "</Relationships>"
                 ),
-                "xl/worksheets/sheet1.xml": (
-                    f'<worksheet xmlns="{NS_S}"><sheetData/></worksheet>'
-                ),
+                "xl/worksheets/sheet1.xml": (f'<worksheet xmlns="{NS_S}"><sheetData/></worksheet>'),
             },
         )
         with self.assertRaises(ValueError):
@@ -228,9 +226,7 @@ class RangeReadingTests(unittest.TestCase):
                     'Target="worksheets/sheet1.xml"/>'
                     "</Relationships>"
                 ),
-                "xl/worksheets/sheet1.xml": (
-                    f'<worksheet xmlns="{NS_S}"><sheetData/></worksheet>'
-                ),
+                "xl/worksheets/sheet1.xml": (f'<worksheet xmlns="{NS_S}"><sheetData/></worksheet>'),
             },
         )
         with self.assertRaises(ValueError):

@@ -17,25 +17,49 @@ NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
 # Theme color slot order (ECMA-376 §20.1.6.2).
 _THEME_SLOTS = [
-    "dk1", "lt1", "dk2", "lt2",
-    "accent1", "accent2", "accent3", "accent4", "accent5", "accent6",
-    "hlink", "folHlink",
+    "dk1",
+    "lt1",
+    "dk2",
+    "lt2",
+    "accent1",
+    "accent2",
+    "accent3",
+    "accent4",
+    "accent5",
+    "accent6",
+    "hlink",
+    "folHlink",
 ]
 
 # Office default theme colors (fallback when theme1.xml is absent).
 _DEFAULT_THEME: dict[int, str] = {
     idx: rgb
-    for idx, rgb in enumerate([
-        "000000", "FFFFFF", "44546A", "E7E6E6",
-        "4472C4", "ED7D31", "A5A5A5", "FFC000",
-        "5B9BD5", "70AD47", "0563C1", "954F72",
-    ])
+    for idx, rgb in enumerate(
+        [
+            "000000",
+            "FFFFFF",
+            "44546A",
+            "E7E6E6",
+            "4472C4",
+            "ED7D31",
+            "A5A5A5",
+            "FFC000",
+            "5B9BD5",
+            "70AD47",
+            "0563C1",
+            "954F72",
+        ]
+    )
 }
 
 # numFmtId ranges for built-in date / time formats (ECMA-376 §18.8.30).
 _BUILTIN_DATE_IDS: set[int] = set()
 for _lo, _hi in [
-    (14, 22), (27, 36), (45, 47), (50, 58), (71, 81),
+    (14, 22),
+    (27, 36),
+    (45, 47),
+    (50, 58),
+    (71, 81),
 ]:
     _BUILTIN_DATE_IDS.update(range(_lo, _hi + 1))
 
@@ -78,10 +102,15 @@ class FormatIndex:
     def register_fill(self, fill_info: dict) -> None:
         self._fills.append(fill_info)
 
-    def register_cell_format(self, num_fmt_id: int, format_code: str,
-                             font_id: int = 0, fill_id: int = 0,
-                             locked: bool = True,
-                             formula_hidden: bool = False) -> None:
+    def register_cell_format(
+        self,
+        num_fmt_id: int,
+        format_code: str,
+        font_id: int = 0,
+        fill_id: int = 0,
+        locked: bool = True,
+        formula_hidden: bool = False,
+    ) -> None:
         self._cell_formats.append(
             (num_fmt_id, format_code, font_id, fill_id, locked, formula_hidden)
         )
@@ -109,7 +138,9 @@ class FormatIndex:
         if style_index is None or style_index >= len(self._cell_formats):
             return ""
         if style_index not in self._style_attrs_cache:
-            _num_fmt_id, _fmt_code, font_id, fill_id, _locked, _hidden = self._cell_formats[style_index]
+            _num_fmt_id, _fmt_code, font_id, fill_id, _locked, _hidden = self._cell_formats[
+                style_index
+            ]
             parts = []
             if font_id < len(self._fonts):
                 font = self._fonts[font_id]
@@ -137,7 +168,9 @@ class FormatIndex:
         """
         if style_index is None or style_index >= len(self._cell_formats):
             return ""
-        _num_fmt_id, _fmt_code, _font_id, _fill_id, locked, formula_hidden = self._cell_formats[style_index]
+        _num_fmt_id, _fmt_code, _font_id, _fill_id, locked, formula_hidden = self._cell_formats[
+            style_index
+        ]
         parts = []
         if not locked:
             parts.append("unlocked")
@@ -147,12 +180,8 @@ class FormatIndex:
 
     def _resolve(self, num_fmt_id: int, fmt_code: str) -> tuple[bool, bool]:
         if num_fmt_id not in self._fmt_cache:
-            is_date = num_fmt_id in _BUILTIN_DATE_IDS or bool(
-                _DATE_TOKENS_RE.search(fmt_code)
-            )
-            is_pct = num_fmt_id in _BUILTIN_PCT_IDS or bool(
-                _PCT_RE.search(fmt_code)
-            )
+            is_date = num_fmt_id in _BUILTIN_DATE_IDS or bool(_DATE_TOKENS_RE.search(fmt_code))
+            is_pct = num_fmt_id in _BUILTIN_PCT_IDS or bool(_PCT_RE.search(fmt_code))
             self._fmt_cache[num_fmt_id] = (is_date, is_pct)
         return self._fmt_cache[num_fmt_id]
 

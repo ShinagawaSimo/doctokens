@@ -21,9 +21,7 @@ def _make_xlsx(entries: dict[str, str | bytes]) -> bytes:
 
 def _wb_xml(sheets: list[tuple[str, int]]) -> str:
     """Build workbook.xml with given (name, sheetId) pairs."""
-    sheet_elems = "".join(
-        f'<sheet name="{n}" sheetId="{i}" r:id="rSheet{i}"/>' for n, i in sheets
-    )
+    sheet_elems = "".join(f'<sheet name="{n}" sheetId="{i}" r:id="rSheet{i}"/>' for n, i in sheets)
     return (
         f'<workbook xmlns="{NS_S}" xmlns:r="http://schemas.openxmlformats.org/package/2006/relationships">'
         f"<sheets>{sheet_elems}</sheets>"
@@ -33,8 +31,7 @@ def _wb_xml(sheets: list[tuple[str, int]]) -> str:
 
 def _wb_rels(count: int) -> str:
     rows = "".join(
-        f'<Relationship Id="rSheet{i}" Type="{NS_O}/worksheet" '
-        f'Target="worksheets/sheet{i}.xml"/>'
+        f'<Relationship Id="rSheet{i}" Type="{NS_O}/worksheet" Target="worksheets/sheet{i}.xml"/>'
         for i in range(1, count + 1)
     )
     return (
@@ -56,10 +53,7 @@ def _shared_strings_xml(strings: list[str]) -> str:
         else:
             items.append(f"<si><t>{s}</t></si>")
     count = len(strings)
-    return (
-        f'<sst xmlns="{NS_S}" count="{count}" uniqueCount="{count}">'
-        f"{''.join(items)}</sst>"
-    )
+    return f'<sst xmlns="{NS_S}" count="{count}" uniqueCount="{count}">{"".join(items)}</sst>'
 
 
 class MultiSheetTests(unittest.TestCase):
@@ -163,12 +157,7 @@ class SharedStringsTests(unittest.TestCase):
                 # Shared strings: "Product" at idx 0, "Price" at idx 1
                 "xl/sharedStrings.xml": _shared_strings_xml(["Product", "Price"]),
                 "xl/worksheets/sheet1.xml": _sheet_xml(
-                    [
-                        '<row r="1">'
-                        '<c r="A1" t="s"><v>0</v></c>'
-                        '<c r="B1" t="s"><v>1</v></c>'
-                        "</row>"
-                    ]
+                    ['<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>']
                 ),
             },
         )
@@ -290,13 +279,7 @@ class SharedStringsTests(unittest.TestCase):
                 "xl/workbook.xml": _wb_xml([("Data", 1)]),
                 "xl/_rels/workbook.xml.rels": _wb_rels(1),
                 "xl/worksheets/sheet1.xml": _sheet_xml(
-                    [
-                        '<row r="1">'
-                        '<c r="A1" t="str">'
-                        "<f>SUM(A2:A10)</f><v>Total: 42</v>"
-                        "</c>"
-                        "</row>"
-                    ]
+                    ['<row r="1"><c r="A1" t="str"><f>SUM(A2:A10)</f><v>Total: 42</v></c></row>']
                 ),
             },
         )

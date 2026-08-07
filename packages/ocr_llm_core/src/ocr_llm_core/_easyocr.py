@@ -22,14 +22,12 @@ class EasyOcrProvider(OcrProvider):
 
     def extract(self, image_bytes: bytes) -> str:
         try:
-            import easyocr  # type: ignore[import-untyped]
+            import easyocr  # type: ignore[import-not-found, import-untyped]
         except ImportError:
             return ""
         try:
             if self._reader is None:
-                self._reader = easyocr.Reader(
-                    self.lang_list, gpu=self.gpu, verbose=False
-                )
+                self._reader = easyocr.Reader(self.lang_list, gpu=self.gpu, verbose=False)
             texts: list[str] = self._reader.readtext(  # type: ignore[union-attr]
                 image_bytes, detail=0
             )

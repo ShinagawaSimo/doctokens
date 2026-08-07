@@ -8,6 +8,16 @@ from xml.etree import ElementTree as ET
 from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.package import PackageReader
 
+from ._sheet_post import (
+    apply_comments,
+    apply_hyperlinks,
+    apply_merge_cells,
+    apply_spill_ranges,
+    detect_pivot_tables,
+    parse_drawings,
+    parse_tables,
+)
+from ._utils import parse_ref
 from .formats import FormatIndex, parse_styles
 from .models import Cell, ParsedWorkbook, SheetInfo
 from .share_formulas import expand_shared_formulas
@@ -45,11 +55,18 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
 
         for sheet in sheets:
             if sheet.get("kind") != "chartsheet":
-                (rows, hidden_cols, sheet_protection,
-                 filter_range, filter_cols,
-                 data_validations, conditional_formats) = _parse_sheet(
-                    pkg, sheet["part"], sst, rich_map, fmt_index
-                )
+                # Read sheet relationships once — shared across all helpers.
+                sheet_rels = list(pkg.read_relationships_for_part(sheet["part"]))
+
+                (
+                    rows,
+                    hidden_cols,
+                    sheet_protection,
+                    filter_range,
+                    filter_cols,
+                    data_validations,
+                    conditional_formats,
+                ) = _parse_sheet(pkg, sheet["part"], sst, rich_map, fmt_index, sheet_rels)
                 sheet["rows"] = rows
                 if hidden_cols:
                     sheet["hidden_cols"] = hidden_cols
@@ -65,15 +82,15 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
                     sheet["conditional_formats"] = conditional_formats
 
                 # Parse tables (ListObject) associated with this sheet
-                sheet["tables"] = _parse_tables(pkg, sheet["part"])
+                sheet["tables"] = parse_tables(sheet_rels, pkg)
 
                 # Parse drawing (images, shapes) + charts + pivots
-                images, charts = _parse_drawings(pkg, sheet["part"])
+                images, charts = parse_drawings(sheet_rels, pkg)
                 if images:
                     sheet["images"] = images
                 if charts:
                     sheet["charts"] = charts
-                pivots = _detect_pivot_tables(pkg, sheet["part"])
+                pivots = detect_pivot_tables(sheet_rels)
                 if pivots:
                     sheet["pivot_tables"] = pivots
 
@@ -116,9 +133,13 @@ def _parse_workbook_xml(pkg: PackageReader) -> tuple[bool, list[SheetInfo], list
         name = sheet_elem.get("name", "")
         rel_id = sheet_elem.get(f"{{{NS_R}}}id", "")
         rel_info = rels.get(rel_id)
-        part, rel_type = rel_info if rel_info else (
-            f"xl/worksheets/sheet{len(sheets) + 1}.xml",
-            _REL_WORKSHEET,
+        part, rel_type = (
+            rel_info
+            if rel_info
+            else (
+                f"xl/worksheets/sheet{len(sheets) + 1}.xml",
+                _REL_WORKSHEET,
+            )
         )
         state = sheet_elem.get("state", "visible")
 
@@ -146,12 +167,14 @@ def _parse_workbook_xml(pkg: PackageReader) -> tuple[bool, list[SheetInfo], list
                         scope_sheet = sheets[si]["name"]
                 except ValueError:
                     pass
-            defined_names.append({
-                "name": name,
-                "ref": dn.text or "",
-                "scopeSheet": scope_sheet,
-                "hidden": is_hidden,
-            })
+            defined_names.append(
+                {
+                    "name": name,
+                    "ref": dn.text or "",
+                    "scopeSheet": scope_sheet,
+                    "hidden": is_hidden,
+                }
+            )
 
     # External references (D10: detect via defined names with [N] syntax)
     external_links: list[str] = []
@@ -162,6 +185,7 @@ def _parse_workbook_xml(pkg: PackageReader) -> tuple[bool, list[SheetInfo], list
             if "[" in ref_text:
                 # Extract up to filename.xlsx] or filename.xlsm]
                 import re
+
                 m = re.search(r"\[([^\]]+)\]", ref_text)
                 if m and m.group(1) not in external_links:
                     external_links.append(m.group(1))
@@ -219,12 +243,20 @@ def _parse_shared_strings(pkg: PackageReader) -> tuple[list[str], dict[int, list
 
 
 def _parse_sheet(
-    pkg: PackageReader, part: str, sst: list[str],
+    pkg: PackageReader,
+    part: str,
+    sst: list[str],
     rich_map: dict[int, list[dict]] | None = None,
     fmt_index: FormatIndex | None = None,
+    sheet_rels: list | None = None,
 ) -> tuple[list[list[Cell]], list[tuple[int, int]], bool, str, list[dict], list[dict], list[dict]]:
     """Parse a single worksheet XML into typed cell rows, hidden-col ranges,
-    sheet-protection, filter, data validations, and conditional formats."""
+    sheet-protection, filter, data validations, and conditional formats.
+
+    *sheet_rels* are the pre-read relationships for this sheet part, shared
+    across hyperlink, comment, table, drawing, and pivot helpers to avoid
+    redundant I/O.
+    """
     if not pkg.exists(part):
         return [], [], False, "", [], [], []
 
@@ -244,7 +276,9 @@ def _parse_sheet(
             col_id_str = fc.get("colId", "0")
             filters = fc.find(f"{{{NS_S}}}filters")
             if filters is not None:
-                vals = [f.get("val", "") for f in filters.findall(f"{{{NS_S}}}filter") if f.get("val")]
+                vals = [
+                    f.get("val", "") for f in filters.findall(f"{{{NS_S}}}filter") if f.get("val")
+                ]
                 if vals:
                     filter_cols.append({"col": int(col_id_str), "type": "values", "values": vals})
 
@@ -253,24 +287,28 @@ def _parse_sheet(
     dvs = root.find(f"{{{NS_S}}}dataValidations")
     if dvs is not None:
         for dv in dvs.findall(f"{{{NS_S}}}dataValidation"):
-            data_validations.append({
-                "ranges": dv.get("sqref", ""),
-                "type": dv.get("type", ""),
-                "formula1": dv.findtext(f"{{{NS_S}}}formula1", ""),
-                "allowBlank": dv.get("allowBlank", "1") == "1",
-            })
+            data_validations.append(
+                {
+                    "ranges": dv.get("sqref", ""),
+                    "type": dv.get("type", ""),
+                    "formula1": dv.findtext(f"{{{NS_S}}}formula1", ""),
+                    "allowBlank": dv.get("allowBlank", "1") == "1",
+                }
+            )
 
     # Conditional formatting (D9).
     conditional_formats: list[dict] = []
     for cf in root.findall(f"{{{NS_S}}}conditionalFormatting"):
         cf_range = cf.get("sqref", "")
         for rule in cf.findall(f"{{{NS_S}}}cfRule"):
-            conditional_formats.append({
-                "ranges": cf_range,
-                "priority": int(rule.get("priority", "0")),
-                "ruleType": rule.get("type", ""),
-                "formula": rule.findtext(f"{{{NS_S}}}formula", ""),
-            })
+            conditional_formats.append(
+                {
+                    "ranges": cf_range,
+                    "priority": int(rule.get("priority", "0")),
+                    "ruleType": rule.get("type", ""),
+                    "formula": rule.findtext(f"{{{NS_S}}}formula", ""),
+                }
+            )
 
     # Column definitions (hidden, width, outline) — parsed before sheetData.
     hidden_cols: list[tuple[int, int]] = []
@@ -284,7 +322,15 @@ def _parse_sheet(
 
     sheet_data = root.find(f"{{{NS_S}}}sheetData")
     if sheet_data is None:
-        return [], hidden_cols, sheet_protection, filter_range, filter_cols, data_validations, conditional_formats
+        return (
+            [],
+            hidden_cols,
+            sheet_protection,
+            filter_range,
+            filter_cols,
+            data_validations,
+            conditional_formats,
+        )
 
     rows: list[list[Cell]] = []
     for row_elem in sheet_data.findall(f"{{{NS_S}}}row"):
@@ -297,7 +343,7 @@ def _parse_sheet(
         for cell_elem in row_elem.findall(f"{{{NS_S}}}c"):
             ref = cell_elem.get("r", "")
             cell_type = cell_elem.get("t", "n")
-            col, row = _parse_ref(ref)
+            col, row = parse_ref(ref)
 
             text = ""
             if cell_type == "inlineStr":
@@ -395,329 +441,36 @@ def _parse_sheet(
 
         rows.append(cells)
 
-    # Expand shared formulas
+    # Expand shared formulas (needs only formula-bearing cells, not the full grid)
     all_formula_cells = [c for row_cells in rows for c in row_cells if "si" in c]
     if all_formula_cells:
         expand_shared_formulas(all_formula_cells)
 
+    # Build (col, row) → Cell lookup once — shared by merge, spill,
+    # hyperlink, and comment post-processing.
+    cell_map: dict[tuple[int, int], Cell] = {}
+    for row_cells in rows:
+        for c in row_cells:
+            cell_map[(c["col"], c["row"])] = c
+
     # Parse merge cells and mark shadow cells
-    _apply_merge_cells(root, rows)
+    apply_merge_cells(root, cell_map)
 
     # Mark dynamic array spill relationships
-    _apply_spill_ranges(rows)
+    apply_spill_ranges(rows, cell_map)
 
     # Resolve hyperlinks (relationship IDs → URLs)
-    _apply_hyperlinks(root, rows, pkg, part)
+    apply_hyperlinks(root, cell_map, sheet_rels or [])
 
     # Attach legacy comments to cells
-    _apply_comments(rows, pkg, part)
+    apply_comments(cell_map, pkg, sheet_rels or [])
 
-    return rows, hidden_cols, sheet_protection, filter_range, filter_cols, data_validations, conditional_formats
-
-
-def _apply_merge_cells(root: ET.Element, rows: list[list[Cell]]) -> None:
-    """Parse <mergeCells> and mark anchor cells with colspan/rowspan,
-    shadow cells with shadow=True (excluded from rendering)."""
-    merge_cells = root.find(f"{{{NS_S}}}mergeCells")
-    if merge_cells is None:
-        return
-
-    # Build coordinate → cell lookup
-    cell_map: dict[tuple[int, int], Cell] = {}
-    for row_cells in rows:
-        for c in row_cells:
-            cell_map[(c["col"], c["row"])] = c
-
-    for mc in merge_cells.findall(f"{{{NS_S}}}mergeCell"):
-        ref = mc.get("ref", "")
-        if ":" not in ref:
-            continue
-        start_ref, end_ref = ref.split(":", 1)
-        sc, sr = _parse_ref(start_ref)
-        ec, er = _parse_ref(end_ref)
-
-        anchor = cell_map.get((sc, sr))
-        if anchor is not None:
-            anchor["colspan"] = ec - sc + 1
-            anchor["rowspan"] = er - sr + 1
-
-        # Mark shadow cells
-        for r in range(sr, er + 1):
-            for c in range(sc, ec + 1):
-                if c == sc and r == sr:
-                    continue
-                shadow = cell_map.get((c, r))
-                if shadow is not None:
-                    shadow["shadow"] = True
-
-
-def _apply_spill_ranges(rows: list[list[Cell]]) -> None:
-    """Detect dynamic-array spill ranges and mark source/recipient relationships.
-
-    An array formula with a ``ref`` range larger than its own cell is a spill
-    source.  Cells inside that range that carry no independent formula are
-    marked as spill recipients pointing back to the source via ``spillFrom``.
-    """
-    # Build coordinate → cell lookup
-    cell_map: dict[tuple[int, int], Cell] = {}
-    for row_cells in rows:
-        for c in row_cells:
-            cell_map[(c["col"], c["row"])] = c
-
-    for row_cells in rows:
-        for cell in row_cells:
-            formula_range = cell.get("formulaRange")
-            if not formula_range:
-                continue
-            if ":" not in formula_range:
-                continue
-            start_ref, end_ref = formula_range.split(":", 1)
-            sc, sr = _parse_ref(start_ref)
-            ec, er = _parse_ref(end_ref)
-
-            # Skip if the range covers only the cell itself
-            if sc == cell["col"] and sr == cell["row"] and ec == cell["col"] and er == cell["row"]:
-                continue
-
-            cell["spillRange"] = formula_range
-
-            # Mark spill recipients: cells inside the range without their own formula
-            for r in range(sr, er + 1):
-                for col in range(sc, ec + 1):
-                    if col == cell["col"] and r == cell["row"]:
-                        continue
-                    recipient = cell_map.get((col, r))
-                    if recipient is not None and "formula" not in recipient and "si" not in recipient:
-                        recipient["spillFrom"] = cell["ref"]
-
-
-def _apply_hyperlinks(root: ET.Element, rows: list[list[Cell]],
-                     pkg: PackageReader, part: str) -> None:
-    """Resolve <hyperlinks> via relationships and attach to cells."""
-    hyperlinks = root.find(f"{{{NS_S}}}hyperlinks")
-    if hyperlinks is None:
-        return
-
-    # Build rId → (target, target_mode) from sheet rels
-    rel_targets: dict[str, str] = {}
-    for rel in pkg.read_relationships_for_part(part):
-        target = rel.resolved_target or ""
-        if target:
-            rel_targets[rel.id] = target
-
-    # Build coordinate → cell lookup
-    cell_map: dict[tuple[int, int], Cell] = {}
-    for row_cells in rows:
-        for c in row_cells:
-            cell_map[(c["col"], c["row"])] = c
-
-    for hl in hyperlinks.findall(f"{{{NS_S}}}hyperlink"):
-        ref = hl.get("ref", "")
-        location = hl.get("location", "")
-        r_id = hl.get(f"{{{NS_R}}}id", "")
-
-        col, row = _parse_ref(ref)
-        cell = cell_map.get((col, row))
-        if cell is None:
-            continue
-
-        # External URL takes precedence; fallback to internal location.
-        target = rel_targets.get(r_id) if r_id else None
-        if target:
-            if location:
-                # External link with internal location fragment
-                cell["hyperlink"] = f"{target}#{location}"
-            else:
-                cell["hyperlink"] = target
-        elif location:
-            cell["hyperlink"] = f"#{location}"
-
-
-_REL_COMMENTS = f"{NS_R}/comments"
-_REL_TABLE = f"{NS_R}/table"
-_REL_DRAWING = f"{NS_R}/drawing"
-_REL_IMAGE = f"{NS_R}/image"
-_REL_CHART = f"{NS_R}/chart"
-
-NS_XDR = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
-NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
-
-
-def _apply_comments(rows: list[list[Cell]], pkg: PackageReader, sheet_part: str) -> None:
-    """Parse legacy comments (xl/commentsN.xml) and attach to cells."""
-    # Find comments part via sheet relationships
-    comments_part: str | None = None
-    for rel in pkg.read_relationships_for_part(sheet_part):
-        if rel.type == _REL_COMMENTS:
-            comments_part = rel.resolved_target
-            break
-    if comments_part is None or not pkg.exists(comments_part):
-        return
-
-    with pkg.open_entry(comments_part) as stream:
-        root = ET.parse(stream).getroot()
-
-    # Authors list
-    authors: list[str] = []
-    authors_elem = root.find(f"{{{NS_S}}}authors")
-    if authors_elem is not None:
-        for a in authors_elem.findall(f"{{{NS_S}}}author"):
-            authors.append(a.text or "")
-
-    # Build cell lookup
-    cell_map: dict[tuple[int, int], Cell] = {}
-    for row_cells in rows:
-        for c in row_cells:
-            cell_map[(c["col"], c["row"])] = c
-
-    comment_list = root.find(f"{{{NS_S}}}commentList")
-    if comment_list is None:
-        return
-    idx = 0
-    for cmt in comment_list.findall(f"{{{NS_S}}}comment"):
-        ref = cmt.get("ref", "")
-        author_id_str = cmt.get("authorId", "0")
-        col, row = _parse_ref(ref)
-        cell = cell_map.get((col, row))
-        if cell is None:
-            idx += 1
-            continue
-        try:
-            author_id = int(author_id_str)
-            cell["commentAuthor"] = authors[author_id] if author_id < len(authors) else ""
-        except (ValueError, IndexError):
-            cell["commentAuthor"] = ""
-        text_elem = cmt.find(f"{{{NS_S}}}text")
-        if text_elem is not None:
-            if text_elem.text:
-                cell["comment"] = text_elem.text
-            else:
-                # Rich-text body: concatenate <r><t> runs
-                parts = []
-                for r_elem in text_elem.findall(f"{{{NS_S}}}r"):
-                    t = r_elem.find(f"{{{NS_S}}}t")
-                    if t is not None and t.text:
-                        parts.append(t.text)
-                cell["comment"] = "".join(parts)
-        else:
-            cell["comment"] = ""
-        idx += 1
-
-
-def _parse_tables(pkg: PackageReader, sheet_part: str) -> list[dict]:
-    """Parse ListObject tables associated with *sheet_part*."""
-    tables: list[dict] = []
-    for rel in pkg.read_relationships_for_part(sheet_part):
-        if rel.type != _REL_TABLE:
-            continue
-        table_part = rel.resolved_target or ""
-        if not table_part or not pkg.exists(table_part):
-            continue
-        with pkg.open_entry(table_part) as stream:
-            root = ET.parse(stream).getroot()
-
-        name = root.get("displayName", root.get("name", ""))
-        ref = root.get("ref", "")
-        table_id = f"table-{len(tables)}"
-        columns: list[str] = []
-        totals_row = root.get("totalsRowCount", "0") == "1"
-        table_cols = root.find(f"{{{NS_S}}}tableColumns")
-        if table_cols is not None:
-            for tc in table_cols.findall(f"{{{NS_S}}}tableColumn"):
-                col_name = tc.get("name", "")
-                if col_name:
-                    columns.append(col_name)
-        tables.append({
-            "id": table_id,
-            "name": name,
-            "ref": ref,
-            "columns": columns,
-            "totalsRow": totals_row,
-        })
-    return tables
-
-
-def _parse_drawings(pkg: PackageReader, sheet_part: str) -> tuple[list[dict], list[dict]]:
-    """Parse drawing anchors for images and chart references."""
-    images: list[dict] = []
-    charts: list[dict] = []
-    drawing_part: str | None = None
-    for rel in pkg.read_relationships_for_part(sheet_part):
-        if rel.type == _REL_DRAWING:
-            drawing_part = rel.resolved_target
-            break
-    if not drawing_part or not pkg.exists(drawing_part):
-        return images, charts
-
-    # Drawing relationships for image/chart media
-    drawing_rels: dict[str, str] = {}
-    for rel in pkg.read_relationships_for_part(drawing_part):
-        drawing_rels[rel.id] = rel.resolved_target or ""
-
-    with pkg.open_entry(drawing_part) as stream:
-        root = ET.parse(stream).getroot()
-
-    for anchor in root.iter(f"{{{NS_XDR}}}twoCellAnchor"):
-        _parse_drawing_anchor(anchor, drawing_rels, images, charts)
-    for anchor in root.iter(f"{{{NS_XDR}}}oneCellAnchor"):
-        _parse_drawing_anchor(anchor, drawing_rels, images, charts)
-
-    return images, charts
-
-
-def _parse_drawing_anchor(anchor: ET.Element, drawing_rels: dict[str, str],
-                          images: list[dict], charts: list[dict]) -> None:
-    """Parse one drawing anchor for image/chart refs and position."""
-    from_elem = anchor.find(f"{{{NS_XDR}}}from")
-    if from_elem is None:
-        return
-    col = int(from_elem.findtext(f"{{{NS_XDR}}}col", "0"))
-    row = int(from_elem.findtext(f"{{{NS_XDR}}}row", "0"))
-    ref = f"{_str_from_col(col + 1)}{row + 1}"
-
-    # Picture (image)
-    for blip in anchor.iter(f"{{{NS_A}}}blip"):
-        embed_id = blip.get(f"{{{NS_R}}}embed", "")
-        target = drawing_rels.get(embed_id)
-        if target:
-            img_id = f"image{len(images) + 1}"
-            images.append({"id": img_id, "ref": ref, "alt": ""})
-            break  # one image per anchor
-
-    # Chart reference
-    for chart_elem in anchor.iter(f"{{{NS_XDR}}}chart"):
-        chart_id = len(charts) + 1
-        charts.append({"id": f"chart{chart_id}", "ref": ref, "type": "", "title": "", "series_count": 0})
-
-
-def _detect_pivot_tables(pkg: PackageReader, sheet_part: str) -> list[dict]:
-    """Detect pivot table relationships for a sheet."""
-    pivots: list[dict] = []
-    for rel in pkg.read_relationships_for_part(sheet_part):
-        if rel.type == f"{NS_R}/pivotTable":
-            pivots.append({"id": f"pivot{len(pivots) + 1}", "ref": "", "name": ""})
-    return pivots
-
-
-def _str_from_col(c: int) -> str:
-    result = ""
-    while c > 0:
-        c, rem = divmod(c - 1, 26)
-        result = chr(ord("A") + rem) + result
-    return result
-
-
-def _parse_ref(ref: str) -> tuple[int, int]:
-    """Parse an A1-style reference into (col, row) as 1-based integers."""
-    col_str = ""
-    row_str = ""
-    for ch in ref:
-        if ch.isalpha():
-            col_str += ch
-        else:
-            row_str += ch
-    col = 0
-    for ch in col_str.upper():
-        col = col * 26 + (ord(ch) - ord("A") + 1)
-    row = int(row_str) if row_str else 0
-    return col, row
+    return (
+        rows,
+        hidden_cols,
+        sheet_protection,
+        filter_range,
+        filter_cols,
+        data_validations,
+        conditional_formats,
+    )

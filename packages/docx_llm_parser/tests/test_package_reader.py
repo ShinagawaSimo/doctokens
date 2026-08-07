@@ -147,9 +147,7 @@ class PackageReaderTests(unittest.TestCase):
                 {"[Content_Types].xml": _content_types(), "word/document.xml": "x" * 200_000},
             )
             with (
-                PackageReader(
-                    path, ParseOptions(max_total_uncompressed_bytes=100_000)
-                ) as package,
+                PackageReader(path, ParseOptions(max_total_uncompressed_bytes=100_000)) as package,
                 self.assertRaisesRegex(DocxPackageError, "too large"),
             ):
                 package.read_entry_index()
@@ -252,9 +250,7 @@ class PackageReaderTests(unittest.TestCase):
     def test_drive_letter_path_rejected(self) -> None:
         with TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "drive.docx"
-            _write_zip(
-                path, {"[Content_Types].xml": _content_types(), "C:/word/document.xml": ""}
-            )
+            _write_zip(path, {"[Content_Types].xml": _content_types(), "C:/word/document.xml": ""})
             with (
                 PackageReader(path, ParseOptions()) as package,
                 self.assertRaisesRegex(DocxPackageError, "drive"),
@@ -302,18 +298,14 @@ class PackageReaderTests(unittest.TestCase):
         path = Path(TemporaryDirectory().name) / "unused.docx"  # not actually used
         with TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "exists_test.docx"
-            _write_zip(
-                path, {"[Content_Types].xml": _content_types(), "word/document.xml": ""}
-            )
+            _write_zip(path, {"[Content_Types].xml": _content_types(), "word/document.xml": ""})
             with PackageReader(path, ParseOptions()) as package:
                 self.assertFalse(package.exists("nonexistent.xml"))
 
     def test_open_entry_on_missing_raises(self) -> None:
         with TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "open_test.docx"
-            _write_zip(
-                path, {"[Content_Types].xml": _content_types(), "word/document.xml": ""}
-            )
+            _write_zip(path, {"[Content_Types].xml": _content_types(), "word/document.xml": ""})
             with (
                 PackageReader(path, ParseOptions()) as package,
                 self.assertRaisesRegex(DocxPackageError, "Missing zip entry"),

@@ -6,12 +6,10 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from _fixtures import write_rich_docx
 from docx_llm_parser import Density, render_document
 from docx_llm_parser.core.models import ParseOptions
-from docx_llm_parser.core.enums import RevisionMode
 from docx_llm_parser.parser import DocxParser
-
-from _fixtures import write_rich_docx
 
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 _EXCLUDE_DEBUG = {"metrics.json"}

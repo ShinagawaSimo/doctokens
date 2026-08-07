@@ -143,9 +143,7 @@ def table_text_only(block: TableBlock) -> str:
         header_line = "\t".join(cell["text"] for cell in first_row["cells"])
         total_rows = len(rows)
         column_count = block["columnCount"]
-        return (
-            f"{header_line}\n[Table truncated: {total_rows} rows, {column_count} cols]"
-        )
+        return f"{header_line}\n[Table truncated: {total_rows} rows, {column_count} cols]"
 
     row_texts = ["\t".join(cell["text"] for cell in row["cells"]) for row in rows]
     return "\n".join(row_texts)

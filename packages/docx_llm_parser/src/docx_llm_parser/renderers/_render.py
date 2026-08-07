@@ -15,13 +15,14 @@ def _paragraph_text(block, density: str, ocr_results: dict[str, str] | None = No
     """Extract rendered text for a single paragraph block."""
     return inline_content(block, density, ocr_results)
 
+
 # ── semantic 渲染 ──
 
 
 def iter_l2(parsed: ParsedDocument) -> Iterator[str]:
     """semantic — 完整语义 HTML5。每段独立一个 <p> 标签。"""
     yield "density=semantic\n"
-    ocr = getattr(parsed, 'ocr_results', None) or {}
+    ocr = getattr(parsed, "ocr_results", None) or {}
     current_page = 0
     for block in parsed.blocks:
         block_page = block.get("page", 1)
@@ -61,7 +62,7 @@ def iter_l2(parsed: ParsedDocument) -> Iterator[str]:
 def iter_l1(parsed: ParsedDocument) -> Iterator[str]:
     """structural — 块级结构 + 语义对象，去掉 inline 格式。"""
     yield "density=structural\n"
-    ocr = getattr(parsed, 'ocr_results', None) or {}
+    ocr = getattr(parsed, "ocr_results", None) or {}
     current_page = 0
     for block in parsed.blocks:
         block_page = block.get("page", 1)

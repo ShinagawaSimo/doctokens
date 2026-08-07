@@ -4,7 +4,7 @@ import io
 import unittest
 import zipfile
 
-from xlsx_llm_parser import iter_workbook, render_range, parse_xlsx
+from xlsx_llm_parser import iter_workbook, parse_xlsx, render_range
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -103,9 +103,7 @@ class StreamingTests(unittest.TestCase):
                     'Target="worksheets/sheet1.xml"/>'
                     "</Relationships>"
                 ),
-                "xl/worksheets/sheet1.xml": (
-                    f'<worksheet xmlns="{NS_S}"><sheetData/></worksheet>'
-                ),
+                "xl/worksheets/sheet1.xml": (f'<worksheet xmlns="{NS_S}"><sheetData/></worksheet>'),
             },
         )
         for density in ("plain", "structural"):
@@ -121,9 +119,7 @@ class TruncationTests(unittest.TestCase):
         rows_xml = []
         for r in range(1, num_rows + 1):
             rows_xml.append(
-                f'<row r="{r}">'
-                f'<c r="A{r}" t="inlineStr"><is><t>Row{r}</t></is></c>'
-                f"</row>"
+                f'<row r="{r}"><c r="A{r}" t="inlineStr"><is><t>Row{r}</t></is></c></row>'
             )
         return _make_xlsx(
             {

@@ -63,8 +63,7 @@ def apply_merge_cells(root: ET.Element, cell_map: dict[tuple[int, int], Cell]) -
 # ── Dynamic array spill ──
 
 
-def apply_spill_ranges(rows: list[list[Cell]],
-                       cell_map: dict[tuple[int, int], Cell]) -> None:
+def apply_spill_ranges(rows: list[list[Cell]], cell_map: dict[tuple[int, int], Cell]) -> None:
     """Detect dynamic-array spill ranges and mark source/recipient relationships.
 
     An array formula with a ``ref`` range larger than its own cell is a spill
@@ -94,15 +93,20 @@ def apply_spill_ranges(rows: list[list[Cell]],
                     if col == cell["col"] and r == cell["row"]:
                         continue
                     recipient = cell_map.get((col, r))
-                    if recipient is not None and "formula" not in recipient and "si" not in recipient:
+                    if (
+                        recipient is not None
+                        and "formula" not in recipient
+                        and "si" not in recipient
+                    ):
                         recipient["spillFrom"] = cell["ref"]
 
 
 # ── Hyperlinks ──
 
 
-def apply_hyperlinks(root: ET.Element, cell_map: dict[tuple[int, int], Cell],
-                     sheet_rels: list) -> None:
+def apply_hyperlinks(
+    root: ET.Element, cell_map: dict[tuple[int, int], Cell], sheet_rels: list
+) -> None:
     """Resolve <hyperlinks> via relationships and attach to cells."""
     hyperlinks = root.find(f"{{{NS_S}}}hyperlinks")
     if hyperlinks is None:
@@ -139,8 +143,9 @@ def apply_hyperlinks(root: ET.Element, cell_map: dict[tuple[int, int], Cell],
 # ── Comments ──
 
 
-def apply_comments(cell_map: dict[tuple[int, int], Cell],
-                   pkg: PackageReader, sheet_rels: list) -> None:
+def apply_comments(
+    cell_map: dict[tuple[int, int], Cell], pkg: PackageReader, sheet_rels: list
+) -> None:
     """Parse legacy comments (xl/commentsN.xml) and attach to cells."""
     # Find comments part via pre-read sheet relationships
     comments_part: str | None = None
@@ -218,13 +223,15 @@ def parse_tables(sheet_rels: list, pkg: PackageReader) -> list[dict]:
                 col_name = tc.get("name", "")
                 if col_name:
                     columns.append(col_name)
-        tables.append({
-            "id": table_id,
-            "name": name,
-            "ref": ref,
-            "columns": columns,
-            "totalsRow": totals_row,
-        })
+        tables.append(
+            {
+                "id": table_id,
+                "name": name,
+                "ref": ref,
+                "columns": columns,
+                "totalsRow": totals_row,
+            }
+        )
     return tables
 
 
@@ -271,8 +278,9 @@ def parse_drawings(sheet_rels: list, pkg: PackageReader) -> tuple[list[dict], li
     return images, charts
 
 
-def _parse_drawing_anchor(anchor: ET.Element, drawing_rels: dict[str, str],
-                          images: list[dict], charts: list[dict]) -> None:
+def _parse_drawing_anchor(
+    anchor: ET.Element, drawing_rels: dict[str, str], images: list[dict], charts: list[dict]
+) -> None:
     """Parse one drawing anchor for image/chart refs and position."""
     from_elem = anchor.find(f"{{{NS_XDR}}}from")
     if from_elem is None:
@@ -295,14 +303,16 @@ def _parse_drawing_anchor(anchor: ET.Element, drawing_rels: dict[str, str],
         chart_r_id = ch_elem.get(f"{{{NS_R}}}id", "")
         chart_part = drawing_rels.get(chart_r_id, "")
         chart_id = f"chart{len(charts) + 1}"
-        charts.append({
-            "id": chart_id,
-            "ref": ref,
-            "type": "",
-            "title": "",
-            "series_count": 0,
-            "part": chart_part,
-        })
+        charts.append(
+            {
+                "id": chart_id,
+                "ref": ref,
+                "type": "",
+                "title": "",
+                "series_count": 0,
+                "part": chart_part,
+            }
+        )
 
 
 # ── Chart part parsing ──

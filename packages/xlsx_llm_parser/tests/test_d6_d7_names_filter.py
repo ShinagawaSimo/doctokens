@@ -74,8 +74,8 @@ class DefinedNameTests(unittest.TestCase):
         structural = parse_xlsx(data, density="structural")
 
         # User names visible in semantic only
-        self.assertIn('<definedName name=DiscountRate', semantic)
-        self.assertIn('<definedName name=TaxRate', semantic)
+        self.assertIn("<definedName name=DiscountRate", semantic)
+        self.assertIn("<definedName name=TaxRate", semantic)
         # Built-in _xlnm names skipped
         self.assertNotIn("Print_Area", semantic)
         # structural omits defined names

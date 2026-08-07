@@ -7,14 +7,14 @@ from pathlib import Path
 from typing import cast
 from xml.etree import ElementTree as ET
 
-from docx_llm_parser.renderers.html5 import extract as _extract_resources
-from docx_llm_parser.renderers.html5 import manifest as _manifest
 from docx_llm_parser.core.models import ParsedDocument, ParseOptions
 from docx_llm_parser.core.package import PackageReader
 from docx_llm_parser.core.relationships import RelationshipIndex
 from docx_llm_parser.extractors.body import DocumentBodyParser
 from docx_llm_parser.ooxml.numbering import NumberingMap, NumberingState
 from docx_llm_parser.ooxml.styles import StyleMap
+from docx_llm_parser.renderers.html5 import extract as _extract_resources
+from docx_llm_parser.renderers.html5 import manifest as _manifest
 from docx_llm_parser.renderers.l0.helpers import table_text_only
 from docx_llm_parser.renderers.tables.render import table_id
 
@@ -133,29 +133,54 @@ class TableIdentityTests(unittest.TestCase):
         self.assertEqual(len(detail["rows"]), 2)
         self.assertEqual(_manifest(parsed)["tables"], 1)
 
-    def _make_table(self, headers: list[str], data: list[list[str]], table_id: str = "t1") -> ParsedDocument:
+    def _make_table(
+        self, headers: list[str], data: list[list[str]], table_id: str = "t1"
+    ) -> ParsedDocument:
         """Build a minimal ParsedDocument with one table."""
         header_row = {
             "rowIndex": 0,
             "isHeader": True,
-            "cells": [{"rowIndex": 0, "colIndex": i, "rowSpan": 1, "colSpan": 1, "text": h, "blocks": []}
-                      for i, h in enumerate(headers)],
+            "cells": [
+                {"rowIndex": 0, "colIndex": i, "rowSpan": 1, "colSpan": 1, "text": h, "blocks": []}
+                for i, h in enumerate(headers)
+            ],
         }
         data_rows = [
-            {"rowIndex": i + 1, "isHeader": False,
-             "cells": [{"rowIndex": i + 1, "colIndex": j, "rowSpan": 1, "colSpan": 1, "text": v, "blocks": []}
-                       for j, v in enumerate(row)]}
+            {
+                "rowIndex": i + 1,
+                "isHeader": False,
+                "cells": [
+                    {
+                        "rowIndex": i + 1,
+                        "colIndex": j,
+                        "rowSpan": 1,
+                        "colSpan": 1,
+                        "text": v,
+                        "blocks": [],
+                    }
+                    for j, v in enumerate(row)
+                ],
+            }
             for i, row in enumerate(data)
         ]
         table_block = {
-            "type": "table", "tableId": table_id, "columnCount": len(headers),
+            "type": "table",
+            "tableId": table_id,
+            "columnCount": len(headers),
             "rows": [header_row] + data_rows,
-            "id": "b1", "part": "word/document.xml", "order": 1, "page": 1,
+            "id": "b1",
+            "part": "word/document.xml",
+            "order": 1,
+            "page": 1,
             "segmentIndex": 1,
         }
         return ParsedDocument(
-            metadata={}, package_info={},
-            blocks=[table_block], relationships=[], styles=[], warnings=[],
+            metadata={},
+            package_info={},
+            blocks=[table_block],
+            relationships=[],
+            styles=[],
+            warnings=[],
         )
 
     def test_table_row_slice(self):
@@ -168,7 +193,9 @@ class TableIdentityTests(unittest.TestCase):
         self.assertEqual(detail["rows"][1]["cells"][0]["text"], "C")
 
     def test_table_column_filter(self):
-        parsed = self._make_table(["Name", "Age", "City"], [["Alice", "30", "NYC"], ["Bob", "25", "LA"]])
+        parsed = self._make_table(
+            ["Name", "Age", "City"], [["Alice", "30", "NYC"], ["Bob", "25", "LA"]]
+        )
         results = _extract_resources(parsed, "table", "t1", columns=["Name", "City"])
         self.assertEqual(len(results), 1)
         detail = results[0]
@@ -178,7 +205,9 @@ class TableIdentityTests(unittest.TestCase):
 
     def test_table_aggregate_sum(self):
         parsed = self._make_table(["Item", "Price"], [["A", "10"], ["B", "20"], ["C", "30"]])
-        results = _extract_resources(parsed, "table", "t1", aggregate="sum", aggregate_column="Price")
+        results = _extract_resources(
+            parsed, "table", "t1", aggregate="sum", aggregate_column="Price"
+        )
         self.assertEqual(len(results), 1)
         detail = results[0]
         self.assertEqual(detail["aggregate"], "sum")
@@ -186,7 +215,9 @@ class TableIdentityTests(unittest.TestCase):
 
     def test_table_aggregate_avg(self):
         parsed = self._make_table(["Item", "Score"], [["X", "100"], ["Y", "200"]])
-        results = _extract_resources(parsed, "table", "t1", aggregate="avg", aggregate_column="Score")
+        results = _extract_resources(
+            parsed, "table", "t1", aggregate="avg", aggregate_column="Score"
+        )
         self.assertEqual(len(results), 1)
         detail = results[0]
         self.assertEqual(detail["aggregate"], "avg")
@@ -194,7 +225,9 @@ class TableIdentityTests(unittest.TestCase):
 
     def test_table_aggregate_count(self):
         parsed = self._make_table(["Item", "Qty"], [["A", "5"], ["B", ""], ["C", "15"]])
-        results = _extract_resources(parsed, "table", "t1", aggregate="count", aggregate_column="Qty")
+        results = _extract_resources(
+            parsed, "table", "t1", aggregate="count", aggregate_column="Qty"
+        )
         self.assertEqual(len(results), 1)
         detail = results[0]
         self.assertEqual(detail["aggregate"], "count")

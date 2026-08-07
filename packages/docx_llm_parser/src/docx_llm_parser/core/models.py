@@ -4,25 +4,23 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 from ooxml_llm_core.models import (  # noqa: F401 — re-exported as stable API
     ContentTypes,
     JsonObject,
-    MetricValue,
     MetricsSnapshot,
+    MetricValue,
     ParseWarning,
     RelationshipRecord,
     ZipEntryInfo,
 )
-from ooxml_llm_core.models import ParseWarning  # noqa: F811 — explicit single import
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ocr_llm_core import OcrProvider as OcrProviderType
+    pass
 
 from .enums import RevisionMode
+
 RunFormat = dict[str, bool | str | None]
 
 
@@ -73,8 +71,8 @@ class ChartSeries(ChartSeriesRequired, total=False):
     min: float
     max: float
     formula: str
-    categories: list[str]   # full category labels (for get_resource)
-    values: list[str]       # full cached values (for get_resource)
+    categories: list[str]  # full category labels (for get_resource)
+    values: list[str]  # full cached values (for get_resource)
 
 
 class ChartRequired(TypedDict):

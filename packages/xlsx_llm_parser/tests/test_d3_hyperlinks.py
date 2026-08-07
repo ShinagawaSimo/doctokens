@@ -62,7 +62,7 @@ class HyperlinkTests(unittest.TestCase):
                     "<sheetData>"
                     '<row r="1"><c r="A1" t="inlineStr"><is><t>Click</t></is></c></row>'
                     "</sheetData>"
-                    '<hyperlinks>'
+                    "<hyperlinks>"
                     f'<hyperlink ref="A1" r:id="rLink1"/>'
                     "</hyperlinks>"
                     "</worksheet>"

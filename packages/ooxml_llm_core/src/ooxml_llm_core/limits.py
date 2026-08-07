@@ -13,7 +13,7 @@ class PackageLimits:
     """
 
     max_zip_entries: int = 10_000
-    max_entry_uncompressed_bytes: int = 50_000_000   # 50 MiB
+    max_entry_uncompressed_bytes: int = 50_000_000  # 50 MiB
     max_total_uncompressed_bytes: int = 500_000_000  # 500 MiB
 
     def __post_init__(self) -> None:

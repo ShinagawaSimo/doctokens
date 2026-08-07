@@ -9,7 +9,6 @@ from io import BytesIO
 from pathlib import Path
 from types import TracebackType
 from typing import IO
-
 from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.limits import PackageLimits

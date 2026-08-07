@@ -87,11 +87,7 @@ def _relationship(
     target_mode: str | None = None,
 ) -> str:
     mode = f' TargetMode="{target_mode}"' if target_mode else ""
-    return (
-        f'<Relationship Id="{rel_id}" '
-        f'Type="{_rel_type_url(rel_type)}" '
-        f'Target="{target}"{mode}/>'
-    )
+    return f'<Relationship Id="{rel_id}" Type="{_rel_type_url(rel_type)}" Target="{target}"{mode}/>'
 
 
 def _rel_type_url(rel_type: str) -> str:

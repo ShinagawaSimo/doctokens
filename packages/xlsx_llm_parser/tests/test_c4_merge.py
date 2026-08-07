@@ -103,9 +103,7 @@ class MergeCellTests(unittest.TestCase):
         data = self._make_merged(
             "",
             [
-                '<row r="1">'
-                '<c r="A1" t="inlineStr"><is><t>Normal</t></is></c>'
-                "</row>",
+                '<row r="1"><c r="A1" t="inlineStr"><is><t>Normal</t></is></c></row>',
             ],
         )
         html = parse_xlsx(data, density="semantic")

@@ -35,9 +35,7 @@ class XmlHelpersTests(unittest.TestCase):
         self.assertIsNone(attr(el, "w", "val", ns=NS_DOCX))
 
     def test_first_child_returns_direct_child(self) -> None:
-        el = ET.fromstring(
-            f'<w:p xmlns:w="{NS_DOCX["w"]}"><w:r><w:t>text</w:t></w:r></w:p>'
-        )
+        el = ET.fromstring(f'<w:p xmlns:w="{NS_DOCX["w"]}"><w:r><w:t>text</w:t></w:r></w:p>')
         result = first_child(el, "w", "r", ns=NS_DOCX)
         self.assertIsNotNone(result)
         self.assertEqual(local_name(result.tag), "r")
@@ -50,22 +48,16 @@ class XmlHelpersTests(unittest.TestCase):
         self.assertIsNone(first_child(el, "w", "t", ns=NS_DOCX))
 
     def test_first_child_does_not_match_grandchild(self) -> None:
-        el = ET.fromstring(
-            f'<w:p xmlns:w="{NS_DOCX["w"]}"><w:r><w:t>text</w:t></w:r></w:p>'
-        )
+        el = ET.fromstring(f'<w:p xmlns:w="{NS_DOCX["w"]}"><w:r><w:t>text</w:t></w:r></w:p>')
         self.assertIsNone(first_child(el, "w", "t", ns=NS_DOCX))
 
     def test_first_child_matches_first_of_many(self) -> None:
-        el = ET.fromstring(
-            f'<w:p xmlns:w="{NS_DOCX["w"]}"><w:r w:val="1"/><w:r w:val="2"/></w:p>'
-        )
+        el = ET.fromstring(f'<w:p xmlns:w="{NS_DOCX["w"]}"><w:r w:val="1"/><w:r w:val="2"/></w:p>')
         result = first_child(el, "w", "r", ns=NS_DOCX)
         self.assertEqual(attr(result, "w", "val", ns=NS_DOCX), "1")
 
     def test_child_elements_returns_direct_children(self) -> None:
-        el = ET.fromstring(
-            f'<w:p xmlns:w="{NS_DOCX["w"]}"><w:r w:val="1"/><w:r w:val="2"/></w:p>'
-        )
+        el = ET.fromstring(f'<w:p xmlns:w="{NS_DOCX["w"]}"><w:r w:val="1"/><w:r w:val="2"/></w:p>')
         children = child_elements(el, "w", "r", ns=NS_DOCX)
         self.assertEqual(len(children), 2)
         self.assertEqual(attr(children[0], "w", "val", ns=NS_DOCX), "1")

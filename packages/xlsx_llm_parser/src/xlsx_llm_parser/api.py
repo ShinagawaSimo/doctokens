@@ -16,8 +16,9 @@ from .renderers.structural import (
 )
 
 
-def parse_xlsx(source: str | Path | bytes, *, density: str = "structural",
-               start_row: int = 1) -> str:
+def parse_xlsx(
+    source: str | Path | bytes, *, density: str = "structural", start_row: int = 1
+) -> str:
     """Parse *source* and render the entire workbook at the given density.
 
     *start_row* (1-based) begins rendering from the specified row for the
@@ -34,8 +35,9 @@ def parse_xlsx(source: str | Path | bytes, *, density: str = "structural",
     return "".join(parts)
 
 
-def iter_workbook(source: str | Path | bytes, *, density: str = "structural",
-                  start_row: int = 1) -> Iterator[str]:
+def iter_workbook(
+    source: str | Path | bytes, *, density: str = "structural", start_row: int = 1
+) -> Iterator[str]:
     """Stream workbook rendering chunks from *source*."""
     wb = _parse_workbook(source)
     yield f"density={density}\n"
@@ -84,6 +86,7 @@ def find_cells(
     *kind* narrows to one of ``value``, ``formula``, ``comment``, ``definedName``.
     """
     import re as _re
+
     if not query:
         return "<matches>\n"
     wb = _parse_workbook(source)
@@ -132,8 +135,7 @@ def find_cells(
                     continue
                 if pattern.search(dn["name"]) or pattern.search(dn.get("ref", "")):
                     matches.append(
-                        f'<match field=definedName>'
-                        f"{escape(dn['name'])} = {escape(dn['ref'])}"
+                        f"<match field=definedName>{escape(dn['name'])} = {escape(dn['ref'])}"
                     )
 
     parts = ["<matches>\n"]

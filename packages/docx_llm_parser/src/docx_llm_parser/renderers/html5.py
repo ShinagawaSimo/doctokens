@@ -168,7 +168,7 @@ def extract(
 
     if resolved_type in {ResourceType.IMAGES, ResourceType.IMAGE}:
         source_path = parsed.metadata.get("sourcePath", "")
-        ocr = getattr(parsed, 'ocr_results', None) or {}
+        ocr = getattr(parsed, "ocr_results", None) or {}
         result = []
         for a in parsed.assets:
             if a["type"] != "image":
@@ -297,7 +297,9 @@ def _filter_columns(rows: list, column_names: list[str]) -> list:
     result = []
     for row in rows:
         filtered = [row["cells"][i] for i in keep_indices if i < len(row["cells"])]
-        result.append({"rowIndex": row["rowIndex"], "cells": filtered, "isHeader": row.get("isHeader", False)})
+        result.append(
+            {"rowIndex": row["rowIndex"], "cells": filtered, "isHeader": row.get("isHeader", False)}
+        )
     return result
 
 
@@ -318,7 +320,11 @@ def _compute_aggregate(rows: list, operation: str, column: str) -> ResourceDetai
             f"Unknown aggregate {operation!r}; expected one of: {', '.join(sorted(_AGGREGATORS))}"
         )
     values = _column_values(rows, column)
-    return {"aggregate": operation, "aggregate_column": column, "aggregate_value": _AGGREGATORS[operation](values)}
+    return {
+        "aggregate": operation,
+        "aggregate_column": column,
+        "aggregate_value": _AGGREGATORS[operation](values),
+    }
 
 
 def _column_values(rows: list, column: str) -> list[float]:

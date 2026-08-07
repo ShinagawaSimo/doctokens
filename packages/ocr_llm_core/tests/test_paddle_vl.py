@@ -32,19 +32,17 @@ class PaddleVLProviderTest(unittest.TestCase):
         with patch.object(p, "_get_access_token", return_value="tok"):
             with patch.object(p, "_submit", return_value="task-abc"):
                 with patch.object(p, "_poll", return_value=("success", None)):
-                    with patch.object(
-                        p, "_download_markdown", return_value=expected
-                    ):
+                    with patch.object(p, "_download_markdown", return_value=expected):
                         result = p.extract(b"fake-image-bytes")
         self.assertEqual(result, expected)
 
     def test_extract_returns_empty_on_api_failure(self) -> None:
         p = PaddleVLProvider("k", "s")
-        with patch.object(p, "_get_access_token", return_value="tok"):
-            with patch.object(
-                p, "_submit", side_effect=RuntimeError("network down")
-            ):
-                result = p.extract(b"fake")
+        with (
+            patch.object(p, "_get_access_token", return_value="tok"),
+            patch.object(p, "_submit", side_effect=RuntimeError("network down")),
+        ):
+            result = p.extract(b"fake")
         self.assertEqual(result, "")
 
     def test_extract_returns_empty_on_poll_timeout(self) -> None:
@@ -75,9 +73,7 @@ class PaddleVLProviderTest(unittest.TestCase):
             }
         ).encode()
         mock_response.__enter__.return_value = mock_response
-        with patch(
-            "urllib.request.urlopen", return_value=mock_response
-        ) as mock_urlopen:
+        with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
             token = p._get_access_token()
         self.assertEqual(token, "tok-123")
         call_args = mock_urlopen.call_args[0][0]

@@ -106,16 +106,16 @@ html = render_range("workbook.xlsx", "Sheet1", "B2:D10")
 from xlsx_llm_parser import parse_xlsx, render_range, iter_workbook
 
 # 主入口：解析并渲染完整工作簿
-html = parse_xlsx("workbook.xlsx")                             # structural（默认）
-html = parse_xlsx("workbook.xlsx", density="semantic")         # 语义级
-html = parse_xlsx("workbook.xlsx", density="plain")            # 纯文本
+html = parse_xlsx("workbook.xlsx")  # structural（默认）
+html = parse_xlsx("workbook.xlsx", density="semantic")  # 语义级
+html = parse_xlsx("workbook.xlsx", density="plain")  # 纯文本
 
 # 流式迭代
 for chunk in iter_workbook("workbook.xlsx", density="structural"):
     ...
 
 # 范围读取
-html = render_range("workbook.xlsx", "Sheet1", "A1:H30")       # structural（默认）
+html = render_range("workbook.xlsx", "Sheet1", "A1:H30")  # structural（默认）
 html = render_range("workbook.xlsx", "Sheet1", "A1:H30", density="semantic")
 ```
 

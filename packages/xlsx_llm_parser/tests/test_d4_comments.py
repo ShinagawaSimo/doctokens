@@ -65,7 +65,7 @@ class CommentTests(unittest.TestCase):
                     "<authors><author>Alice</author></authors>"
                     "<commentList>"
                     '<comment ref="A1" authorId="0">'
-                    '<text>Approved by auditor</text>'
+                    "<text>Approved by auditor</text>"
                     "</comment>"
                     "</commentList>"
                     "</comments>"

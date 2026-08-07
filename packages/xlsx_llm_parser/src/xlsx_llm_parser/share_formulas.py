@@ -10,10 +10,10 @@ from __future__ import annotations
 import re
 from typing import NamedTuple
 
+from ._utils import _col_from_str, col_letter
+
 # A1-style cell reference: $A$1, $A1, A$1, A1  (optionally qualified by sheet)
-_CELL_REF_RE = re.compile(
-    r"(?P<col_abs>\$)?(?P<col>[A-Z]{1,3})(?P<row_abs>\$)?(?P<row>[0-9]+)"
-)
+_CELL_REF_RE = re.compile(r"(?P<col_abs>\$)?(?P<col>[A-Z]{1,3})(?P<row_abs>\$)?(?P<row>[0-9]+)")
 
 # Full single-cell or range reference captured greedily inside a formula.
 # Matches optional sheet prefix, then two cell refs optionally separated by ":".
@@ -31,8 +31,8 @@ class _Ref(NamedTuple):
     """Parsed cell or range reference."""
 
     span: tuple[int, int]  # (start, end) positions in the formula string
-    sheet: str | None      # optional sheet qualifier (kept verbatim when present)
-    raw: str               # the original matched text
+    sheet: str | None  # optional sheet qualifier (kept verbatim when present)
+    raw: str  # the original matched text
 
 
 def expand_shared_formulas(
@@ -81,11 +81,7 @@ def _col_row(ref: str) -> tuple[int, int]:
     m = _CELL_REF_RE.match(ref.replace("$", ""))
     if not m:
         return 0, 0
-    col_str = m.group("col")
-    col = 0
-    for ch in col_str:
-        col = col * 26 + (ord(ch) - ord("A") + 1)
-    return col, int(m.group("row"))
+    return _col_from_str(m.group("col")), int(m.group("row"))
 
 
 def _offset_formula(formula: str, dc: int, dr: int) -> str:
@@ -95,11 +91,13 @@ def _offset_formula(formula: str, dc: int, dr: int) -> str:
 
     refs: list[_Ref] = []
     for m in _A1_REF_RE.finditer(formula):
-        refs.append(_Ref(
-            span=(m.start(), m.end()),
-            sheet=m.group("sheet"),
-            raw=m.group(0),
-        ))
+        refs.append(
+            _Ref(
+                span=(m.start(), m.end()),
+                sheet=m.group("sheet"),
+                raw=m.group(0),
+            )
+        )
 
     if not refs:
         return formula
@@ -169,21 +167,6 @@ def _offset_one_ref(
         c += dc
     if not row_abs:
         r += dr
-    col_frag = _str_from_col(c)
+    col_frag = col_letter(c)
     row_frag = str(r)
     return f"{'$' if col_abs else ''}{col_frag}{'$' if row_abs else ''}{row_frag}"
-
-
-def _col_from_str(s: str) -> int:
-    c = 0
-    for ch in s:
-        c = c * 26 + (ord(ch) - ord("A") + 1)
-    return c
-
-
-def _str_from_col(c: int) -> str:
-    result = ""
-    while c > 0:
-        c, rem = divmod(c - 1, 26)
-        result = chr(ord("A") + rem) + result
-    return result

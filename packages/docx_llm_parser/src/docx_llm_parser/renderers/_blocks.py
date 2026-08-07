@@ -9,7 +9,9 @@ from .inline import inline_content
 from .tables import render_table
 
 
-def render_block(block: Block, density: str, ocr_results: dict[str, str] | None = None) -> Iterator[str]:
+def render_block(
+    block: Block, density: str, ocr_results: dict[str, str] | None = None
+) -> Iterator[str]:
     """Dispatch a parsed block to its density-specific renderer."""
     if block["type"] == "heading":
         level = min(block["level"], 6)

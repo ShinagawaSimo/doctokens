@@ -41,7 +41,7 @@ class DataValidationTests(unittest.TestCase):
                 ),
                 "xl/workbook.xml": (
                     f'<workbook xmlns="{NS_S}" xmlns:r="{NS_O}">'
-                    "<sheets><sheet name=\"Data\" sheetId=\"1\" r:id=\"rSheet1\"/></sheets>"
+                    '<sheets><sheet name="Data" sheetId="1" r:id="rSheet1"/></sheets>'
                     "</workbook>"
                 ),
                 "xl/_rels/workbook.xml.rels": (
@@ -90,7 +90,7 @@ class ConditionalFormatTests(unittest.TestCase):
                 ),
                 "xl/workbook.xml": (
                     f'<workbook xmlns="{NS_S}" xmlns:r="{NS_O}">'
-                    "<sheets><sheet name=\"Data\" sheetId=\"1\" r:id=\"rSheet1\"/></sheets>"
+                    '<sheets><sheet name="Data" sheetId="1" r:id="rSheet1"/></sheets>'
                     "</workbook>"
                 ),
                 "xl/_rels/workbook.xml.rels": (
@@ -140,9 +140,9 @@ class ExternalLinkTests(unittest.TestCase):
                 ),
                 "xl/workbook.xml": (
                     f'<workbook xmlns="{NS_S}" xmlns:r="{NS_O}">'
-                    "<sheets><sheet name=\"Data\" sheetId=\"1\" r:id=\"rSheet1\"/></sheets>"
+                    '<sheets><sheet name="Data" sheetId="1" r:id="rSheet1"/></sheets>'
                     "<definedNames>"
-                    "<definedName name=\"ExtRef\" localSheetId=\"0\">"
+                    '<definedName name="ExtRef" localSheetId="0">'
                     "'[Budget.xlsx]Sheet1'!$A$1"
                     "</definedName>"
                     "</definedNames>"
@@ -162,7 +162,7 @@ class ExternalLinkTests(unittest.TestCase):
             },
         )
         semantic = parse_xlsx(data, density="semantic")
-        self.assertIn('<externalLink target=Budget.xlsx/>', semantic)
+        self.assertIn("<externalLink target=Budget.xlsx/>", semantic)
 
 
 if __name__ == "__main__":

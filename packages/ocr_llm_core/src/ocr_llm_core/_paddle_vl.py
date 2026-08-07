@@ -6,17 +6,12 @@ import base64
 import json
 import time
 import urllib.request
-from urllib.error import URLError
 
 from ._provider import OcrProvider
 
 _TOKEN_URL = "https://aip.baidubce.com/oauth/2.0/token"
-_SUBMIT_URL = (
-    "https://aip.baidubce.com/rest/2.0/brain/online/v2/paddle-vl-parser/task"
-)
-_QUERY_URL = (
-    "https://aip.baidubce.com/rest/2.0/brain/online/v2/paddle-vl-parser/task/query"
-)
+_SUBMIT_URL = "https://aip.baidubce.com/rest/2.0/brain/online/v2/paddle-vl-parser/task"
+_QUERY_URL = "https://aip.baidubce.com/rest/2.0/brain/online/v2/paddle-vl-parser/task/query"
 
 
 class PaddleVLProvider(OcrProvider):
@@ -88,9 +83,7 @@ class PaddleVLProvider(OcrProvider):
         with urllib.request.urlopen(req, timeout=60) as resp:
             body = json.loads(resp.read())
         if body.get("error_code", 0) != 0:
-            raise RuntimeError(
-                f"Submit failed: {body.get('error_msg', 'unknown')}"
-            )
+            raise RuntimeError(f"Submit failed: {body.get('error_msg', 'unknown')}")
         return body["result"]["task_id"]
 
     def _poll(self, token: str, task_id: str) -> tuple[str, str | None]:

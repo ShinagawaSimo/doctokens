@@ -9,9 +9,9 @@ from ._tesseract import TesseractProvider
 from ._version import __version__
 
 __all__ = [
-    "__version__",
     "EasyOcrProvider",
     "OcrProvider",
     "PaddleVLProvider",
     "TesseractProvider",
+    "__version__",
 ]

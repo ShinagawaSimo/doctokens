@@ -86,8 +86,12 @@ def get_resource(
         raise ValueError("resource_type must be singular when getting one resource")
     parsed = DocxParser().parse(source, options)
     items = _extract_resources(
-        parsed, resolved_type, resource_id,
-        rows=rows, columns=columns,
-        aggregate=aggregate, aggregate_column=aggregate_column,
+        parsed,
+        resolved_type,
+        resource_id,
+        rows=rows,
+        columns=columns,
+        aggregate=aggregate,
+        aggregate_column=aggregate_column,
     )
     return items[0] if items else None

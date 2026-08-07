@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from _fixtures import write_rich_docx
 from docx_llm_parser import (
     Density,
     get_resource,
@@ -14,11 +15,9 @@ from docx_llm_parser import (
     write_document,
 )
 from docx_llm_parser.concurrency import parse_many
-from docx_llm_parser.core.models import ParseOptions
 from docx_llm_parser.core.enums import RevisionMode
+from docx_llm_parser.core.models import ParseOptions
 from docx_llm_parser.parser import DocxParser
-
-from _fixtures import write_rich_docx
 
 
 class DocxPipelineTests(unittest.TestCase):

@@ -42,7 +42,7 @@ class WindowingTests(unittest.TestCase):
                 ),
                 "xl/workbook.xml": (
                     f'<workbook xmlns="{NS_S}" xmlns:r="{NS_O}">'
-                    "<sheets><sheet name=\"Data\" sheetId=\"1\" r:id=\"rSheet1\"/></sheets>"
+                    '<sheets><sheet name="Data" sheetId="1" r:id="rSheet1"/></sheets>'
                     "</workbook>"
                 ),
                 "xl/_rels/workbook.xml.rels": (
@@ -94,7 +94,7 @@ class WindowingTests(unittest.TestCase):
                 ),
                 "xl/workbook.xml": (
                     f'<workbook xmlns="{NS_S}" xmlns:r="{NS_O}">'
-                    "<sheets><sheet name=\"Data\" sheetId=\"1\" r:id=\"rSheet1\"/></sheets>"
+                    '<sheets><sheet name="Data" sheetId="1" r:id="rSheet1"/></sheets>'
                     "</workbook>"
                 ),
                 "xl/_rels/workbook.xml.rels": (

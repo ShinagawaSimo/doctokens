@@ -6,6 +6,6 @@ _GRID_BOUND_SENTINEL = 1_000_000
 
 # Truncation budget per sheet when rendering the default view.
 # Exceeding any one threshold triggers truncation (no rows output).
-_CELL_BUDGET = 500   # max non-empty cells before truncation
-_ROW_BUDGET = 50     # max data rows before truncation
-_COL_BUDGET = 30     # max columns before truncation
+_CELL_BUDGET = 500  # max non-empty cells before truncation
+_ROW_BUDGET = 50  # max data rows before truncation
+_COL_BUDGET = 30  # max columns before truncation

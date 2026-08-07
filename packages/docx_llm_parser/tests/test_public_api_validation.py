@@ -6,12 +6,11 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from docx_llm_parser import Density, ResourceType, get_resource, render_document, render_window
+from _fixtures import write_rich_docx
+from docx_llm_parser import Density, ResourceType, get_resource, render_document
 from docx_llm_parser.concurrency import parse_many
 from docx_llm_parser.core.enums import RevisionMode
 from docx_llm_parser.core.models import ParseOptions
-
-from _fixtures import write_rich_docx
 
 
 def _docx_path() -> Path:
@@ -27,7 +26,6 @@ class PublicApiValidationTests(unittest.TestCase):
         self.assertEqual(str(ResourceType.TABLES), "tables")
 
     def test_density_rejects_unknown_value(self) -> None:
-        from _fixtures import write_rich_docx
 
         with TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "test.docx"
@@ -54,7 +52,6 @@ class PublicApiValidationTests(unittest.TestCase):
             parse_many([], "out", revision_mode="typo")
 
     def test_get_resource_rejects_plural_type(self) -> None:
-        from _fixtures import write_rich_docx
 
         with TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "test.docx"
@@ -63,7 +60,6 @@ class PublicApiValidationTests(unittest.TestCase):
                 get_resource(path, "images", "img1")
 
     def test_get_resource_unknown_type(self) -> None:
-        from _fixtures import write_rich_docx
 
         with TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "test.docx"

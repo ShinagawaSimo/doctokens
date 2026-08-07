@@ -28,7 +28,7 @@ def _content_types() -> str:
         '<Default Extension="rels" ContentType='
         '"application/vnd.openxmlformats-package.relationships+xml"/>'
         '<Override PartName="/xl/workbook.xml" '
-        "ContentType=\"application/vnd.openxmlformats-officedocument."
+        'ContentType="application/vnd.openxmlformats-officedocument.'
         'spreadsheetml.sheet.main+xml"/>'
         "</Types>"
     )
@@ -52,8 +52,7 @@ def _workbook_xml(sheet_names: list[str]) -> str:
 
 def _workbook_rels(sheet_count: int) -> str:
     rows = "".join(
-        f'<Relationship Id="rSheet{i}" Type="{NS_O}/worksheet" '
-        f'Target="worksheets/sheet{i}.xml"/>'
+        f'<Relationship Id="rSheet{i}" Type="{NS_O}/worksheet" Target="worksheets/sheet{i}.xml"/>'
         for i in range(1, sheet_count + 1)
     )
     return (
@@ -122,12 +121,7 @@ class MinimalParseTests(unittest.TestCase):
                 "xl/workbook.xml": _workbook_xml(["Sheet1"]),
                 "xl/_rels/workbook.xml.rels": _workbook_rels(1),
                 "xl/worksheets/sheet1.xml": _sheet_xml(
-                    [
-                        '<row r="1">'
-                        '<c r="A1" t="b"><v>1</v></c>'
-                        '<c r="B1" t="e"><v>#N/A</v></c>'
-                        "</row>"
-                    ]
+                    ['<row r="1"><c r="A1" t="b"><v>1</v></c><c r="B1" t="e"><v>#N/A</v></c></row>']
                 ),
             },
         )

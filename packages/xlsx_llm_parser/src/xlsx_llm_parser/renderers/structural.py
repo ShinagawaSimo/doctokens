@@ -55,8 +55,9 @@ def render_range(
 # ── Per-sheet rendering ──
 
 
-def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None,
-                  start_row: int = 1) -> Iterator[str]:
+def _render_sheet(
+    sheet, density: Density, wb: ParsedWorkbook | None = None, start_row: int = 1
+) -> Iterator[str]:
     name = sheet["name"]
     state = sheet.get("state", "visible")
     kind = sheet.get("kind", "worksheet")
@@ -81,7 +82,9 @@ def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None,
         hidden_cols = sheet.get("hidden_cols")
         if hidden_cols:
             for cmin, cmax in hidden_cols:
-                col_range = col_letter(cmin) if cmin == cmax else f"{col_letter(cmin)}:{col_letter(cmax)}"
+                col_range = (
+                    col_letter(cmin) if cmin == cmax else f"{col_letter(cmin)}:{col_letter(cmax)}"
+                )
                 yield f"<columns ref={col_range} hidden>\n"
 
     if density == "semantic" and sheet.get("sheet_protection"):
@@ -113,13 +116,13 @@ def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None,
     # Data validations (semantic only)
     if density == "semantic":
         for dv in sheet.get("data_validations", []):
-            yield f'<dataValidation ref={dv["ranges"]} type={dv["type"]}/>\n'
+            yield f"<dataValidation ref={dv['ranges']} type={dv['type']}/>\n"
 
     # Conditional formatting (semantic only)
     if density == "semantic":
         for cf in sheet.get("conditional_formats", []):
-            yield f'<conditionalFormatting ref={cf["ranges"]}>\n'
-            parts = [f'<rule type={cf["ruleType"]}']
+            yield f"<conditionalFormatting ref={cf['ranges']}>\n"
+            parts = [f"<rule type={cf['ruleType']}"]
             if cf.get("formula"):
                 parts.append(f' formula="{escape(cf["formula"], quote=True)}"')
             parts.append("/>\n")
@@ -133,18 +136,18 @@ def _render_sheet(sheet, density: Density, wb: ParsedWorkbook | None = None,
 
     # Images (structural + semantic)
     for img in sheet.get("images", []):
-        yield f'<image id={img["id"]} ref={img["ref"]}/>\n'
+        yield f"<image id={img['id']} ref={img['ref']}/>\n"
 
     # Charts (structural: summary; semantic: details)
     for ch in sheet.get("charts", []):
-        attrs = f'id={ch["id"]} ref={ch["ref"]} type={ch.get("type","?")}'
-        attrs += f' series={ch.get("series_count", 0)}'
+        attrs = f"id={ch['id']} ref={ch['ref']} type={ch.get('type', '?')}"
+        attrs += f" series={ch.get('series_count', 0)}"
         # Series names for quick identification
         ch_series = ch.get("series", [])
         if ch_series:
-            names = [s.get("name", f"S{s.get('index','')}") for s in ch_series]
+            names = [s.get("name", f"S{s.get('index', '')}") for s in ch_series]
             if names:
-                attrs += f' names={escape(",".join(names), quote=True)}'
+                attrs += f" names={escape(','.join(names), quote=True)}"
         if ch.get("title"):
             attrs += f" title={escape(ch['title'], quote=True)}"
         attrs += " truncated"
@@ -187,9 +190,9 @@ def _render_plain(rows: list[list[Cell]], start_row: int = 1) -> Iterator[str]:
 # ── Grid rendering (structural / semantic) ──
 
 
-def _render_grid(rows: list[list[Cell]], density: Density,
-                 wb: ParsedWorkbook | None = None,
-                 start_row: int = 1) -> str:
+def _render_grid(
+    rows: list[list[Cell]], density: Density, wb: ParsedWorkbook | None = None, start_row: int = 1
+) -> str:
     if not rows:
         return ""
 
@@ -233,7 +236,9 @@ def _render_grid(rows: list[list[Cell]], density: Density,
             break
 
     # Output comment blocks after the grid
-    for idx, ((_col, _row), (ref, author, text)) in enumerate(sorted(comments.items(), key=lambda x: (x[0][1], x[0][0]))):
+    for idx, ((_col, _row), (ref, author, text)) in enumerate(
+        sorted(comments.items(), key=lambda x: (x[0][1], x[0][0]))
+    ):
         attrs = f'id=comment{idx} cell="{escape(ref, quote=True)}"'
         if author:
             attrs += f" author={escape(author, quote=True)}"
@@ -242,9 +247,13 @@ def _render_grid(rows: list[list[Cell]], density: Density,
     return "".join(parts)
 
 
-def _render_row(row_cells: list[Cell], grid_min_col: int, density: Density,
-                wb: ParsedWorkbook | None = None,
-                comments: dict[tuple[int, int], tuple[str, str, str]] | None = None) -> str:
+def _render_row(
+    row_cells: list[Cell],
+    grid_min_col: int,
+    density: Density,
+    wb: ParsedWorkbook | None = None,
+    comments: dict[tuple[int, int], tuple[str, str, str]] | None = None,
+) -> str:
     actual_row = row_cells[0]["row"]
     first_cell = row_cells[0]
     row_hidden = " hidden" if first_cell.get("hidden") else ""
@@ -290,7 +299,11 @@ def _render_row(row_cells: list[Cell], grid_min_col: int, density: Density,
         if c != next_col:
             tag_attrs += f" col={col_letter(c)}"
         parts.append(f"<{tag_attrs}>")
-        body = _render_rich_text(cell["rich"]) if density == "semantic" and cell.get("rich") else escape(cell["text"])
+        body = (
+            _render_rich_text(cell["rich"])
+            if density == "semantic" and cell.get("rich")
+            else escape(cell["text"])
+        )
         if cell.get("hyperlink"):
             body = f'<a href="{escape(cell["hyperlink"], quote=True)}">{body}</a>'
         # Inline comment reference + register for post-grid output
@@ -374,6 +387,6 @@ def _render_rich_text(runs: list[dict]) -> str:
         if run.get("underline"):
             txt = f"<u>{txt}</u>"
         if run.get("color"):
-            txt = f'<color value={run["color"]}>{txt}</color>'
+            txt = f"<color value={run['color']}>{txt}</color>"
         parts.append(txt)
     return "".join(parts)

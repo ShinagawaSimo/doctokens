@@ -44,7 +44,7 @@ class ImageTests(unittest.TestCase):
                 ),
                 "xl/workbook.xml": (
                     f'<workbook xmlns="{NS_S}" xmlns:r="{NS_O}">'
-                    "<sheets><sheet name=\"Data\" sheetId=\"1\" r:id=\"rSheet1\"/></sheets>"
+                    '<sheets><sheet name="Data" sheetId="1" r:id="rSheet1"/></sheets>'
                     "</workbook>"
                 ),
                 "xl/_rels/workbook.xml.rels": (
@@ -72,7 +72,7 @@ class ImageTests(unittest.TestCase):
                     "<from><col>0</col><row>0</row></from>"
                     "<to><col>2</col><row>1</row></to>"
                     "<pic>"
-                    "<blipFill><a:blip r:embed=\"rImg1\"/></blipFill>"
+                    '<blipFill><a:blip r:embed="rImg1"/></blipFill>'
                     "</pic>"
                     "</twoCellAnchor>"
                     "</wsDr>"
@@ -110,7 +110,7 @@ class PivotTableTests(unittest.TestCase):
                 ),
                 "xl/workbook.xml": (
                     f'<workbook xmlns="{NS_S}" xmlns:r="{NS_O}">'
-                    "<sheets><sheet name=\"Data\" sheetId=\"1\" r:id=\"rSheet1\"/></sheets>"
+                    '<sheets><sheet name="Data" sheetId="1" r:id="rSheet1"/></sheets>'
                     "</workbook>"
                 ),
                 "xl/_rels/workbook.xml.rels": (

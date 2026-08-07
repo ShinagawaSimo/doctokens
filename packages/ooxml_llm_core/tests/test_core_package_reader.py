@@ -76,9 +76,7 @@ class CorePackageReaderTests(unittest.TestCase):
             "word/media/image.png",
         )
         self.assertEqual(
-            resolve_relationship_target(
-                "word/document.xml", "https://example.test", "External"
-            ),
+            resolve_relationship_target("word/document.xml", "https://example.test", "External"),
             "https://example.test",
         )
 

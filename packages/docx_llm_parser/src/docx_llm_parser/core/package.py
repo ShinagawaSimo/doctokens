@@ -7,10 +7,12 @@ from pathlib import Path
 from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.package import (  # noqa: F401 — re-export
     PackageError,
-    PackageReader as _BasePackageReader,
     rels_path_for_part,
     resolve_relationship_target,
     source_part_from_rels_path,
+)
+from ooxml_llm_core.package import (
+    PackageReader as _BasePackageReader,
 )
 
 from .models import ParseOptions

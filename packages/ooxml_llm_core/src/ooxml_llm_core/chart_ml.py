@@ -49,12 +49,12 @@ class ChartSeriesInfo(TypedDict, total=False):
 
     index: int
     name: str
-    categories: list[str]         # all category labels
-    values: list[str]             # all cached values (strings)
-    preview: str                  # first N points as "cat=val; ..." for inline display
+    categories: list[str]  # all category labels
+    values: list[str]  # all cached values (strings)
+    preview: str  # first N points as "cat=val; ..." for inline display
     min: float
     max: float
-    formula: str                  # cell-range formula from <c:f>
+    formula: str  # cell-range formula from <c:f>
 
 
 class ChartInfo(TypedDict, total=False):
@@ -117,15 +117,13 @@ def _chart_series(plot_area: ET.Element | None) -> list[ChartSeriesInfo]:
         return []
 
     rows: list[ChartSeriesInfo] = []
-    for ser_index, ser in enumerate(
-        plot_area.iter(f"{{{NS_C}}}ser"), start=1
-    ):
-        categories = _cached_values(
-            _first_child(ser, "cat")
-        ) or _cached_values(_first_child(ser, "xVal"))
-        values = _cached_values(
-            _first_child(ser, "val")
-        ) or _cached_values(_first_child(ser, "yVal"))
+    for ser_index, ser in enumerate(plot_area.iter(f"{{{NS_C}}}ser"), start=1):
+        categories = _cached_values(_first_child(ser, "cat")) or _cached_values(
+            _first_child(ser, "xVal")
+        )
+        values = _cached_values(_first_child(ser, "val")) or _cached_values(
+            _first_child(ser, "yVal")
+        )
         name = _series_name(ser)
         point_count = max(len(categories), len(values))
 
@@ -144,9 +142,7 @@ def _chart_series(plot_area: ET.Element | None) -> list[ChartSeriesInfo]:
         if name:
             row["name"] = name
 
-        value_numbers = [
-            _to_float(v) for v in values if v and _to_float(v) is not None
-        ]
+        value_numbers = [_to_float(v) for v in values if v and _to_float(v) is not None]
         if value_numbers:
             row["min"] = min(value_numbers)
             row["max"] = max(value_numbers)

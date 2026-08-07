@@ -7,6 +7,7 @@ from html import escape
 from pathlib import Path
 
 from .parser import _parse_workbook
+from .query import query_data as _query_data
 from .renderers.structural import (
     _find_sheet,
     _parse_range,
@@ -158,166 +159,19 @@ def query_data(
     grouping, and aggregation.  Returns lightweight tabular HTML.
     """
     wb = _parse_workbook(source)
-
-    # Resolve data source
-    rows: list[list] = []
-    columns: list[str] = []
-    if table_id is not None:
-        for s in wb["sheets"]:
-            for t in s.get("tables", []):
-                if t["id"] == table_id:
-                    sheet_obj = s
-                    columns = t.get("columns", [])
-                    start_col, start_row, end_col, end_row = _parse_range(t["ref"])
-                    break
-            else:
-                continue
-            break
-        else:
-            raise ValueError(f"Table {table_id!r} not found")
-    elif sheet and range_spec and header_row:
-        sheet_obj = _find_sheet(wb, sheet)
-        start_col, start_row, end_col, end_row = _parse_range(range_spec)
-        columns = []
-    else:
-        raise ValueError("Provide table_id or (sheet + range_spec + header_row)")
-
-    # Collect rows (header + data)
-    typed_rows: list[dict[str, object]] = []
-    for row_cells in sheet_obj.get("rows", []):
-        if not row_cells:
-            continue
-        row_num = row_cells[0]["row"]
-        if row_num < start_row:
-            continue
-        if row_num > end_row:
-            break
-        row_dict: dict[str, object] = {}
-        for c in row_cells:
-            if start_col <= c["col"] <= end_col:
-                col_idx = c["col"] - start_col
-                col_name = columns[col_idx] if col_idx < len(columns) else f"Col{c['col']}"
-                raw = c.get("text", "")
-                try:
-                    if "." in str(raw):
-                        row_dict[col_name] = float(str(raw))
-                    else:
-                        row_dict[col_name] = int(str(raw))
-                except (ValueError, TypeError):
-                    row_dict[col_name] = str(raw)
-        if row_dict:
-            row_dict["__row"] = row_num
-            typed_rows.append(row_dict)
-
-    # Header row detection — extract column names from data
-    if not columns and header_row:
-        for r in typed_rows:
-            if r.get("__row") == header_row:
-                columns = [str(v) for k, v in r.items() if k != "__row"]
-                break
-
-    # Filtering
-    if where:
-        filtered: list[dict[str, object]] = []
-        for row in typed_rows:
-            match = True
-            for cond in where:
-                col = str(cond.get("column", ""))
-                op = cond.get("op", "eq")
-                val = cond.get("value")
-                cell_val = row.get(col)
-                if op == "eq" and str(cell_val) != str(val):
-                    match = False
-                elif op == "contains" and str(val).lower() not in str(cell_val).lower():
-                    match = False
-                elif op in ("gt", "lt"):
-                    if not isinstance(cell_val, (int, float)):
-                        match = False
-                    else:
-                        try:
-                            num_val = float(str(val))
-                        except (ValueError, TypeError):
-                            match = False
-                        else:
-                            if op == "gt" and cell_val <= num_val:
-                                match = False
-                            elif op == "lt" and cell_val >= num_val:
-                                match = False
-            if match:
-                filtered.append(row)
-        typed_rows = filtered
-
-    # Column projection (select)
-    if select and typed_rows:
-        keep_cols = [str(s) for s in select]
-
-    # Aggregation
-    if group_by and aggregates:
-        groups: dict[tuple, dict[str, object]] = {}
-        for row in typed_rows:
-            key = tuple(row.get(g, "") for g in group_by)
-            if key not in groups:
-                groups[key] = {g: row.get(g, "") for g in group_by}
-            for agg in aggregates:
-                op = agg.get("op", "sum")
-                col = str(agg.get("column", ""))
-                as_name = agg.get("as", f"{op}_{col}")
-                val = row.get(col)
-                if op == "count":
-                    groups[key][as_name] = groups[key].get(as_name, 0) + 1
-                    continue
-                if not isinstance(val, (int, float)):
-                    continue
-                if op == "sum":
-                    groups[key][as_name] = groups[key].get(as_name, 0) + val
-                elif op == "avg":
-                    cur = groups[key].get(as_name, (0, 0))
-                    groups[key][as_name] = (cur[0] + val, cur[1] + 1)
-                elif op == "min":
-                    groups[key][as_name] = min(groups[key].get(as_name, val), val)
-                elif op == "max":
-                    groups[key][as_name] = max(groups[key].get(as_name, val), val)
-        # Finalize averages
-        for key in groups:
-            for agg in aggregates:
-                if agg.get("op") == "avg":
-                    as_name = agg.get("as", f"avg_{agg['column']}")
-                    cur = groups[key].get(as_name)
-                    if isinstance(cur, tuple):
-                        groups[key][as_name] = round(cur[0] / cur[1], 4) if cur[1] else 0
-                    elif cur is None:
-                        groups[key][as_name] = 0
-        typed_rows = list(groups.values())
-
-    # Column projection applied after aggregation too
-    if select and typed_rows:
-        keep_cols = [str(s) for s in select]
-        typed_rows = [{c: r.get(c, "") for c in keep_cols if c in r} for r in typed_rows]
-
-    # Sorting
-    if order_by:
-        for ob in reversed(order_by):
-            col = str(ob.get("column", ""))
-            desc = ob.get("direction") == "desc"
-            typed_rows.sort(key=lambda r, c=col: str(r.get(c, "")), reverse=desc)
-
-    # Limit
-    if limit and limit > 0:
-        typed_rows = typed_rows[:limit]
-
-    # Render
-    if not typed_rows:
-        return "<table>\n"
-    all_cols = list(typed_rows[0].keys())
-    all_cols = [c for c in all_cols if c != "__row"]
-    parts = ["<table>\n<tr>"]
-    for col in all_cols:
-        parts.append(f"<th>{escape(str(col))}")
-    for row in typed_rows:
-        parts.append("<tr>")
-        for col in all_cols:
-            parts.append(f"<td>{escape(str(row.get(col, '')))}")
-    return "".join(parts) + "\n"
+    return _query_data(
+        wb,
+        table_id=table_id,
+        sheet=sheet,
+        range_spec=range_spec,
+        header_row=header_row,
+        select=select,
+        where=where,
+        group_by=group_by,
+        aggregates=aggregates,
+        order_by=order_by,
+        limit=limit,
+    )
 
 
 def get_resource(
@@ -340,7 +194,18 @@ def get_resource(
         for s in wb["sheets"]:
             for ch in s.get("charts", []):
                 if ch["id"] == resource_id:
-                    return {"type": "chart", "id": resource_id, "ref": ch["ref"]}
+                    result: dict = {
+                        "type": "chart",
+                        "id": ch["id"],
+                        "ref": ch["ref"],
+                        "chartType": ch.get("type", ""),
+                        "seriesCount": ch.get("series_count", 0),
+                    }
+                    if ch.get("title"):
+                        result["title"] = ch["title"]
+                    if ch.get("part"):
+                        result["part"] = ch["part"]
+                    return result
     elif resource_type == "pivot_table":
         for s in wb["sheets"]:
             for pv in s.get("pivot_tables", []):

@@ -17,6 +17,11 @@ from ooxml_llm_core.models import (  # noqa: F401 — re-exported as stable API
 )
 from ooxml_llm_core.models import ParseWarning  # noqa: F811 — explicit single import
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ocr_llm_core import OcrProvider as OcrProviderType
+
 from .enums import RevisionMode
 RunFormat = dict[str, bool | str | None]
 
@@ -338,6 +343,9 @@ class ParseOptions:
     max_zip_entries: int = 10000
     max_entry_uncompressed_bytes: int = 50 * 1024 * 1024
     max_total_uncompressed_bytes: int = 500 * 1024 * 1024
+    ocr: object | None = None  # OcrProvider | None, lazy import
+    ocr_workers: int = 4
+    ocr_confidence_threshold: float = 0.0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "revision_mode", RevisionMode.parse(self.revision_mode))

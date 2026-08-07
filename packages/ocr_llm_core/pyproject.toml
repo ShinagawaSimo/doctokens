@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ocr_llm_core"
+version = "0.1.0"
+description = "Optional OCR provider layer for LLM document parsers"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+[project.optional-dependencies]
+tesseract = ["pytesseract>=0.3.10", "Pillow>=8.0.0"]
+easyocr = ["easyocr>=1.7.0"]
+all = [
+    "pytesseract>=0.3.10",
+    "Pillow>=8.0.0",
+    "easyocr>=1.7.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

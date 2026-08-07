@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from pathlib import Path
 
@@ -48,6 +50,9 @@ class DocxParser:
             object_lookup, charts, smartarts = self._index_objects(
                 package, relationships, warnings, metrics)
 
+            # OCR pipeline — runs in parallel with body parsing.
+            ocr_results = self._run_ocr(package, assets, opts)
+
             body_parser, blocks = self._parse_body(
                 package, styles, opts, warnings, relationships,
                 asset_lookup, object_lookup, numbering, metrics)
@@ -61,7 +66,7 @@ class DocxParser:
         return self._build_document(
             docx_source_path, source_name, zip_index, content_types,
             relationships, styles, numbering, assets, charts, smartarts,
-            blocks, body_parser, ancillary, warnings, metrics,
+            blocks, body_parser, ancillary, ocr_results, warnings, metrics,
             debug, debug_dir, style_rows, opts)
 
     # ── package helpers ──────────────────────────────────────────
@@ -138,12 +143,60 @@ class DocxParser:
                 object_lookup=object_lookup,
             ).parse()
 
+    # ── OCR pipeline ─────────────────────────────────────────────
+
+    @staticmethod
+    def _run_ocr(package, assets, opts):
+        """Run OCR on embedded images, deduplicating by content hash."""
+        provider = getattr(opts, 'ocr', None)
+        if provider is None:
+            return {}
+
+        # Collect unique images by content hash.
+        hashes: dict[str, str] = {}   # assetId → sha256 hex
+        unique_images: dict[str, bytes] = {}  # sha256 → image bytes
+        for asset in assets:
+            if asset["type"] != "image" or asset.get("source") != "embedded":
+                continue
+            zip_path = asset.get("zipPath")
+            if not zip_path:
+                continue
+            image_bytes = package.open_entry(zip_path).read()
+            h = hashlib.sha256(image_bytes).hexdigest()
+            hashes[asset["id"]] = h
+            if h not in unique_images:
+                unique_images[h] = image_bytes
+
+        if not unique_images:
+            return {}
+
+        # Submit OCR jobs in parallel.
+        ocr_raw: dict[str, str] = {}  # sha256 → ocr text
+        max_workers = getattr(opts, 'ocr_workers', 4)
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {
+                pool.submit(provider.extract, img): h
+                for h, img in unique_images.items()
+            }
+            for future in as_completed(futures):
+                h = futures[future]
+                try:
+                    ocr_raw[h] = future.result()
+                except Exception:
+                    ocr_raw[h] = ""
+
+        # Map back to asset IDs.
+        result: dict[str, str] = {}
+        for asset_id, h in hashes.items():
+            result[asset_id] = ocr_raw.get(h, "")
+        return result
+
     # ── build document ───────────────────────────────────────────
 
     def _build_document(
         self, docx_source_path, source_name, zip_index, content_types,
         relationships, styles, numbering, assets, charts, smartarts,
-        blocks, body_parser, ancillary, warnings, metrics,
+        blocks, body_parser, ancillary, ocr_results, warnings, metrics,
         debug, debug_dir, style_rows, opts,
     ):
         total_uncompressed = 0
@@ -187,6 +240,7 @@ class DocxParser:
             endnotes=ancillary["endnotes"],
             comments=ancillary["comments"],
             numbering=numbering.to_debug_dict(),
+            ocr_results=ocr_results,
         )
         self._record_content_metrics(parsed, metrics)
 

@@ -11,9 +11,9 @@ from .inline import inline_content
 from .l0 import block_text_only, inline_text_only
 
 
-def _paragraph_text(block, density: str) -> str:
+def _paragraph_text(block, density: str, ocr_results: dict[str, str] | None = None) -> str:
     """Extract rendered text for a single paragraph block."""
-    return inline_content(block, density)
+    return inline_content(block, density, ocr_results)
 
 # ── semantic 渲染 ──
 
@@ -21,6 +21,7 @@ def _paragraph_text(block, density: str) -> str:
 def iter_l2(parsed: ParsedDocument) -> Iterator[str]:
     """semantic — 完整语义 HTML5。每段独立一个 <p> 标签。"""
     yield "density=semantic\n"
+    ocr = getattr(parsed, 'ocr_results', None) or {}
     current_page = 0
     for block in parsed.blocks:
         block_page = block.get("page", 1)
@@ -29,17 +30,24 @@ def iter_l2(parsed: ParsedDocument) -> Iterator[str]:
             yield f"<page={current_page}>\n"
 
         if block["type"] == "paragraph":
-            text = _paragraph_text(block, "semantic")
+            text = _paragraph_text(block, "semantic", ocr)
             yield f"<p>{text}\n"
         else:
-            yield from render_block(block, "semantic")
+            yield from render_block(block, "semantic", ocr)
 
     for asset in parsed.assets:
         attrs = f"id={asset['id']}"
         if asset.get("href"):
             attrs += f" href={escape(asset['href'], quote=True)}"
         yield f"<img {attrs}>\n"
-        yield "\n"
+        aid = asset["id"]
+        ocr_text = ocr.get(aid)
+        if ocr_text is None:
+            yield "\n"
+        elif ocr_text == "":
+            yield f"<ocr-text id={aid} error>\n"
+        else:
+            yield f"<ocr-text id={aid}>{ocr_text}\n"
 
     supplemental = supplemental_to_html5(parsed, "semantic")
     if supplemental:
@@ -53,6 +61,7 @@ def iter_l2(parsed: ParsedDocument) -> Iterator[str]:
 def iter_l1(parsed: ParsedDocument) -> Iterator[str]:
     """structural — 块级结构 + 语义对象，去掉 inline 格式。"""
     yield "density=structural\n"
+    ocr = getattr(parsed, 'ocr_results', None) or {}
     current_page = 0
     for block in parsed.blocks:
         block_page = block.get("page", 1)
@@ -61,15 +70,22 @@ def iter_l1(parsed: ParsedDocument) -> Iterator[str]:
             yield f"<page={current_page}>\n"
 
         if block["type"] == "paragraph":
-            text = _paragraph_text(block, "structural")
+            text = _paragraph_text(block, "structural", ocr)
             yield f"<p>{text}\n"
         else:
-            yield from render_block(block, "structural")
+            yield from render_block(block, "structural", ocr)
 
     for asset in parsed.assets:
         attrs = f"id={asset['id']}"
         yield f"<img {attrs}>\n"
-        yield "\n"
+        aid = asset["id"]
+        ocr_text = ocr.get(aid)
+        if ocr_text is None:
+            yield "\n"
+        elif ocr_text == "":
+            yield f"<ocr-text id={aid} error>\n"
+        else:
+            yield f"<ocr-text id={aid}>{ocr_text}\n"
 
     supplemental = supplemental_to_html5(parsed, "structural")
     if supplemental:
@@ -149,6 +165,6 @@ def supplemental_to_html5(parsed: ParsedDocument, density: str) -> str:
             date = item.get("date")
             if date is not None:
                 attrs += f" date={escape(date, quote=True)}"
-            content = inline_content(item, density)
+            content = inline_content(item, density, None)
             lines.append(f"<{tag} {attrs}>{content}")
     return "\n".join(lines)

@@ -399,6 +399,7 @@ class ParsedDocument:
     endnotes: list[AncillaryItem] = field(default_factory=list)
     comments: list[AncillaryItem] = field(default_factory=list)
     numbering: dict[str, object] = field(default_factory=dict)
+    ocr_results: dict[str, str] = field(default_factory=dict)
     metrics: MetricsSnapshot = field(
         default_factory=lambda: MetricsSnapshot(stagesMs={}, counters={})
     )

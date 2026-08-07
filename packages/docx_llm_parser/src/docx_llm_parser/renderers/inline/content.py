@@ -9,7 +9,7 @@ from .._text_utils import filter_format, merge_text_runs
 from ..objects import chart_to_html5, smartart_to_html5
 
 
-def inline_content(block: InlineContainer, density: str) -> str:
+def inline_content(block: InlineContainer, density: str, ocr_results: dict[str, str] | None = None) -> str:
     """把 run 文本、链接、图片、脚注引用等合成为 inline HTML5。"""
     if "runs" not in block:
         return escape(block["text"])
@@ -42,7 +42,7 @@ def inline_content(block: InlineContainer, density: str) -> str:
             parts.append(text)
 
         if "objects" in run:
-            parts.extend(inline_object(obj, density) for obj in run["objects"])
+            parts.extend(inline_object(obj, density, ocr_results) for obj in run["objects"])
     return "".join(parts)
 
 
@@ -73,12 +73,12 @@ def apply_inline_format(text: str, fmt: RunFormat, density: str) -> str:
     return text
 
 
-def inline_object(obj: InlineObject, density: str) -> str:
+def inline_object(obj: InlineObject, density: str, ocr_results: dict[str, str] | None = None) -> str:
     """渲染段落内的非纯文本对象引用。"""
     obj_type = obj["type"]
 
     if obj_type == "image":
-        return image_object(obj, density)
+        return image_object(obj, density, ocr_results)
 
     if obj_type == "drawing":
         return drawing_object(obj, density)
@@ -113,14 +113,23 @@ def inline_object(obj: InlineObject, density: str) -> str:
     return f"<unsupported type={escape(obj_type, quote=True)}/>"
 
 
-def image_object(obj: InlineObject, density: str) -> str:
-    """Render an embedded image reference."""
+def image_object(obj: InlineObject, density: str, ocr_results: dict[str, str] | None = None) -> str:
+    """Render an embedded image reference with optional OCR text."""
+    asset_id = obj.get('assetId', '')
     if density == "structural":
-        return "<img>"
-    attrs = f"id={obj.get('assetId', '')}"
-    if obj.get("alt"):
-        attrs += f" alt={escape(obj['alt'], quote=True)}"
-    return f"<img {attrs}>"
+        img_tag = "<img>"
+    else:
+        attrs = f"id={asset_id}"
+        if obj.get("alt"):
+            attrs += f" alt={escape(obj['alt'], quote=True)}"
+        img_tag = f"<img {attrs}>"
+
+    ocr_text = (ocr_results or {}).get(asset_id)
+    if ocr_text is None:
+        return img_tag
+    if ocr_text == "":
+        return f"{img_tag}\n<ocr-text id={asset_id} error>"
+    return f"{img_tag}\n<ocr-text id={asset_id}>{ocr_text}"
 
 
 def drawing_object(obj: InlineObject, density: str) -> str:

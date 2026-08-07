@@ -124,6 +124,7 @@ def window(
         endnotes=parsed.endnotes,
         comments=[],
         numbering=parsed.numbering,
+        ocr_results=parsed.ocr_results,
         metrics=parsed.metrics,
     )
     return "".join(iter_html5(window_parsed, resolved_density))
@@ -167,13 +168,14 @@ def extract(
 
     if resolved_type in {ResourceType.IMAGES, ResourceType.IMAGE}:
         source_path = parsed.metadata.get("sourcePath", "")
+        ocr = getattr(parsed, 'ocr_results', None) or {}
         result = []
         for a in parsed.assets:
             if a["type"] != "image":
                 continue
             if resource_id and a["id"] != resource_id:
                 continue
-            item: ResourceDetail = {"id": a["id"]}
+            item: ResourceDetail = {"id": a["id"], "type": "image"}
             if a.get("href"):
                 item["href"] = a["href"]
             if a.get("contentType"):
@@ -183,6 +185,9 @@ def extract(
             if zip_path and source_path:
                 with zipfile.ZipFile(source_path, "r") as zf:
                     item["data"] = zf.read(zip_path)
+            ocr_text = ocr.get(a["id"])
+            if ocr_text is not None:
+                item["ocr_text"] = ocr_text
             result.append(item)
         return result
 

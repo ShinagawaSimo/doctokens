@@ -122,10 +122,13 @@ class PaddleVLProviderTest(unittest.TestCase):
         self.assertEqual(payload["fileType"], 1)
         self.assertEqual(payload["language"], "cht")
 
-        with patch(
-            "urllib.request.urlopen",
-            return_value=_response({"error_code": 17, "error_msg": "bad request"}),
-        ), self.assertRaises(RuntimeError):
+        with (
+            patch(
+                "urllib.request.urlopen",
+                return_value=_response({"error_code": 17, "error_msg": "bad request"}),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
             p._submit("tok", b"abc")
 
     def test_poll_success_and_api_error(self) -> None:

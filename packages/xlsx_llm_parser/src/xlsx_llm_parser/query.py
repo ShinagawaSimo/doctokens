@@ -87,10 +87,7 @@ def query_data(
     if select and typed_rows:
         columns = _select_columns(select, columns)
         keep_cols = [item["key"] for item in columns]
-        typed_rows = [
-            {col: row.get(col, "") for col in keep_cols if col in row}
-            for row in typed_rows
-        ]
+        typed_rows = [{col: row.get(col, "") for col in keep_cols if col in row} for row in typed_rows]
 
     if order_by:
         typed_rows = _apply_order_by(typed_rows, _resolve_order_specs(order_by, columns))
@@ -288,11 +285,7 @@ def _apply_where(
     rows: list[dict[str, object]],
     conditions: list[WhereCondition],
 ) -> list[dict[str, object]]:
-    return [
-        row
-        for row in rows
-        if all(_matches_condition(row, condition) for condition in conditions)
-    ]
+    return [row for row in rows if all(_matches_condition(row, condition) for condition in conditions)]
 
 
 def _matches_condition(row: dict[str, object], condition: WhereCondition) -> bool:

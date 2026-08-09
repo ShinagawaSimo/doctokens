@@ -108,11 +108,7 @@ def _parse_auto_filter(root: ET.Element) -> tuple[str, list[FilterColumn]]:
         filters = filter_column.find(f"{{{NS_S}}}filters")
         if filters is None:
             continue
-        values = [
-            item.get("val", "")
-            for item in filters.findall(f"{{{NS_S}}}filter")
-            if item.get("val")
-        ]
+        values = [item.get("val", "") for item in filters.findall(f"{{{NS_S}}}filter") if item.get("val")]
         if values:
             filter_cols.append({"col": column_id, "type": "values", "values": values})
     return filter_range, filter_cols
@@ -178,10 +174,7 @@ def _parse_rows(
     for row_elem in sheet_data.findall(f"{{{NS_S}}}row"):
         row_attrs = _row_attrs(row_elem)
         rows.append(
-            [
-                _parse_cell(cell_elem, row_attrs, sst, rich_map, fmt_index)
-                for cell_elem in row_elem.findall(f"{{{NS_S}}}c")
-            ]
+            [_parse_cell(cell_elem, row_attrs, sst, rich_map, fmt_index) for cell_elem in row_elem.findall(f"{{{NS_S}}}c")]
         )
     return rows
 
@@ -328,11 +321,7 @@ def _post_process_rows(
     pkg: PackageReader,
     sheet_rels: list[RelationshipRecord],
 ) -> None:
-    cell_map = {
-        (cell["col"], cell["row"]): cell
-        for row_cells in rows
-        for cell in row_cells
-    }
+    cell_map = {(cell["col"], cell["row"]): cell for row_cells in rows for cell in row_cells}
     apply_merge_cells(root, cell_map)
     apply_spill_ranges(rows, cell_map)
     apply_hyperlinks(root, cell_map, sheet_rels)

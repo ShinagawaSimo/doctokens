@@ -29,9 +29,7 @@ class StyleMap:
             return None
         if style_id not in self._heading_level_cache:
             # The style inheritance chain is resolved once; later hot paths (runs/paragraphs) read the cache directly.
-            self._heading_level_cache[style_id] = self._resolve_heading_level(
-                style_id, visited=set()
-            )
+            self._heading_level_cache[style_id] = self._resolve_heading_level(style_id, visited=set())
         return self._heading_level_cache[style_id]
 
     def resolve_numbering(self, style_id: str | None) -> tuple[str, int] | None:
@@ -211,9 +209,7 @@ class StylesParser:
                     self.warnings.append(
                         ParseWarning(
                             code="INVALID_STYLE_NUMBERING_LEVEL",
-                            message=(
-                                f"Invalid numbering level {level_str!r} for style {style_id}"
-                            ),
+                            message=(f"Invalid numbering level {level_str!r} for style {style_id}"),
                             locator="word/styles.xml",
                         )
                     )

@@ -37,7 +37,7 @@ def render_smartart_resource(s: SmartArt) -> str:
         parts.append(f"\n<node {n_attrs}/>")
 
     for link in s.get("links") or []:
-        l_attrs = f'from={link["from"]} to={link["to"]}'
+        l_attrs = f"from={link['from']} to={link['to']}"
         if link.get("kind"):
             l_attrs += f" kind={link['kind']}"
         parts.append(f"\n<link {l_attrs}/>")

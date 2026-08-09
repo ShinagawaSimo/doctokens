@@ -256,7 +256,7 @@ class RendererBranchTests(unittest.TestCase):
         self.assertIn("type=bar", chart_html)
         self.assertIn("series=6", chart_html)
         self.assertIn("name=S1", chart_html)
-        self.assertIn('<point category=Q1 value=1/>', chart_html)
+        self.assertIn("<point category=Q1 value=1/>", chart_html)
 
         smartart = {
             "id": "sa1",
@@ -266,10 +266,7 @@ class RendererBranchTests(unittest.TestCase):
             "linkCount": 18,
             "rawLinkCount": 18,
             "layoutType": "process",
-            "nodes": [
-                {"modelId": f"n{index}", "text": f"Node {index}", "kind": "node"}
-                for index in range(1, 15)
-            ],
+            "nodes": [{"modelId": f"n{index}", "text": f"Node {index}", "kind": "node"} for index in range(1, 15)],
             "links": [{"from": index, "to": index + 1, "kind": "parOf"} for index in range(1, 19)],
         }
 

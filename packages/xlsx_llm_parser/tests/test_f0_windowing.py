@@ -103,9 +103,7 @@ class WindowingTests(unittest.TestCase):
                     'Target="worksheets/sheet1.xml"/>'
                     "</Relationships>"
                 ),
-                "xl/worksheets/sheet1.xml": (
-                    f'<worksheet xmlns="{NS_S}"><sheetData>{rows_xml}</sheetData></worksheet>'
-                ),
+                "xl/worksheets/sheet1.xml": (f'<worksheet xmlns="{NS_S}"><sheetData>{rows_xml}</sheetData></worksheet>'),
             },
         )
         html = parse_xlsx(data, density="structural")

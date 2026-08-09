@@ -222,14 +222,8 @@ class AncillaryParser:
         runs: list[Run] = []
         raw_hints: list[RawHint] = []
         for tr in child_elements(tbl, "w", "tr"):
-            cell_contents = [
-                self._container_content(tc, part) for tc in child_elements(tr, "w", "tc")
-            ]
-            visible_cells = [
-                cell
-                for cell in cell_contents
-                if cell["text"].strip() or self._has_objects(cell["runs"])
-            ]
+            cell_contents = [self._container_content(tc, part) for tc in child_elements(tr, "w", "tc")]
+            visible_cells = [cell for cell in cell_contents if cell["text"].strip() or self._has_objects(cell["runs"])]
             if not visible_cells:
                 continue
             if runs:

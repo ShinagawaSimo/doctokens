@@ -32,6 +32,7 @@ _REL_WORKSHEET = f"{NS_R}/worksheet"
 _REL_CHARTSHEET = f"{NS_R}/chartsheet"
 _EXTERNAL_WORKBOOK_EXTENSIONS = (".xlsx", ".xlsm", ".xlsb", ".xls", ".xltx", ".xltm")
 
+
 # OOXML cell type codes → LLM-readable semantic names.
 def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
     """Parse an XLSX file and return a typed workbook IR."""
@@ -118,10 +119,7 @@ def _parse_workbook_xml(
     date_1904 = wb_pr is not None and wb_pr.get("date1904") == "1"
 
     # Build a lookup of rel_id → (resolved_target, rel_type)
-    rels = {
-        r.id: (r.resolved_target, r.type)
-        for r in pkg.read_relationships_for_part("xl/workbook.xml")
-    }
+    rels = {r.id: (r.resolved_target, r.type) for r in pkg.read_relationships_for_part("xl/workbook.xml")}
 
     sheets: list[SheetInfo] = []
     sheets_elem = root.find(f"{{{NS_S}}}sheets")

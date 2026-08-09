@@ -30,9 +30,7 @@ class DebugWriterTests(unittest.TestCase):
                 writer.write_json("value.json", {"name": "示例"})
                 writer.write_jsonl("events.jsonl", [{"id": 1}, {"id": 2}])
 
-            self.assertEqual(
-                json.loads((debug_dir / "value.json").read_text("utf-8")), {"name": "示例"}
-            )
+            self.assertEqual(json.loads((debug_dir / "value.json").read_text("utf-8")), {"name": "示例"})
             self.assertEqual(
                 (debug_dir / "events.jsonl").read_text("utf-8").splitlines(),
                 ['{"id": 1}', '{"id": 2}'],

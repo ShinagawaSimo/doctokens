@@ -31,13 +31,9 @@ def _wb_xml(sheets: list[tuple[str, int]]) -> str:
 
 def _wb_rels(count: int) -> str:
     rows = "".join(
-        f'<Relationship Id="rSheet{i}" Type="{NS_O}/worksheet" Target="worksheets/sheet{i}.xml"/>'
-        for i in range(1, count + 1)
+        f'<Relationship Id="rSheet{i}" Type="{NS_O}/worksheet" Target="worksheets/sheet{i}.xml"/>' for i in range(1, count + 1)
     )
-    return (
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        f"{rows}</Relationships>"
-    )
+    return f'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">{rows}</Relationships>'
 
 
 def _sheet_xml(rows: list[str]) -> str:
@@ -76,12 +72,8 @@ class MultiSheetTests(unittest.TestCase):
                 ),
                 "xl/workbook.xml": _wb_xml([("First", 1), ("Second", 2), ("Third", 3)]),
                 "xl/_rels/workbook.xml.rels": _wb_rels(3),
-                "xl/worksheets/sheet1.xml": _sheet_xml(
-                    ['<row r="1"><c r="A1" t="inlineStr"><is><t>Sheet1</t></is></c></row>']
-                ),
-                "xl/worksheets/sheet2.xml": _sheet_xml(
-                    ['<row r="1"><c r="A1" t="inlineStr"><is><t>Sheet2</t></is></c></row>']
-                ),
+                "xl/worksheets/sheet1.xml": _sheet_xml(['<row r="1"><c r="A1" t="inlineStr"><is><t>Sheet1</t></is></c></row>']),
+                "xl/worksheets/sheet2.xml": _sheet_xml(['<row r="1"><c r="A1" t="inlineStr"><is><t>Sheet2</t></is></c></row>']),
                 "xl/worksheets/sheet3.xml": _sheet_xml([]),
             },
         )
@@ -186,12 +178,8 @@ class SharedStringsTests(unittest.TestCase):
                 ),
                 "xl/workbook.xml": _wb_xml([("Data", 1)]),
                 "xl/_rels/workbook.xml.rels": _wb_rels(1),
-                "xl/sharedStrings.xml": _shared_strings_xml(
-                    ["<r><rPr><b/></rPr><t>Bold</t></r><r><t>Normal</t></r>"]
-                ),
-                "xl/worksheets/sheet1.xml": _sheet_xml(
-                    ['<row r="1"><c r="A1" t="s"><v>0</v></c></row>']
-                ),
+                "xl/sharedStrings.xml": _shared_strings_xml(["<r><rPr><b/></rPr><t>Bold</t></r><r><t>Normal</t></r>"]),
+                "xl/worksheets/sheet1.xml": _sheet_xml(['<row r="1"><c r="A1" t="s"><v>0</v></c></row>']),
             },
         )
         html = parse_xlsx(data)
@@ -219,9 +207,7 @@ class SharedStringsTests(unittest.TestCase):
                 "xl/workbook.xml": _wb_xml([("Data", 1)]),
                 "xl/_rels/workbook.xml.rels": _wb_rels(1),
                 "xl/sharedStrings.xml": _shared_strings_xml(["OnlyOne"]),
-                "xl/worksheets/sheet1.xml": _sheet_xml(
-                    ['<row r="1"><c r="A1" t="s"><v>99</v></c></row>']
-                ),
+                "xl/worksheets/sheet1.xml": _sheet_xml(['<row r="1"><c r="A1" t="s"><v>99</v></c></row>']),
             },
         )
         html = parse_xlsx(data)
@@ -249,9 +235,7 @@ class SharedStringsTests(unittest.TestCase):
                 ),
                 "xl/workbook.xml": _wb_xml([("Data", 1)]),
                 "xl/_rels/workbook.xml.rels": _wb_rels(1),
-                "xl/worksheets/sheet1.xml": _sheet_xml(
-                    ['<row r="1"><c r="A1" t="s"><v>0</v></c></row>']
-                ),
+                "xl/worksheets/sheet1.xml": _sheet_xml(['<row r="1"><c r="A1" t="s"><v>0</v></c></row>']),
             },
         )
         html = parse_xlsx(data)
@@ -356,9 +340,7 @@ class SharedStringsTests(unittest.TestCase):
                 ),
                 "xl/workbook.xml": _wb_xml([("Data", 1)]),
                 "xl/_rels/workbook.xml.rels": _wb_rels(1),
-                "xl/worksheets/sheet1.xml": _sheet_xml(
-                    ['<row r="1"><c r="A1" t="d"><v>2024-01-15</v></c></row>']
-                ),
+                "xl/worksheets/sheet1.xml": _sheet_xml(['<row r="1"><c r="A1" t="d"><v>2024-01-15</v></c></row>']),
             },
         )
         html = parse_xlsx(data)

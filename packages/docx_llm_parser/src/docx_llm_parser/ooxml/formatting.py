@@ -60,15 +60,11 @@ def visible_run_format(fmt: RunFormat | None) -> RunFormat:
     if not fmt:
         return {}
     return {
-        key: value
-        for key, value in fmt.items()
-        if key in VISIBLE_FORMAT_KEYS and value is not False and value not in {None, ""}
+        key: value for key, value in fmt.items() if key in VISIBLE_FORMAT_KEYS and value is not False and value not in {None, ""}
     }
 
 
-def _read_bool_format(
-    run_properties: ET.Element, child_name: str, key: str, fmt: RunFormat
-) -> None:
+def _read_bool_format(run_properties: ET.Element, child_name: str, key: str, fmt: RunFormat) -> None:
     """Read boolean run attributes such as b/i."""
     node = first_child(run_properties, "w", child_name)
     if node is not None:

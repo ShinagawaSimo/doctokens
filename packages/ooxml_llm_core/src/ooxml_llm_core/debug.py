@@ -34,9 +34,7 @@ class DebugWriter:
     def write_json(self, filename: str, data: Any) -> None:
         if not self.enabled:
             return
-        self._atomic_write(
-            filename, lambda stream: json.dump(data, stream, ensure_ascii=False, indent=2)
-        )
+        self._atomic_write(filename, lambda stream: json.dump(data, stream, ensure_ascii=False, indent=2))
 
     def write_jsonl(self, filename: str, rows: Iterable[Mapping[str, object]]) -> None:
         if not self.enabled:

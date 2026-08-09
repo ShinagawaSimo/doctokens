@@ -122,9 +122,7 @@ class FormatIndex:
         locked: bool = True,
         formula_hidden: bool = False,
     ) -> None:
-        self._cell_formats.append(
-            (num_fmt_id, format_code, font_id, fill_id, locked, formula_hidden)
-        )
+        self._cell_formats.append((num_fmt_id, format_code, font_id, fill_id, locked, formula_hidden))
 
     def format_value(self, style_index: int | None, raw: str) -> str:
         """Apply number formatting to a raw cell value string."""
@@ -149,9 +147,7 @@ class FormatIndex:
         if style_index is None or style_index >= len(self._cell_formats):
             return ""
         if style_index not in self._style_attrs_cache:
-            _num_fmt_id, _fmt_code, font_id, fill_id, _locked, _hidden = self._cell_formats[
-                style_index
-            ]
+            _num_fmt_id, _fmt_code, font_id, fill_id, _locked, _hidden = self._cell_formats[style_index]
             parts = []
             if font_id < len(self._fonts):
                 font = self._fonts[font_id]
@@ -180,9 +176,7 @@ class FormatIndex:
         """
         if style_index is None or style_index >= len(self._cell_formats):
             return ""
-        _num_fmt_id, _fmt_code, _font_id, _fill_id, locked, formula_hidden = self._cell_formats[
-            style_index
-        ]
+        _num_fmt_id, _fmt_code, _font_id, _fill_id, locked, formula_hidden = self._cell_formats[style_index]
         parts = []
         if not locked:
             parts.append("unlocked")

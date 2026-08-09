@@ -131,9 +131,7 @@ class RenderOcrTextTest(unittest.TestCase):
             "page": 1,
             "styleId": None,
             "text": "",
-            "runs": [
-                {"text": "", "objects": [{"type": "image", "assetId": "img7", "alt": "A diagram"}]}
-            ],
+            "runs": [{"text": "", "objects": [{"type": "image", "assetId": "img7", "alt": "A diagram"}]}],
         }
         parsed = ParsedDocument(
             metadata={},

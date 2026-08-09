@@ -116,9 +116,7 @@ class InlineParser:
             raw_hints.append({"type": "hyperlink", **link})
             temp_runs: list[Run] = []
             for child in node:
-                self._extract_inline_runs(
-                    child, part, block_id, paragraph_style_id, raw_hints, temp_runs
-                )
+                self._extract_inline_runs(child, part, block_id, paragraph_style_id, raw_hints, temp_runs)
             for run in temp_runs:
                 run["link"] = link
                 runs.append(run)
@@ -127,17 +125,14 @@ class InlineParser:
             # Insertion revisions are visible text in final/review views.
             self._warn(
                 "REVISION_INSERTION_INCLUDED",
-                "Encountered insertion revision; parser includes inserted text "
-                "in final/review mode.",
+                "Encountered insertion revision; parser includes inserted text in final/review mode.",
                 part=part,
                 block_id=block_id,
             )
             if self.options.revision_mode in {"final", "review"}:
                 revision_runs: list[Run] = []
                 for child in node:
-                    self._extract_inline_runs(
-                        child, part, block_id, paragraph_style_id, raw_hints, revision_runs
-                    )
+                    self._extract_inline_runs(child, part, block_id, paragraph_style_id, raw_hints, revision_runs)
                 for run in revision_runs:
                     if self.options.revision_mode == "review":
                         run["revision"] = "inserted"
@@ -162,9 +157,7 @@ class InlineParser:
         if lname in {"sdt", "sdtContent", "smartTag"}:
             # Content controls and smart tags are wrapper layers; keep reading their visible content.
             for child in node:
-                self._extract_inline_runs(
-                    child, part, block_id, paragraph_style_id, raw_hints, runs
-                )
+                self._extract_inline_runs(child, part, block_id, paragraph_style_id, raw_hints, runs)
             return
         if lname in {"oMath", "oMathPara"}:
             # Paragraph-level OMML equations enter the final XML as lightweight objects.
@@ -288,9 +281,7 @@ class InlineParser:
             field_hint: RawHint = {"type": "field", "node": lname}
             if lname == "instrText" and child.text:
                 field_hint["instruction"] = child.text
-                parsed_run.setdefault("objects", []).append(
-                    {"type": "fieldInstruction", "instruction": child.text}
-                )
+                parsed_run.setdefault("objects", []).append({"type": "fieldInstruction", "instruction": child.text})
             raw_hints.append(field_hint)
         elif child_tag in (_TAG_W_FOOTNOTE_REF, _TAG_W_ENDNOTE_REF, _TAG_W_ANNOTATION_REF):
             return

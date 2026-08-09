@@ -143,8 +143,8 @@ class ChartTests(unittest.TestCase):
                 "xl/charts/chart1.xml": (
                     f'<c:chartSpace xmlns:c="{NS_C}">'
                     "<c:chart><c:plotArea><c:barChart>"
-                    "<c:ser><c:idx val=\"0\"/><c:order val=\"0\"/>"
-                    "<c:tx><c:strRef><c:strCache><c:pt idx=\"0\"><c:v>Sales</c:v></c:pt></c:strCache></c:strRef></c:tx>"
+                    '<c:ser><c:idx val="0"/><c:order val="0"/>'
+                    '<c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>Sales</c:v></c:pt></c:strCache></c:strRef></c:tx>'
                     "</c:ser>"
                     "</c:barChart></c:plotArea></c:chart>"
                     "</c:chartSpace>"

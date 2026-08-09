@@ -102,10 +102,7 @@ class DocumentBodyParser:
                     continue
 
                 direct_body_child = (
-                    body_depth is not None
-                    and len(stack) == body_depth + 1
-                    and len(stack) >= 2
-                    and stack[-2] == "body"
+                    body_depth is not None and len(stack) == body_depth + 1 and len(stack) >= 2 and stack[-2] == "body"
                 )
                 if direct_body_child and lname == "p":
                     # Only handle paragraphs that are direct children of body, so table cell content is not hoisted twice.
@@ -154,11 +151,7 @@ class DocumentBodyParser:
                 has_objects = True
         text = "".join(text_parts)
         # text.isspace() avoids the cost of text.strip() creating a new string.
-        if (
-            (not text or text.isspace())
-            and not has_objects
-            and not self.options.preserve_empty_paragraphs
-        ):
+        if (not text or text.isspace()) and not has_objects and not self.options.preserve_empty_paragraphs:
             # Empty paragraphs (no visible text, no inline objects) produce no content.
             # lrpb/manual page breaks inside a paragraph have no visual effect in Word
             # rendering, so drop them without advancing the page number.
@@ -360,9 +353,7 @@ class DocumentBodyParser:
         pstyle = first_child(paragraph_properties, "w", "pStyle")
         return attr(pstyle, "w", "val") if pstyle is not None else None
 
-    def _paragraph_numbering(
-        self, p: ET.Element, style_id: str | None, part: str, block_id: str
-    ) -> NumberingLabel | None:
+    def _paragraph_numbering(self, p: ET.Element, style_id: str | None, part: str, block_id: str) -> NumberingLabel | None:
         """Read the paragraph numbering and advance the numbering counter."""
         paragraph_properties = first_child(p, "w", "pPr")
         numbering_properties = first_child(paragraph_properties, "w", "numPr")
@@ -375,16 +366,10 @@ class DocumentBodyParser:
         num_id = direct_num_id or (style_numbering[0] if style_numbering else None)
         if num_id is None:
             return None
-        level = (
-            direct_level
-            if direct_level is not None
-            else (style_numbering[1] if style_numbering else 0)
-        )
+        level = direct_level if direct_level is not None else (style_numbering[1] if style_numbering else 0)
         return self.numbering_state.advance(num_id, level, part=part, block_id=block_id)
 
-    def _num_pr_values(
-        self, numbering_properties: ET.Element | None
-    ) -> tuple[str | None, int | None]:
+    def _num_pr_values(self, numbering_properties: ET.Element | None) -> tuple[str | None, int | None]:
         """Read numId and ilvl from w:numPr."""
         if numbering_properties is None:
             return (None, None)

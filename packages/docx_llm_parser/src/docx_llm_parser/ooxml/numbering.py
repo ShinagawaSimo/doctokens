@@ -80,10 +80,7 @@ class NumberingMap:
         """
         return {
             "abstractNums": {
-                abstract_id: {
-                    str(numbering_level): asdict(level)
-                    for numbering_level, level in sorted(levels.items())
-                }
+                abstract_id: {str(numbering_level): asdict(level) for numbering_level, level in sorted(levels.items())}
                 for abstract_id, levels in sorted(self.abstract_levels.items())
             },
             "nums": {
@@ -91,12 +88,10 @@ class NumberingMap:
                     "numId": instance.numbering_id,
                     "abstractNumId": instance.abstract_num_id,
                     "levelOverrides": {
-                        str(numbering_level): asdict(level)
-                        for numbering_level, level in sorted(instance.level_overrides.items())
+                        str(numbering_level): asdict(level) for numbering_level, level in sorted(instance.level_overrides.items())
                     },
                     "startOverrides": {
-                        str(numbering_level): start
-                        for numbering_level, start in sorted(instance.start_overrides.items())
+                        str(numbering_level): start for numbering_level, start in sorted(instance.start_overrides.items())
                     },
                 }
                 for numbering_id, instance in sorted(self.instances.items())
@@ -131,10 +126,7 @@ class NumberingState:
             self.warnings.append(
                 ParseWarning(
                     code="NUMBERING_LEVEL_MISSING",
-                    message=(
-                        f"Missing numbering level for numId={num_id}, "
-                        f"numbering_level={numbering_level}"
-                    ),
+                    message=(f"Missing numbering level for numId={num_id}, numbering_level={numbering_level}"),
                     locator=locator(part, block_id),
                 )
             )
@@ -174,9 +166,7 @@ class NumberingState:
             return (
                 "•"
                 if current_level.number_format == "bullet"
-                else self._format_number(
-                    counters.get(numbering_level, current_level.start), current_level.number_format
-                )
+                else self._format_number(counters.get(numbering_level, current_level.start), current_level.number_format)
             )
 
         def replace_match(match: re.Match[str]) -> str:
@@ -219,9 +209,7 @@ class NumberingState:
             self.warnings.append(
                 ParseWarning(
                     code="UNSUPPORTED_NUMBER_FORMAT",
-                    message=(
-                        f"Unsupported numbering format {number_format!r}; decimal fallback is used."
-                    ),
+                    message=(f"Unsupported numbering format {number_format!r}; decimal fallback is used."),
                     locator="word/numbering.xml",
                 )
             )

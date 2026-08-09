@@ -71,11 +71,7 @@ class PaddleVLProvider(OcrProvider):
     # -- internal helpers --
 
     def _get_access_token(self) -> str:
-        data = (
-            f"grant_type=client_credentials"
-            f"&client_id={self.api_key}"
-            f"&client_secret={self.secret_key}"
-        ).encode()
+        data = (f"grant_type=client_credentials&client_id={self.api_key}&client_secret={self.secret_key}").encode()
         req = urllib.request.Request(_TOKEN_URL, data=data, method="POST")
         req.add_header("Content-Type", "application/x-www-form-urlencoded")
         with urllib.request.urlopen(req, timeout=30) as resp:

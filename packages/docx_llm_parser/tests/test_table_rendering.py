@@ -74,9 +74,7 @@ class TableIdentityTests(unittest.TestCase):
     def test_l0_truncation_uses_assigned_table_id(self) -> None:
         rows: list[dict[str, Any]] = [{"cells": [{"text": "x"}]} for _ in range(11)]
 
-        rendered = table_text_only(
-            cast(Any, {"type": "table", "tableId": "t7", "rows": rows, "columnCount": 1})
-        )
+        rendered = table_text_only(cast(Any, {"type": "table", "tableId": "t7", "rows": rows, "columnCount": 1}))
 
         self.assertIn("[Table truncated: 11 rows, 1 cols]", rendered)
 
@@ -125,16 +123,13 @@ class TableIdentityTests(unittest.TestCase):
         self.assertIn("<table id=t1 rows=2 cols=3>", results[0])
         self.assertEqual(_manifest(parsed)["tables"], 1)
 
-    def _make_table(
-        self, headers: list[str], data: list[list[str]], table_id: str = "t1"
-    ) -> ParsedDocument:
+    def _make_table(self, headers: list[str], data: list[list[str]], table_id: str = "t1") -> ParsedDocument:
         """Build a minimal ParsedDocument with one table."""
         header_row = {
             "rowIndex": 0,
             "isHeader": True,
             "cells": [
-                {"rowIndex": 0, "colIndex": i, "rowSpan": 1, "colSpan": 1, "text": h, "blocks": []}
-                for i, h in enumerate(headers)
+                {"rowIndex": 0, "colIndex": i, "rowSpan": 1, "colSpan": 1, "text": h, "blocks": []} for i, h in enumerate(headers)
             ],
         }
         data_rows = [
@@ -184,9 +179,7 @@ class TableIdentityTests(unittest.TestCase):
         self.assertIn("<tr>C|", html)
 
     def test_table_column_filter(self) -> None:
-        parsed = self._make_table(
-            ["Name", "Age", "City"], [["Alice", "30", "NYC"], ["Bob", "25", "LA"]]
-        )
+        parsed = self._make_table(["Name", "Age", "City"], [["Alice", "30", "NYC"], ["Bob", "25", "LA"]])
         results = _render_resource(parsed, "table", "t1", columns=["Name", "City"])
         self.assertEqual(len(results), 1)
         html = results[0]
@@ -195,35 +188,27 @@ class TableIdentityTests(unittest.TestCase):
 
     def test_table_aggregate_sum(self) -> None:
         parsed = self._make_table(["Item", "Price"], [["A", "10"], ["B", "20"], ["C", "30"]])
-        results = _render_resource(
-            parsed, "table", "t1", aggregate="sum", aggregate_column="Price"
-        )
+        results = _render_resource(parsed, "table", "t1", aggregate="sum", aggregate_column="Price")
         self.assertEqual(len(results), 1)
         html = results[0]
         self.assertIn("<aggregate op=sum column=Price>60.0", html)
 
     def test_table_aggregate_avg(self) -> None:
         parsed = self._make_table(["Item", "Score"], [["X", "100"], ["Y", "200"]])
-        results = _render_resource(
-            parsed, "table", "t1", aggregate="avg", aggregate_column="Score"
-        )
+        results = _render_resource(parsed, "table", "t1", aggregate="avg", aggregate_column="Score")
         self.assertEqual(len(results), 1)
         html = results[0]
         self.assertIn("<aggregate op=avg column=Score>150.0", html)
 
     def test_table_aggregate_count(self) -> None:
         parsed = self._make_table(["Item", "Qty"], [["A", "5"], ["B", ""], ["C", "15"]])
-        results = _render_resource(
-            parsed, "table", "t1", aggregate="count", aggregate_column="Qty"
-        )
+        results = _render_resource(parsed, "table", "t1", aggregate="count", aggregate_column="Qty")
         self.assertEqual(len(results), 1)
         html = results[0]
         self.assertIn("<aggregate op=count column=Qty>2", html)
 
     def test_table_rows_and_columns_combined(self) -> None:
-        parsed = self._make_table(
-            ["Name", "Score", "Rank"], [["A", "100", "1"], ["B", "200", "2"], ["C", "300", "3"]]
-        )
+        parsed = self._make_table(["Name", "Score", "Rank"], [["A", "100", "1"], ["B", "200", "2"], ["C", "300", "3"]])
         results = _render_resource(parsed, "table", "t1", rows="2-3", columns=["Name", "Score"])
         self.assertEqual(len(results), 1)
         html = results[0]

@@ -80,7 +80,7 @@ class HyperlinkTests(unittest.TestCase):
         semantic = parse_xlsx(data, density="semantic")
         self.assertIn('<a href="https://example.com">Click</a>', semantic)
         matches = find_cells(data, "example.com", kind="hyperlink")
-        self.assertIn('field=hyperlink', matches)
+        self.assertIn("field=hyperlink", matches)
         self.assertIn("https://example.com", matches)
 
     def test_internal_location_rendered_as_anchor(self) -> None:

@@ -120,9 +120,7 @@ def _emit_hidden_cols(sheet: SheetInfo, density: Density) -> Iterator[str]:
     if not hidden_cols:
         return
     for cmin, cmax in hidden_cols:
-        col_range = (
-            col_letter(cmin) if cmin == cmax else f"{col_letter(cmin)}:{col_letter(cmax)}"
-        )
+        col_range = col_letter(cmin) if cmin == cmax else f"{col_letter(cmin)}:{col_letter(cmax)}"
         yield f"<columns ref={col_range} hidden>\n"
 
 
@@ -131,9 +129,7 @@ def _emit_sheet_protection(sheet: SheetInfo, density: Density) -> Iterator[str]:
         yield "<sheetProtection/>\n"
 
 
-def _emit_defined_names(
-    wb: ParsedWorkbook | None, density: Density, sheet_name: str
-) -> Iterator[str]:
+def _emit_defined_names(wb: ParsedWorkbook | None, density: Density, sheet_name: str) -> Iterator[str]:
     """User-defined names scoped to this sheet or global."""
     if density not in {"structural", "semantic"} or wb is None:
         return
@@ -287,11 +283,7 @@ def _render_plain(
             continue
         if row_cells[0]["row"] < start_row:
             continue
-        texts = [
-            cell["text"]
-            for cell in row_cells
-            if not _is_hidden_col(cell["col"], hidden_cols)
-        ]
+        texts = [cell["text"] for cell in row_cells if not _is_hidden_col(cell["col"], hidden_cols)]
         yield "\t".join(texts) + "\n"
 
 
@@ -370,9 +362,7 @@ def _render_grid(
             break
 
     # Output comment blocks after the grid
-    for idx, ((_col, _row), (ref, author, text)) in enumerate(
-        sorted(comments.items(), key=lambda x: (x[0][1], x[0][0]))
-    ):
+    for idx, ((_col, _row), (ref, author, text)) in enumerate(sorted(comments.items(), key=lambda x: (x[0][1], x[0][0]))):
         attrs = f'id=comment{idx} cell="{escape(ref, quote=True)}"'
         if author:
             attrs += f" author={escape(author, quote=True)}"
@@ -438,11 +428,7 @@ def _render_row(
         if c != next_col:
             tag_attrs += f" col={col_letter(c)}"
         parts.append(f"<{tag_attrs}>")
-        body = (
-            _render_rich_text(cell["rich"])
-            if density == "semantic" and cell.get("rich")
-            else escape(cell["text"])
-        )
+        body = _render_rich_text(cell["rich"]) if density == "semantic" and cell.get("rich") else escape(cell["text"])
         if cell.get("hyperlink"):
             body = f'<a href="{escape(cell["hyperlink"], quote=True)}">{body}</a>'
         # Inline comment reference + register for post-grid output
@@ -481,9 +467,7 @@ def _repeated_style_ranges(
                 for col in range(cell["col"], cell["col"] + cell.get("colspan", 1)):
                     cells.add((row, col))
 
-    suppressed_styles = {
-        style for style, cells in cells_by_style.items() if len(cells) >= _STYLE_RANGE_MIN_CELLS
-    }
+    suppressed_styles = {style for style, cells in cells_by_style.items() if len(cells) >= _STYLE_RANGE_MIN_CELLS}
     lines: list[str] = []
     for style in sorted(suppressed_styles):
         for start_col, first_row, end_col, last_row in _rectangular_ranges(cells_by_style[style]):
@@ -573,11 +557,7 @@ def _filter_rows(
     """Keep only cells within the requested A1 range."""
     result: list[list[Cell]] = []
     for row_cells in rows:
-        kept = [
-            c
-            for c in row_cells
-            if start_col <= c["col"] <= end_col and start_row <= c["row"] <= end_row
-        ]
+        kept = [c for c in row_cells if start_col <= c["col"] <= end_col and start_row <= c["row"] <= end_row]
         if kept:
             result.append(kept)
     return result

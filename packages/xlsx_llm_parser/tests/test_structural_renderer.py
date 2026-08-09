@@ -51,9 +51,7 @@ def _workbook() -> dict[str, object]:
                 "filter_range": "A1:B2",
                 "filter_cols": [{"col": 0, "type": "values", "values": ["Alice"]}],
                 "data_validations": [{"ranges": "B2:B4", "type": "whole"}],
-                "conditional_formats": [
-                    {"ranges": "B2:B4", "ruleType": "cellIs", "formula": "B2>0"}
-                ],
+                "conditional_formats": [{"ranges": "B2:B4", "ruleType": "cellIs", "formula": "B2>0"}],
                 "images": [{"id": "image1", "ref": "D4"}],
                 "charts": [
                     {
@@ -128,7 +126,7 @@ class StructuralRendererTests(unittest.TestCase):
             self.assertIn("spillRange=B2:B4", html)
 
         self.assertIn('<a href="https://example.test/a">Alice</a>', structural)
-        self.assertIn('<commentref id=comment0/>', structural)
+        self.assertIn("<commentref id=comment0/>", structural)
         self.assertIn('<a href="https://example.test/a"><b>Ali</b>ce</a>', semantic)
         self.assertIn("<comment id=comment0", structural)
         self.assertIn("<comment id=comment0", semantic)

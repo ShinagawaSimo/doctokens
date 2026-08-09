@@ -59,9 +59,7 @@ class _ParseResult:
 class DocxParser:
     """Public DOCX parser entry point."""
 
-    def parse(
-        self, docx_source: str | Path | bytes, options: ParseOptions | None = None
-    ) -> ParsedDocument:
+    def parse(self, docx_source: str | Path | bytes, options: ParseOptions | None = None) -> ParsedDocument:
         """Parse a single DOCX file, creating fresh per-call context for concurrency safety."""
         opts = options or ParseOptions()
         warnings: list[ParseWarning] = []
@@ -75,14 +73,10 @@ class DocxParser:
             zip_index, content_types, relationships = self._open_package(package, metrics)
             styles = self._resolve_styles(package, warnings, metrics)
             numbering = self._resolve_numbering(package, warnings, metrics)
-            assets, asset_lookup = self._index_resources(
-                package, relationships, content_types, warnings, metrics
-            )
-            object_lookup, charts, smartarts = self._index_objects(
-                package, relationships, warnings, metrics
-            )
+            assets, asset_lookup = self._index_resources(package, relationships, content_types, warnings, metrics)
+            object_lookup, charts, smartarts = self._index_objects(package, relationships, warnings, metrics)
 
-    # OCR pipeline
+            # OCR pipeline
             ocr_results = self._run_ocr(package, assets, opts)
 
             body_parser, blocks = self._parse_body(
@@ -245,9 +239,7 @@ class DocxParser:
     # OCR pipeline
 
     @staticmethod
-    def _run_ocr(
-        package: PackageReader, assets: list[ImageAsset], opts: ParseOptions
-    ) -> dict[str, str]:
+    def _run_ocr(package: PackageReader, assets: list[ImageAsset], opts: ParseOptions) -> dict[str, str]:
         """Run OCR on embedded images, deduplicating by content hash."""
         provider = getattr(opts, "ocr", None)
         if provider is None:
@@ -275,9 +267,7 @@ class DocxParser:
         ocr_raw: dict[str, str] = {}  # sha256 -> OCR text
         max_workers = getattr(opts, "ocr_workers", 4)
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {
-                pool.submit(provider.extract, img): h for h, img in unique_images.items()
-            }
+            futures = {pool.submit(provider.extract, img): h for h, img in unique_images.items()}
             for future in as_completed(futures):
                 h = futures[future]
                 try:
@@ -318,9 +308,7 @@ class DocxParser:
         metrics.set_counter("zipCompressedBytes", total_compressed)
         metadata: dict[str, object] = {
             "sourceFile": result.source_name,
-            "sourcePath": (
-                str(result.source_path) if not isinstance(result.source_path, bytes) else ""
-            ),
+            "sourcePath": (str(result.source_path) if not isinstance(result.source_path, bytes) else ""),
             "format": "docx",
             "parser": "docx_llm_parser",
             "parserVersion": __version__,
@@ -351,17 +339,20 @@ class DocxParser:
 
         with metrics.stage("debug_write"), debug:
             write_debug_artifacts(
-                debug, result.zip_index, result.content_types, result.relationships,
-                result.style_rows, result.body_parser, parsed,
+                debug,
+                result.zip_index,
+                result.content_types,
+                result.relationships,
+                result.style_rows,
+                result.body_parser,
+                parsed,
             )
             parsed.metrics = metrics.snapshot()
             write_metrics_debug(debug, parsed)
         return parsed
 
 
-def _source_info(
-    docx_source: str | Path | bytes, metrics: MetricsRecorder
-) -> tuple[str, str | Path | bytes]:
+def _source_info(docx_source: str | Path | bytes, metrics: MetricsRecorder) -> tuple[str, str | Path | bytes]:
     if isinstance(docx_source, bytes):
         metrics.set_counter("inputBytes", len(docx_source))
         return "stream", docx_source

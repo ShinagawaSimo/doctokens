@@ -69,6 +69,4 @@ class ResourceType(StringEnum):
             return cls(value)
         except ValueError as exc:
             supported = ", ".join(item.value for item in cls)
-            raise ValueError(
-                f"Unknown resource type {value!r}; expected one of: {supported}"
-            ) from exc
+            raise ValueError(f"Unknown resource type {value!r}; expected one of: {supported}") from exc

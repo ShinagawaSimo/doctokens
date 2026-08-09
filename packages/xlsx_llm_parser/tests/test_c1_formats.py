@@ -77,9 +77,7 @@ class DateDecodingTests(unittest.TestCase):
                     f"</styleSheet>"
                 ),
                 "xl/worksheets/sheet1.xml": (
-                    f'<worksheet xmlns="{NS_S}"><sheetData>'
-                    f"{''.join(sheet_rows)}"
-                    f"</sheetData></worksheet>"
+                    f'<worksheet xmlns="{NS_S}"><sheetData>{"".join(sheet_rows)}</sheetData></worksheet>'
                 ),
             },
         )

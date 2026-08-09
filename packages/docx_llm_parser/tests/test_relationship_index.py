@@ -6,9 +6,7 @@ from docx_llm_parser.core.models import RelationshipRecord
 from docx_llm_parser.core.relationships import RelationshipIndex
 
 
-def _rec(
-    source: str, rel_id: str, rel_type: str, **kwargs: str | None
-) -> RelationshipRecord:
+def _rec(source: str, rel_id: str, rel_type: str, **kwargs: str | None) -> RelationshipRecord:
     return RelationshipRecord(
         source_part=source,
         id=rel_id,
@@ -21,9 +19,7 @@ def _rec(
 
 class RelationshipIndexTests(unittest.TestCase):
     def test_get_returns_record_on_hit(self) -> None:
-        idx = RelationshipIndex.from_records(
-            [_rec("doc", "rId1", "image"), _rec("doc", "rId2", "chart")]
-        )
+        idx = RelationshipIndex.from_records([_rec("doc", "rId1", "image"), _rec("doc", "rId2", "chart")])
         self.assertIsNotNone(idx.get("doc", "rId1"))
         result = idx.get("doc", "rId1")
         assert result is not None
@@ -43,9 +39,7 @@ class RelationshipIndexTests(unittest.TestCase):
             idx.require("doc", "rId99")
 
     def test_by_source_returns_tuple(self) -> None:
-        idx = RelationshipIndex.from_records(
-            [_rec("doc", "r1", "image"), _rec("doc", "r2", "chart")]
-        )
+        idx = RelationshipIndex.from_records([_rec("doc", "r1", "image"), _rec("doc", "r2", "chart")])
         result = idx.by_source("doc")
         self.assertEqual(len(result), 2)
 
@@ -61,9 +55,7 @@ class RelationshipIndexTests(unittest.TestCase):
                 _rec("doc", "r3", "chart"),
             ]
         )
-        images = idx.by_type(
-            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
-        )
+        images = idx.by_type("http://schemas.openxmlformats.org/officeDocument/2006/relationships/image")
         self.assertEqual(len(images), 2)
 
     def test_by_type_with_source_filter(self) -> None:

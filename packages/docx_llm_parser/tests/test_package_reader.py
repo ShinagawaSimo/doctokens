@@ -338,10 +338,7 @@ def _relationships(
 ) -> str:
     noise = "<Ignored/>" if include_noise else ""
     body = "".join(_relationship(*row) for row in rows)
-    return (
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        f"{noise}{body}</Relationships>"
-    )
+    return f'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">{noise}{body}</Relationships>'
 
 
 def _relationship(

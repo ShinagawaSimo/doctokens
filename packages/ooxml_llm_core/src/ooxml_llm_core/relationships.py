@@ -40,9 +40,7 @@ class RelationshipIndex:
             _by_source_id=MappingProxyType(by_source_id),
             _by_source=MappingProxyType({key: tuple(value) for key, value in by_source.items()}),
             _by_type=MappingProxyType({key: tuple(value) for key, value in by_type.items()}),
-            _by_source_type=MappingProxyType(
-                {key: tuple(value) for key, value in by_source_type.items()}
-            ),
+            _by_source_type=MappingProxyType({key: tuple(value) for key, value in by_source_type.items()}),
         )
 
     def get(self, source_part: str, rel_id: str) -> RelationshipRecord | None:
@@ -54,9 +52,7 @@ class RelationshipIndex:
     def by_source(self, source_part: str) -> tuple[RelationshipRecord, ...]:
         return self._by_source.get(source_part, ())
 
-    def by_type(
-        self, rel_type: str, source_part: str | None = None
-    ) -> tuple[RelationshipRecord, ...]:
+    def by_type(self, rel_type: str, source_part: str | None = None) -> tuple[RelationshipRecord, ...]:
         if source_part is not None:
             return self._by_source_type.get((source_part, rel_type), ())
         return self._by_type.get(rel_type, ())

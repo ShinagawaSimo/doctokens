@@ -112,17 +112,12 @@ class PackageReader:
                 raise PackageError(f"Entry too large: {name} ({info.file_size} bytes)")
             total_uncompressed += info.file_size
             if total_uncompressed > self.limits.max_total_uncompressed_bytes:
-                raise PackageError(
-                    f"Package uncompressed size too large: {total_uncompressed} bytes"
-                )
+                raise PackageError(f"Package uncompressed size too large: {total_uncompressed} bytes")
 
             if info.file_size > _GRACE_ENTRY_SIZE and info.compress_size > 0:
                 ratio = info.compress_size / info.file_size
                 if ratio < _MIN_INFLATE_RATIO:
-                    raise PackageError(
-                        f"Suspicious compression ratio for {name}: "
-                        f"{info.compress_size}/{info.file_size}"
-                    )
+                    raise PackageError(f"Suspicious compression ratio for {name}: {info.compress_size}/{info.file_size}")
 
             names.add(name)
             rows.append(
@@ -155,9 +150,7 @@ class PackageReader:
     def read_all_relationships(self) -> list[RelationshipRecord]:
         self._ensure_index()
         rels_paths = sorted(
-            name
-            for name in self._names
-            if name == "_rels/.rels" or ("/_rels/" in name and name.endswith(".rels"))
+            name for name in self._names if name == "_rels/.rels" or ("/_rels/" in name and name.endswith(".rels"))
         )
         relationships: list[RelationshipRecord] = []
         for rels_path in rels_paths:
@@ -240,9 +233,7 @@ def source_part_from_rels_path(rels_path: str) -> str | None:
     return f"{parent}/{source_file}" if parent else source_file
 
 
-def resolve_relationship_target(
-    source_part: str, target: str, target_mode: str | None
-) -> str | None:
+def resolve_relationship_target(source_part: str, target: str, target_mode: str | None) -> str | None:
     if target_mode == "External":
         return target
     normalized = target.replace("\\", "/")

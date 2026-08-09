@@ -118,12 +118,8 @@ def _chart_series(plot_area: ET.Element | None) -> list[ChartSeriesInfo]:
 
     rows: list[ChartSeriesInfo] = []
     for ser_index, ser in enumerate(plot_area.iter(f"{{{NS_C}}}ser"), start=1):
-        categories = _cached_values(_first_child(ser, "cat")) or _cached_values(
-            _first_child(ser, "xVal")
-        )
-        values = _cached_values(_first_child(ser, "val")) or _cached_values(
-            _first_child(ser, "yVal")
-        )
+        categories = _cached_values(_first_child(ser, "cat")) or _cached_values(_first_child(ser, "xVal"))
+        values = _cached_values(_first_child(ser, "val")) or _cached_values(_first_child(ser, "yVal"))
         name = _series_name(ser)
         point_count = max(len(categories), len(values))
 

@@ -43,10 +43,7 @@ def _root_rels() -> str:
 
 
 def _workbook_xml(sheet_names: list[str]) -> str:
-    sheets = "".join(
-        f'<sheet name="{n}" sheetId="{i}" r:id="rSheet{i}"/>'
-        for i, n in enumerate(sheet_names, start=1)
-    )
+    sheets = "".join(f'<sheet name="{n}" sheetId="{i}" r:id="rSheet{i}"/>' for i, n in enumerate(sheet_names, start=1))
     return f'<workbook xmlns="{NS_S}" xmlns:r="{NS_R}"><sheets>{sheets}</sheets></workbook>'
 
 
@@ -55,10 +52,7 @@ def _workbook_rels(sheet_count: int) -> str:
         f'<Relationship Id="rSheet{i}" Type="{NS_O}/worksheet" Target="worksheets/sheet{i}.xml"/>'
         for i in range(1, sheet_count + 1)
     )
-    return (
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        f"{rows}</Relationships>"
-    )
+    return f'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">{rows}</Relationships>'
 
 
 def _sheet_xml(rows: list[str]) -> str:
@@ -80,10 +74,7 @@ class MinimalParseTests(unittest.TestCase):
                         '<c r="A1" t="inlineStr"><is><t>Product</t></is></c>'
                         '<c r="B1" t="inlineStr"><is><t>Price</t></is></c>'
                         "</row>",
-                        '<row r="2">'
-                        '<c r="A2" t="inlineStr"><is><t>Widget</t></is></c>'
-                        '<c r="B2"><v>99</v></c>'
-                        "</row>",
+                        '<row r="2"><c r="A2" t="inlineStr"><is><t>Widget</t></is></c><c r="B2"><v>99</v></c></row>',
                     ]
                 ),
             },

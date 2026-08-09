@@ -98,9 +98,7 @@ def l0_image_placeholder(
     ocr_results: dict[str, str] | None = None,
 ) -> str:
     """Render a compact plain-text image summary."""
-    label = _string_field(obj.get("alt")) or _string_field(obj.get("title")) or _string_field(
-        obj.get("name")
-    )
+    label = _string_field(obj.get("alt")) or _string_field(obj.get("title")) or _string_field(obj.get("name"))
     asset_id = _string_field(obj.get("assetId"))
     ocr_text = _string_field((ocr_results or {}).get(asset_id, "")) if asset_id else ""
     parts: list[str] = []

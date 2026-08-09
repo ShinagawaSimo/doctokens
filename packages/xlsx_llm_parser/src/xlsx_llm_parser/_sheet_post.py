@@ -102,11 +102,7 @@ def apply_spill_ranges(rows: list[list[Cell]], cell_map: dict[tuple[int, int], C
                     if col == cell["col"] and r == cell["row"]:
                         continue
                     recipient = cell_map.get((col, r))
-                    if (
-                        recipient is not None
-                        and "formula" not in recipient
-                        and "si" not in recipient
-                    ):
+                    if recipient is not None and "formula" not in recipient and "si" not in recipient:
                         recipient["spillFrom"] = cell["ref"]
 
 

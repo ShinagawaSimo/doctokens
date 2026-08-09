@@ -53,10 +53,7 @@ class MergeCellTests(unittest.TestCase):
                     "</Relationships>"
                 ),
                 "xl/worksheets/sheet1.xml": (
-                    f'<worksheet xmlns="{NS_S}">'
-                    f"<sheetData>{''.join(sheet_rows)}</sheetData>"
-                    f"{merge_cells}"
-                    f"</worksheet>"
+                    f'<worksheet xmlns="{NS_S}"><sheetData>{"".join(sheet_rows)}</sheetData>{merge_cells}</worksheet>'
                 ),
             },
         )

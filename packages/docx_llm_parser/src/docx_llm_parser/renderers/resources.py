@@ -202,9 +202,7 @@ _AGGREGATORS: dict[str, Callable[[list[float]], float | int]] = {
 def _compute_aggregate(rows: list[TableRow], operation: str, column: str) -> ResourceDetail:
     operation = operation.lower()
     if operation not in _AGGREGATORS:
-        raise ValueError(
-            f"Unknown aggregate {operation!r}; expected one of: {', '.join(sorted(_AGGREGATORS))}"
-        )
+        raise ValueError(f"Unknown aggregate {operation!r}; expected one of: {', '.join(sorted(_AGGREGATORS))}")
     values = _column_values(rows, column)
     return {
         "aggregate": operation,

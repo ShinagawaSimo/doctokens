@@ -20,12 +20,8 @@ from ..core.package import PackageReader
 from ..core.relationships import RelationshipIndex
 
 CHART_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
-DIAGRAM_DATA_REL_TYPE = (
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData"
-)
-DIAGRAM_LAYOUT_REL_TYPE = (
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout"
-)
+DIAGRAM_DATA_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData"
+DIAGRAM_LAYOUT_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout"
 
 
 class EmbeddedObjectExtractor:
@@ -113,9 +109,7 @@ class EmbeddedObjectExtractor:
     ) -> list[SmartArt]:
         """Parse the diagram data parts targeted by SmartArt data model relationships."""
         smartarts: list[SmartArt] = []
-        for item_index, rel in enumerate(
-            self.relationships.by_type(DIAGRAM_DATA_REL_TYPE), start=1
-        ):
+        for item_index, rel in enumerate(self.relationships.by_type(DIAGRAM_DATA_REL_TYPE), start=1):
             smartart_id = f"smartart{item_index}"
             target = rel.resolved_target
             if rel.target_mode == "External" or not target or not self.package.exists(target):
@@ -212,12 +206,7 @@ def parse_smartart_root(root: ET.Element, smartart_id: str, part_name: str) -> S
         raw_link_count += 1
         source = connection.get("srcId")
         target = connection.get("destId")
-        if (
-            source is not None
-            and target is not None
-            and source in node_index_by_model_id
-            and target in node_index_by_model_id
-        ):
+        if source is not None and target is not None and source in node_index_by_model_id and target in node_index_by_model_id:
             # The final XML references nodes by short ordinal numbers to avoid exposing
             # lengthy modelIds.
             link: SmartArtLink = {

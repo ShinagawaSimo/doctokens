@@ -9,9 +9,7 @@ from .._text_utils import filter_format, merge_text_runs
 from ..objects import chart_to_html5, smartart_to_html5
 
 
-def inline_content(
-    block: InlineContainer, density: str, ocr_results: dict[str, str] | None = None
-) -> str:
+def inline_content(block: InlineContainer, density: str, ocr_results: dict[str, str] | None = None) -> str:
     """Combine run text, links, images, footnote references, etc. into inline HTML5."""
     if "runs" not in block:
         return escape(block["text"])
@@ -75,9 +73,7 @@ def apply_inline_format(text: str, fmt: RunFormat, density: str) -> str:
     return text
 
 
-def inline_object(
-    obj: InlineObject, density: str, ocr_results: dict[str, str] | None = None
-) -> str:
+def inline_object(obj: InlineObject, density: str, ocr_results: dict[str, str] | None = None) -> str:
     """Render non-plain-text object references inside a paragraph."""
     obj_type = obj["type"]
 

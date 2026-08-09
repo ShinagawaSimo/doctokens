@@ -128,9 +128,7 @@ from docx_llm_parser import ParseOptions, parse_docx, write_document
 
 output_dir = Path("out") / "example"
 parsed = parse_docx("example.docx", ParseOptions(debug=True, output_dir=output_dir))
-html_path = write_document(
-    parsed, output_dir, density="semantic"
-)  # "plain" | "structural" | "semantic"
+html_path = write_document(parsed, output_dir, density="semantic")  # "plain" | "structural" | "semantic"
 ```
 
 ### 分步使用

@@ -233,9 +233,7 @@ class InlineRendererTests(unittest.TestCase):
           </dgm:ptLst>
           <dgm:cxnLst><dgm:cxn modelId="c1" type="parOf" srcId="n1" destId="n2"/></dgm:cxnLst>
         </dgm:dataModel>"""
-        smartart = parse_smartart_root(
-            ET.fromstring(smartart_xml), "smartart1", "word/diagrams/data1.xml"
-        )
+        smartart = parse_smartart_root(ET.fromstring(smartart_xml), "smartart1", "word/diagrams/data1.xml")
         xml = f"""<w:p {NS}><w:r><w:drawing><wp:inline>
           <a:graphic><a:graphicData><dgm:relIds r:dm="rIdDm"/></a:graphicData></a:graphic>
         </wp:inline></w:drawing></w:r></w:p>"""
@@ -280,9 +278,7 @@ class InlineRendererTests(unittest.TestCase):
             ]
         )
 
-        lookup, charts, smartarts = EmbeddedObjectExtractor(
-            cast(Any, package), relationships, self.warnings
-        ).extract()
+        lookup, charts, smartarts = EmbeddedObjectExtractor(cast(Any, package), relationships, self.warnings).extract()
 
         self.assertEqual(charts[0]["chartType"], "line")
         self.assertEqual(smartarts[0]["nodes"][0]["text"], "节点")

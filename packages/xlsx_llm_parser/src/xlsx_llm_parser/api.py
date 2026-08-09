@@ -18,9 +18,7 @@ from .renderers.structural import (
 )
 
 
-def parse_xlsx(
-    source: str | Path | bytes, *, density: str = "structural", start_row: int = 1
-) -> str:
+def parse_xlsx(source: str | Path | bytes, *, density: str = "structural", start_row: int = 1) -> str:
     """Parse *source* and render the entire workbook at the given density.
 
     *start_row* (1-based) begins rendering from the specified row for the
@@ -37,9 +35,7 @@ def parse_xlsx(
     return "".join(parts)
 
 
-def iter_workbook(
-    source: str | Path | bytes, *, density: str = "structural", start_row: int = 1
-) -> Iterator[str]:
+def iter_workbook(source: str | Path | bytes, *, density: str = "structural", start_row: int = 1) -> Iterator[str]:
     """Stream workbook rendering chunks from *source*."""
     wb = _parse_workbook(source)
     yield f"density={density}\n"
@@ -64,11 +60,7 @@ def render_range(
     rows = sheet_info.get("rows", [])
     filtered: list[list[Cell]] = []
     for row_cells in rows:
-        kept = [
-            c
-            for c in row_cells
-            if start_col <= c["col"] <= end_col and start_row <= c["row"] <= end_row
-        ]
+        kept = [c for c in row_cells if start_col <= c["col"] <= end_col and start_row <= c["row"] <= end_row]
         if kept:
             filtered.append(kept)
 
@@ -107,33 +99,16 @@ def find_cells(
                     break
                 cell_ref = f"{escape(sheet_name, quote=True)}!{cell['ref']}"
                 if (kind is None or kind == "value") and pattern.search(cell.get("text", "")):
-                    matches.append(
-                        f'<match cell="{cell_ref}" field=value>{escape(cell["text"])}'
-                    )
+                    matches.append(f'<match cell="{cell_ref}" field=value>{escape(cell["text"])}')
                     continue
-                if (kind is None or kind == "formula") and pattern.search(
-                    cell.get("formula", "")
-                ):
-                    matches.append(
-                        f'<match cell="{cell_ref}" field=formula>'
-                        f"{escape(cell.get('formula', ''))}"
-                    )
+                if (kind is None or kind == "formula") and pattern.search(cell.get("formula", "")):
+                    matches.append(f'<match cell="{cell_ref}" field=formula>{escape(cell.get("formula", ""))}')
                     continue
-                if (kind is None or kind == "comment") and pattern.search(
-                    cell.get("comment", "")
-                ):
-                    matches.append(
-                        f'<match cell="{cell_ref}" field=comment>'
-                        f"{escape(cell.get('comment', ''))}"
-                    )
+                if (kind is None or kind == "comment") and pattern.search(cell.get("comment", "")):
+                    matches.append(f'<match cell="{cell_ref}" field=comment>{escape(cell.get("comment", ""))}')
                     continue
-                if (kind is None or kind == "hyperlink") and pattern.search(
-                    cell.get("hyperlink", "")
-                ):
-                    matches.append(
-                        f'<match cell="{cell_ref}" field=hyperlink>'
-                        f"{escape(cell.get('hyperlink', ''))}"
-                    )
+                if (kind is None or kind == "hyperlink") and pattern.search(cell.get("hyperlink", "")):
+                    matches.append(f'<match cell="{cell_ref}" field=hyperlink>{escape(cell.get("hyperlink", ""))}')
             if len(matches) >= limit:
                 break
 
@@ -146,9 +121,7 @@ def find_cells(
                 if scope and scope != sheet_name:
                     continue
                 if pattern.search(dn["name"]) or pattern.search(dn.get("ref", "")):
-                    matches.append(
-                        f"<match field=definedName>{escape(dn['name'])} = {escape(dn['ref'])}"
-                    )
+                    matches.append(f"<match field=definedName>{escape(dn['name'])} = {escape(dn['ref'])}")
 
     parts = ["<matches>\n"]
     parts.append("\n".join(matches[:limit]))

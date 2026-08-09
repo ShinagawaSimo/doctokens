@@ -387,9 +387,7 @@ class ParsedDocument:
     styles: list[StyleRecord]
     warnings: list[ParseWarning]
     debug_dir: str | None = None
-    content_types: ContentTypes = field(
-        default_factory=lambda: ContentTypes(defaults={}, overrides={})
-    )
+    content_types: ContentTypes = field(default_factory=lambda: ContentTypes(defaults={}, overrides={}))
     assets: list[ImageAsset] = field(default_factory=list)
     charts: list[Chart] = field(default_factory=list)
     smartarts: list[SmartArt] = field(default_factory=list)
@@ -400,9 +398,7 @@ class ParsedDocument:
     comments: list[AncillaryItem] = field(default_factory=list)
     numbering: dict[str, object] = field(default_factory=dict)
     ocr_results: dict[str, str] = field(default_factory=dict)
-    metrics: MetricsSnapshot = field(
-        default_factory=lambda: MetricsSnapshot(stagesMs={}, counters={})
-    )
+    metrics: MetricsSnapshot = field(default_factory=lambda: MetricsSnapshot(stagesMs={}, counters={}))
 
     def to_dict(self) -> dict[str, object]:
         """Output the full internal structure, mainly for debug or development inspection."""

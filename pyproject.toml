@@ -82,3 +82,11 @@ files = [
     "packages/xlsx_llm_parser/src",
     "packages/ocr_llm_core/src",
 ]
+
+[[tool.mypy.overrides]]
+module = "ocr_llm_core._tesseract"
+disable_error_code = ["unused-ignore"]
+
+[[tool.mypy.overrides]]
+module = "ocr_llm_core._easyocr"
+disable_error_code = ["unused-ignore"]

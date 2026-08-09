@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Self
 
 from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.package import (
@@ -15,6 +14,7 @@ from ooxml_llm_core.package import (
 from ooxml_llm_core.package import (
     PackageReader as _BasePackageReader,
 )
+from typing_extensions import Self
 
 from .models import ParseOptions
 

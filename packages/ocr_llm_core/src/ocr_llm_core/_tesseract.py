@@ -29,7 +29,7 @@ class TesseractProvider(OcrProvider):
         try:
             if self.tesseract_cmd is not None:
                 pytesseract.pytesseract.tesseract_cmd = self.tesseract_cmd
-            from PIL import Image
+            from PIL import Image  # type: ignore[import-not-found]
 
             image = Image.open(BytesIO(image_bytes))
             text: str = pytesseract.image_to_string(image, lang=self.lang)

@@ -16,12 +16,14 @@ def block_text_only(
     block: Block,
     footnote_map: dict[str, str],
     endnote_order: list[str],
+    comment_order: list[str],
+    ocr_results: dict[str, str] | None = None,
 ) -> str:
     """Render a parsed block as plain text."""
     if block["type"] == "table":
         return table_text_only(block)
 
-    text = inline_text_only(block)
+    text = inline_text_only(block, ocr_results)
 
     for footnote_id in collect_footnote_refs(block):
         fn_text = footnote_map.get(footnote_id, "")
@@ -32,10 +34,17 @@ def block_text_only(
         if endnote_id not in endnote_order:
             endnote_order.append(endnote_id)
 
+    for comment_id in collect_comment_refs(block):
+        if comment_id not in comment_order:
+            comment_order.append(comment_id)
+
     return text
 
 
-def inline_text_only(block: InlineContainer) -> str:
+def inline_text_only(
+    block: InlineContainer,
+    ocr_results: dict[str, str] | None = None,
+) -> str:
     """Extract plain text from a block-like object that carries inline runs."""
     if "runs" not in block:
         return _string_field(block.get("text", ""))
@@ -51,15 +60,18 @@ def inline_text_only(block: InlineContainer) -> str:
             parts.append(text)
 
         if "objects" in run:
-            parts.extend(l0_object_placeholder(obj) for obj in run["objects"])
+            parts.extend(l0_object_placeholder(obj, ocr_results) for obj in run["objects"])
     return "".join(parts)
 
 
-def l0_object_placeholder(obj: InlineObject) -> str:
+def l0_object_placeholder(
+    obj: InlineObject,
+    ocr_results: dict[str, str] | None = None,
+) -> str:
     """Return the plain-text representation of one inline object."""
     obj_type = obj["type"]
     if obj_type in ("image", "drawing"):
-        return "[Image]"
+        return l0_image_placeholder(obj, ocr_results)
     if obj_type == "chart":
         return l0_chart_placeholder(obj)
     if obj_type == "smartart":
@@ -69,7 +81,7 @@ def l0_object_placeholder(obj: InlineObject) -> str:
     if obj_type == "endnoteRef":
         return f"[ed{obj.get('id') or ''}]"
     if obj_type == "commentRef":
-        return ""
+        return f"[cmt{obj.get('id') or ''}]"
     if obj_type == "equation":
         return _string_field(obj.get("text", ""))
     if obj_type == "textbox":
@@ -81,9 +93,28 @@ def l0_object_placeholder(obj: InlineObject) -> str:
     return ""
 
 
+def l0_image_placeholder(
+    obj: InlineObject,
+    ocr_results: dict[str, str] | None = None,
+) -> str:
+    """Render a compact plain-text image summary."""
+    label = _string_field(obj.get("alt")) or _string_field(obj.get("title")) or _string_field(
+        obj.get("name")
+    )
+    asset_id = _string_field(obj.get("assetId"))
+    ocr_text = _string_field((ocr_results or {}).get(asset_id, "")) if asset_id else ""
+    parts: list[str] = []
+    if label:
+        parts.append(label)
+    if ocr_text:
+        parts.append(f"OCR: {_plain_excerpt(ocr_text)}")
+    if not parts:
+        return "[Image]"
+    return f"[Image {'; '.join(parts)}]"
+
+
 def l0_chart_placeholder(obj: InlineObject) -> str:
     """Render a compact plain-text chart summary."""
-    chart_id = _string_field(obj.get("id"), "?")
     chart_type = _string_field(obj.get("chartType"), "?")
     title = _string_field(obj.get("title"))
     series = obj.get("series") or []
@@ -96,7 +127,6 @@ def l0_chart_placeholder(obj: InlineObject) -> str:
 
 def l0_smartart_placeholder(obj: InlineObject) -> str:
     """Render a compact plain-text SmartArt summary."""
-    smartart_id = _string_field(obj.get("id"), "?")
     smartart_type = _string_field(obj.get("layoutType"))
     nodes = obj.get("nodes") or []
     node_text = " ".join(node.get("text", "") for node in nodes)
@@ -135,6 +165,21 @@ def collect_endnote_refs(block: InlineContainer) -> list[str]:
     return refs
 
 
+def collect_comment_refs(block: InlineContainer) -> list[str]:
+    """Collect comment reference IDs from inline object runs."""
+    refs: list[str] = []
+    if "runs" not in block:
+        return refs
+    for run in block["runs"]:
+        if "objects" not in run:
+            continue
+        for obj in run["objects"]:
+            ref_id = obj.get("id")
+            if obj["type"] == "commentRef" and ref_id is not None:
+                refs.append(ref_id)
+    return refs
+
+
 def table_text_only(block: TableBlock) -> str:
     """Render a table as tab-separated plain text, truncating very large tables."""
     rows = block["rows"]
@@ -147,3 +192,11 @@ def table_text_only(block: TableBlock) -> str:
 
     row_texts = ["\t".join(cell["text"] for cell in row["cells"]) for row in rows]
     return "\n".join(row_texts)
+
+
+def _plain_excerpt(text: str, limit: int = 120) -> str:
+    """Return a short single-line excerpt for plain-text summaries."""
+    compact = " ".join(text.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: max(0, limit - 3)].rstrip() + "..."

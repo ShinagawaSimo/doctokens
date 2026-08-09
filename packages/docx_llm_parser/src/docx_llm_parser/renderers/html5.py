@@ -2,20 +2,27 @@
 
 from __future__ import annotations
 
+import dataclasses
 import os
-import zipfile
 from collections.abc import Iterator
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from time import perf_counter
 
-from ..core.enums import Density, ResourceType
-from ..core.models import DocumentManifest, ParsedDocument, TableBlock
+from ..core.enums import Density
+from ..core.models import DocumentManifest, ParsedDocument
 from ._metrics import record_render_metrics, write_metrics_debug
 from ._render import iter_l0, iter_l1, iter_l2
-from .objects import render_chart_resource, render_smartart_resource
+from .resources import render_resource, table_groups
 
-# ── 公共 API ──
+__all__ = [
+    "iter_html5",
+    "manifest",
+    "render_resource",
+    "to_html5",
+    "window",
+    "write_outputs",
+]
 
 
 def write_outputs(
@@ -23,7 +30,7 @@ def write_outputs(
     output_dir: Path,
     density: Density | str = Density.SEMANTIC,
 ) -> dict[str, str]:
-    """写出最终标记文件，并在 metrics 中记录渲染耗时。"""
+    """Write the final markup file and record render timing in metrics."""
     resolved_density = Density.parse(density)
     output_dir.mkdir(parents=True, exist_ok=True)
     density_files = {
@@ -63,12 +70,12 @@ def write_outputs(
 
 
 def to_html5(parsed: ParsedDocument, density: Density | str = Density.SEMANTIC) -> str:
-    """生成完整标记字符串（plain 纯文本 / structural 结构 / semantic 语义）。"""
+    """Return the complete markup string at the given density."""
     return "".join(iter_html5(parsed, density))
 
 
 def iter_html5(parsed: ParsedDocument, density: Density | str = Density.SEMANTIC) -> Iterator[str]:
-    """按片段生成标记，供大文档流式写出。"""
+    """Yield markup chunks for streaming output."""
     resolved_density = Density.parse(density)
     if resolved_density is Density.PLAIN:
         yield from iter_l0(parsed)
@@ -84,7 +91,7 @@ def window(
     span: int = 1,
     density: Density | str = Density.SEMANTIC,
 ) -> str:
-    """返回指定页码范围的内容片段。page=-1 表示最后一页。"""
+    """Return content for the given page range; page=-1 means the last page."""
     resolved_density = Density.parse(density)
     if page != -1 and page < 1:
         raise ValueError("page must be -1 or greater than zero")
@@ -101,304 +108,37 @@ def window(
         start_page = min(page, total_pages)
 
     end_page = min(start_page + span - 1, total_pages)
-
     start_block = page_index.get(start_page, (0,))[0] if start_page in page_index else 0
     end_block = page_index.get(end_page, (len(parsed.blocks) - 1,))
-    end_idx = end_block[1] if isinstance(end_block, tuple) and len(end_block) > 1 else end_block[0]
+    end_idx = end_block[1] if len(end_block) > 1 else end_block[0]
 
     window_blocks = parsed.blocks[start_block : end_idx + 1]
-
-    window_parsed = ParsedDocument(
-        metadata=parsed.metadata,
-        package_info=parsed.package_info,
+    window_parsed = dataclasses.replace(
+        parsed,
         blocks=window_blocks,
-        relationships=parsed.relationships,
-        styles=parsed.styles,
-        warnings=parsed.warnings,
-        assets=parsed.assets,
-        charts=parsed.charts,
-        smartarts=parsed.smartarts,
         headers=[],
         footers=[],
-        footnotes=parsed.footnotes,
-        endnotes=parsed.endnotes,
         comments=[],
-        numbering=parsed.numbering,
-        ocr_results=parsed.ocr_results,
-        metrics=parsed.metrics,
     )
     return "".join(iter_html5(window_parsed, resolved_density))
 
 
 def manifest(parsed: ParsedDocument) -> DocumentManifest:
-    """返回文档元信息，供 LLM 首轮调用获取概览。"""
+    """Return document metadata for LLM orientation on the first call."""
     page_index = _build_page_index(parsed)
     pages = max(page_index.keys()) if page_index else 1
     return {
         "pages": pages,
-        "tables": len(_table_groups(parsed)),
-        "images": sum(1 for a in parsed.assets if a["type"] == "image"),
+        "tables": len(table_groups(parsed)),
+        "images": len(parsed.assets),
         "footnotes": len(parsed.footnotes),
         "endnotes": len(parsed.endnotes),
         "comments": len(parsed.comments),
     }
 
 
-def render_resource(
-    parsed: ParsedDocument,
-    resource_type: ResourceType | str,
-    resource_id: str | None = None,
-    *,
-    rows: str | None = None,
-    columns: list[str] | None = None,
-    aggregate: str | None = None,
-    aggregate_column: str | None = None,
-) -> list[str]:
-    """Render a resource as an HTML string for LLM consumption.
-
-    Tables support ``rows``, ``columns``, and ``aggregate``.
-    """
-    resolved_type = ResourceType.parse(resource_type)
-    if resolved_type.is_plural and resource_id is not None:
-        raise ValueError("resource_id is only valid with a singular resource type")
-    if not resolved_type.is_plural and resource_id is None:
-        raise ValueError("resource_id is required with a singular resource type")
-
-    if resolved_type in {ResourceType.IMAGES, ResourceType.IMAGE}:
-        return _render_images(parsed, resource_id)
-
-    if resolved_type in {ResourceType.CHARTS, ResourceType.CHART}:
-        return _render_charts(parsed, resource_id)
-
-    if resolved_type in {ResourceType.SMARTARTS, ResourceType.SMARTART}:
-        return _render_smartarts(parsed, resource_id)
-
-    if resolved_type is ResourceType.TABLES:
-        return [
-            _render_table_resource(table_id, segments, rows, columns, aggregate, aggregate_column)
-            for table_id, segments in _table_groups(parsed).items()
-        ]
-
-    if resolved_type is ResourceType.TABLE:
-        assert resource_id is not None
-        segments = _table_groups(parsed).get(resource_id)
-        if segments is None:
-            return []
-        return [
-            _render_table_resource(resource_id, segments, rows, columns, aggregate, aggregate_column)
-        ]
-
-    raise AssertionError("validated resource type was not handled")
-
-
-# ── per-type HTML renderers ──
-
-
-def _render_images(parsed: ParsedDocument, resource_id: str | None) -> list[str]:
-    source_path = parsed.metadata.get("sourcePath", "")
-    ocr = getattr(parsed, "ocr_results", None) or {}
-    result: list[str] = []
-    for a in parsed.assets:
-        if a["type"] != "image":
-            continue
-        if resource_id and a["id"] != resource_id:
-            continue
-        attrs = f"id={a['id']}"
-        if a.get("href"):
-            attrs += f" href={a['href']}"
-        if a.get("contentType"):
-            attrs += f" contentType={a['contentType']}"
-        parts = [f"<image {attrs}>"]
-        zip_path = a.get("zipPath")
-        if zip_path and source_path:
-            import base64
-
-            with zipfile.ZipFile(source_path, "r") as zf:
-                data = zf.read(zip_path)
-            parts.append(base64.b64encode(data).decode())
-        ocr_text = ocr.get(a["id"])
-        if ocr_text is not None:
-            parts.append(f"\n<ocr-text id={a['id']}>{ocr_text}")
-        result.append("".join(parts))
-    return result
-
-
-def _render_charts(parsed: ParsedDocument, resource_id: str | None) -> list[str]:
-    result: list[str] = []
-    for c in parsed.charts:
-        if resource_id and c.get("id") != resource_id:
-            continue
-        result.append(render_chart_resource(c))
-    return result
-
-
-def _render_smartarts(parsed: ParsedDocument, resource_id: str | None) -> list[str]:
-    result: list[str] = []
-    for s in parsed.smartarts:
-        if resource_id and s.get("id") != resource_id:
-            continue
-        result.append(render_smartart_resource(s))
-    return result
-
-
-def _render_table_resource(
-    table_id: str,
-    segments: list[TableBlock],
-    rows: str | None,
-    columns: list[str] | None,
-    aggregate: str | None,
-    aggregate_column: str | None,
-) -> str:
-    all_rows = [row for segment in segments for row in segment["rows"]]
-    column_count = max((seg["columnCount"] for seg in segments), default=0)
-    attrs = f"id={table_id} rows={len(all_rows)} cols={column_count}"
-    parts = [f"<table {attrs}>"]
-
-    if aggregate is not None:
-        agg_result = _compute_aggregate(all_rows, aggregate, aggregate_column or "")
-        op = agg_result.get("aggregate", "")
-        col = agg_result.get("aggregate_column", "")
-        val = agg_result.get("aggregate_value", "")
-        parts.append(f"\n<aggregate op={op} column={col}>{val}")
-    else:
-        filtered = _slice_and_filter_rows(all_rows, rows, columns)
-        for r in filtered:
-            cells = "|".join(c.get("text", "") for c in r["cells"])
-            if r.get("isHeader"):
-                parts.append(f"\n<tr isHeader>{cells}")
-            else:
-                parts.append(f"\n<tr>{cells}")
-    return "".join(parts)
-
-
-def _table_groups(parsed: ParsedDocument) -> dict[str, list[TableBlock]]:
-    """Group top-level table segments by their stable logical table ID."""
-    groups: dict[str, list[TableBlock]] = {}
-    for block in parsed.blocks:
-        if block["type"] != "table":
-            continue
-        groups.setdefault(block["tableId"], []).append(block)
-    return groups
-
-
-def _table_summary(table_id: str, segments: list[TableBlock]) -> ResourceDetail:
-    """Build a stable summary for one logical table."""
-    return {
-        "id": table_id,
-        "rowCount": sum(len(segment["rows"]) for segment in segments),
-        "columnCount": max((segment["columnCount"] for segment in segments), default=0),
-        "segmentCount": len(segments),
-        "pages": [segment.get("page", 1) for segment in segments],
-    }
-
-
-def _slice_and_filter_rows(
-    rows: list,
-    rows_spec: str | None,
-    columns: list[str] | None,
-) -> list:
-    """Apply row slicing and column filtering to table rows.
-
-    Column filtering is applied first (needs header row for name matching),
-    then row slicing operates on the already-filtered result.
-    """
-    if columns is not None:
-        rows = _filter_columns(rows, columns)
-    if rows_spec is not None:
-        rows = _slice_rows(rows, rows_spec)
-    return rows
-
-
-def _slice_rows(rows: list, spec: str) -> list:
-    """Slice rows by range like ``"10-25"`` (1-based, inclusive)."""
-    try:
-        start_str, end_str = spec.split("-", 1)
-        start = int(start_str) - 1
-        end = int(end_str)
-    except (ValueError, TypeError):
-        raise ValueError(f"Invalid rows range: {spec!r}") from None
-    if start < 0 or end < start:
-        raise ValueError(f"Invalid rows range: {spec!r}")
-    return rows[start:end]
-
-
-def _filter_columns(rows: list, column_names: list[str]) -> list:
-    """Keep only the columns whose header text matches one of *column_names*."""
-    if not rows:
-        return rows
-    header = rows[0]
-    header_texts = [cell["text"] for cell in header["cells"]]
-    keep_indices = []
-    for name in column_names:
-        for idx, hdr_text in enumerate(header_texts):
-            if hdr_text == name and idx not in keep_indices:
-                keep_indices.append(idx)
-                break
-    keep_indices.sort()
-    result = []
-    for row in rows:
-        filtered = [row["cells"][i] for i in keep_indices if i < len(row["cells"])]
-        result.append(
-            {"rowIndex": row["rowIndex"], "cells": filtered, "isHeader": row.get("isHeader", False)}
-        )
-    return result
-
-
-_AGGREGATORS = {
-    "sum": sum,
-    "count": len,
-    "avg": lambda vals: sum(vals) / len(vals) if vals else 0,
-    "min": lambda vals: min(vals) if vals else 0,
-    "max": lambda vals: max(vals) if vals else 0,
-}
-
-
-def _compute_aggregate(rows: list, operation: str, column: str) -> ResourceDetail:
-    """Compute an aggregate over a named column; returns dict to merge into table item."""
-    operation = operation.lower()
-    if operation not in _AGGREGATORS:
-        raise ValueError(
-            f"Unknown aggregate {operation!r}; expected one of: {', '.join(sorted(_AGGREGATORS))}"
-        )
-    values = _column_values(rows, column)
-    return {
-        "aggregate": operation,
-        "aggregate_column": column,
-        "aggregate_value": _AGGREGATORS[operation](values),
-    }
-
-
-def _column_values(rows: list, column: str) -> list[float]:
-    """Extract numeric values from a named column (matched by header text)."""
-    if not rows:
-        return []
-    header = rows[0]
-    col_idx: int | None = None
-    for idx, cell in enumerate(header["cells"]):
-        if cell["text"] == column:
-            col_idx = idx
-            break
-    if col_idx is None:
-        raise ValueError(f"Column {column!r} not found in table header")
-    values: list[float] = []
-    for row in rows[1:]:  # skip header row
-        if col_idx >= len(row["cells"]):
-            continue
-        text = row["cells"][col_idx].get("text", "").strip()
-        if not text:
-            continue
-        try:
-            values.append(float(text))
-        except ValueError:
-            continue
-    return values
-
-
-# ── 页码索引 ──
-
-
 def _build_page_index(parsed: ParsedDocument) -> dict[int, tuple[int, int]]:
-    """构建 page → (start_block_idx, end_block_idx) 映射。"""
+    """Build a mapping of page number to start and end block indexes."""
     index: dict[int, tuple[int, int]] = {}
     current_page = 1
     page_start = 0

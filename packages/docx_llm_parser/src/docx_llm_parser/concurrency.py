@@ -1,4 +1,4 @@
-"""文档级并发解析入口。"""
+"""Document-level concurrent parsing entry point."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from .renderers.html5 import write_outputs
 
 @dataclass(frozen=True)
 class BatchParseResult:
-    """单个 DOCX 批量解析任务的结果摘要。"""
+    """Summary of one DOCX batch parse task result."""
 
     docx: Path
     output_dir: Path
@@ -34,7 +34,7 @@ def parse_many(
     max_workers: int | None = None,
     revision_mode: RevisionMode | str = RevisionMode.FINAL,
 ) -> list[BatchParseResult]:
-    """并发解析多篇 DOCX，并保持返回结果与输入顺序一致。"""
+    """Concurrently parse multiple DOCX files, keeping results in input order."""
     if max_workers is not None and max_workers <= 0:
         raise ValueError("max_workers must be greater than zero")
     resolved_revision_mode = RevisionMode.parse(revision_mode)
@@ -50,14 +50,14 @@ def parse_many(
             for index, path in enumerate(paths)
         }
         for future in as_completed(futures):
-            # 每篇文档上下文独立，完成顺序不影响最终返回顺序。
+            # Each document's context is independent; completion order does not affect return order.
             results[futures[future]] = future.result()
 
     return [cast(BatchParseResult, item) for item in results]
 
 
 def _parse_one(docx_path: Path, output_base: Path, revision_mode: RevisionMode) -> BatchParseResult:
-    """解析单篇文档；异常被收敛为批量结果，便于其它文档继续完成。"""
+    """Parse a single document; exceptions are folded into the batch result so others continue."""
     output_dir = output_base / docx_path.stem
     try:
         options = ParseOptions(debug=False, revision_mode=revision_mode, output_dir=output_dir)
@@ -71,7 +71,7 @@ def _parse_one(docx_path: Path, output_base: Path, revision_mode: RevisionMode) 
             debug_dir=Path(parsed.debug_dir) if parsed.debug_dir is not None else None,
         )
     except Exception as exc:
-        # 批量模式记录单文档失败，不让一个坏输入阻断整个队列。
+        # Batch mode records per-document failures so one bad input does not block the queue.
         return BatchParseResult(
             docx=docx_path,
             output_dir=output_dir,

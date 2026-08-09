@@ -1,1 +1,1 @@
-"""从 DOCX 各内容 part 中抽取可读信息。"""
+"""Extract readable information from DOCX content parts."""

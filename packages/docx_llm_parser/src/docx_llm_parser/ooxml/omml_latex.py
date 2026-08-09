@@ -1,8 +1,9 @@
-"""OMML (Office Math Markup Language) → LaTeX 转换器。
+"""OMML (Office Math Markup Language) → LaTeX converter.
 
-将 Word 文档中的公式子树递归转换为标准 LaTeX 数学表达式。
-覆盖约 25 种 OMML 元素：分式、根号、上下标、n-ary 运算符、
-重音、函数名、括号组、矩阵、方程组、极限、幻影等。
+Recursively converts formula subtrees in Word documents to standard
+LaTeX math expressions. Covers about 25 OMML element kinds: fractions,
+radicals, sub/superscripts, n-ary operators, accents, function names,
+bracket groups, matrices, equation arrays, limits, phantoms, etc.
 """
 
 from __future__ import annotations
@@ -12,8 +13,8 @@ from xml.etree import ElementTree as ET
 
 from ..core.constants import attr, child_elements, first_child, local_name, qualified_name
 
-# ── N-ary 运算符映射 ──
-# <m:chr> 的 Unicode 字符值 → LaTeX 命令
+# ── N-ary operator map ──
+# <m:chr> Unicode character value → LaTeX command
 _NARY_OPERATOR_MAP: dict[str, str] = {
     "∑": r"\sum",  # ∑
     "∏": r"\prod",  # ∏
@@ -31,23 +32,23 @@ _NARY_OPERATOR_MAP: dict[str, str] = {
     "⨂": r"\bigotimes",  # ⨂
 }
 
-# ── 重音映射 ──
-# <m:acc> 的 <m:chr> 值 → LaTeX 重音命令
+# ── Accent map ──
+# <m:acc> <m:chr> value → LaTeX accent command
 _ACCENT_MAP: dict[str, str] = {
-    "̂": r"\hat",  # 抑扬符  ̂
-    "̃": r"\tilde",  # 波浪线  ̃
-    "̇": r"\dot",  # 点      ̇
-    "̈": r"\ddot",  # 双点    ̈
-    "⃗": r"\vec",  # 向量箭头 ⃗
-    "̄": r"\bar",  # 上划线  ̄
-    "̆": r"\breve",  # 短音符  ̆
-    "̌": r"\check",  # 抑扬符  ̌
-    "̀": r"\grave",  # 重音符  ̀
-    "́": r"\acute",  # 尖音符  ́
+    "̂": r"\hat",  # circumflex  ̂
+    "̃": r"\tilde",  # tilde  ̃
+    "̇": r"\dot",  # dot      ̇
+    "̈": r"\ddot",  # double dot    ̈
+    "⃗": r"\vec",  # vector arrow ⃗
+    "̄": r"\bar",  # overline  ̄
+    "̆": r"\breve",  # breve  ̆
+    "̌": r"\check",  # caron  ̌
+    "̀": r"\grave",  # grave accent  ̀
+    "́": r"\acute",  # acute accent  ́
 }
 
-# ── 数学函数映射 ──
-# <m:func> 的 <m:fName> 文本 → LaTeX 函数命令
+# ── Math function map ──
+# <m:func> <m:fName> text → LaTeX function command
 _FUNC_MAP: dict[str, str] = {
     "sin": r"\sin",
     "cos": r"\cos",
@@ -83,8 +84,8 @@ _FUNC_MAP: dict[str, str] = {
     "Pr": r"\Pr",
 }
 
-# ── 括号/定界符映射 ──
-# <m:dPr> 的 begChr/endChr 字符 → LaTeX 定界符
+# ── Bracket/delimiter map ──
+# <m:dPr> begChr/endChr characters → LaTeX delimiters
 _DELIM_MAP: dict[str, str] = {
     "(": "(",
     ")": ")",
@@ -93,7 +94,7 @@ _DELIM_MAP: dict[str, str] = {
     "{": r"\{",
     "}": r"\}",
     "|": "|",
-    "‖": r"\|",  # ‖ 双竖线
+    "‖": r"\|",  # ‖ double vertical bar
     "⌊": r"\lfloor",  # ⌊
     "⌋": r"\rfloor",  # ⌋
     "⌈": r"\lceil",  # ⌈
@@ -104,31 +105,25 @@ _DELIM_MAP: dict[str, str] = {
 
 
 def omath_to_latex(elem: ET.Element) -> str:
-    """将 OMML 公式元素树递归转换为 LaTeX 字符串。
-    LaTeX 数学模式下空格被忽略，因此直接拼接即可。"""
-    parts: list[str] = []
-    for child in elem:
-        latex = _convert_node(child)
-        if latex:
-            parts.append(latex)
-    return "".join(parts)
+    """Convert an OMML equation element tree to a LaTeX string."""
+    return _convert_children(elem)
 
 
 def _convert_node(node: ET.Element) -> str:
-    """按节点标签名分发到对应的处理函数。"""
+    """Dispatch to the handler for the node's tag name."""
     lname = local_name(node.tag)
     handler = _DISPATCH.get(lname)
     if handler is not None:
         return handler(node)
-    # 未知元素：尝试提取其中文本
+    # Unknown element: fall back to extracting its text
     return _plain_text(node)
 
 
-# ── 叶子节点：数学文本 run ──
+# ── Leaf nodes: math text runs ──
 
 
 def _handle_r(elem: ET.Element) -> str:
-    """处理 <m:r>：提取格式化文本并转义 LaTeX 特殊字符。"""
+    """Handle <m:r>: extract formatted text and escape LaTeX special characters."""
     parts: list[str] = []
     for child in elem:
         if local_name(child.tag) == "t":
@@ -138,25 +133,25 @@ def _handle_r(elem: ET.Element) -> str:
 
 
 def _handle_t(elem: ET.Element) -> str:
-    """处理 <m:t>（可能被递归调用时直接遇到）。"""
+    """Handle <m:t> (may be hit directly during recursive calls)."""
     return _escape_latex(elem.text or "")
 
 
-# ── 分式 ──
+# ── Fractions ──
 
 
 def _handle_f(elem: ET.Element) -> str:
-    """处理 <m:f> → \\frac{num}{den}。"""
+    """Handle <m:f> → \\frac{num}{den}."""
     num = _child_convert(elem, "num")
     den = _child_convert(elem, "den")
     return rf"\frac{{{num}}}{{{den}}}"
 
 
-# ── 根号 ──
+# ── Radicals ──
 
 
 def _handle_rad(elem: ET.Element) -> str:
-    """处理 <m:rad> → \\sqrt[deg]{e}。"""
+    """Handle <m:rad> → \\sqrt[deg]{e}."""
     deg = _child_convert(elem, "deg")
     e_val = _child_convert(elem, "e")
     if deg:
@@ -164,11 +159,11 @@ def _handle_rad(elem: ET.Element) -> str:
     return rf"\sqrt{{{e_val}}}"
 
 
-# ── 上下标 ──
+# ── Sub/superscripts ──
 
 
 def _handle_ssub(elem: ET.Element) -> str:
-    """处理 <m:sSub> → {e}_{sub}。"""
+    """Handle <m:sSub> → {e}_{sub}."""
     e_val = _child_convert(elem, "e")
     sub = _child_convert(elem, "sub")
     e_out = _wrap_group(e_val)
@@ -176,7 +171,7 @@ def _handle_ssub(elem: ET.Element) -> str:
 
 
 def _handle_ssup(elem: ET.Element) -> str:
-    """处理 <m:sSup> → {e}^{sup}。"""
+    """Handle <m:sSup> → {e}^{sup}."""
     e_val = _child_convert(elem, "e")
     sup = _child_convert(elem, "sup")
     e_out = _wrap_group(e_val)
@@ -184,7 +179,7 @@ def _handle_ssup(elem: ET.Element) -> str:
 
 
 def _handle_ssubsup(elem: ET.Element) -> str:
-    """处理 <m:sSubSup> → {e}_{sub}^{sup}。"""
+    """Handle <m:sSubSup> → {e}_{sub}^{sup}."""
     e_val = _child_convert(elem, "e")
     sub = _child_convert(elem, "sub")
     sup = _child_convert(elem, "sup")
@@ -198,7 +193,7 @@ def _handle_ssubsup(elem: ET.Element) -> str:
 
 
 def _handle_spre(elem: ET.Element) -> str:
-    """处理 <m:sPre> → {}_{sub}^{sup}{e}。"""
+    """Handle <m:sPre> → {}_{sub}^{sup}{e}."""
     e_val = _child_convert(elem, "e")
     sub = _child_convert(elem, "sub")
     sup = _child_convert(elem, "sup")
@@ -211,12 +206,12 @@ def _handle_spre(elem: ET.Element) -> str:
     return "".join(parts)
 
 
-# ── N-ary 运算符（求和、积分、乘积等） ──
+# ── N-ary operators (sum, integral, product, etc.) ──
 
 
 def _handle_nary(elem: ET.Element) -> str:
-    """处理 <m:nary> → \\sum_{sub}^{sup} 或 \\int_{sub}^{sup} 等。"""
-    # 从 <m:chr> 读取运算符字符
+    """Handle <m:nary> → \\sum_{sub}^{sup} or \\int_{sub}^{sup}, etc."""
+    # Read the operator character from <m:chr>
     chr_val = _child_attr(elem, "chr", "val")
     op = _NARY_OPERATOR_MAP.get(chr_val or "", r"\sum")
 
@@ -224,7 +219,7 @@ def _handle_nary(elem: ET.Element) -> str:
     sup = _child_convert(elem, "sup")
     e_val = _child_convert(elem, "e")
 
-    # 构建 limits
+    # Build the limits
     limits = ""
     if sub:
         limits += f"_{{{sub}}}"
@@ -234,22 +229,22 @@ def _handle_nary(elem: ET.Element) -> str:
     return f"{op}{limits} {{{e_val}}}"
 
 
-# ── 重音 ──
+# ── Accents ──
 
 
 def _handle_acc(elem: ET.Element) -> str:
-    """处理 <m:acc> → \\hat{e}、\\vec{e} 等。"""
+    """Handle <m:acc> → \\hat{e}, \\vec{e}, etc."""
     chr_val = _child_attr(elem, "chr", "val")
     cmd = _ACCENT_MAP.get(chr_val or "", r"\hat")
     e_val = _child_convert(elem, "e")
     return f"{cmd}{{{e_val}}}"
 
 
-# ── 上下划线 ──
+# ── Overline/underline ──
 
 
 def _handle_bar(elem: ET.Element) -> str:
-    """处理 <m:bar> → \\overline{e} 或 \\underline{e}。"""
+    """Handle <m:bar> → \\overline{e} or \\underline{e}."""
     pos = _child_attr(elem, "pr", "pos") or "top"
     e_val = _child_convert(elem, "e")
     if pos == "bot":
@@ -257,15 +252,15 @@ def _handle_bar(elem: ET.Element) -> str:
     return rf"\overline{{{e_val}}}"
 
 
-# ── 数学函数 ──
+# ── Math functions ──
 
 
 def _handle_func(elem: ET.Element) -> str:
-    """处理 <m:func> → \\sin{e} 或 \\lim_{sub} e。"""
+    """Handle <m:func> → \\sin{e} or \\lim_{sub} e."""
     fname_text = _func_name(elem)
     func_cmd = _FUNC_MAP.get(fname_text, rf"\operatorname{{{fname_text}}}")
 
-    # 检查是否有 limits（如 lim 的 subscript）
+    # Check for limits (e.g. lim's subscript)
     lim = _child_convert(elem, "lim")
     e_val = _child_convert(elem, "e")
 
@@ -278,18 +273,18 @@ def _handle_func(elem: ET.Element) -> str:
 
 
 def _func_name(elem: ET.Element) -> str:
-    """从 <m:fName> 中提取函数名文本。"""
+    """Extract the function name text from <m:fName>."""
     fname = first_child(elem, "m", "fName")
     if fname is None:
         return ""
     return _plain_text(fname).strip()
 
 
-# ── 括号组 ──
+# ── Bracket groups ──
 
 
 def _handle_groupchr(elem: ET.Element) -> str:
-    """处理 <m:groupChr> → {e} 或上方有符号的括号组。"""
+    """Handle <m:groupChr> → {e} or a bracket group with a symbol above."""
     chr_val = _child_attr(elem, "pr", "chr") or _child_attr(elem, "groupChrPr", "chr")
     e_val = _child_convert(elem, "e")
     if chr_val is not None:
@@ -297,11 +292,11 @@ def _handle_groupchr(elem: ET.Element) -> str:
     return f"{{{e_val}}}"
 
 
-# ── 定界符（括号） ──
+# ── Delimiters (parentheses) ──
 
 
 def _handle_d(elem: ET.Element) -> str:
-    """处理 <m:d> → \\left( e \\right)。"""
+    """Handle <m:d> → \\left( e \\right)."""
     beg_chr = _child_attr(elem, "pr", "begChr") or "("
     end_chr = _child_attr(elem, "pr", "endChr") or ")"
     beg = _DELIM_MAP.get(beg_chr, beg_chr)
@@ -310,11 +305,11 @@ def _handle_d(elem: ET.Element) -> str:
     return rf"\left{beg} {e_val} \right{end}"
 
 
-# ── 矩阵 ──
+# ── Matrices ──
 
 
 def _handle_m(elem: ET.Element) -> str:
-    """处理 <m:m>（矩阵）→ \\begin{matrix}...\\end{matrix}。"""
+    """Handle <m:m> (matrix) → \\begin{matrix}...\\end{matrix}."""
     rows: list[str] = []
     for mr in child_elements(elem, "m", "mr"):
         cells = [_convert_node(cell) for cell in mr if local_name(cell.tag) == "e"]
@@ -323,58 +318,58 @@ def _handle_m(elem: ET.Element) -> str:
     return rf"\begin{{matrix}} {body} \end{{matrix}}"
 
 
-# ── 方程组 ──
+# ── Equation arrays ──
 
 
 def _handle_eqarr(elem: ET.Element) -> str:
-    """处理 <m:eqArr> → \\begin{aligned}...\\end{aligned}。"""
+    """Handle <m:eqArr> → \\begin{aligned}...\\end{aligned}."""
     rows = [_convert_node(child) for child in elem if local_name(child.tag) == "e"]
     body = r" \\ ".join(rows)
     return rf"\begin{{aligned}} {body} \end{{aligned}}"
 
 
-# ── 极限 ──
+# ── Limits ──
 
 
 def _handle_limlow(elem: ET.Element) -> str:
-    """处理 <m:limLow> → {e}_{lim}。"""
+    """Handle <m:limLow> → {e}_{lim}."""
     e_val = _child_convert(elem, "e")
     lim = _child_convert(elem, "lim")
     return f"{{{e_val}}}_{{{lim}}}"
 
 
 def _handle_limupp(elem: ET.Element) -> str:
-    """处理 <m:limUpp> → {e}^{lim}。"""
+    """Handle <m:limUpp> → {e}^{lim}."""
     e_val = _child_convert(elem, "e")
     lim = _child_convert(elem, "lim")
     return f"{{{e_val}}}^{{{lim}}}"
 
 
-# ── 幻影/边框盒/空盒 ──
+# ── Phantom/border box/box ──
 
 
 def _handle_phant(elem: ET.Element) -> str:
-    """处理 <m:phant> → \\phantom{e}。"""
+    """Handle <m:phant> → \\phantom{e}."""
     e_val = _child_convert(elem, "e")
     return rf"\phantom{{{e_val}}}"
 
 
 def _handle_borderbox(elem: ET.Element) -> str:
-    """处理 <m:borderBox> → \\boxed{e}。"""
+    """Handle <m:borderBox> → \\boxed{e}."""
     e_val = _child_convert(elem, "e")
     return rf"\boxed{{{e_val}}}"
 
 
 def _handle_box(elem: ET.Element) -> str:
-    """处理 <m:box>：直接传递子元素。"""
+    """Handle <m:box>: pass through child elements."""
     return _convert_children(elem)
 
 
-# ── 辅助函数 ──
+# ── Helper functions ──
 
 
 def _child_convert(elem: ET.Element, child_local: str) -> str:
-    """查找指定 local name 的第一个子元素并转换，不存在时返回空串。"""
+    """Find the first child with the given local name and convert it; return "" when absent."""
     child = first_child(elem, "m", child_local)
     if child is None:
         return ""
@@ -382,7 +377,7 @@ def _child_convert(elem: ET.Element, child_local: str) -> str:
 
 
 def _child_attr(elem: ET.Element, child_local: str, attr_name: str) -> str | None:
-    """读取指定子元素的 m:val 属性值。"""
+    """Read the attribute value of the specified child element."""
     child = first_child(elem, "m", child_local)
     if child is None:
         return None
@@ -390,7 +385,7 @@ def _child_attr(elem: ET.Element, child_local: str, attr_name: str) -> str | Non
 
 
 def _convert_children(elem: ET.Element) -> str:
-    """转换所有子元素并直接拼接（LaTeX 数学模式忽略空格）。"""
+    """Convert all child elements and concatenate (LaTeX math mode ignores whitespace)."""
     parts: list[str] = []
     for child in elem:
         latex = _convert_node(child)
@@ -400,7 +395,7 @@ def _convert_children(elem: ET.Element) -> str:
 
 
 def _wrap_group(latex: str) -> str:
-    """如果 LaTeX 包含分式/根号/多字符等需要显式分组的情况，加上花括号。"""
+    """Wrap LaTeX in braces when grouping is needed (fractions, radicals, multi-char content)."""
     if not latex:
         return "{}"
     if any(cmd in latex for cmd in (r"\frac", r"\sqrt", r"\sum", r"\int", r"\prod")):
@@ -411,14 +406,14 @@ def _wrap_group(latex: str) -> str:
 
 
 def _plain_text(elem: ET.Element) -> str:
-    """提取元素内所有 <m:t> 文本（fallback 用）。"""
+    """Extract all <m:t> text within the element (used as a fallback)."""
     parts = [mt.text for mt in elem.iter(qualified_name("m", "t")) if mt.text]
     return "".join(parts)
 
 
 def _escape_latex(text: str) -> str:
-    """转义 LaTeX 特殊字符。"""
-    # 转义顺序重要：先处理反斜杠，再处理花括号
+    """Escape LaTeX special characters."""
+    # Escape order matters: backslash first, then braces
     replacements = [
         ("\\", r"\textbackslash{}"),
         ("&", r"\&"),
@@ -436,7 +431,7 @@ def _escape_latex(text: str) -> str:
     return text
 
 
-# ── 元素分发表 ──
+# ── Element dispatch table ──
 
 _DISPATCH: dict[str, Callable[[ET.Element], str]] = {
     "r": _handle_r,
@@ -460,10 +455,10 @@ _DISPATCH: dict[str, Callable[[ET.Element], str]] = {
     "phant": _handle_phant,
     "borderBox": _handle_borderbox,
     "box": _handle_box,
-    # 容器元素：透传子元素
+    # Container elements: pass through child elements
     "oMath": _convert_children,
     "oMathPara": _convert_children,
-    # 以下元素直接透传子元素
+    # The elements below pass through their children directly
     "e": _convert_children,
     "num": _convert_children,
     "den": _convert_children,
@@ -473,7 +468,7 @@ _DISPATCH: dict[str, Callable[[ET.Element], str]] = {
     "lim": _convert_children,
     "fName": lambda e: _plain_text(e).strip(),
     "chr": lambda e: e.get(qualified_name("m", "val"), ""),
-    # 格式控制元素：不产生输出
+    # Formatting control elements: produce no output
     "oMathParaPr": lambda e: "",
     "oMathPr": lambda e: "",
     "sSubPr": lambda e: "",

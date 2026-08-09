@@ -1,4 +1,4 @@
-"""表格渲染（structural/semantic）：完整表格、截断表格、行、单元格、嵌套表格。"""
+"""Table rendering (structural/semantic): full tables, truncated tables, rows, cells, nested tables."""
 
 from __future__ import annotations
 
@@ -11,21 +11,21 @@ from ..inline import inline_content
 
 
 def render_table(block: TableBlock, density: str) -> Iterator[str]:
-    """输出 HTML5 表格（structural/semantic 用）。行内单元格无换行，仅行间换行。"""
+    """Output an HTML5 table (for structural/semantic). Cells within a row have no newlines; only rows are newline-separated."""
     rows = block.get("rows", [])
 
     if len(rows) > _constants._TABLE_TRUNCATE_STRUCTURAL_SEMANTIC:
         yield from render_truncated_table(block, rows, density)
         return
 
-    yield "<table>\n"
+    yield f"<table id={table_id(block)}>\n"
     for row in rows:
         yield render_table_row(row, density) + "\n"
 
 
 def render_truncated_table(block: TableBlock, rows: list[TableRow], density: str) -> Iterator[str]:
-    """输出截断表格（structural/semantic 用）：表头行 + 首行。"""
-    yield "<table truncated>\n"
+    """Output a truncated table (for structural/semantic): header row + first row."""
+    yield f"<table id={table_id(block)} truncated>\n"
     yield render_table_row(rows[0], density) + "\n"
     if len(rows) > 1:
         yield render_table_row(rows[1], density) + "\n"
@@ -40,14 +40,14 @@ def table_id(block: TableBlock) -> str:
 
 
 def render_table_row(row: TableRow, density: str) -> str:
-    """渲染一行表格。structural 忽略 colspan/rowspan/vMerge。"""
+    """Render one table row. structural keeps merge structure and nested tables."""
     row_tag = "<tr h>" if row.get("isHeader") else "<tr>"
     parts = [row_tag]
 
     for cell in row["cells"]:
         cell_tag = "th" if row.get("isHeader") else "td"
 
-        if density == "semantic":
+        if density in {"structural", "semantic"}:
             attrs_parts: list[str] = [cell_tag]
             if cell["colSpan"] != 1:
                 attrs_parts.append(f"colspan={cell['colSpan']}")
@@ -66,14 +66,14 @@ def render_table_row(row: TableRow, density: str) -> str:
 
 
 def cell_content(cell: TableCell, density: str) -> str:
-    """输出单元格文本。"""
+    """Output the cell text."""
     blocks = cell.get("blocks", [])
     if not blocks:
         return escape(cell["text"])
     parts: list[str] = []
     for block in blocks:
         if block["type"] == "table":
-            if density == "semantic":
+            if density in {"structural", "semantic"}:
                 parts.append(nested_table(block))
         else:
             parts.append(inline_content(block, density))
@@ -81,9 +81,13 @@ def cell_content(cell: TableCell, density: str) -> str:
 
 
 def nested_table(block: TableBlock) -> str:
-    """semantic：把嵌套表格渲染为轻量 HTML5。"""
+    """Render a nested table as lightweight HTML5."""
     rows = block["rows"]
-    parts = [f"<nestedtable rows={len(rows)} cols={block['columnCount']}>"]
+    attrs = f"rows={len(rows)} cols={block['columnCount']}"
+    table_id_value = block.get("tableId")
+    if isinstance(table_id_value, str) and table_id_value:
+        attrs = f"id={table_id_value} {attrs}"
+    parts = [f"<nestedtable {attrs}>"]
     for row in rows:
         tag = "<row header>" if row.get("isHeader") else "<row>"
         parts.append(tag)

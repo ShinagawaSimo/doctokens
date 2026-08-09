@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timedelta
+from typing import TypedDict
 from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.package import PackageReader
@@ -15,12 +16,12 @@ from ooxml_llm_core.package import PackageReader
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
-# Theme color slot order (ECMA-376 §20.1.6.2).
+# Spreadsheet theme color index order.
 _THEME_SLOTS = [
-    "dk1",
     "lt1",
-    "dk2",
+    "dk1",
     "lt2",
+    "dk2",
     "accent1",
     "accent2",
     "accent3",
@@ -32,14 +33,13 @@ _THEME_SLOTS = [
 ]
 
 # Office default theme colors (fallback when theme1.xml is absent).
-_DEFAULT_THEME: dict[int, str] = {
-    idx: rgb
-    for idx, rgb in enumerate(
+_DEFAULT_THEME: dict[int, str] = dict(
+    enumerate(
         [
-            "000000",
             "FFFFFF",
-            "44546A",
+            "000000",
             "E7E6E6",
+            "44546A",
             "4472C4",
             "ED7D31",
             "A5A5A5",
@@ -50,7 +50,7 @@ _DEFAULT_THEME: dict[int, str] = {
             "954F72",
         ]
     )
-}
+)
 
 # numFmtId ranges for built-in date / time formats (ECMA-376 §18.8.30).
 _BUILTIN_DATE_IDS: set[int] = set()
@@ -77,6 +77,17 @@ _PCT_RE = re.compile(r"%")
 # ── Public API ──
 
 
+class FontInfo(TypedDict, total=False):
+    bold: bool
+    italic: bool
+    underline: bool
+    color: str
+
+
+class FillInfo(TypedDict, total=False):
+    fill: str
+
+
 class FormatIndex:
     """Cell → display-value and style resolver built from styles.xml."""
 
@@ -88,18 +99,18 @@ class FormatIndex:
         # style_index → resolved attribute string ("" = no styles)
         self._style_attrs_cache: dict[int, str] = {}
         # fontId → {"bold": bool, "italic": bool, "color": str | None}
-        self._fonts: list[dict] = []
+        self._fonts: list[FontInfo] = []
         # fillId → {"fill": str | None}
-        self._fills: list[dict] = []
+        self._fills: list[FillInfo] = []
         self.date_1904 = False
 
     def set_date_system(self, date_1904: bool) -> None:
         self.date_1904 = date_1904
 
-    def register_font(self, font_info: dict) -> None:
+    def register_font(self, font_info: FontInfo) -> None:
         self._fonts.append(font_info)
 
-    def register_fill(self, fill_info: dict) -> None:
+    def register_fill(self, fill_info: FillInfo) -> None:
         self._fills.append(fill_info)
 
     def register_cell_format(
@@ -150,8 +161,9 @@ class FormatIndex:
                     parts.append("italic")
                 if font.get("underline"):
                     parts.append("underline")
-                if font.get("color"):
-                    parts.append(f"color={font['color']}")
+                color = font.get("color")
+                if color and color.upper() != "#000000":
+                    parts.append(f"color={color}")
             if fill_id < len(self._fills):
                 fill = self._fills[fill_id]
                 if fill.get("fill"):
@@ -212,7 +224,7 @@ def parse_styles(pkg: PackageReader) -> FormatIndex:
     fonts_elem = root.find(f"{{{NS_S}}}fonts")
     if fonts_elem is not None:
         for font in fonts_elem.findall(f"{{{NS_S}}}font"):
-            info: dict = {"bold": False, "italic": False, "underline": False}
+            info: FontInfo = {"bold": False, "italic": False, "underline": False}
             if font.find(f"{{{NS_S}}}b") is not None:
                 info["bold"] = True
             if font.find(f"{{{NS_S}}}i") is not None:
@@ -230,7 +242,7 @@ def parse_styles(pkg: PackageReader) -> FormatIndex:
     fills_elem = root.find(f"{{{NS_S}}}fills")
     if fills_elem is not None:
         for fill in fills_elem.findall(f"{{{NS_S}}}fill"):
-            fill_info: dict = {}
+            fill_info: FillInfo = {}
             pf = fill.find(f"{{{NS_S}}}patternFill")
             if pf is not None:
                 fg = pf.find(f"{{{NS_S}}}fgColor")
@@ -286,15 +298,28 @@ def _parse_theme(pkg: PackageReader) -> dict[int, str]:
     mapping: dict[int, str] = {}
     for idx, slot in enumerate(_THEME_SLOTS):
         elem = scheme.find(f"{{{NS_A}}}{slot}")
-        if elem is not None:
-            srgb = elem.find(f"{{{NS_A}}}srgbClr")
-            if srgb is not None:
-                val = srgb.get("val", "")
-                if val:
-                    mapping[idx] = val
-                    continue
+        resolved = _theme_slot_value(elem)
+        if resolved:
+            mapping[idx] = resolved
+            continue
         mapping[idx] = _DEFAULT_THEME.get(idx, "000000")
     return mapping
+
+
+def _theme_slot_value(elem: ET.Element | None) -> str | None:
+    if elem is None:
+        return None
+    srgb = elem.find(f"{{{NS_A}}}srgbClr")
+    if srgb is not None:
+        val = srgb.get("val", "")
+        if val:
+            return val
+    sys_color = elem.find(f"{{{NS_A}}}sysClr")
+    if sys_color is not None:
+        val = sys_color.get("lastClr", "")
+        if val:
+            return val
+    return None
 
 
 def _resolve_color(color_elem: ET.Element, theme: dict[int, str]) -> str | None:

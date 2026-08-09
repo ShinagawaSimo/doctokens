@@ -1,4 +1,4 @@
-"""plain 纯文本渲染辅助。"""
+"""Helpers for plain-text rendering."""
 
 from .helpers import (
     block_text_only,

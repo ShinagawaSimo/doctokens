@@ -13,8 +13,8 @@ from docx_llm_parser.core.relationships import RelationshipIndex
 from docx_llm_parser.extractors.body import DocumentBodyParser
 from docx_llm_parser.ooxml.numbering import NumberingMap, NumberingState
 from docx_llm_parser.ooxml.styles import StyleMap
-from docx_llm_parser.renderers.html5 import render_resource as _render_resource
 from docx_llm_parser.renderers.html5 import manifest as _manifest
+from docx_llm_parser.renderers.html5 import render_resource as _render_resource
 from docx_llm_parser.renderers.l0.helpers import table_text_only
 from docx_llm_parser.renderers.tables.render import table_id
 
@@ -159,7 +159,7 @@ class TableIdentityTests(unittest.TestCase):
             "type": "table",
             "tableId": table_id,
             "columnCount": len(headers),
-            "rows": [header_row] + data_rows,
+            "rows": [header_row, *data_rows],
             "id": "b1",
             "part": "word/document.xml",
             "order": 1,

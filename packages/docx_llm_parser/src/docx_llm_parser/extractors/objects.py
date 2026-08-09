@@ -1,4 +1,4 @@
-"""解析 DOCX 中被 DrawingML 引用的图表和 SmartArt。"""
+"""Parse charts and SmartArt referenced by DrawingML in DOCX files."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ DIAGRAM_LAYOUT_REL_TYPE = (
 
 
 class EmbeddedObjectExtractor:
-    """从 chart/diagram relationships 中构建轻量对象索引。"""
+    """Build a lightweight object index from chart/diagram relationships."""
 
     def __init__(
         self,
@@ -42,7 +42,7 @@ class EmbeddedObjectExtractor:
         self.warnings = warnings
 
     def extract(self) -> tuple[ObjectLookup, list[Chart], list[SmartArt]]:
-        """解析图表和 SmartArt，并返回 `(sourcePart, rId)` 索引。"""
+        """Parse charts and SmartArt, returning a `(sourcePart, rId)` index."""
         lookup: ObjectLookup = {}
         layout_map = self._build_layout_map()
         charts = self._extract_charts(lookup)
@@ -50,10 +50,10 @@ class EmbeddedObjectExtractor:
         return lookup, charts, smartarts
 
     def _build_layout_map(self) -> dict[str, str]:
-        """构建 SmartArt data part → layout type 映射。
+        """Build a mapping from SmartArt data parts to layout types.
 
-        从 DIAGRAM_LAYOUT_REL_TYPE 关系中读取 layoutN.xml，
-        提取 catLst/cat@type 的末尾类别名。
+        Reads layoutN.xml parts via DIAGRAM_LAYOUT_REL_TYPE relationships
+        and extracts the trailing category name of catLst/cat@type.
         """
         layout_map: dict[str, str] = {}
         for rel in self.relationships.by_type(DIAGRAM_LAYOUT_REL_TYPE):
@@ -75,13 +75,14 @@ class EmbeddedObjectExtractor:
         return layout_map
 
     def _extract_charts(self, lookup: ObjectLookup) -> list[Chart]:
-        """解析 chart relationships 指向的图表 part。"""
+        """Parse the chart parts targeted by chart relationships."""
         charts: list[Chart] = []
         for chart_index, rel in enumerate(self.relationships.by_type(CHART_REL_TYPE), start=1):
             chart_id = f"chart{chart_index}"
             target = rel.resolved_target
             if rel.target_mode == "External" or not target or not self.package.exists(target):
-                # 图表 part 缺失时保留 warning，正文里会降级成轻量占位。
+                # Keep a warning when the chart part is missing; the body falls back to a
+                # lightweight placeholder.
                 self._warn(
                     "CHART_TARGET_MISSING",
                     f"Chart target is missing: {target}",
@@ -110,7 +111,7 @@ class EmbeddedObjectExtractor:
         lookup: ObjectLookup,
         layout_map: dict[str, str],
     ) -> list[SmartArt]:
-        """解析 SmartArt data model relationships 指向的 diagram data part。"""
+        """Parse the diagram data parts targeted by SmartArt data model relationships."""
         smartarts: list[SmartArt] = []
         for item_index, rel in enumerate(
             self.relationships.by_type(DIAGRAM_DATA_REL_TYPE), start=1
@@ -135,7 +136,7 @@ class EmbeddedObjectExtractor:
                     part=target,
                 )
                 continue
-            # 注入 layout type（从 layoutN.xml 中提取的类别名）
+            # Inject the layout type (the category name extracted from layoutN.xml)
             layout_type = layout_map.get(rel.source_part)
             if layout_type:
                 smartart["layoutType"] = layout_type
@@ -146,12 +147,12 @@ class EmbeddedObjectExtractor:
         return smartarts
 
     def _warn(self, code: str, message: str, part: str | None = None) -> None:
-        """记录对象解析 warning。"""
+        """Record an object-parsing warning."""
         self.warnings.append(ParseWarning(code=code, message=message, locator=part))
 
 
 def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> Chart:
-    """从 chart XML 中抽取图表信息 — 委托给共享 ChartML 解析器。"""
+    """Extract chart information from the chart XML, delegating to the shared ChartML parser."""
     info = parse_chart_xml(root)
     series: list[ChartSeries] = []
     for s in info.get("series", []):
@@ -190,7 +191,7 @@ def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> Chart:
 
 
 def parse_smartart_root(root: ET.Element, smartart_id: str, part_name: str) -> SmartArt:
-    """从 SmartArt data model 中抽取节点文字和连接关系。"""
+    """Extract node text and connections from the SmartArt data model."""
     nodes: list[SmartArtNode] = []
     node_index_by_model_id: dict[str, int] = {}
     for point in root.iter(qualified_name("dgm", "pt")):
@@ -217,7 +218,8 @@ def parse_smartart_root(root: ET.Element, smartart_id: str, part_name: str) -> S
             and source in node_index_by_model_id
             and target in node_index_by_model_id
         ):
-            # 最终 XML 使用短序号引用节点，避免暴露冗长 modelId。
+            # The final XML references nodes by short ordinal numbers to avoid exposing
+            # lengthy modelIds.
             link: SmartArtLink = {
                 "from": node_index_by_model_id[source],
                 "to": node_index_by_model_id[target],
@@ -240,16 +242,17 @@ def parse_smartart_root(root: ET.Element, smartart_id: str, part_name: str) -> S
 
 
 def _drawing_text(node: ET.Element) -> str:
-    """读取 DrawingML/diagram 富文本中的 a:t 文本。"""
+    """Read the a:t text inside DrawingML/diagram rich text."""
     parts = [item.text or "" for item in node.iter() if item.tag == qualified_name("a", "t")]
     return "".join(parts).strip()
 
 
 def _layout_type(root: ET.Element) -> str | None:
-    """从 dgm:layoutDef 中提取布局类别名。
+    """Extract the layout category name from a dgm:layoutDef.
 
-    读取 catLst 中第一个 cat 元素的 type 属性，提取 URI 最后一段作为类别名
-    （如 process, cycle, hierarchy, list, relationship, matrix, pyramid）。
+    Reads the type attribute of the first cat element in catLst and takes
+    the last URI segment as the category name (e.g. process, cycle,
+    hierarchy, list, relationship, matrix, pyramid).
     """
     cat = root.find(".//" + qualified_name("dgm", "cat"))
     if cat is None:
@@ -257,5 +260,5 @@ def _layout_type(root: ET.Element) -> str | None:
     type_uri = cat.get("type", "")
     if not type_uri:
         return None
-    # 提取 URI 最后一段作为类别名
+    # Take the last URI segment as the category name
     return type_uri.rstrip("/").rsplit("/", 1)[-1]

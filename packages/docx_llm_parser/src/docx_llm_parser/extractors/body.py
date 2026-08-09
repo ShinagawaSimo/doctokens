@@ -1,4 +1,4 @@
-"""解析 word/document.xml 正文 block。"""
+"""Parse the main body blocks of word/document.xml."""
 
 from __future__ import annotations
 
@@ -34,20 +34,20 @@ from .inline import InlineParser
 
 
 class BlockIdAllocator:
-    """为正文 block 分配稳定的内部 ID。"""
+    """Assign stable internal IDs to body blocks."""
 
     def __init__(self) -> None:
         self._next = 1
 
     def next(self) -> str:
-        # 每篇文档独立计数，避免并发解析时共享状态。
+        # Count independently per document to avoid shared state across concurrent parses.
         block_id = f"b{self._next}"
         self._next += 1
         return block_id
 
 
 class DocumentBodyParser:
-    """把 document.xml 的直接正文内容解析成段落、标题和表格。"""
+    """Parse the direct body content of document.xml into paragraphs, headings, and tables."""
 
     def __init__(
         self,
@@ -78,24 +78,24 @@ class DocumentBodyParser:
         self._order = 0
         self._table_index = 0
         self._page_hint = 1
-        # 计数器替代布尔：一个段落/表格内可能有多个 lastRenderedPageBreak。
+        # Counter instead of boolean: a paragraph/table can contain multiple lastRenderedPageBreak elements.
         self._pending_page_breaks = 0
         self.body_events: list[BodyEvent] = []
         self._section_header_refs: list[tuple[str, str]] = []
         self._section_footer_refs: list[tuple[str, str]] = []
 
     def parse(self) -> list[Block]:
-        """流式解析 word/document.xml，并保持段落/表格的原始顺序。"""
+        """Stream-parse word/document.xml, preserving the original paragraph/table order."""
         blocks: list[Block] = []
         with self.package.open_entry("word/document.xml") as stream:
             parser = ET.iterparse(stream, events=("start", "end"))
             stack: list[str] = []
             body_depth: int | None = None
             for event, elem in parser:
-                # 优化：使用 local_name 避免 split 内存分配。
+                # Optimization: use local_name to avoid split memory allocation.
                 lname = local_name(elem.tag)
                 if event == "start":
-                    # start 事件只维护当前位置栈，不构造完整 DOM。
+                    # start events only maintain the position stack; they don't build a full DOM.
                     stack.append(lname)
                     if lname == "body":
                         body_depth = len(stack)
@@ -108,17 +108,17 @@ class DocumentBodyParser:
                     and stack[-2] == "body"
                 )
                 if direct_body_child and lname == "p":
-                    # 只处理 body 直接段落，避免表格单元格内容被重复提升。
+                    # Only handle paragraphs that are direct children of body, so table cell content is not hoisted twice.
                     block = self.parse_paragraph(elem, "word/document.xml")
                     if block is not None:
                         blocks.append(block)
                     elem.clear()
                 elif direct_body_child and lname == "tbl":
-                    # 表格内可能有换页，parse_table 返回 list（每页一个子表 block）。
+                    # Tables can contain page breaks, so parse_table returns a list (one sub-table block per page).
                     blocks.extend(self.parse_table(elem, "word/document.xml"))
                     elem.clear()
                 elif direct_body_child and lname == "sectPr":
-                    # 分节符：Word 渲染时总是从新页开始新节。
+                    # Section break: Word always starts a new section on a new page when rendering.
                     self._collect_section_refs(elem)
                     self._pending_page_breaks += 1
                     elem.clear()
@@ -131,21 +131,21 @@ class DocumentBodyParser:
         return blocks
 
     def parse_paragraph(self, p: ET.Element, part: str) -> TextBlock | None:
-        """解析段落；只有样式大纲级别明确时才输出 heading。"""
+        """Parse a paragraph; emit a heading only when the style outline level is explicit."""
         block_id = self.ids.next()
         self._order += 1
-        # 应用前一个 block 积累的断页数。
+        # Apply the page-break count accumulated by the previous block.
         page_start = self._flush_pending_page_breaks()
 
         style_id = self._paragraph_style_id(p)
         runs, raw_hints = self.inline.paragraph_runs(p, part, block_id, style_id)
         numbering = self._paragraph_numbering(p, style_id, part, block_id)
         if numbering is not None:
-            # 自动编号是 Word 可见文本，作为合成 run 放进正文流。
+            # Auto-numbering is visible Word text; insert it into the text stream as a synthetic run.
             runs.insert(0, {"text": numbering["text"], "kind": "numberingLabel"})
             raw_hints.append({"type": "numbering", **numbering})
 
-        # 单次遍历同时收集文本和检测内联对象，避免热路径双重迭代。
+        # Collect text and detect inline objects in a single pass to avoid double iteration on the hot path.
         text_parts: list[str] = []
         has_objects = False
         for run in runs:
@@ -153,25 +153,26 @@ class DocumentBodyParser:
             if "objects" in run:
                 has_objects = True
         text = "".join(text_parts)
-        # text.isspace() 避免 text.strip() 创建新字符串的开销。
+        # text.isspace() avoids the cost of text.strip() creating a new string.
         if (
             (not text or text.isspace())
             and not has_objects
             and not self.options.preserve_empty_paragraphs
         ):
-            # 空段（无可见文本、无内联对象）不产生内容。
-            # 段内 lrpb/手动分页在 Word 渲染中无视觉效果，一并丢弃，不推进页码。
+            # Empty paragraphs (no visible text, no inline objects) produce no content.
+            # lrpb/manual page breaks inside a paragraph have no visual effect in Word
+            # rendering, so drop them without advancing the page number.
             self._pending_page_breaks = 0
             return None
 
-        # 段内 lrpb/手动分页推进本段起始页码。
+        # lrpb/manual page breaks inside the paragraph advance this paragraph's starting page number.
         page_start += self._pending_page_breaks
         self._page_hint = page_start
         self._pending_page_breaks = 0
 
         heading_level = self.styles.resolve_heading_level(style_id)
         if heading_level is not None:
-            # 标题只来自 styles.xml / outlineLvl，不从文本形态猜测。
+            # Headings come only from styles.xml / outlineLvl, never guessed from text shape.
             block: TextBlock = {
                 "id": block_id,
                 "type": "heading",
@@ -202,18 +203,20 @@ class DocumentBodyParser:
         return block
 
     def parse_table(self, tbl: ET.Element, part: str) -> list[TableBlock]:
-        """解析 Word 表格，保留行列、合并单元格和单元格内 block。
-        表格内发生换页时拆分为多个 block，使渲染器能在子表间输出 <page n=N>。
-        同一行内多个单元格的 lrpb 合并为一次换页判断（按 _page_hint 变化）。"""
+        """Parse a Word table, preserving rows/columns, merged cells, and cell blocks.
+        When a page break occurs inside the table, split it into multiple blocks so the
+        renderer can emit <page n=N> between sub-tables.
+        Multiple lrpb across cells in the same row collapse into a single page-break
+        decision (based on _page_hint changes)."""
         self._order += 1
         table_id = self._next_table_id()
-        # 应用前一个 block 积累的断页数。
+        # Apply the page-break count accumulated by the previous block.
         current_page = self._flush_pending_page_breaks()
 
         sub_tables: list[TableBlock] = []
         current_rows: list[TableRow] = []
         max_col = 0
-        # 记录处理本行之前的页码，用于判断本行是否触发了换页。
+        # Record the page number before processing this row, to tell whether the row triggered a page break.
         page_before_row = self._page_hint
 
         for row_index, tr in enumerate(child_elements(tbl, "w", "tr")):
@@ -221,7 +224,7 @@ class DocumentBodyParser:
             col_index = 0
             is_header = first_child(first_child(tr, "w", "trPr"), "w", "tblHeader") is not None
             for tc in child_elements(tr, "w", "tc"):
-                # Word 表格不是简单二维数组，必须记录 colSpan/vMerge 信息。
+                # A Word table is not a simple 2D array; colSpan/vMerge info must be recorded.
                 col_span = self._cell_col_span(tc)
                 v_merge = self._cell_v_merge(tc)
                 cell_blocks = self._parse_cell_blocks(tc, part)
@@ -241,10 +244,10 @@ class DocumentBodyParser:
             max_col = max(max_col, col_index)
             row: TableRow = {"rowIndex": row_index, "cells": cells}
             if is_header:
-                # 重复表头对 LLM 理解表格语义有帮助，保留成轻量标记。
+                # Repeated header rows help LLMs understand table semantics, so keep them as a lightweight flag.
                 row["isHeader"] = True
 
-            # 本行处理后 _page_hint 是否变化？同一行多列 lrpb 只算一次换页。
+            # Did _page_hint change after processing this row? Multiple lrpb in one row count as a single page break.
             if self._page_hint != page_before_row:
                 if current_rows:
                     sub_tables.append(
@@ -258,7 +261,7 @@ class DocumentBodyParser:
                         )
                     )
                     current_rows = []
-                # 同一行多单元格 lrpb 合并为一次换页：页码只 +1。
+                # Multiple lrpb across cells in the same row collapse into one page break: the page number only increments by 1.
                 self._page_hint = page_before_row + 1
                 self._pending_page_breaks = 0
                 current_page = self._page_hint
@@ -266,7 +269,7 @@ class DocumentBodyParser:
             current_rows.append(row)
             page_before_row = self._page_hint
 
-        # 提交最后一批行。
+        # Commit the final batch of rows.
         if current_rows:
             self._apply_vertical_merges(current_rows)
             sub_tables.append(
@@ -291,7 +294,7 @@ class DocumentBodyParser:
         table_id: str,
         segment_index: int,
     ) -> TableBlock:
-        """构造一个表格 block 字典。"""
+        """Build a table block dictionary."""
         block_id = self.ids.next()
         return {
             "id": block_id,
@@ -311,34 +314,34 @@ class DocumentBodyParser:
         return f"t{self._table_index}"
 
     def _parse_cell_blocks(self, tc: ET.Element, part: str) -> list[Block]:
-        """解析单元格内部内容；单元格可以包含段落和嵌套表格。
-        优化：使用预计算标签名直接比对，避免每次调用 local_name。"""
+        """Parse cell content; cells can contain paragraphs and nested tables.
+        Optimization: compare against precomputed tag names to avoid a local_name call per child."""
         blocks: list[Block] = []
         for child in tc:
             child_tag = child.tag
             if child_tag == _TAG_W_PARAGRAPH:
-                # 单元格段落保留为嵌套 block，避免丢失多段结构。
+                # Cell paragraphs are kept as nested blocks to avoid losing multi-paragraph structure.
                 block = self.parse_paragraph(child, part)
                 if block is not None:
                     blocks.append(block)
             elif child_tag == _TAG_W_TABLE:
-                # 嵌套表格递归解析，表内换页也会拆分为多个子表。
+                # Nested tables are parsed recursively; page breaks inside them also split into sub-tables.
                 blocks.extend(self.parse_table(child, part))
         return blocks
 
     def _apply_vertical_merges(self, rows: list[TableRow]) -> None:
-        """根据 vMerge 为合并起点补充 rowSpan。"""
+        """Add rowSpan to merge origins based on vMerge."""
         active: dict[int, TableCell] = {}
         for row in rows:
             for cell in row["cells"]:
                 columns = range(cell["colIndex"], cell["colIndex"] + cell["colSpan"])
                 v_merge = cell.get("vMerge")
                 if v_merge == "restart":
-                    # restart 单元格成为后续 continue 单元格的纵向合并起点。
+                    # A restart cell becomes the vertical merge origin for subsequent continue cells.
                     for column in columns:
                         active[column] = cell
                 elif v_merge == "continue":
-                    # continue 单元格推动起点 rowSpan，仍保留自身位置便于还原网格。
+                    # A continue cell advances the origin's rowSpan while keeping its own position for grid reconstruction.
                     origins: list[TableCell] = []
                     for column in columns:
                         origin = active.get(column)
@@ -347,12 +350,12 @@ class DocumentBodyParser:
                     for origin in origins:
                         origin["rowSpan"] += 1
                 else:
-                    # 非纵向合并单元格会截断同列上一个活动合并。
+                    # A non-merged cell truncates the previous active merge in the same column.
                     for column in columns:
                         active.pop(column, None)
 
     def _paragraph_style_id(self, p: ET.Element) -> str | None:
-        """读取段落样式 ID。"""
+        """Read the paragraph style ID."""
         paragraph_properties = first_child(p, "w", "pPr")
         pstyle = first_child(paragraph_properties, "w", "pStyle")
         return attr(pstyle, "w", "val") if pstyle is not None else None
@@ -360,14 +363,14 @@ class DocumentBodyParser:
     def _paragraph_numbering(
         self, p: ET.Element, style_id: str | None, part: str, block_id: str
     ) -> NumberingLabel | None:
-        """读取段落编号，并推进编号计数器。"""
+        """Read the paragraph numbering and advance the numbering counter."""
         paragraph_properties = first_child(p, "w", "pPr")
         numbering_properties = first_child(paragraph_properties, "w", "numPr")
         style_numbering = self.styles.resolve_numbering(style_id)
         direct_num_id, direct_level = self._num_pr_values(numbering_properties)
 
         if direct_num_id == "0":
-            # numId=0 在 Word 中表示取消编号，也不回退到样式编号。
+            # numId=0 means numbering is off in Word; it also doesn't fall back to the style's numbering.
             return None
         num_id = direct_num_id or (style_numbering[0] if style_numbering else None)
         if num_id is None:
@@ -382,7 +385,7 @@ class DocumentBodyParser:
     def _num_pr_values(
         self, numbering_properties: ET.Element | None
     ) -> tuple[str | None, int | None]:
-        """读取 w:numPr 中的 numId 和 ilvl。"""
+        """Read numId and ilvl from w:numPr."""
         if numbering_properties is None:
             return (None, None)
         num_id_node = first_child(numbering_properties, "w", "numId")
@@ -394,7 +397,7 @@ class DocumentBodyParser:
         try:
             return (num_id, int(level_str))
         except ValueError:
-            # 非法层级不应中断解析，按 0 层处理并记录 warning。
+            # An invalid level must not abort parsing; treat it as level 0 and record a warning.
             self._warn(
                 "INVALID_PARAGRAPH_NUMBERING_LEVEL",
                 f"Invalid paragraph numbering level: {level_str!r}",
@@ -403,7 +406,7 @@ class DocumentBodyParser:
             return (num_id, 0)
 
     def _cell_col_span(self, tc: ET.Element) -> int:
-        """读取横向合并列数。"""
+        """Read the horizontal merge column count."""
         tcpr = first_child(tc, "w", "tcPr")
         grid_span = first_child(tcpr, "w", "gridSpan")
         val = attr(grid_span, "w", "val") if grid_span is not None else None
@@ -412,7 +415,7 @@ class DocumentBodyParser:
         try:
             return max(1, int(val))
         except ValueError:
-            # 非法 gridSpan 不应中断整篇文档解析。
+            # An invalid gridSpan must not abort parsing of the whole document.
             self._warn(
                 "INVALID_GRID_SPAN",
                 f"Invalid gridSpan value: {val!r}",
@@ -421,7 +424,7 @@ class DocumentBodyParser:
             return 1
 
     def _cell_v_merge(self, tc: ET.Element) -> str | None:
-        """读取纵向合并标记。"""
+        """Read the vertical merge marker."""
         tcpr = first_child(tc, "w", "tcPr")
         vmerge = first_child(tcpr, "w", "vMerge")
         if vmerge is None:
@@ -429,7 +432,7 @@ class DocumentBodyParser:
         return attr(vmerge, "w", "val") or "continue"
 
     def _blocks_text(self, blocks: list[Block]) -> str:
-        """把单元格内嵌 block 合并为单元格可读文本。"""
+        """Combine the cell's nested blocks into human-readable cell text."""
         parts: list[str] = []
         for block in blocks:
             if block["type"] in {"paragraph", "heading"}:
@@ -443,7 +446,7 @@ class DocumentBodyParser:
         return "\n".join(parts)
 
     def _add_body_event(self, block: Block) -> None:
-        """记录 debug 用 body 事件，不影响最终 LLM 输出。"""
+        """Record a body event for debugging; it does not affect the final LLM output."""
         event: BodyEvent = {
             "id": block["id"],
             "type": block["type"],
@@ -462,17 +465,17 @@ class DocumentBodyParser:
         self.body_events.append(event)
 
     def _mark_page_break(self) -> None:
-        """由 InlineParser 通知发现 lrpb/手动分页符，递增待处理断页计数。"""
+        """Called by InlineParser when an lrpb/manual page break is found; increments the pending page-break count."""
         self._pending_page_breaks += 1
 
     def _flush_pending_page_breaks(self) -> int:
-        """应用积累的断页并返回当前页码。"""
+        """Apply accumulated page breaks and return the current page number."""
         self._page_hint += self._pending_page_breaks
         self._pending_page_breaks = 0
         return self._page_hint
 
     def _collect_section_refs(self, sect_pr: ET.Element) -> None:
-        """从 sectPr 中提取 header/footer 引用。"""
+        """Extract header/footer references from sectPr."""
         for child in sect_pr:
             lname = local_name(child.tag)
             r_id = attr(child, "r", "id")
@@ -486,7 +489,7 @@ class DocumentBodyParser:
 
     @property
     def section_refs(self) -> dict[str, list[tuple[str, str]]]:
-        """返回收集到的节引用，供 AncillaryParser 过滤未使用的页眉页脚。"""
+        """Return the collected section references so AncillaryParser can filter unused headers/footers."""
         return {
             "headers": list(self._section_header_refs),
             "footers": list(self._section_footer_refs),
@@ -499,7 +502,7 @@ class DocumentBodyParser:
         part: str | None = None,
         block_id: str | None = None,
     ) -> None:
-        """追加解析 warning。"""
+        """Append a parse warning."""
         self.warnings.append(
             ParseWarning(
                 code=code,

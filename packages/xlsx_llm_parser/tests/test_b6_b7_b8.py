@@ -116,11 +116,10 @@ class TruncationTests(unittest.TestCase):
     """Large sheets produce head+tail with truncated attribute."""
 
     def _make_sheet(self, num_rows: int) -> bytes:
-        rows_xml = []
-        for r in range(1, num_rows + 1):
-            rows_xml.append(
-                f'<row r="{r}"><c r="A{r}" t="inlineStr"><is><t>Row{r}</t></is></c></row>'
-            )
+        rows_xml = [
+            f'<row r="{r}"><c r="A{r}" t="inlineStr"><is><t>Row{r}</t></is></c></row>'
+            for r in range(1, num_rows + 1)
+        ]
         return _make_xlsx(
             {
                 "[Content_Types].xml": (

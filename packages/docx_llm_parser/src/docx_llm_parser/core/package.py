@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Self
 
 from ooxml_llm_core.limits import PackageLimits
-from ooxml_llm_core.package import (  # noqa: F401 — re-export
+from ooxml_llm_core.package import (
     PackageError,
     rels_path_for_part,
     resolve_relationship_target,
@@ -20,6 +21,15 @@ from .models import ParseOptions
 # Backward-compatible alias for tests and existing code
 DocxPackageError = PackageError
 
+__all__ = [
+    "DocxPackageError",
+    "PackageError",
+    "PackageReader",
+    "rels_path_for_part",
+    "resolve_relationship_target",
+    "source_part_from_rels_path",
+]
+
 
 class PackageReader(_BasePackageReader):
     """DOCX-format OPC reader.
@@ -28,7 +38,7 @@ class PackageReader(_BasePackageReader):
     ``validate()`` to require ``word/document.xml``.
     """
 
-    def __init__(self, source: Path | bytes, options: ParseOptions) -> None:
+    def __init__(self, source: str | Path | bytes, options: ParseOptions) -> None:
         self.options = options
         super().__init__(
             source,
@@ -39,5 +49,9 @@ class PackageReader(_BasePackageReader):
             ),
         )
 
-    def validate(self) -> None:
-        super().validate(required_part="word/document.xml")
+    def __enter__(self) -> Self:
+        super().__enter__()
+        return self
+
+    def validate(self, required_part: str | None = None) -> None:
+        super().validate(required_part=required_part or "word/document.xml")

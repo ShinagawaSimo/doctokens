@@ -142,7 +142,13 @@ def _chart_series(plot_area: ET.Element | None) -> list[ChartSeriesInfo]:
         if name:
             row["name"] = name
 
-        value_numbers = [_to_float(v) for v in values if v and _to_float(v) is not None]
+        value_numbers: list[float] = []
+        for value in values:
+            if not value:
+                continue
+            number = _to_float(value)
+            if number is not None:
+                value_numbers.append(number)
         if value_numbers:
             row["min"] = min(value_numbers)
             row["max"] = max(value_numbers)

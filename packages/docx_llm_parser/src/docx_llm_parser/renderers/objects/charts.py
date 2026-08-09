@@ -1,4 +1,4 @@
-"""图表 inline 渲染与 extract 辅助。"""
+"""Chart inline rendering and extract helpers."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from .. import _constants
 
 
 def chart_to_html5(obj: InlineObject) -> str:
-    """semantic：输出图表轻量摘要。完整数据点通过 get_resource 获取。"""
+    """semantic: output a lightweight chart summary. Full data points are available via get_resource."""
     chart_id = obj.get("id", "?")
     chart_type = obj.get("chartType", "?")
 
@@ -27,7 +27,7 @@ def chart_to_html5(obj: InlineObject) -> str:
 
 
 def chart_type_attrs(obj: InlineObject, chart_type: str) -> str:
-    """按图表类型返回差异化属性的 HTML 字符串。"""
+    """Return an HTML string with attributes differentiated by chart type."""
     attrs = ""
     series = obj.get("series") or []
 
@@ -79,7 +79,7 @@ def chart_type_attrs(obj: InlineObject, chart_type: str) -> str:
 
 
 def _all_categories(series: list[ChartSeries]) -> list[str]:
-    """从所有系列的预览数据中提取分类标签。"""
+    """Extract category labels from the preview data of all series."""
     cats: list[str] = []
     for s in series:
         preview = (s.get("preview") or "").split("; ")

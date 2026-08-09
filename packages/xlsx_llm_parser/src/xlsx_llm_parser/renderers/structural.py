@@ -6,15 +6,15 @@ from collections.abc import Iterator
 from html import escape
 
 from .._utils import col_letter, parse_ref
-from ..models import Cell, ParsedWorkbook, SheetInfo
+from ..formats import FormatIndex
+from ..models import Cell, ParsedWorkbook, RichTextRun, SheetInfo
 from ._constants import (
     _CELL_BUDGET,
-    _COL_BUDGET,
     _GRID_BOUND_SENTINEL,
-    _ROW_BUDGET,
 )
 
 Density = str  # "plain" | "structural" | "semantic"
+_STYLE_RANGE_MIN_CELLS = 6
 
 
 # ── Public API ──
@@ -49,14 +49,21 @@ def render_range(
 
     rows = sheet_info.get("rows", [])
     filtered = _filter_rows(rows, start_col, start_row, end_col, end_row)
-    return _render_grid(filtered, density)
+    return _render_grid(
+        filtered,
+        density,
+        sheet_protection=bool(sheet_info.get("sheet_protection")),
+    )
 
 
 # ── Per-sheet rendering ──
 
 
 def _render_sheet(
-    sheet, density: Density, wb: ParsedWorkbook | None = None, start_row: int = 1
+    sheet: SheetInfo,
+    density: Density,
+    wb: ParsedWorkbook | None = None,
+    start_row: int = 1,
 ) -> Iterator[str]:
     name = sheet["name"]
     state = sheet.get("state", "visible")
@@ -77,87 +84,167 @@ def _render_sheet(
     if not rows:
         return
 
-    if density != "plain":
-        # Hidden column ranges from <cols> — output before <grid>
-        hidden_cols = sheet.get("hidden_cols")
-        if hidden_cols:
-            for cmin, cmax in hidden_cols:
-                col_range = (
-                    col_letter(cmin) if cmin == cmax else f"{col_letter(cmin)}:{col_letter(cmax)}"
-                )
-                yield f"<columns ref={col_range} hidden>\n"
+    yield from _emit_hidden_cols(sheet, density)
+    yield from _emit_sheet_protection(sheet, density)
+    yield from _emit_defined_names(wb, density, name)
+    yield from _emit_autofilter(sheet, density)
+    yield from _emit_data_validations(sheet, density)
+    yield from _emit_conditional_formats(sheet, density)
+    yield from _emit_external_links(wb, density)
+    yield from _emit_images(sheet)
+    yield from _emit_charts(sheet, density)
+    yield from _emit_pivot_tables(sheet)
+    yield from _emit_tables(sheet, density)
 
-    if density == "semantic" and sheet.get("sheet_protection"):
+    if density == "plain":
+        yield from _render_plain(
+            rows,
+            start_row=start_row,
+            hidden_cols=sheet.get("hidden_cols", []),
+        )
+    else:
+        yield _render_grid(
+            rows,
+            density,
+            wb,
+            start_row=start_row,
+            sheet_protection=bool(sheet.get("sheet_protection")),
+        )
+
+
+def _emit_hidden_cols(sheet: SheetInfo, density: Density) -> Iterator[str]:
+    """Hidden column ranges from ``<cols>`` — emitted before ``<grid>``."""
+    if density == "plain":
+        return
+    hidden_cols = sheet.get("hidden_cols")
+    if not hidden_cols:
+        return
+    for cmin, cmax in hidden_cols:
+        col_range = (
+            col_letter(cmin) if cmin == cmax else f"{col_letter(cmin)}:{col_letter(cmax)}"
+        )
+        yield f"<columns ref={col_range} hidden>\n"
+
+
+def _emit_sheet_protection(sheet: SheetInfo, density: Density) -> Iterator[str]:
+    if density in {"structural", "semantic"} and sheet.get("sheet_protection"):
         yield "<sheetProtection/>\n"
 
-    # Defined names (semantic only, user names scoped to this sheet or global)
-    if density == "semantic" and wb is not None:
-        defined_names = wb.get("metadata", {}).get("defined_names", [])
-        for dn in defined_names:
-            if dn.get("hidden"):
-                continue
-            scope = dn.get("scopeSheet")
-            if scope and scope != name:
-                continue
-            # Skip built-in names unless they affect the current window
-            if dn["name"].startswith("_xlnm."):
-                continue
-            yield f'<definedName name={escape(dn["name"], quote=True)} refersTo="{escape(dn["ref"], quote=True)}">\n'
 
-    # AutoFilter (structural: range only; semantic: conditions)
+def _emit_defined_names(
+    wb: ParsedWorkbook | None, density: Density, sheet_name: str
+) -> Iterator[str]:
+    """User-defined names scoped to this sheet or global."""
+    if density not in {"structural", "semantic"} or wb is None:
+        return
+    defined_names = wb["metadata"].get("defined_names", [])
+    for dn in defined_names:
+        if dn.get("hidden"):
+            continue
+        scope = dn.get("scopeSheet")
+        if scope and scope != sheet_name:
+            continue
+        if dn["name"].startswith("_xlnm."):
+            continue
+        name_attr = escape(dn["name"], quote=True)
+        ref_attr = escape(dn["ref"], quote=True)
+        yield f'<definedName name={name_attr} refersTo="{ref_attr}">\n'
+
+
+def _emit_autofilter(sheet: SheetInfo, density: Density) -> Iterator[str]:
+    """AutoFilter range (all densities) and filter-column conditions (structural/semantic)."""
     filter_ref = sheet.get("filter_range")
-    if filter_ref:
-        yield f"<filter ref={filter_ref}>\n"
-        if density == "semantic":
-            for fc in sheet.get("filter_cols", []):
-                vals = ",".join(escape(v, quote=True) for v in fc.get("values", []))
-                yield f'<condition col={fc["col"]} type={fc["type"]} values="{vals}"/>\n'
+    if not filter_ref:
+        return
+    yield f"<filter ref={filter_ref}>\n"
+    if density in {"structural", "semantic"}:
+        for fc in sheet.get("filter_cols", []):
+            vals = ",".join(escape(v, quote=True) for v in fc.get("values", []))
+            yield f'<condition col={fc["col"]} type={fc["type"]} values="{vals}"/>\n'
 
-    # Data validations (semantic only)
-    if density == "semantic":
-        for dv in sheet.get("data_validations", []):
-            yield f"<dataValidation ref={dv['ranges']} type={dv['type']}/>\n"
 
-    # Conditional formatting (semantic only)
-    if density == "semantic":
-        for cf in sheet.get("conditional_formats", []):
-            yield f"<conditionalFormatting ref={cf['ranges']}>\n"
-            parts = [f"<rule type={cf['ruleType']}"]
-            if cf.get("formula"):
-                parts.append(f' formula="{escape(cf["formula"], quote=True)}"')
-            parts.append("/>\n")
-            yield "".join(parts)
+def _emit_data_validations(sheet: SheetInfo, density: Density) -> Iterator[str]:
+    if density not in {"structural", "semantic"}:
+        return
+    for dv in sheet.get("data_validations", []):
+        yield f"<dataValidation ref={dv['ranges']} type={dv['type']}/>\n"
 
-    # External links (semantic only, once per workbook)
-    if density == "semantic" and wb is not None:
-        ext = wb.get("metadata", {}).get("external_links", [])
-        for link in ext:
-            yield f"<externalLink target={escape(link, quote=True)}/>\n"
 
-    # Images (structural + semantic)
+def _emit_conditional_formats(sheet: SheetInfo, density: Density) -> Iterator[str]:
+    if density not in {"structural", "semantic"}:
+        return
+    for cf in sheet.get("conditional_formats", []):
+        yield f"<conditionalFormatting ref={cf['ranges']}>\n"
+        parts = [f"<rule type={cf['ruleType']}"]
+        if cf.get("formula"):
+            parts.append(f' formula="{escape(cf["formula"], quote=True)}"')
+        parts.append("/>\n")
+        yield "".join(parts)
+
+
+def _emit_external_links(wb: ParsedWorkbook | None, density: Density) -> Iterator[str]:
+    if density not in {"structural", "semantic"} or wb is None:
+        return
+    for link in wb["metadata"].get("external_links", []):
+        yield f"<externalLink target={escape(link, quote=True)}/>\n"
+
+
+def _emit_images(sheet: SheetInfo) -> Iterator[str]:
     for img in sheet.get("images", []):
         yield f"<image id={img['id']} ref={img['ref']}/>\n"
 
-    # Charts (structural: summary; semantic: details)
-    for ch in sheet.get("charts", []):
+
+def _emit_charts(sheet: SheetInfo, density: Density) -> Iterator[str]:
+    """Charts — structural shows summary attributes; semantic includes series names."""
+    charts = sheet.get("charts", [])
+    if density == "plain":
+        if charts:
+            yield f"<charts count={len(charts)}>\n"
+            for ch in charts:
+                names = _chart_series_names(ch)
+                if names:
+                    yield f'<chart names="{escape(",".join(names), quote=True)}"/>\n'
+        return
+
+    for ch in charts:
         attrs = f"id={ch['id']} ref={ch['ref']} type={ch.get('type', '?')}"
         attrs += f" series={ch.get('series_count', 0)}"
-        # Series names for quick identification
-        ch_series = ch.get("series", [])
-        if ch_series:
-            names = [s.get("name", f"S{s.get('index', '')}") for s in ch_series]
-            if names:
-                attrs += f" names={escape(','.join(names), quote=True)}"
+        names = _chart_series_names(ch)
+        if names:
+            attrs += f" names={escape(','.join(names), quote=True)}"
         if ch.get("title"):
             attrs += f" title={escape(ch['title'], quote=True)}"
         attrs += " truncated"
         yield f"<chart {attrs}/>\n"
 
-    # Pivot tables (structural locator only)
+
+def _chart_series_names(ch: object) -> list[str]:
+    if not isinstance(ch, dict):
+        return []
+    ch_series = ch.get("series", [])
+    if not isinstance(ch_series, list):
+        return []
+    names: list[str] = []
+    for series in ch_series:
+        if not isinstance(series, dict):
+            continue
+        name = series.get("name", f"S{series.get('index', '')}")
+        if name:
+            names.append(str(name))
+    return names
+
+
+def _emit_pivot_tables(sheet: SheetInfo) -> Iterator[str]:
     for pv in sheet.get("pivot_tables", []):
         yield f"<pivotTable id={pv['id']} name={escape(pv['name'], quote=True)}/>\n"
 
-    # Table summaries before grid
+
+def _emit_tables(sheet: SheetInfo, density: Density) -> Iterator[str]:
+    """Table summary tags emitted before the grid."""
+    if density == "plain":
+        for t in sheet.get("tables", []):
+            yield _plain_table_summary(t)
+        return
     for t in sheet.get("tables", []):
         attrs = f"id={t['id']} name={escape(t['name'], quote=True)} ref={t['ref']}"
         if density == "semantic" and t.get("columns"):
@@ -167,31 +254,62 @@ def _render_sheet(
             attrs += " totalsRow"
         yield f"<table {attrs}>\n"
 
-    if density == "plain":
-        yield from _render_plain(rows, start_row=start_row)
-    else:
-        yield _render_grid(rows, density, wb, start_row=start_row)
+
+def _plain_table_summary(table: object) -> str:
+    """Render a human-readable table summary for plain density."""
+    if not isinstance(table, dict):
+        return "[Table]\n"
+    name = table.get("name")
+    columns = table.get("columns") or []
+    if not isinstance(columns, list):
+        columns = []
+    column_text = ", ".join(str(col) for col in columns if col)
+    if name and column_text:
+        return f"[Table {name}: {column_text}]\n"
+    if name:
+        return f"[Table {name}]\n"
+    if column_text:
+        return f"[Table: {column_text}]\n"
+    return "[Table]\n"
 
 
 # ── Plain text ──
 
 
-def _render_plain(rows: list[list[Cell]], start_row: int = 1) -> Iterator[str]:
+def _render_plain(
+    rows: list[list[Cell]],
+    start_row: int = 1,
+    hidden_cols: list[tuple[int, int]] | None = None,
+) -> Iterator[str]:
     """Tab-separated cell values, no coordinates."""
     for row_cells in rows:
         if not row_cells:
             continue
         if row_cells[0]["row"] < start_row:
             continue
-        texts = [cell["text"] for cell in row_cells]
+        texts = [
+            cell["text"]
+            for cell in row_cells
+            if not _is_hidden_col(cell["col"], hidden_cols)
+        ]
         yield "\t".join(texts) + "\n"
+
+
+def _is_hidden_col(col: int, hidden_cols: list[tuple[int, int]] | None) -> bool:
+    if hidden_cols is None:
+        return False
+    return any(start <= col <= end for start, end in hidden_cols)
 
 
 # ── Grid rendering (structural / semantic) ──
 
 
 def _render_grid(
-    rows: list[list[Cell]], density: Density, wb: ParsedWorkbook | None = None, start_row: int = 1
+    rows: list[list[Cell]],
+    density: Density,
+    wb: ParsedWorkbook | None = None,
+    start_row: int = 1,
+    sheet_protection: bool = False,
 ) -> str:
     if not rows:
         return ""
@@ -223,6 +341,12 @@ def _render_grid(
     tag = f"<grid ref={ref}"
 
     parts = [tag + ">\n"]
+    suppressed_styles: set[str] = set()
+    fmt_index = wb["fmt_index"] if wb is not None else None
+    if density == "semantic" and isinstance(fmt_index, FormatIndex):
+        style_ranges, suppressed_styles = _repeated_style_ranges(rows, fmt_index, start_row)
+        parts.extend(style_ranges)
+
     comments: dict[tuple[int, int], tuple[str, str, str]] = {}  # (col,row) → (ref, author, text)
     cell_count = 0
     for row_cells in rows:
@@ -231,7 +355,17 @@ def _render_grid(
         if row_cells[0]["row"] < start_row:
             continue
         cell_count += len(row_cells)
-        parts.append(_render_row(row_cells, min_col, density, wb, comments))
+        parts.append(
+            _render_row(
+                row_cells,
+                min_col,
+                density,
+                wb,
+                comments,
+                suppressed_styles,
+                sheet_protection,
+            )
+        )
         if cell_count >= _CELL_BUDGET:
             break
 
@@ -253,18 +387,22 @@ def _render_row(
     density: Density,
     wb: ParsedWorkbook | None = None,
     comments: dict[tuple[int, int], tuple[str, str, str]] | None = None,
+    suppressed_styles: set[str] | None = None,
+    sheet_protection: bool = False,
 ) -> str:
     actual_row = row_cells[0]["row"]
     first_cell = row_cells[0]
     row_hidden = " hidden" if first_cell.get("hidden") else ""
     parts = [f"<tr row={actual_row}{row_hidden}"]
-    if density == "semantic" and first_cell.get("outlineLevel"):
+    if density in {"structural", "semantic"} and first_cell.get("outlineLevel"):
         parts.append(f" outlineLevel={first_cell['outlineLevel']}")
         if first_cell.get("collapsed"):
             parts.append(" collapsed")
     parts.append(">")
 
-    fmt_index = wb.get("fmt_index") if wb is not None else None
+    fmt_index = wb["fmt_index"] if wb is not None else None
+    if not isinstance(fmt_index, FormatIndex):
+        fmt_index = None
 
     next_col = grid_min_col
     for cell in row_cells:
@@ -274,7 +412,7 @@ def _render_row(
 
         c = cell["col"]
         tag_attrs = "td"
-        if density == "semantic":
+        if density in {"structural", "semantic"}:
             if cell.get("colspan", 1) > 1:
                 tag_attrs += f" colspan={cell['colspan']}"
             if cell.get("rowspan", 1) > 1:
@@ -290,12 +428,13 @@ def _render_row(
             if cell.get("spillFrom"):
                 tag_attrs += f' spillFrom="{escape(cell["spillFrom"], quote=True)}"'
             if fmt_index is not None and "style" in cell:
-                style = fmt_index.style_attrs(cell["style"])
-                if style:
-                    tag_attrs += f" {style}"
                 prot = fmt_index.protection_attrs(cell["style"])
                 if prot:
                     tag_attrs += f" {prot}"
+        if density == "semantic" and fmt_index is not None and "style" in cell:
+            style = fmt_index.style_attrs(cell["style"])
+            if style and (suppressed_styles is None or style not in suppressed_styles):
+                tag_attrs += f" {style}"
         if c != next_col:
             tag_attrs += f" col={col_letter(c)}"
         parts.append(f"<{tag_attrs}>")
@@ -322,17 +461,86 @@ def _render_row(
     return "".join(parts)
 
 
-# ── Truncation logic ──
-
-
-def _should_truncate(rows: list[list[Cell]]) -> bool:
-    cell_count = 0
-    col_set: set[int] = set()
+def _repeated_style_ranges(
+    rows: list[list[Cell]],
+    fmt_index: FormatIndex,
+    start_row: int,
+) -> tuple[list[str], set[str]]:
+    cells_by_style: dict[str, set[tuple[int, int]]] = {}
     for row_cells in rows:
-        cell_count += len(row_cells)
+        if not row_cells or row_cells[0]["row"] < start_row:
+            continue
         for cell in row_cells:
-            col_set.add(cell["col"])
-    return cell_count > _CELL_BUDGET or len(rows) > _ROW_BUDGET or len(col_set) > _COL_BUDGET
+            if cell.get("shadow") or "style" not in cell:
+                continue
+            style = fmt_index.style_attrs(cell["style"])
+            if not _is_groupable_style(style):
+                continue
+            cells = cells_by_style.setdefault(style, set())
+            for row in range(cell["row"], cell["row"] + cell.get("rowspan", 1)):
+                for col in range(cell["col"], cell["col"] + cell.get("colspan", 1)):
+                    cells.add((row, col))
+
+    suppressed_styles = {
+        style for style, cells in cells_by_style.items() if len(cells) >= _STYLE_RANGE_MIN_CELLS
+    }
+    lines: list[str] = []
+    for style in sorted(suppressed_styles):
+        for start_col, first_row, end_col, last_row in _rectangular_ranges(cells_by_style[style]):
+            ref = _range_ref(start_col, first_row, end_col, last_row)
+            lines.append(f'<styleRange ref={ref} attrs="{escape(style, quote=True)}"/>\n')
+    return lines, suppressed_styles
+
+
+def _is_groupable_style(style: str) -> bool:
+    return "color=" in style or "fill=" in style
+
+
+def _rectangular_ranges(cells: set[tuple[int, int]]) -> list[tuple[int, int, int, int]]:
+    spans_by_row: dict[int, list[tuple[int, int]]] = {}
+    for row in sorted({row for row, _col in cells}):
+        cols = sorted(col for item_row, col in cells if item_row == row)
+        spans_by_row[row] = _horizontal_spans(cols)
+
+    finished: list[tuple[int, int, int, int]] = []
+    active: dict[tuple[int, int], tuple[int, int, int, int]] = {}
+    for row in sorted(spans_by_row):
+        current: set[tuple[int, int]] = set()
+        for start_col, end_col in spans_by_row[row]:
+            key = (start_col, end_col)
+            current.add(key)
+            existing = active.get(key)
+            if existing is not None and existing[3] == row - 1:
+                active[key] = (existing[0], existing[1], existing[2], row)
+            else:
+                if existing is not None:
+                    finished.append(existing)
+                active[key] = (start_col, row, end_col, row)
+        expired = [key for key in active if key not in current and active[key][3] < row]
+        finished.extend(active.pop(key) for key in expired)
+    finished.extend(active.values())
+    return sorted(finished, key=lambda item: (item[1], item[0], item[3], item[2]))
+
+
+def _horizontal_spans(cols: list[int]) -> list[tuple[int, int]]:
+    if not cols:
+        return []
+    spans: list[tuple[int, int]] = []
+    start = prev = cols[0]
+    for col in cols[1:]:
+        if col == prev + 1:
+            prev = col
+            continue
+        spans.append((start, prev))
+        start = prev = col
+    spans.append((start, prev))
+    return spans
+
+
+def _range_ref(start_col: int, start_row: int, end_col: int, end_row: int) -> str:
+    start = f"{col_letter(start_col)}{start_row}"
+    end = f"{col_letter(end_col)}{end_row}"
+    return start if start == end else f"{start}:{end}"
 
 
 # ── Helpers ──
@@ -375,7 +583,7 @@ def _filter_rows(
     return result
 
 
-def _render_rich_text(runs: list[dict]) -> str:
+def _render_rich_text(runs: list[RichTextRun]) -> str:
     """Render formatted text runs as inline HTML tags."""
     parts: list[str] = []
     for run in runs:

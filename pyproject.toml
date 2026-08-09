@@ -18,7 +18,18 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-where = []
+where = [
+    "packages/ooxml_llm_core/src",
+    "packages/docx_llm_parser/src",
+    "packages/xlsx_llm_parser/src",
+    "packages/ocr_llm_core/src",
+]
+
+[tool.setuptools.package-data]
+docx_llm_parser = ["py.typed"]
+ooxml_llm_core = ["py.typed"]
+ocr_llm_core = ["py.typed"]
+xlsx_llm_parser = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = [
@@ -26,6 +37,12 @@ testpaths = [
     "packages/docx_llm_parser/tests",
     "packages/xlsx_llm_parser/tests",
     "packages/ocr_llm_core/tests",
+]
+pythonpath = [
+    "packages/ooxml_llm_core/src",
+    "packages/docx_llm_parser/src",
+    "packages/xlsx_llm_parser/src",
+    "packages/ocr_llm_core/src",
 ]
 addopts = [
     "-ra",
@@ -50,7 +67,7 @@ source = [
 
 [tool.ruff]
 target-version = "py310"
-line-length = 100
+line-length = 130
 exclude = ["out", "tmp"]
 lint.select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "PERF", "RUF"]
 lint.ignore = ["RUF001", "RUF002", "RUF003"]

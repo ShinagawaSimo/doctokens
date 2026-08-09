@@ -10,10 +10,19 @@ from __future__ import annotations
 from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.chart_ml import parse_chart_xml
+from ooxml_llm_core.models import RelationshipRecord
 from ooxml_llm_core.package import PackageReader
 
 from ._utils import col_letter, parse_ref
-from .models import Cell
+from .models import (
+    Cell,
+    ChartPoint,
+    DrawingChart,
+    DrawingChartSeries,
+    DrawingImage,
+    PivotTableInfo,
+    TableInfo,
+)
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -105,7 +114,9 @@ def apply_spill_ranges(rows: list[list[Cell]], cell_map: dict[tuple[int, int], C
 
 
 def apply_hyperlinks(
-    root: ET.Element, cell_map: dict[tuple[int, int], Cell], sheet_rels: list
+    root: ET.Element,
+    cell_map: dict[tuple[int, int], Cell],
+    sheet_rels: list[RelationshipRecord],
 ) -> None:
     """Resolve <hyperlinks> via relationships and attach to cells."""
     hyperlinks = root.find(f"{{{NS_S}}}hyperlinks")
@@ -130,12 +141,12 @@ def apply_hyperlinks(
             continue
 
         # External URL takes precedence; fallback to internal location.
-        target = rel_targets.get(r_id) if r_id else None
-        if target:
+        link_target = rel_targets.get(r_id) if r_id else None
+        if link_target:
             if location:
-                cell["hyperlink"] = f"{target}#{location}"
+                cell["hyperlink"] = f"{link_target}#{location}"
             else:
-                cell["hyperlink"] = target
+                cell["hyperlink"] = link_target
         elif location:
             cell["hyperlink"] = f"#{location}"
 
@@ -144,13 +155,15 @@ def apply_hyperlinks(
 
 
 def apply_comments(
-    cell_map: dict[tuple[int, int], Cell], pkg: PackageReader, sheet_rels: list
+    cell_map: dict[tuple[int, int], Cell],
+    pkg: PackageReader,
+    sheet_rels: list[RelationshipRecord],
 ) -> None:
     """Parse legacy comments (xl/commentsN.xml) and attach to cells."""
     # Find comments part via pre-read sheet relationships
     comments_part: str | None = None
     for rel in sheet_rels:
-        if rel.type == _REL_COMMENTS:
+        if rel.type == _REL_COMMENTS and rel.resolved_target:
             comments_part = rel.resolved_target
             break
     if comments_part is None or not pkg.exists(comments_part):
@@ -163,8 +176,7 @@ def apply_comments(
     authors: list[str] = []
     authors_elem = root.find(f"{{{NS_S}}}authors")
     if authors_elem is not None:
-        for a in authors_elem.findall(f"{{{NS_S}}}author"):
-            authors.append(a.text or "")
+        authors.extend(a.text or "" for a in authors_elem.findall(f"{{{NS_S}}}author"))
 
     comment_list = root.find(f"{{{NS_S}}}commentList")
     if comment_list is None:
@@ -200,9 +212,14 @@ def apply_comments(
 # ── Tables ──
 
 
-def parse_tables(sheet_rels: list, pkg: PackageReader) -> list[dict]:
+def parse_tables(
+    sheet_rels: list[RelationshipRecord],
+    pkg: PackageReader,
+    *,
+    start_index: int = 0,
+) -> list[TableInfo]:
     """Parse ListObject tables from pre-read *sheet_rels*."""
-    tables: list[dict] = []
+    tables: list[TableInfo] = []
     for rel in sheet_rels:
         if rel.type != _REL_TABLE:
             continue
@@ -214,7 +231,7 @@ def parse_tables(sheet_rels: list, pkg: PackageReader) -> list[dict]:
 
         name = root.get("displayName", root.get("name", ""))
         ref = root.get("ref", "")
-        table_id = f"table-{len(tables)}"
+        table_id = f"table-{start_index + len(tables)}"
         columns: list[str] = []
         totals_row = root.get("totalsRowCount", "0") == "1"
         table_cols = root.find(f"{{{NS_S}}}tableColumns")
@@ -238,10 +255,16 @@ def parse_tables(sheet_rels: list, pkg: PackageReader) -> list[dict]:
 # ── Drawings ──
 
 
-def parse_drawings(sheet_rels: list, pkg: PackageReader) -> tuple[list[dict], list[dict]]:
+def parse_drawings(
+    sheet_rels: list[RelationshipRecord],
+    pkg: PackageReader,
+    *,
+    image_start: int = 1,
+    chart_start: int = 1,
+) -> tuple[list[DrawingImage], list[DrawingChart]]:
     """Parse drawing anchors for images and chart references from pre-read *sheet_rels*."""
-    images: list[dict] = []
-    charts: list[dict] = []
+    images: list[DrawingImage] = []
+    charts: list[DrawingChart] = []
     drawing_part: str | None = None
     for rel in sheet_rels:
         if rel.type == _REL_DRAWING:
@@ -259,9 +282,9 @@ def parse_drawings(sheet_rels: list, pkg: PackageReader) -> tuple[list[dict], li
         root = ET.parse(stream).getroot()
 
     for anchor in root.iter(f"{{{NS_XDR}}}twoCellAnchor"):
-        _parse_drawing_anchor(anchor, drawing_rels, images, charts)
+        _parse_drawing_anchor(anchor, drawing_rels, images, charts, image_start, chart_start)
     for anchor in root.iter(f"{{{NS_XDR}}}oneCellAnchor"):
-        _parse_drawing_anchor(anchor, drawing_rels, images, charts)
+        _parse_drawing_anchor(anchor, drawing_rels, images, charts, image_start, chart_start)
 
     # Parse chart parts for richer metadata
     for ch in charts:
@@ -279,7 +302,12 @@ def parse_drawings(sheet_rels: list, pkg: PackageReader) -> tuple[list[dict], li
 
 
 def _parse_drawing_anchor(
-    anchor: ET.Element, drawing_rels: dict[str, str], images: list[dict], charts: list[dict]
+    anchor: ET.Element,
+    drawing_rels: dict[str, str],
+    images: list[DrawingImage],
+    charts: list[DrawingChart],
+    image_start: int,
+    chart_start: int,
 ) -> None:
     """Parse one drawing anchor for image/chart refs and position."""
     from_elem = anchor.find(f"{{{NS_XDR}}}from")
@@ -294,7 +322,7 @@ def _parse_drawing_anchor(
         embed_id = blip.get(f"{{{NS_R}}}embed", "")
         target = drawing_rels.get(embed_id)
         if target:
-            img_id = f"image{len(images) + 1}"
+            img_id = f"image{image_start + len(images)}"
             images.append({"id": img_id, "ref": ref, "alt": ""})
             break  # one image per anchor
 
@@ -302,7 +330,7 @@ def _parse_drawing_anchor(
     for ch_elem in anchor.iter(f"{{{NS_C}}}chart"):
         chart_r_id = ch_elem.get(f"{{{NS_R}}}id", "")
         chart_part = drawing_rels.get(chart_r_id, "")
-        chart_id = f"chart{len(charts) + 1}"
+        chart_id = f"chart{chart_start + len(charts)}"
         charts.append(
             {
                 "id": chart_id,
@@ -318,26 +346,7 @@ def _parse_drawing_anchor(
 # ── Chart part parsing ──
 
 
-_CHART_TYPE_MAP: dict[str, str] = {
-    "areaChart": "area",
-    "area3DChart": "area3d",
-    "barChart": "bar",
-    "bar3DChart": "bar3d",
-    "bubbleChart": "bubble",
-    "doughnutChart": "doughnut",
-    "lineChart": "line",
-    "line3DChart": "line3d",
-    "ofPieChart": "ofPie",
-    "pieChart": "pie",
-    "pie3DChart": "pie3d",
-    "radarChart": "radar",
-    "scatterChart": "scatter",
-    "surfaceChart": "surface",
-    "surface3DChart": "surface3d",
-}
-
-
-def _parse_chart_part(pkg: PackageReader, chart_part: str) -> dict:
+def _parse_chart_part(pkg: PackageReader, chart_part: str) -> DrawingChart:
     """Parse a chart XML part via shared ChartML parser; return structured dict."""
     try:
         with pkg.open_entry(chart_part) as stream:
@@ -346,9 +355,9 @@ def _parse_chart_part(pkg: PackageReader, chart_part: str) -> dict:
     except Exception:
         return {"type": "", "title": "", "series_count": 0}
 
-    series_list: list[dict] = []
+    series_list: list[DrawingChartSeries] = []
     for s in info.get("series", []):
-        s_item: dict = {
+        s_item: DrawingChartSeries = {
             "index": s["index"],
             "pointCount": max(len(s.get("categories", [])), len(s.get("values", []))),
         }
@@ -361,9 +370,9 @@ def _parse_chart_part(pkg: PackageReader, chart_part: str) -> dict:
         # Full data points
         cats = s.get("categories", [])
         vals = s.get("values", [])
-        points: list[dict[str, str]] = []
+        points: list[ChartPoint] = []
         for i in range(max(len(cats), len(vals))):
-            pt: dict[str, str] = {}
+            pt: ChartPoint = {}
             if i < len(cats):
                 pt["category"] = cats[i]
             if i < len(vals):
@@ -385,10 +394,14 @@ def _parse_chart_part(pkg: PackageReader, chart_part: str) -> dict:
 # ── Pivot tables ──
 
 
-def detect_pivot_tables(sheet_rels: list) -> list[dict]:
+def detect_pivot_tables(
+    sheet_rels: list[RelationshipRecord],
+    *,
+    start_index: int = 1,
+) -> list[PivotTableInfo]:
     """Detect pivot table relationships from pre-read *sheet_rels*."""
-    pivots: list[dict] = []
+    pivots: list[PivotTableInfo] = []
     for rel in sheet_rels:
         if rel.type == f"{NS_R}/pivotTable":
-            pivots.append({"id": f"pivot{len(pivots) + 1}", "ref": "", "name": ""})
+            pivots.append({"id": f"pivot{start_index + len(pivots)}", "ref": "", "name": ""})
     return pivots

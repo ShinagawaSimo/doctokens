@@ -1,4 +1,4 @@
-"""解析 OOXML 中对阅读语义有用的文字格式。"""
+"""Parse OOXML text formatting that is useful for reading semantics."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ VISIBLE_FORMAT_KEYS = (
 
 
 def parse_run_format(run_properties: ET.Element | None) -> RunFormat:
-    """从 w:rPr 提取最终文本可能需要保留的轻量格式。"""
+    """Extract lightweight formatting from w:rPr that the final text may need to preserve."""
     if run_properties is None:
         return {}
 
@@ -39,7 +39,7 @@ def parse_run_format(run_properties: ET.Element | None) -> RunFormat:
 
 
 def merge_run_formats(*formats: RunFormat | None) -> RunFormat:
-    """按继承顺序合并格式，后面的显式值覆盖前面的值。"""
+    """Merge formats in inheritance order; later explicit values override earlier ones."""
     merged: RunFormat = {}
     for fmt in formats:
         if not fmt:
@@ -48,7 +48,7 @@ def merge_run_formats(*formats: RunFormat | None) -> RunFormat:
             if key not in VISIBLE_FORMAT_KEYS:
                 continue
             if value is False or value is None or value == "":
-                # 显式关闭时移除继承来的可见格式。
+                # When explicitly disabled, remove the inherited visible format.
                 merged.pop(key, None)
             else:
                 merged[key] = value
@@ -56,7 +56,7 @@ def merge_run_formats(*formats: RunFormat | None) -> RunFormat:
 
 
 def visible_run_format(fmt: RunFormat | None) -> RunFormat:
-    """过滤成最终 XML 需要表达的格式集合。"""
+    """Filter down to the set of formats the final XML needs to express."""
     if not fmt:
         return {}
     return {
@@ -69,14 +69,14 @@ def visible_run_format(fmt: RunFormat | None) -> RunFormat:
 def _read_bool_format(
     run_properties: ET.Element, child_name: str, key: str, fmt: RunFormat
 ) -> None:
-    """读取 b/i 这类布尔 run 属性。"""
+    """Read boolean run attributes such as b/i."""
     node = first_child(run_properties, "w", child_name)
     if node is not None:
         fmt[key] = is_on(node)
 
 
 def _read_underline(run_properties: ET.Element, fmt: RunFormat) -> None:
-    """读取下划线；最终只关心有没有下划线，不暴露具体线型。"""
+    """Read underline; only its presence matters in the end, not the specific line style."""
     node = first_child(run_properties, "w", "u")
     if node is None:
         return
@@ -85,7 +85,7 @@ def _read_underline(run_properties: ET.Element, fmt: RunFormat) -> None:
 
 
 def _read_strike(run_properties: ET.Element, fmt: RunFormat) -> None:
-    """读取删除线和双删除线，最终都表达为 strike。"""
+    """Read strike and double strike; both are ultimately expressed as strike."""
     strike = first_child(run_properties, "w", "strike")
     double_strike = first_child(run_properties, "w", "dstrike")
     if strike is not None:
@@ -95,7 +95,7 @@ def _read_strike(run_properties: ET.Element, fmt: RunFormat) -> None:
 
 
 def _read_vert_align(run_properties: ET.Element, fmt: RunFormat) -> None:
-    """读取上标/下标标记（w:vertAlign）。"""
+    """Read superscript/subscript markers (w:vertAlign)."""
     node = first_child(run_properties, "w", "vertAlign")
     if node is None:
         return
@@ -109,7 +109,7 @@ def _read_vert_align(run_properties: ET.Element, fmt: RunFormat) -> None:
 
 
 def _read_color(run_properties: ET.Element, fmt: RunFormat) -> None:
-    """读取字体颜色；主题色映射暂留给后续主题解析。"""
+    """Read the font color; theme color mapping is deferred to a later theme parsing pass."""
     node = first_child(run_properties, "w", "color")
     if node is None:
         return
@@ -119,7 +119,7 @@ def _read_color(run_properties: ET.Element, fmt: RunFormat) -> None:
 
 
 def _read_highlight(run_properties: ET.Element, fmt: RunFormat) -> None:
-    """读取 Word 文本高亮。"""
+    """Read Word text highlight."""
     node = first_child(run_properties, "w", "highlight")
     if node is None:
         return
@@ -131,7 +131,7 @@ def _read_highlight(run_properties: ET.Element, fmt: RunFormat) -> None:
 
 
 def _read_background(run_properties: ET.Element, fmt: RunFormat) -> None:
-    """读取 run 底纹背景色。"""
+    """Read the run's shading background color."""
     node = first_child(run_properties, "w", "shd")
     if node is None:
         return
@@ -141,7 +141,7 @@ def _read_background(run_properties: ET.Element, fmt: RunFormat) -> None:
 
 
 def normalize_hex_color(value: str | None) -> str | None:
-    """把 OOXML 六位颜色统一成 #RRGGBB，其它有效值原样保留。"""
+    """Normalize OOXML six-digit colors to #RRGGBB; other valid values are kept as-is."""
     if not value or value.lower() == "auto":
         return None
     if re.fullmatch(r"[0-9A-Fa-f]{6}", value):
@@ -150,7 +150,7 @@ def normalize_hex_color(value: str | None) -> str | None:
 
 
 def is_default_text_color(value: str) -> bool:
-    """过滤接近默认黑色的字体色，减少最终 XML 噪声。"""
+    """Filter out font colors close to the default black to reduce noise in the final XML."""
     lowered = value.lower()
     if lowered in {"black", "#000000"}:
         return True

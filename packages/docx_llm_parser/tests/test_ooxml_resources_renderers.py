@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import unittest
 from io import BytesIO
-from pathlib import Path
-from tempfile import TemporaryDirectory
 from xml.etree import ElementTree as ET
 
 from docx_llm_parser.core.models import ContentTypes, ParseWarning, RelationshipRecord
@@ -161,61 +159,59 @@ class NumberingAndAssetTests(unittest.TestCase):
         self.assertEqual(warnings[-1].code, "NUMBERING_LEVEL_MISSING")
 
     def test_asset_extractor_handles_external_missing_and_embedded(self) -> None:
-        with TemporaryDirectory() as temp_dir:
-            output_dir = Path(temp_dir)
-            warnings: list[ParseWarning] = []
-            package = FakePackage(
-                {
-                    "word/media/image1.png": b"png-data",
-                }
-            )
-            relationships = RelationshipIndex.from_records(
-                [
-                    RelationshipRecord(
-                        "word/document.xml",
-                        "rExt",
-                        IMAGE_REL_TYPE,
-                        "https://example.test/image.png",
-                        "External",
-                        "https://example.test/image.png",
-                    ),
-                    RelationshipRecord(
-                        "word/document.xml",
-                        "rMissing",
-                        IMAGE_REL_TYPE,
-                        "media/missing.png",
-                        None,
-                        "word/media/missing.png",
-                    ),
-                    RelationshipRecord(
-                        "word/document.xml",
-                        "rPng",
-                        IMAGE_REL_TYPE,
-                        "media/image1.png",
-                        None,
-                        "word/media/image1.png",
-                    ),
-                ]
-            )
-            content_types: ContentTypes = {
-                "defaults": {},
-                "overrides": {"word/media/image1.png": "image/png"},
+        warnings: list[ParseWarning] = []
+        package = FakePackage(
+            {
+                "word/media/image1.png": b"png-data",
             }
+        )
+        relationships = RelationshipIndex.from_records(
+            [
+                RelationshipRecord(
+                    "word/document.xml",
+                    "rExt",
+                    IMAGE_REL_TYPE,
+                    "https://example.test/image.png",
+                    "External",
+                    "https://example.test/image.png",
+                ),
+                RelationshipRecord(
+                    "word/document.xml",
+                    "rMissing",
+                    IMAGE_REL_TYPE,
+                    "media/missing.png",
+                    None,
+                    "word/media/missing.png",
+                ),
+                RelationshipRecord(
+                    "word/document.xml",
+                    "rPng",
+                    IMAGE_REL_TYPE,
+                    "media/image1.png",
+                    None,
+                    "word/media/image1.png",
+                ),
+            ]
+        )
+        content_types: ContentTypes = {
+            "defaults": {},
+            "overrides": {"word/media/image1.png": "image/png"},
+        }
 
-            assets, lookup = AssetExtractor(
-                package,
-                relationships,
-                content_types,
-                warnings,
-            ).extract()
+        assets, lookup = AssetExtractor(
+            package,
+            relationships,
+            content_types,
+            warnings,
+        ).extract()
 
-            self.assertEqual(
-                [asset["source"] for asset in assets],
-                ["external", "embedded"],
-            )
-            self.assertEqual(assets[1]["contentType"], "image/png")
-            self.assertEqual(lookup[("word/document.xml", "rPng")]["id"], assets[1]["id"])
-            self.assertIn("IMAGE_TARGET_MISSING", [warning.code for warning in warnings])
+        self.assertEqual(
+            [asset["source"] for asset in assets],
+            ["external", "embedded"],
+        )
+        self.assertEqual(assets[1]["contentType"], "image/png")
+        self.assertEqual(lookup[("word/document.xml", "rPng")]["id"], assets[1]["id"])
+        self.assertIn("IMAGE_TARGET_MISSING", [warning.code for warning in warnings])
 
 
 class RendererBranchTests(unittest.TestCase):
@@ -298,8 +294,11 @@ class RendererBranchTests(unittest.TestCase):
         ]
         table = {"type": "table", "tableId": "t-long", "rows": rows, "columnCount": 1}
 
-        self.assertIn("<table truncated>", "".join(render_table(table, "L2")))
-        self.assertIn("<td>R1", "".join(render_table({"rows": rows[:2]}, "L1")))
+        self.assertIn("<table id=t-long truncated>", "".join(render_table(table, "L2")))
+        self.assertIn(
+            "<td>R1",
+            "".join(render_table({"tableId": "t-short", "rows": rows[:2], "columnCount": 1}, "L1")),
+        )
         with self.assertRaisesRegex(TypeError, "tableId"):
             table_id({"tableId": 123})
 

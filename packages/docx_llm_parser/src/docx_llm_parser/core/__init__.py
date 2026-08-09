@@ -1,1 +1,1 @@
-"""核心数据结构、ZIP 包读取和通用工具。"""
+"""Core data structures, ZIP package reading, and shared utilities."""

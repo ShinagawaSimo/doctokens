@@ -21,8 +21,8 @@ def _make_xlsx(entries: dict[str, str]) -> bytes:
 
 
 class DefinedNameTests(unittest.TestCase):
-    def test_user_defined_name_in_semantic(self) -> None:
-        """User-defined name appears in semantic only."""
+    def test_user_defined_name_in_structural_and_semantic(self) -> None:
+        """User-defined name appears in structural and semantic."""
         data = _make_xlsx(
             {
                 "[Content_Types].xml": (
@@ -73,18 +73,19 @@ class DefinedNameTests(unittest.TestCase):
         semantic = parse_xlsx(data, density="semantic")
         structural = parse_xlsx(data, density="structural")
 
-        # User names visible in semantic only
+        # User names visible in structural and semantic
         self.assertIn("<definedName name=DiscountRate", semantic)
         self.assertIn("<definedName name=TaxRate", semantic)
+        self.assertIn("<definedName name=DiscountRate", structural)
+        self.assertIn("<definedName name=TaxRate", structural)
         # Built-in _xlnm names skipped
         self.assertNotIn("Print_Area", semantic)
-        # structural omits defined names
-        self.assertNotIn("definedName", structural)
+        self.assertNotIn("Print_Area", structural)
 
 
 class FilterTests(unittest.TestCase):
-    def test_filter_range_in_structural(self) -> None:
-        """AutoFilter range in structural, conditions in semantic."""
+    def test_filter_range_and_conditions_in_structural(self) -> None:
+        """AutoFilter range and conditions appear in structural and semantic."""
         data = _make_xlsx(
             {
                 "[Content_Types].xml": (
@@ -132,12 +133,11 @@ class FilterTests(unittest.TestCase):
         structural = parse_xlsx(data, density="structural")
         semantic = parse_xlsx(data, density="semantic")
 
-        # Both densities show filter range
+        # Both densities show filter range and conditions
         self.assertIn("<filter ref=A1:K50>", structural)
         self.assertIn("<filter ref=A1:K50>", semantic)
-        # Conditions only in semantic
         self.assertIn("<condition", semantic)
-        self.assertNotIn("<condition", structural)
+        self.assertIn("<condition", structural)
 
 
 if __name__ == "__main__":

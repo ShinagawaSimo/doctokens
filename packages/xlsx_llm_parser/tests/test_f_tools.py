@@ -5,6 +5,7 @@ import unittest
 import zipfile
 
 from xlsx_llm_parser import find_cells, get_resource, query_data
+from xlsx_llm_parser.api import _render_chart_resource
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -63,6 +64,56 @@ class FindCellsTests(unittest.TestCase):
         self.assertIn("Data!A1", result)
         self.assertNotIn("Cost", result)
 
+    def test_find_formula_and_defined_name(self) -> None:
+        data = _make_xlsx(
+            {
+                "[Content_Types].xml": (
+                    f'<Types xmlns="{NS_CT}">'
+                    '<Default Extension="xml" ContentType="application/xml"/>'
+                    '<Default Extension="rels" ContentType='
+                    '"application/vnd.openxmlformats-package.relationships+xml"/>'
+                    '<Override PartName="/xl/workbook.xml" '
+                    'ContentType="application/vnd.openxmlformats-officedocument.'
+                    'spreadsheetml.sheet.main+xml"/>'
+                    "</Types>"
+                ),
+                "_rels/.rels": (
+                    f'<Relationships xmlns="{NS_RP}">'
+                    f'<Relationship Id="r1" Type="{NS_O}/officeDocument" Target="xl/workbook.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/workbook.xml": (
+                    f'<workbook xmlns="{NS_S}" xmlns:r="{NS_O}">'
+                    "<definedNames>"
+                    '<definedName name="NamedTotal">Data!$B$1</definedName>'
+                    "</definedNames>"
+                    '<sheets><sheet name="Data" sheetId="1" r:id="rSheet1"/></sheets>'
+                    "</workbook>"
+                ),
+                "xl/_rels/workbook.xml.rels": (
+                    f'<Relationships xmlns="{NS_RP}">'
+                    f'<Relationship Id="rSheet1" Type="{NS_O}/worksheet" '
+                    'Target="worksheets/sheet1.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/worksheets/sheet1.xml": (
+                    f'<worksheet xmlns="{NS_S}"><sheetData>'
+                    '<row r="1"><c r="A1" t="inlineStr"><is><t>Total</t></is></c>'
+                    '<c r="B1"><f>SUM(B2:B3)</f><v>3</v></c></row>'
+                    '<row r="2"><c r="B2"><v>1</v></c></row>'
+                    '<row r="3"><c r="B3"><v>2</v></c></row>'
+                    "</sheetData></worksheet>"
+                ),
+            },
+        )
+
+        formula_result = find_cells(data, "SUM", kind="formula")
+        defined_name_result = find_cells(data, "NamedTotal", kind="definedName")
+
+        self.assertIn("field=formula", formula_result)
+        self.assertIn("Data!B1", formula_result)
+        self.assertIn("NamedTotal", defined_name_result)
+
 
 class QueryDataTests(unittest.TestCase):
     def test_query_basic(self) -> None:
@@ -102,7 +153,7 @@ class QueryDataTests(unittest.TestCase):
                 ),
                 "xl/tables/table1.xml": (
                     f'<table xmlns="{NS_S}" '
-                    'name="Sales" displayName="Sales" ref="A1:B3">'
+                    'name="Sales" displayName="Sales" ref="A1:B4">'
                     "<tableColumns>"
                     '<tableColumn name="Item"/>'
                     '<tableColumn name="Amount"/>'
@@ -111,12 +162,14 @@ class QueryDataTests(unittest.TestCase):
                 ),
                 "xl/worksheets/sheet1.xml": (
                     f'<worksheet xmlns="{NS_S}"><sheetData>'
-                    '<row r="1"><c r="A1" t="inlineStr"><is><t>Widget</t></is></c>'
-                    '<c r="B1"><v>100</v></c></row>'
-                    '<row r="2"><c r="A2" t="inlineStr"><is><t>Gadget</t></is></c>'
-                    '<c r="B2"><v>200</v></c></row>'
-                    '<row r="3"><c r="A3" t="inlineStr"><is><t>Total</t></is></c>'
-                    '<c r="B3"><v>300</v></c></row>'
+                    '<row r="1"><c r="A1" t="inlineStr"><is><t>Item</t></is></c>'
+                    '<c r="B1" t="inlineStr"><is><t>Amount</t></is></c></row>'
+                    '<row r="2"><c r="A2" t="inlineStr"><is><t>Widget</t></is></c>'
+                    '<c r="B2"><v>100</v></c></row>'
+                    '<row r="3"><c r="A3" t="inlineStr"><is><t>Gadget</t></is></c>'
+                    '<c r="B3"><v>200</v></c></row>'
+                    '<row r="4"><c r="A4" t="inlineStr"><is><t>Total</t></is></c>'
+                    '<c r="B4"><v>300</v></c></row>'
                     "</sheetData></worksheet>"
                 ),
             },
@@ -125,6 +178,60 @@ class QueryDataTests(unittest.TestCase):
         self.assertIn("Widget", result)
         self.assertIn("100", result)
         self.assertIn("<table>", result)
+        self.assertNotIn("<td>Item", result)
+
+    def test_query_range_with_header_row(self) -> None:
+        data = _make_xlsx(
+            {
+                "[Content_Types].xml": (
+                    f'<Types xmlns="{NS_CT}">'
+                    '<Default Extension="xml" ContentType="application/xml"/>'
+                    '<Default Extension="rels" ContentType='
+                    '"application/vnd.openxmlformats-package.relationships+xml"/>'
+                    '<Override PartName="/xl/workbook.xml" '
+                    'ContentType="application/vnd.openxmlformats-officedocument.'
+                    'spreadsheetml.sheet.main+xml"/>'
+                    "</Types>"
+                ),
+                "_rels/.rels": (
+                    f'<Relationships xmlns="{NS_RP}">'
+                    f'<Relationship Id="r1" Type="{NS_O}/officeDocument" Target="xl/workbook.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/workbook.xml": (
+                    f'<workbook xmlns="{NS_S}" xmlns:r="{NS_O}">'
+                    '<sheets><sheet name="Data" sheetId="1" r:id="rSheet1"/></sheets>'
+                    "</workbook>"
+                ),
+                "xl/_rels/workbook.xml.rels": (
+                    f'<Relationships xmlns="{NS_RP}">'
+                    f'<Relationship Id="rSheet1" Type="{NS_O}/worksheet" '
+                    'Target="worksheets/sheet1.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/worksheets/sheet1.xml": (
+                    f'<worksheet xmlns="{NS_S}"><sheetData>'
+                    '<row r="1"><c r="A1" t="inlineStr"><is><t>Name</t></is></c>'
+                    '<c r="B1" t="inlineStr"><is><t>Amount</t></is></c></row>'
+                    '<row r="2"><c r="A2" t="inlineStr"><is><t>Alice</t></is></c>'
+                    '<c r="B2"><v>10</v></c></row>'
+                    '<row r="3"><c r="A3" t="inlineStr"><is><t>Bob</t></is></c>'
+                    '<c r="B3"><v>25</v></c></row>'
+                    "</sheetData></worksheet>"
+                ),
+            },
+        )
+
+        result = query_data(
+            data,
+            sheet="Data",
+            range_spec="A1:B3",
+            header_row=1,
+            where=[{"column": "Amount", "op": "gt", "value": 20}],
+        )
+
+        self.assertIn("Bob", result)
+        self.assertNotIn("Alice", result)
 
 
 class GetResourceTests(unittest.TestCase):
@@ -191,6 +298,33 @@ class GetResourceTests(unittest.TestCase):
         self.assertIsInstance(r, str)
         self.assertIn("id=image1", r)
         self.assertIn("ref=A1", r)
+
+    def test_render_chart_resource_details(self) -> None:
+        html = _render_chart_resource(
+            {
+                "id": "chart1",
+                "ref": "C3",
+                "type": "bar",
+                "title": "Sales",
+                "series_count": 1,
+                "series": [
+                    {
+                        "index": 1,
+                        "name": "Q1",
+                        "min": 1.0,
+                        "max": 2.0,
+                        "points": [
+                            {"category": "A", "value": "1"},
+                            {"category": "B", "value": "2"},
+                        ],
+                    }
+                ],
+            }
+        )
+
+        self.assertIn("<chart id=chart1 ref=C3 type=bar series=1 title=Sales>", html)
+        self.assertIn("<series index=1 name=Q1 min=1.0 max=2.0>", html)
+        self.assertIn("<point category=A value=1/>", html)
 
 
 if __name__ == "__main__":

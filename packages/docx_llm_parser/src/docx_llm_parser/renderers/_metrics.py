@@ -1,7 +1,7 @@
-"""渲染器共享的指标统计逻辑。
+"""Metrics recording logic shared by the renderers.
 
-两个渲染器（XML/HTML5）都需要记录阶段耗时和输出规模，
-此模块提供统一的实现，避免重复。"""
+Both renderers (XML/HTML5) need to record per-stage timing and output size;
+this module provides a unified implementation to avoid duplication."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def record_render_metrics(
     elapsed_ms: float,
     stage_name: str = "render",
 ) -> None:
-    """把最终渲染阶段的指标追加到 parsed.metrics。"""
+    """Append the final render stage metrics to parsed.metrics."""
     metrics = parsed.metrics
     if "stagesMs" not in metrics:
         metrics["stagesMs"] = {}
@@ -37,7 +37,7 @@ def record_render_metrics(
 
 
 def write_metrics_debug(parsed: ParsedDocument) -> None:
-    """渲染后重写 metrics.json，包含最终的输出阶段耗时。"""
+    """Rewrite metrics.json after rendering, including the final output stage timing."""
     if not parsed.debug_dir:
         return
     try:

@@ -1,26 +1,30 @@
-"""三密度主渲染迭代器 + 补充内容。"""
+"""Main rendering iterators for the three densities + supplemental content."""
 
 from __future__ import annotations
 
 from collections.abc import Iterator
 from html import escape
 
-from ..core.models import AncillaryItem, ParsedDocument
+from ..core.models import AncillaryItem, InlineContainer, ParsedDocument
 from ._blocks import render_block
 from .inline import inline_content
 from .l0 import block_text_only, inline_text_only
 
 
-def _paragraph_text(block, density: str, ocr_results: dict[str, str] | None = None) -> str:
+def _paragraph_text(
+    block: InlineContainer,
+    density: str,
+    ocr_results: dict[str, str] | None = None,
+) -> str:
     """Extract rendered text for a single paragraph block."""
     return inline_content(block, density, ocr_results)
 
 
-# ── semantic 渲染 ──
+# ── semantic rendering ──
 
 
 def iter_l2(parsed: ParsedDocument) -> Iterator[str]:
-    """semantic — 完整语义 HTML5。每段独立一个 <p> 标签。"""
+    """semantic — full semantic HTML5. Each paragraph gets its own <p> tag."""
     yield "density=semantic\n"
     ocr = getattr(parsed, "ocr_results", None) or {}
     current_page = 0
@@ -56,11 +60,11 @@ def iter_l2(parsed: ParsedDocument) -> Iterator[str]:
         yield supplemental
 
 
-# ── structural 渲染 ──
+# ── structural rendering ──
 
 
 def iter_l1(parsed: ParsedDocument) -> Iterator[str]:
-    """structural — 块级结构 + 语义对象，去掉 inline 格式。"""
+    """structural — block-level structure + semantic objects, with inline formats stripped."""
     yield "density=structural\n"
     ocr = getattr(parsed, "ocr_results", None) or {}
     current_page = 0
@@ -94,33 +98,50 @@ def iter_l1(parsed: ParsedDocument) -> Iterator[str]:
         yield supplemental
 
 
-# ── plain 渲染 ──
+# ── plain rendering ──
 
 
 def iter_l0(parsed: ParsedDocument) -> Iterator[str]:
-    """plain — 纯文本流。脚注拼段末，尾注拼文末。"""
+    """plain — pure text stream. Footnotes are appended to paragraph ends, endnotes to the document end."""
     yield "density=plain\n"
+    ocr = getattr(parsed, "ocr_results", None) or {}
     footnote_map: dict[str, str] = {}
     for fn in parsed.footnotes:
-        fn_text = inline_text_only(fn)
+        fn_text = inline_text_only(fn, ocr)
         if fn_text and fn["id"] is not None:
             footnote_map[fn["id"]] = fn_text
 
     endnote_map: dict[str, str] = {}
     for en in parsed.endnotes:
-        en_text = inline_text_only(en)
+        en_text = inline_text_only(en, ocr)
         if en_text and en["id"] is not None:
             endnote_map[en["id"]] = en_text
 
     endnote_order: list[str] = []
+    comment_order: list[str] = []
+    comment_map: dict[str, str] = {}
+    for comment in parsed.comments:
+        comment_text = inline_text_only(comment, ocr)
+        comment_id = comment.get("id")
+        if comment_text and comment_id is not None:
+            comment_map[comment_id] = comment_text
 
     parts: list[str] = []
     for block in parsed.blocks:
-        text = block_text_only(block, footnote_map, endnote_order)
+        text = block_text_only(block, footnote_map, endnote_order, comment_order, ocr)
         if text:
             parts.append(text)
 
     yield "\n\n".join(parts)
+
+    for section_name, items in (("Headers", parsed.headers), ("Footers", parsed.footers)):
+        if not items:
+            continue
+        yield f"\n\n[{section_name}]"
+        for item in items:
+            item_text = inline_text_only(item, ocr)
+            if item_text:
+                yield f"\n[{item['loc']}: {item_text}]"
 
     if endnote_order:
         yield "\n\n[Endnotes]"
@@ -129,12 +150,24 @@ def iter_l0(parsed: ParsedDocument) -> Iterator[str]:
             if en_text:
                 yield f"\n[ed{endnote_id}: {en_text}]"
 
+    comment_ids = list(comment_order)
+    seen_comment_ids = set(comment_ids)
+    for comment_id in comment_map:
+        if comment_id not in seen_comment_ids:
+            comment_ids.append(comment_id)
+    if comment_ids:
+        yield "\n\n[Comments]"
+        for comment_id in comment_ids:
+            comment_text = comment_map.get(comment_id, "")
+            if comment_text:
+                yield f"\n[cmt{comment_id}: {comment_text}]"
 
-# ── 补充内容 ──
+
+# ── supplemental content ──
 
 
 def supplemental_to_html5(parsed: ParsedDocument, density: str) -> str:
-    """structural/semantic：输出正文之外的补充文本。"""
+    """structural/semantic: output supplemental text beyond the main body."""
     groups: list[tuple[str, str, list[AncillaryItem]]] = [
         ("headers", "header", parsed.headers),
         ("footers", "footer", parsed.footers),
@@ -142,12 +175,6 @@ def supplemental_to_html5(parsed: ParsedDocument, density: str) -> str:
         ("endnotes", "endnote", parsed.endnotes),
         ("comments", "comment", parsed.comments),
     ]
-    if density == "structural":
-        groups = [
-            ("footnotes", "footnote", parsed.footnotes),
-            ("endnotes", "endnote", parsed.endnotes),
-            ("comments", "comment", parsed.comments),
-        ]
 
     if not any(items for _group_name, _tag, items in groups):
         return ""

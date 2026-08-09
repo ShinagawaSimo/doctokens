@@ -330,10 +330,9 @@ class SharedStringsTests(unittest.TestCase):
         )
         structural = parse_xlsx(data, density="structural")
         semantic = parse_xlsx(data, density="semantic")
-        # Structural: formula hidden
-        self.assertNotIn("formula", structural)
+        # Both structural and semantic show formula
+        self.assertIn('formula="SUM(B1:B10)"', structural)
         self.assertIn("42", structural)
-        # Semantic: formula visible
         self.assertIn('formula="SUM(B1:B10)"', semantic)
 
     def test_date_cell(self) -> None:

@@ -1,4 +1,4 @@
-"""Merged cell tests — colspan/rowspan in semantic, shadow skip."""
+"""Merged cell tests — colspan/rowspan in structural and semantic, shadow skip."""
 
 import io
 import unittest
@@ -61,7 +61,7 @@ class MergeCellTests(unittest.TestCase):
             },
         )
 
-    def test_semantic_outputs_colspan_rowspan(self) -> None:
+    def test_structural_and_semantic_output_colspan_rowspan(self) -> None:
         data = self._make_merged(
             '<mergeCells count="1"><mergeCell ref="A1:B2"/></mergeCells>',
             [
@@ -75,11 +75,15 @@ class MergeCellTests(unittest.TestCase):
                 "</row>",
             ],
         )
-        html = parse_xlsx(data, density="semantic")
-        self.assertIn("colspan=2", html)
-        self.assertIn("rowspan=2", html)
+        semantic = parse_xlsx(data, density="semantic")
+        structural = parse_xlsx(data, density="structural")
+        self.assertIn("colspan=2", semantic)
+        self.assertIn("rowspan=2", semantic)
+        self.assertIn("colspan=2", structural)
+        self.assertIn("rowspan=2", structural)
         # Shadow cells excluded
-        self.assertNotIn("Shadow", html)
+        self.assertNotIn("Shadow", semantic)
+        self.assertNotIn("Shadow", structural)
 
     def test_structural_skips_shadow_cells(self) -> None:
         data = self._make_merged(

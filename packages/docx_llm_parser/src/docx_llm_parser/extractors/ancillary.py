@@ -1,4 +1,4 @@
-"""解析页眉页脚、脚注尾注和批注等补充内容。"""
+"""Extract ancillary content: headers, footers, footnotes, endnotes, and comments."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ from .inline import InlineParser
 
 
 class AncillaryParser:
-    """解析 body 之外但对 LLM 理解仍有价值的内容。"""
+    """Extract content outside the body that is still valuable for LLM understanding."""
 
     def __init__(
         self,
@@ -58,7 +58,7 @@ class AncillaryParser:
         self._block_index = 0
 
     def parse(self) -> AncillaryResult:
-        """返回 headers/footers/footnotes/endnotes/comments 五类补充信息。"""
+        """Return five categories of ancillary content."""
         return {
             "headers": self._parse_header_footer("header"),
             "footers": self._parse_header_footer("footer"),
@@ -67,8 +67,10 @@ class AncillaryParser:
             "comments": self._parse_comments(),
         }
 
+    # ── per-part-type drivers ─────────────────────────────────────
+
     def _parse_header_footer(self, kind: str) -> list[AncillaryItem]:
-        """解析 word/header*.xml 或 word/footer*.xml。"""
+        """Parse word/header*.xml or word/footer*.xml."""
         prefix = f"word/{kind}"
         rows: list[AncillaryItem] = []
         for name in sorted(item["name"] for item in self.package.read_entry_index()):
@@ -78,21 +80,12 @@ class AncillaryParser:
             if root is None:
                 continue
             content = self._container_content(root, name)
-            if content["text"].strip() or self._has_objects(content["runs"]):
-                item_id = name.rsplit("/", 1)[-1].removesuffix(".xml")
-                row: AncillaryItem = {
-                    "id": item_id,
-                    "loc": f"{kind}s.{item_id}",
-                    "text": content["text"],
-                    "runs": content["runs"],
-                }
-                if self.options.include_raw_hints and content["rawHints"]:
-                    row["rawHints"] = content["rawHints"]
-                rows.append(row)
+            item_id = name.rsplit("/", 1)[-1].removesuffix(".xml")
+            self._try_emit_item(item_id, f"{kind}s.{item_id}", content, rows)
         return rows
 
     def _parse_notes(self, part_name: str, tag_name: str) -> list[AncillaryItem]:
-        """解析脚注或尾注。"""
+        """Parse footnotes or endnotes."""
         if not self.package.exists(part_name):
             return []
         root = self._parse_xml_part(part_name)
@@ -103,24 +96,16 @@ class AncillaryParser:
         for note in child_elements(root, "w", tag_name):
             note_type = attr(note, "w", "type")
             if note_type in {"separator", "continuationSeparator"}:
-                # 分隔线不是用户内容。
                 continue
             note_id = attr(note, "w", "id")
+            if not note_id:
+                continue
             content = self._container_content(note, part_name)
-            if content["text"].strip() or self._has_objects(content["runs"]):
-                row: AncillaryItem = {
-                    "id": note_id,
-                    "loc": f"{group}.{note_id}",
-                    "text": content["text"],
-                    "runs": content["runs"],
-                }
-                if self.options.include_raw_hints and content["rawHints"]:
-                    row["rawHints"] = content["rawHints"]
-                rows.append(row)
+            self._try_emit_item(note_id, f"{group}.{note_id}", content, rows)
         return rows
 
     def _parse_comments(self) -> list[AncillaryItem]:
-        """解析批注正文。"""
+        """Parse comment text."""
         part_name = "word/comments.xml"
         if not self.package.exists(part_name):
             return []
@@ -130,23 +115,50 @@ class AncillaryParser:
         rows: list[AncillaryItem] = []
         for comment in child_elements(root, "w", "comment"):
             comment_id = attr(comment, "w", "id")
+            if not comment_id:
+                continue
             content = self._container_content(comment, part_name)
-            if content["text"].strip() or self._has_objects(content["runs"]):
-                row: AncillaryItem = {
-                    "id": comment_id,
-                    "loc": f"comments.{comment_id}",
-                    "author": attr(comment, "w", "author"),
-                    "date": attr(comment, "w", "date"),
-                    "text": content["text"],
-                    "runs": content["runs"],
-                }
-                if self.options.include_raw_hints and content["rawHints"]:
-                    row["rawHints"] = content["rawHints"]
-                rows.append(row)
+            self._try_emit_item(
+                comment_id,
+                f"comments.{comment_id}",
+                content,
+                rows,
+                author=attr(comment, "w", "author") or "",
+                date=attr(comment, "w", "date") or "",
+            )
         return rows
 
+    # ── shared helpers ────────────────────────────────────────────
+
+    def _try_emit_item(
+        self,
+        item_id: str,
+        loc: str,
+        content: AncillaryContent,
+        rows: list[AncillaryItem],
+        *,
+        author: str = "",
+        date: str = "",
+    ) -> None:
+        """Build and append an AncillaryItem if the content is non-empty."""
+        if not (content["text"].strip() or self._has_objects(content["runs"])):
+            return
+        row: AncillaryItem = {
+            "id": item_id,
+            "loc": loc,
+            "text": content["text"],
+            "runs": content["runs"],
+        }
+        if author:
+            row["author"] = author
+        if date:
+            row["date"] = date
+        if self.options.include_raw_hints and content["rawHints"]:
+            row["rawHints"] = content["rawHints"]
+        rows.append(row)
+
     def _parse_xml_part(self, part_name: str) -> ET.Element | None:
-        """读取 XML part；失败时记录 warning 并继续。"""
+        """Read an XML part; log a warning and return None on failure."""
         try:
             with self.package.open_entry(part_name) as stream:
                 return ET.parse(stream).getroot()
@@ -161,15 +173,17 @@ class AncillaryParser:
             return None
 
     def _container_content(self, node: ET.Element, part: str) -> AncillaryContent:
-        """提取容器内段落、表格和轻量 inline 对象。
-        优化：使用预计算标签名直接比对，避免热路径中的 qualified_name()/local_name 调用。"""
+        """Extract paragraphs, tables, and inline objects from a container element.
+
+        Uses pre-computed tag names for direct comparison to avoid qualified_name()
+        / local_name() calls in the hot path.
+        """
         text_parts: list[str] = []
         runs: list[Run] = []
         raw_hints: list[RawHint] = []
         for child in node:
             child_tag = child.tag
             if child_tag == _TAG_W_PARAGRAPH:
-                # 补充区域也按段落解析，避免丢失链接和格式。
                 p_runs, p_hints = self.inline.paragraph_runs(
                     child, part, self._next_block_id(part), self._paragraph_style_id(child)
                 )
@@ -181,7 +195,6 @@ class AncillaryParser:
                     text_parts.append(p_text)
                     raw_hints.extend(p_hints)
             elif child_tag == _TAG_W_TABLE:
-                # 补充区域内表格压缩为行文本，但保留单元格里的 inline 对象。
                 table_content = self._table_content(child, part)
                 if table_content["text"].strip() or self._has_objects(table_content["runs"]):
                     if runs:
@@ -194,7 +207,6 @@ class AncillaryParser:
                 _TAG_W_SDT_CONTENT,
                 _TAG_W_SMART_TAG,
             ):
-                # 包装层继续向内提取可读内容。
                 nested = self._container_content(child, part)
                 if nested["text"].strip() or self._has_objects(nested["runs"]):
                     if runs:
@@ -205,7 +217,7 @@ class AncillaryParser:
         return {"text": "\n".join(text_parts), "runs": runs, "rawHints": raw_hints}
 
     def _table_content(self, tbl: ET.Element, part: str) -> AncillaryContent:
-        """把补充区域中的表格压缩为行文本，并保留 inline run。"""
+        """Flatten a table in ancillary content to row text while preserving inline runs."""
         text_rows: list[str] = []
         runs: list[Run] = []
         raw_hints: list[RawHint] = []
@@ -233,16 +245,16 @@ class AncillaryParser:
         return {"text": "\n".join(text_rows), "runs": runs, "rawHints": raw_hints}
 
     def _paragraph_style_id(self, p: ET.Element) -> str | None:
-        """读取补充区域段落样式 ID。"""
+        """Read the paragraph style id from paragraph properties."""
         paragraph_properties = first_child(p, "w", "pPr")
         pstyle = first_child(paragraph_properties, "w", "pStyle")
         return attr(pstyle, "w", "val") if pstyle is not None else None
 
     def _next_block_id(self, part: str) -> str:
-        """为 supplemental inline warning 生成轻量定位 ID。"""
+        """Generate a lightweight locator id for ancillary inline warnings."""
         self._block_index += 1
         return f"{part}#{self._block_index}"
 
     def _has_objects(self, runs: list[Run]) -> bool:
-        """判断 run 流中是否有图片、脚注引用、公式等非文本对象。"""
+        """Check whether any run carries non-text objects (images, footnotes, equations)."""
         return any("objects" in run for run in runs)

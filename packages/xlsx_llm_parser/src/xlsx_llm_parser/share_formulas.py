@@ -11,6 +11,7 @@ import re
 from typing import NamedTuple
 
 from ._utils import _col_from_str, col_letter
+from .models import Cell
 
 # A1-style cell reference: $A$1, $A1, A$1, A1  (optionally qualified by sheet)
 _CELL_REF_RE = re.compile(r"(?P<col_abs>\$)?(?P<col>[A-Z]{1,3})(?P<row_abs>\$)?(?P<row>[0-9]+)")
@@ -36,7 +37,7 @@ class _Ref(NamedTuple):
 
 
 def expand_shared_formulas(
-    cells: list,  # list of dicts with ref, formula, si, t, etc.
+    cells: list[Cell],
 ) -> None:
     """Resolve shared formula ``si`` references in-place.
 
@@ -47,7 +48,7 @@ def expand_shared_formulas(
     ``formula`` field.
     """
     # Group cells by si index
-    groups: dict[str, list[dict]] = {}
+    groups: dict[str, list[Cell]] = {}
     for c in cells:
         si = c.get("si")
         if si is not None:
@@ -89,15 +90,14 @@ def _offset_formula(formula: str, dc: int, dr: int) -> str:
     if dc == 0 and dr == 0:
         return formula
 
-    refs: list[_Ref] = []
-    for m in _A1_REF_RE.finditer(formula):
-        refs.append(
-            _Ref(
-                span=(m.start(), m.end()),
-                sheet=m.group("sheet"),
-                raw=m.group(0),
-            )
+    refs = [
+        _Ref(
+            span=(match.start(), match.end()),
+            sheet=match.group("sheet"),
+            raw=match.group(0),
         )
+        for match in _A1_REF_RE.finditer(formula)
+    ]
 
     if not refs:
         return formula
@@ -115,20 +115,20 @@ def _offset_formula(formula: str, dc: int, dr: int) -> str:
             continue
 
         # Re-parse this specific match to get offset groups
-        m = _A1_REF_RE.match(r.raw)
-        if m is None:
+        ref_match = _A1_REF_RE.match(r.raw)
+        if ref_match is None:
             parts.append(r.raw)
             continue
 
-        start_col_abs = m.group("start_col_abs") is not None
-        start_row_abs = m.group("start_row_abs") is not None
-        end_col = m.group("end_col")
+        start_col_abs = ref_match.group("start_col_abs") is not None
+        start_row_abs = ref_match.group("start_row_abs") is not None
+        end_col = ref_match.group("end_col")
 
         new_start = _offset_one_ref(
             col_abs=start_col_abs,
             row_abs=start_row_abs,
-            col_str=m.group("start_col"),
-            row_str=m.group("start_row"),
+            col_str=ref_match.group("start_col"),
+            row_str=ref_match.group("start_row"),
             dc=dc,
             dr=dr,
         )
@@ -136,13 +136,17 @@ def _offset_formula(formula: str, dc: int, dr: int) -> str:
         if end_col is None:
             parts.append(new_start)
         else:
-            end_col_abs = m.group("end_col_abs") is not None
-            end_row_abs = m.group("end_row_abs") is not None
+            end_row = ref_match.group("end_row")
+            if end_row is None:
+                parts.append(new_start)
+                continue
+            end_col_abs = ref_match.group("end_col_abs") is not None
+            end_row_abs = ref_match.group("end_row_abs") is not None
             new_end = _offset_one_ref(
                 col_abs=end_col_abs,
                 row_abs=end_row_abs,
                 col_str=end_col,
-                row_str=m.group("end_row"),
+                row_str=end_row,
                 dc=dc,
                 dr=dr,
             )

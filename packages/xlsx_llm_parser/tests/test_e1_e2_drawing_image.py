@@ -12,6 +12,7 @@ NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 NS_RP = "http://schemas.openxmlformats.org/package/2006/relationships"
 NS_XDR = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
 NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+NS_C = "http://schemas.openxmlformats.org/drawingml/2006/chart"
 
 
 def _make_xlsx(entries: dict[str, str]) -> bytes:
@@ -86,6 +87,85 @@ class ImageTests(unittest.TestCase):
         )
         html = parse_xlsx(data, density="structural")
         self.assertIn("<image id=image1 ref=A1/>", html)
+
+
+class ChartTests(unittest.TestCase):
+    def test_plain_chart_summary_uses_count_only(self) -> None:
+        data = _make_xlsx(
+            {
+                "[Content_Types].xml": (
+                    f'<Types xmlns="{NS_CT}">'
+                    '<Default Extension="xml" ContentType="application/xml"/>'
+                    '<Default Extension="rels" ContentType='
+                    '"application/vnd.openxmlformats-package.relationships+xml"/>'
+                    '<Override PartName="/xl/workbook.xml" '
+                    'ContentType="application/vnd.openxmlformats-officedocument.'
+                    'spreadsheetml.sheet.main+xml"/>'
+                    "</Types>"
+                ),
+                "_rels/.rels": (
+                    f'<Relationships xmlns="{NS_RP}">'
+                    f'<Relationship Id="r1" Type="{NS_O}/officeDocument" Target="xl/workbook.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/workbook.xml": (
+                    f'<workbook xmlns="{NS_S}" xmlns:r="{NS_O}">'
+                    '<sheets><sheet name="Data" sheetId="1" r:id="rSheet1"/></sheets>'
+                    "</workbook>"
+                ),
+                "xl/_rels/workbook.xml.rels": (
+                    f'<Relationships xmlns="{NS_RP}">'
+                    f'<Relationship Id="rSheet1" Type="{NS_O}/worksheet" '
+                    'Target="worksheets/sheet1.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/worksheets/_rels/sheet1.xml.rels": (
+                    f'<Relationships xmlns="{NS_RP}">'
+                    f'<Relationship Id="rDraw1" Type="{NS_O}/drawing" '
+                    'Target="../drawings/drawing1.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/drawings/_rels/drawing1.xml.rels": (
+                    f'<Relationships xmlns="{NS_RP}">'
+                    f'<Relationship Id="rChart1" Type="{NS_O}/chart" '
+                    'Target="../charts/chart1.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/drawings/drawing1.xml": (
+                    f'<wsDr xmlns="{NS_XDR}" xmlns:a="{NS_A}" xmlns:c="{NS_C}" xmlns:r="{NS_O}">'
+                    "<twoCellAnchor>"
+                    "<from><col>2</col><row>3</row></from>"
+                    "<to><col>5</col><row>10</row></to>"
+                    '<graphicFrame><a:graphic><a:graphicData><c:chart r:id="rChart1"/></a:graphicData></a:graphic></graphicFrame>'
+                    "</twoCellAnchor>"
+                    "</wsDr>"
+                ),
+                "xl/charts/chart1.xml": (
+                    f'<c:chartSpace xmlns:c="{NS_C}">'
+                    "<c:chart><c:plotArea><c:barChart>"
+                    "<c:ser><c:idx val=\"0\"/><c:order val=\"0\"/>"
+                    "<c:tx><c:strRef><c:strCache><c:pt idx=\"0\"><c:v>Sales</c:v></c:pt></c:strCache></c:strRef></c:tx>"
+                    "</c:ser>"
+                    "</c:barChart></c:plotArea></c:chart>"
+                    "</c:chartSpace>"
+                ),
+                "xl/worksheets/sheet1.xml": (
+                    f'<worksheet xmlns="{NS_S}"><sheetData>'
+                    '<row r="1"><c r="A1" t="inlineStr"><is><t>X</t></is></c></row>'
+                    "</sheetData></worksheet>"
+                ),
+            },
+        )
+
+        plain = parse_xlsx(data, density="plain")
+        structural = parse_xlsx(data, density="structural")
+
+        self.assertIn("<charts count=1>", plain)
+        self.assertIn('<chart names="Sales"/>', plain)
+        self.assertNotIn("<chart id=", plain)
+        self.assertNotIn("series=", plain)
+        self.assertNotIn("truncated", plain)
+        self.assertIn("<chart id=chart1", structural)
 
 
 class PivotTableTests(unittest.TestCase):

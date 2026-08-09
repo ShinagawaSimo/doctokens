@@ -52,12 +52,14 @@ class ParseWarning:
     locator: str | None = None
 
 
-class MetricsSnapshot(TypedDict):
-    """A single point-in-time metrics reading."""
-
-    stage: str
-    elapsed_ms: float
-
-
 MetricValue = int | float | str
 JsonObject = dict[str, "JsonObject | MetricValue"]
+
+
+class MetricsSnapshot(TypedDict, total=False):
+    """Parser/render timing and counter snapshot."""
+
+    totalMs: float
+    parseTotalMs: float
+    stagesMs: dict[str, float]
+    counters: dict[str, MetricValue]

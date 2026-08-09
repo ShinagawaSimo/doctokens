@@ -1,12 +1,12 @@
-"""解析器内部数据模型 — DOCX 专用类型 + 共享类型 re-export。"""
+"""Parser internal data model - DOCX-specific types + shared type re-exports."""
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, TypedDict
+from typing import Literal, TypedDict
 
-from ooxml_llm_core.models import (  # noqa: F401 — re-exported as stable API
+from ooxml_llm_core.models import (
     ContentTypes,
     JsonObject,
     MetricsSnapshot,
@@ -15,9 +15,6 @@ from ooxml_llm_core.models import (  # noqa: F401 — re-exported as stable API
     RelationshipRecord,
     ZipEntryInfo,
 )
-
-if TYPE_CHECKING:
-    pass
 
 from .enums import RevisionMode
 
@@ -56,6 +53,7 @@ class ImageAsset(ImageAssetRequired, total=False):
     href: str
     contentType: str
     zipPath: str
+    file: str
 
 
 class ChartSeriesRequired(TypedDict):
@@ -153,6 +151,8 @@ class InlineObject(InlineObjectRequired, total=False):
     id: str | None
     assetId: str
     file: str
+    embeddedType: str
+    progid: str
     href: str
     alt: str
     name: str
@@ -193,7 +193,7 @@ class Run(RunRequired, total=False):
     kind: str
 
 
-RawHint = JsonObject | InlineObject
+RawHint = dict[str, object] | InlineObject
 
 
 class ParagraphBlockRequired(TypedDict):
@@ -332,7 +332,7 @@ ResourceDetail = dict[str, object]
 
 @dataclass(frozen=True)
 class ParseOptions:
-    """解析配置；设为不可变，避免并发任务互相污染。"""
+    """Parse configuration; immutable to keep concurrent tasks from interfering with each other."""
 
     preserve_empty_paragraphs: bool = False
     include_runs: bool = True
@@ -361,7 +361,7 @@ class ParseOptions:
 
 @dataclass(slots=True)
 class StyleRecord:
-    """Word 样式摘要。"""
+    """Word style summary."""
 
     style_id: str
     type: str = "unknown"
@@ -378,7 +378,7 @@ class StyleRecord:
 
 @dataclass
 class ParsedDocument:
-    """内部完整解析结果；最终输出会再精简。"""
+    """Full internal parse result; the final output is further reduced."""
 
     metadata: dict[str, object]
     package_info: dict[str, object]
@@ -405,7 +405,7 @@ class ParsedDocument:
     )
 
     def to_dict(self) -> dict[str, object]:
-        """输出内部完整结构，主要供 debug 或开发检查使用。"""
+        """Output the full internal structure, mainly for debug or development inspection."""
         return {
             "metadata": self.metadata,
             "packageInfo": self.package_info,
@@ -426,3 +426,47 @@ class ParsedDocument:
             "numbering": self.numbering,
             "metrics": self.metrics,
         }
+
+
+__all__ = [
+    "AncillaryContent",
+    "AncillaryItem",
+    "AncillaryResult",
+    "AssetLookup",
+    "Block",
+    "BodyEvent",
+    "Chart",
+    "ChartSeries",
+    "ContentTypes",
+    "DocumentManifest",
+    "DrawingCommon",
+    "HeadingBlock",
+    "ImageAsset",
+    "InlineContainer",
+    "InlineObject",
+    "JsonObject",
+    "LinkInfo",
+    "MetricValue",
+    "MetricsSnapshot",
+    "NumberingLabel",
+    "ObjectLookup",
+    "ParagraphBlock",
+    "ParseOptions",
+    "ParseWarning",
+    "ParsedDocument",
+    "RawHint",
+    "RelationshipRecord",
+    "ResourceDetail",
+    "ResourceSummary",
+    "Run",
+    "RunFormat",
+    "SmartArt",
+    "SmartArtLink",
+    "SmartArtNode",
+    "StyleRecord",
+    "TableBlock",
+    "TableCell",
+    "TableRow",
+    "TextBlock",
+    "ZipEntryInfo",
+]

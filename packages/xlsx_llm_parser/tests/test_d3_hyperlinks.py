@@ -4,7 +4,7 @@ import io
 import unittest
 import zipfile
 
-from xlsx_llm_parser import parse_xlsx
+from xlsx_llm_parser import find_cells, parse_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -79,6 +79,9 @@ class HyperlinkTests(unittest.TestCase):
         self.assertIn('<a href="https://example.com">Click</a>', html)
         semantic = parse_xlsx(data, density="semantic")
         self.assertIn('<a href="https://example.com">Click</a>', semantic)
+        matches = find_cells(data, "example.com", kind="hyperlink")
+        self.assertIn('field=hyperlink', matches)
+        self.assertIn("https://example.com", matches)
 
     def test_internal_location_rendered_as_anchor(self) -> None:
         """Internal hyperlink via location → <a href='#Sheet2!A1'>."""

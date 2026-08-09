@@ -1,4 +1,4 @@
-"""表格渲染模块。"""
+"""Table rendering module."""
 
 from .render import (
     cell_content,

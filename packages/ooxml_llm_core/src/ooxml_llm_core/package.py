@@ -31,7 +31,7 @@ class PackageError(RuntimeError):
 class PackageReader:
     """On-demand OPC ZIP reader. Never extracts entries to disk."""
 
-    def __init__(self, source: Path | bytes, limits: PackageLimits) -> None:
+    def __init__(self, source: str | Path | bytes, limits: PackageLimits) -> None:
         self._source = source
         self.limits = limits
         self._zip: zipfile.ZipFile | None = None

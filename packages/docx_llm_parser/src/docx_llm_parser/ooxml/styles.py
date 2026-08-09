@@ -1,4 +1,4 @@
-"""解析 word/styles.xml，并根据样式识别标题层级。"""
+"""Parse word/styles.xml and identify heading levels from styles."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from .formatting import merge_run_formats, parse_run_format
 
 
 class StyleMap:
-    """样式索引；构建完成后只读，便于并发解析。"""
+    """Style index; read-only once built, safe for concurrent parsing."""
 
     def __init__(self, records: dict[str, StyleRecord], warnings: list[ParseWarning]) -> None:
         self.records: Mapping[str, StyleRecord] = MappingProxyType(dict(records))
@@ -24,36 +24,36 @@ class StyleMap:
         self._run_format_cache: dict[str, RunFormat] = {}
 
     def resolve_heading_level(self, style_id: str | None) -> int | None:
-        """根据 styleId 解析标题级别；不使用段落文本启发式。"""
+        """Resolve the heading level from a styleId; no paragraph-text heuristics."""
         if not style_id:
             return None
         if style_id not in self._heading_level_cache:
-            # 样式继承链只解析一次，后续 run/段落热路径直接读缓存。
+            # The style inheritance chain is resolved once; later hot paths (runs/paragraphs) read the cache directly.
             self._heading_level_cache[style_id] = self._resolve_heading_level(
                 style_id, visited=set()
             )
         return self._heading_level_cache[style_id]
 
     def resolve_numbering(self, style_id: str | None) -> tuple[str, int] | None:
-        """根据 styleId 解析样式明确绑定的编号信息。"""
+        """Resolve the numbering information a style explicitly binds."""
         if not style_id:
             return None
         if style_id not in self._numbering_cache:
-            # 编号样式继承同样缓存，避免每个段落重复递归。
+            # Numbering-style inheritance is cached too, avoiding repeated recursion per paragraph.
             self._numbering_cache[style_id] = self._resolve_numbering(style_id, visited=set())
         return self._numbering_cache[style_id]
 
     def resolve_run_format(self, style_id: str | None) -> RunFormat:
-        """根据 styleId 解析样式继承后的可见文字格式。"""
+        """Resolve the visible run format of a styleId after inheritance."""
         if not style_id:
             return {}
         if style_id not in self._run_format_cache:
-            # run 数量通常远多于样式数量，缓存能明显降低大文档重复计算。
+            # Runs usually far outnumber styles, so caching notably reduces repeated computation in large documents.
             self._run_format_cache[style_id] = self._resolve_run_format(style_id, visited=set())
         return self._run_format_cache[style_id]
 
     def to_debug_list(self) -> list[dict[str, object]]:
-        """输出 debug 用样式摘要。"""
+        """Produce a style summary for debug output."""
         rows: list[dict[str, object]] = []
         for style_id in sorted(self.records):
             record = self.records[style_id]
@@ -63,9 +63,9 @@ class StyleMap:
         return rows
 
     def _resolve_heading_level(self, style_id: str, visited: set[str]) -> int | None:
-        """递归解析 basedOn 继承链中的 outline level。"""
+        """Recursively resolve the outline level along the basedOn inheritance chain."""
         if style_id in visited:
-            # 样式循环继承不能递归到底，记录 warning 后停止。
+            # Cyclic style inheritance cannot be recursed to the end; record a warning and stop.
             self.warnings.append(
                 ParseWarning(
                     code="STYLE_INHERITANCE_CYCLE",
@@ -77,21 +77,21 @@ class StyleMap:
 
         record = self.records.get(style_id)
         if record is None:
-            # 样式表里没有明确记录时，不做任何标题 fallback。
+            # No heading fallback when the style table has no explicit record.
             return None
 
         if record.outline_level is not None:
-            # OOXML outlineLvl 是 0 基，输出给 LLM 使用 1 基。
+            # OOXML outlineLvl is 0-based; output for the LLM is 1-based.
             return record.outline_level + 1
 
         if record.based_on:
-            # 只沿继承链查找明确的 outlineLvl，不根据样式名称猜测。
+            # Only follow the inheritance chain for an explicit outlineLvl; never guess from style names.
             visited.add(style_id)
             return self._resolve_heading_level(record.based_on, visited)
         return None
 
     def _resolve_numbering(self, style_id: str, visited: set[str]) -> tuple[str, int] | None:
-        """递归解析 basedOn 继承链中的 numPr。"""
+        """Recursively resolve the numPr along the basedOn inheritance chain."""
         if style_id in visited:
             self.warnings.append(
                 ParseWarning(
@@ -107,7 +107,7 @@ class StyleMap:
             return None
 
         if record.numbering_num_id is not None:
-            # 样式中的 numPr 是 Word 明确结构，不是按样式名称猜测。
+            # numPr in a style is an explicit Word structure, not a guess from the style name.
             return (record.numbering_num_id, record.numbering_level or 0)
 
         if record.based_on:
@@ -116,7 +116,7 @@ class StyleMap:
         return None
 
     def _resolve_run_format(self, style_id: str, visited: set[str]) -> RunFormat:
-        """递归合并 basedOn 继承链中的 run 格式。"""
+        """Recursively merge run formats along the basedOn inheritance chain."""
         if style_id in visited:
             self.warnings.append(
                 ParseWarning(
@@ -139,16 +139,16 @@ class StyleMap:
 
 
 class StylesParser:
-    """读取 styles.xml 并构建 StyleMap。"""
+    """Read styles.xml and build a StyleMap."""
 
     def __init__(self, package: PackageReader, warnings: list[ParseWarning]) -> None:
         self.package = package
         self.warnings = warnings
 
     def parse(self) -> StyleMap:
-        """解析样式文件；缺失时返回空样式表。"""
+        """Parse the styles file; return an empty style table when it is missing."""
         if not self.package.exists("word/styles.xml"):
-            # 样式文件缺失时仍可抽段落，但无法可靠识别标题。
+            # Paragraphs can still be extracted without the styles file, but headings cannot be reliably identified.
             self.warnings.append(
                 ParseWarning(
                     code="MISSING_STYLES",
@@ -165,7 +165,7 @@ class StylesParser:
         for style in root.findall(qualified_name("w", "style")):
             style_id = attr(style, "w", "styleId")
             if not style_id:
-                # 没有 styleId 的样式无法被正文引用。
+                # A style without a styleId cannot be referenced from the body.
                 continue
             record = StyleRecord(
                 style_id=style_id,
@@ -189,7 +189,7 @@ class StylesParser:
                 try:
                     record.outline_level = int(outline_val)
                 except ValueError:
-                    # 非法 outlineLvl 不影响其它样式解析。
+                    # An invalid outlineLvl does not affect parsing of other styles.
                     self.warnings.append(
                         ParseWarning(
                             code="INVALID_OUTLINE_LEVEL",
@@ -206,12 +206,14 @@ class StylesParser:
                 try:
                     record.numbering_level = int(level_str) if level_str is not None else 0
                 except ValueError:
-                    # 样式编号层级非法时按 0 层处理，同时保留 warning。
+                    # An invalid style numbering level falls back to level 0 while keeping the warning.
                     record.numbering_level = 0
                     self.warnings.append(
                         ParseWarning(
                             code="INVALID_STYLE_NUMBERING_LEVEL",
-                            message=f"Invalid numbering level {ilvl!r} for style {style_id}",
+                            message=(
+                                f"Invalid numbering level {level_str!r} for style {style_id}"
+                            ),
                             locator="word/styles.xml",
                         )
                     )

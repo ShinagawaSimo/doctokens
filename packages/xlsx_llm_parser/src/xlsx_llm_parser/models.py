@@ -5,6 +5,14 @@ from __future__ import annotations
 from typing import TypedDict
 
 
+class RichTextRun(TypedDict, total=False):
+    text: str
+    bold: bool
+    italic: bool
+    underline: bool
+    color: str
+
+
 class Cell(TypedDict, total=False):
     """A single spreadsheet cell in typed IR."""
 
@@ -30,28 +38,7 @@ class Cell(TypedDict, total=False):
     comment: str  # comment text from legacy or threaded comment
     commentAuthor: str  # author name for the comment
     style: int  # index into cellXfs for style lookup
-    rich: list[dict]  # formatted text runs [{text, bold, italic, color}]
-
-
-class SheetInfo(TypedDict, total=False):
-    """Sheet metadata and cell grid."""
-
-    name: str
-    part: str
-    kind: str  # "worksheet" | "chartsheet"
-    rows: list[list[Cell]]
-    state: str  # "visible" | "hidden" | "veryHidden"
-    hidden_cols: list[tuple[int, int]]  # (min_col, max_col) ranges from <cols>
-    sheet_protection: bool  # True when <sheetProtection> is present
-    tables: list[dict]  # [{id, name, ref, columns, totalsRow}]
-    filter_range: str  # A1 range from <autoFilter> (structural only)
-    filter_cols: list[dict]  # [{col, type, values}] from filter columns (semantic)
-    data_validations: list[dict]  # [{ranges, type, formula1, allowBlank}]
-    conditional_formats: list[dict]  # [{ranges, priority, rule_type, formula}]
-    external_links: list[str]  # detected external workbook references
-    images: list[dict]  # [{id, ref, alt}] from drawing anchors
-    charts: list[dict]  # [{id, ref, type, title, series_count}]
-    pivot_tables: list[dict]  # [{id, ref, name}] detected pivot tables
+    rich: list[RichTextRun]  # formatted text runs [{text, bold, italic, color}]
 
 
 class TableInfo(TypedDict, total=False):
@@ -64,9 +51,99 @@ class TableInfo(TypedDict, total=False):
     totalsRow: bool  # True when totals row is shown
 
 
+class FilterColumn(TypedDict, total=False):
+    col: int
+    type: str
+    values: list[str]
+
+
+class DataValidation(TypedDict, total=False):
+    ranges: str
+    type: str
+    formula1: str
+    allowBlank: bool
+
+
+class ConditionalFormat(TypedDict, total=False):
+    ranges: str
+    priority: int
+    ruleType: str
+    formula: str
+
+
+class DrawingImage(TypedDict, total=False):
+    id: str
+    ref: str
+    alt: str
+
+
+class ChartPoint(TypedDict, total=False):
+    category: str
+    value: str
+
+
+class DrawingChartSeries(TypedDict, total=False):
+    index: int
+    pointCount: int
+    name: str
+    min: float
+    max: float
+    points: list[ChartPoint]
+
+
+class DrawingChart(TypedDict, total=False):
+    id: str
+    ref: str
+    type: str
+    title: str
+    series_count: int
+    part: str
+    series: list[DrawingChartSeries]
+
+
+class PivotTableInfo(TypedDict, total=False):
+    id: str
+    ref: str
+    name: str
+
+
+class DefinedName(TypedDict):
+    name: str
+    ref: str
+    scopeSheet: str | None
+    hidden: bool
+
+
+class WorkbookMetadata(TypedDict, total=False):
+    source: str
+    defined_names: list[DefinedName]
+    external_links: list[str]
+
+
+class SheetInfo(TypedDict, total=False):
+    """Sheet metadata and cell grid."""
+
+    name: str
+    part: str
+    kind: str  # "worksheet" | "chartsheet"
+    rows: list[list[Cell]]
+    state: str  # "visible" | "hidden" | "veryHidden"
+    hidden_cols: list[tuple[int, int]]  # (min_col, max_col) ranges from <cols>
+    sheet_protection: bool  # True when <sheetProtection> is present
+    tables: list[TableInfo]  # [{id, name, ref, columns, totalsRow}]
+    filter_range: str  # A1 range from <autoFilter> (structural only)
+    filter_cols: list[FilterColumn]  # [{col, type, values}] from filter columns (semantic)
+    data_validations: list[DataValidation]  # [{ranges, type, formula1, allowBlank}]
+    conditional_formats: list[ConditionalFormat]  # [{ranges, priority, rule_type, formula}]
+    external_links: list[str]  # detected external workbook references
+    images: list[DrawingImage]  # [{id, ref, alt}] from drawing anchors
+    charts: list[DrawingChart]  # [{id, ref, type, title, series_count}]
+    pivot_tables: list[PivotTableInfo]  # [{id, ref, name}] detected pivot tables
+
+
 class ParsedWorkbook(TypedDict):
     """Parsed XLSX workbook IR."""
 
     sheets: list[SheetInfo]
-    metadata: dict
+    metadata: WorkbookMetadata
     fmt_index: object  # FormatIndex from formats.py

@@ -21,7 +21,7 @@ def _make_xlsx(entries: dict[str, str]) -> bytes:
 
 class SheetProtectionTests(unittest.TestCase):
     def test_sheet_protection_marker(self) -> None:
-        """<sheetProtection/> presence outputs tag in semantic only."""
+        """<sheetProtection/> presence outputs tag in structural and semantic."""
         data = _make_xlsx(
             {
                 "[Content_Types].xml": (
@@ -66,10 +66,10 @@ class SheetProtectionTests(unittest.TestCase):
         structural = parse_xlsx(data, density="structural")
 
         self.assertIn("<sheetProtection/>", semantic)
-        self.assertNotIn("<sheetProtection/>", structural)
+        self.assertIn("<sheetProtection/>", structural)
 
-    def test_unlocked_cell_in_semantic(self) -> None:
-        """Cell with locked='0' outputs unlocked when sheet protection active."""
+    def test_unlocked_cell_in_structural_and_semantic(self) -> None:
+        """Cell with locked='0' outputs unlocked in structural and semantic."""
         data = _make_xlsx(
             {
                 "[Content_Types].xml": (
@@ -124,9 +124,9 @@ class SheetProtectionTests(unittest.TestCase):
         structural = parse_xlsx(data, density="structural")
 
         self.assertIn("unlocked", semantic)
-        self.assertNotIn("unlocked", structural)
+        self.assertIn("unlocked", structural)
 
-    def test_formula_hidden_cell_in_semantic(self) -> None:
+    def test_formula_hidden_cell_in_structural_and_semantic(self) -> None:
         """Cell with hidden='1' outputs formulaHidden."""
         data = _make_xlsx(
             {
@@ -178,7 +178,9 @@ class SheetProtectionTests(unittest.TestCase):
             },
         )
         semantic = parse_xlsx(data, density="semantic")
+        structural = parse_xlsx(data, density="structural")
         self.assertIn("formulaHidden", semantic)
+        self.assertIn("formulaHidden", structural)
 
 
 if __name__ == "__main__":

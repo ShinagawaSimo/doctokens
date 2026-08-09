@@ -21,7 +21,7 @@ def _make_xlsx(entries: dict[str, str]) -> bytes:
 
 
 class DataValidationTests(unittest.TestCase):
-    def test_data_validation_in_semantic(self) -> None:
+    def test_data_validation_in_structural_and_semantic(self) -> None:
         data = _make_xlsx(
             {
                 "[Content_Types].xml": (
@@ -64,13 +64,13 @@ class DataValidationTests(unittest.TestCase):
             },
         )
         semantic = parse_xlsx(data, density="semantic")
-        self.assertIn("<dataValidation ref=A1:A10 type=list/>", semantic)
         structural = parse_xlsx(data, density="structural")
-        self.assertNotIn("dataValidation", structural)
+        self.assertIn("<dataValidation ref=A1:A10 type=list/>", semantic)
+        self.assertIn("<dataValidation ref=A1:A10 type=list/>", structural)
 
 
 class ConditionalFormatTests(unittest.TestCase):
-    def test_conditional_format_in_semantic(self) -> None:
+    def test_conditional_format_in_structural_and_semantic(self) -> None:
         data = _make_xlsx(
             {
                 "[Content_Types].xml": (
@@ -113,10 +113,11 @@ class ConditionalFormatTests(unittest.TestCase):
             },
         )
         semantic = parse_xlsx(data, density="semantic")
+        structural = parse_xlsx(data, density="structural")
         self.assertIn("<conditionalFormatting ref=F4:F20>", semantic)
         self.assertIn('<rule type=cellIs formula="F4&lt;0"/>', semantic)
-        structural = parse_xlsx(data, density="structural")
-        self.assertNotIn("conditionalFormatting", structural)
+        self.assertIn("<conditionalFormatting ref=F4:F20>", structural)
+        self.assertIn('<rule type=cellIs formula="F4&lt;0"/>', structural)
 
 
 class ExternalLinkTests(unittest.TestCase):
@@ -162,7 +163,56 @@ class ExternalLinkTests(unittest.TestCase):
             },
         )
         semantic = parse_xlsx(data, density="semantic")
+        structural = parse_xlsx(data, density="structural")
         self.assertIn("<externalLink target=Budget.xlsx/>", semantic)
+        self.assertIn("<externalLink target=Budget.xlsx/>", structural)
+
+    def test_structured_reference_is_not_external_link(self) -> None:
+        data = _make_xlsx(
+            {
+                "[Content_Types].xml": (
+                    f'<Types xmlns="{NS_CT}">'
+                    '<Default Extension="xml" ContentType="application/xml"/>'
+                    '<Default Extension="rels" ContentType='
+                    '"application/vnd.openxmlformats-package.relationships+xml"/>'
+                    '<Override PartName="/xl/workbook.xml" '
+                    'ContentType="application/vnd.openxmlformats-officedocument.'
+                    'spreadsheetml.sheet.main+xml"/>'
+                    "</Types>"
+                ),
+                "_rels/.rels": (
+                    f'<Relationships xmlns="{NS_RP}">'
+                    f'<Relationship Id="r1" Type="{NS_O}/officeDocument" Target="xl/workbook.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/workbook.xml": (
+                    f'<workbook xmlns="{NS_S}" xmlns:r="{NS_O}">'
+                    '<sheets><sheet name="Data" sheetId="1" r:id="rSheet1"/></sheets>'
+                    "<definedNames>"
+                    '<definedName name="AvgLifeValues">PopulationSummary[AvgLife]</definedName>'
+                    "</definedNames>"
+                    "</workbook>"
+                ),
+                "xl/_rels/workbook.xml.rels": (
+                    f'<Relationships xmlns="{NS_RP}">'
+                    f'<Relationship Id="rSheet1" Type="{NS_O}/worksheet" '
+                    'Target="worksheets/sheet1.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/worksheets/sheet1.xml": (
+                    f'<worksheet xmlns="{NS_S}"><sheetData>'
+                    '<row r="1"><c r="A1" t="inlineStr"><is><t>X</t></is></c></row>'
+                    "</sheetData></worksheet>"
+                ),
+            },
+        )
+
+        semantic = parse_xlsx(data, density="semantic")
+        structural = parse_xlsx(data, density="structural")
+
+        self.assertIn('refersTo="PopulationSummary[AvgLife]"', semantic)
+        self.assertNotIn("externalLink", semantic)
+        self.assertNotIn("externalLink", structural)
 
 
 if __name__ == "__main__":

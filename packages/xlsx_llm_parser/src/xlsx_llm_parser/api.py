@@ -6,7 +6,9 @@ from collections.abc import Iterator
 from html import escape
 from pathlib import Path
 
+from .models import Cell, DrawingChart
 from .parser import _parse_workbook
+from .query import AggregateSpec, OrderSpec, WhereCondition
 from .query import query_data as _query_data
 from .renderers.structural import (
     _find_sheet,
@@ -60,7 +62,7 @@ def render_range(
     start_col, start_row, end_col, end_row = _parse_range(range_spec)
 
     rows = sheet_info.get("rows", [])
-    filtered = []
+    filtered: list[list[Cell]] = []
     for row_cells in rows:
         kept = [
             c
@@ -81,9 +83,10 @@ def find_cells(
     kind: str | None = None,
     limit: int = 50,
 ) -> str:
-    """Search values, formulas, comments, and defined names across sheets.
+    """Search values, formulas, comments, hyperlinks, and defined names across sheets.
 
-    *kind* narrows to one of ``value``, ``formula``, ``comment``, ``definedName``.
+    *kind* narrows to one of ``value``, ``formula``, ``comment``, ``hyperlink``,
+    ``definedName``.
     """
     import re as _re
 
@@ -102,32 +105,41 @@ def find_cells(
             for cell in row_cells:
                 if len(matches) >= limit:
                     break
-                if kind is None or kind == "value":
-                    if pattern.search(cell.get("text", "")):
-                        matches.append(
-                            f'<match cell="{escape(sheet_name, quote=True)}!{cell["ref"]}" field=value>'
-                            f"{escape(cell['text'])}"
-                        )
-                        continue
-                if kind is None or kind == "formula":
-                    if pattern.search(cell.get("formula", "")):
-                        matches.append(
-                            f'<match cell="{escape(sheet_name, quote=True)}!{cell["ref"]}" field=formula>'
-                            f"{escape(cell.get('formula', ''))}"
-                        )
-                        continue
-                if kind is None or kind == "comment":
-                    if pattern.search(cell.get("comment", "")):
-                        matches.append(
-                            f'<match cell="{escape(sheet_name, quote=True)}!{cell["ref"]}" field=comment>'
-                            f"{escape(cell.get('comment', ''))}"
-                        )
+                cell_ref = f"{escape(sheet_name, quote=True)}!{cell['ref']}"
+                if (kind is None or kind == "value") and pattern.search(cell.get("text", "")):
+                    matches.append(
+                        f'<match cell="{cell_ref}" field=value>{escape(cell["text"])}'
+                    )
+                    continue
+                if (kind is None or kind == "formula") and pattern.search(
+                    cell.get("formula", "")
+                ):
+                    matches.append(
+                        f'<match cell="{cell_ref}" field=formula>'
+                        f"{escape(cell.get('formula', ''))}"
+                    )
+                    continue
+                if (kind is None or kind == "comment") and pattern.search(
+                    cell.get("comment", "")
+                ):
+                    matches.append(
+                        f'<match cell="{cell_ref}" field=comment>'
+                        f"{escape(cell.get('comment', ''))}"
+                    )
+                    continue
+                if (kind is None or kind == "hyperlink") and pattern.search(
+                    cell.get("hyperlink", "")
+                ):
+                    matches.append(
+                        f'<match cell="{cell_ref}" field=hyperlink>'
+                        f"{escape(cell.get('hyperlink', ''))}"
+                    )
             if len(matches) >= limit:
                 break
 
         # Defined names
         if (kind is None or kind == "definedName") and len(matches) < limit:
-            for dn in wb.get("metadata", {}).get("defined_names", []):
+            for dn in wb["metadata"].get("defined_names", []):
                 if len(matches) >= limit:
                     break
                 scope = dn.get("scopeSheet")
@@ -151,10 +163,10 @@ def query_data(
     range_spec: str | None = None,
     header_row: int | None = None,
     select: list[str] | None = None,
-    where: list[dict] | None = None,
+    where: list[WhereCondition] | None = None,
     group_by: list[str] | None = None,
-    aggregates: list[dict] | None = None,
-    order_by: list[dict] | None = None,
+    aggregates: list[AggregateSpec] | None = None,
+    order_by: list[OrderSpec] | None = None,
     limit: int | None = None,
 ) -> str:
     """Query a declared Table or explicit range with projection, filtering,
@@ -205,7 +217,7 @@ def get_resource(
     return None
 
 
-def _render_chart_resource(ch: dict) -> str:
+def _render_chart_resource(ch: DrawingChart) -> str:
     """Render a chart as an HTML string — full series data."""
     from html import escape
 

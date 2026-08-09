@@ -1,4 +1,4 @@
-"""建立图片资源索引。不提取二进制数据——按需通过 get_resource 获取。"""
+"""Build the image resource index. No binary data is extracted -- fetched on demand via get_resource."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relation
 
 
 class AssetExtractor:
-    """扫描 image relationships，建立 (sourcePart, rId) → asset 索引。"""
+    """Scan image relationships and build a (sourcePart, rId) -> asset index."""
 
     def __init__(
         self,
@@ -28,21 +28,21 @@ class AssetExtractor:
         self.warnings = warnings
 
     def extract(self) -> tuple[list[ImageAsset], AssetLookup]:
-        """建立图片元数据索引，不读取二进制数据。"""
+        """Build the image metadata index without reading binary data."""
         assets: list[ImageAsset] = []
         lookup: AssetLookup = {}
         image_index = 1
         for rel in self.relationships.by_type(IMAGE_REL_TYPE):
             if rel.target_mode == "External":
-                asset: ImageAsset = {
+                external_asset: ImageAsset = {
                     "id": f"img{image_index}",
                     "type": "image",
                     "source": "external",
                     "href": rel.target,
                 }
                 image_index += 1
-                assets.append(asset)
-                lookup[(rel.source_part, rel.id)] = asset
+                assets.append(external_asset)
+                lookup[(rel.source_part, rel.id)] = external_asset
                 continue
 
             target = rel.resolved_target
@@ -60,20 +60,20 @@ class AssetExtractor:
             image_index += 1
             content_type = self._content_type_for_part(target)
 
-            asset: ImageAsset = {
+            embedded_asset: ImageAsset = {
                 "id": asset_id,
                 "type": "image",
                 "source": "embedded",
                 "zipPath": target,
             }
             if content_type is not None:
-                asset["contentType"] = content_type
-            assets.append(asset)
-            lookup[(rel.source_part, rel.id)] = asset
+                embedded_asset["contentType"] = content_type
+            assets.append(embedded_asset)
+            lookup[(rel.source_part, rel.id)] = embedded_asset
         return assets, lookup
 
     def _content_type_for_part(self, part_name: str) -> str | None:
-        """从 Content Types 中推断资源 MIME 类型。"""
+        """Infer the resource MIME type from Content Types."""
         overrides = self.content_types["overrides"]
         defaults = self.content_types["defaults"]
         if part_name in overrides:

@@ -1,4 +1,4 @@
-"""SmartArt inline 渲染与 extract 辅助。"""
+"""SmartArt inline rendering and extract helpers."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from ...core.models import InlineObject, SmartArt
 
 
 def smartart_to_html5(obj: InlineObject) -> str:
-    """输出 SmartArt 摘要：显示全部节点文本，完整结构通过 get_resource 获取。"""
+    """Output a SmartArt summary: show all node text; the full structure is available via get_resource."""
     smartart_id = obj.get("id", "?")
     smartart_type = obj.get("layoutType", "")
     node_count = obj.get("nodeCount", 0)

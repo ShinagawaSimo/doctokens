@@ -1,4 +1,4 @@
-"""解析 Word 自动编号，并生成段落可见编号文本。"""
+"""Parse Word automatic numbering and produce the visible numbering text for paragraphs."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from ..core.package import PackageReader
 
 @dataclass(frozen=True)
 class NumberingLevel:
-    """单个编号层级的显示规则。"""
+    """Display rules for a single numbering level."""
 
     numbering_level: int
     start: int = 1
@@ -28,7 +28,7 @@ class NumberingLevel:
 
 @dataclass(frozen=True)
 class NumberingInstance:
-    """一个 numId 对应的实际编号实例。"""
+    """The concrete numbering instance for one numId."""
 
     numbering_id: str
     abstract_num_id: str
@@ -41,7 +41,9 @@ class NumberingInstance:
 
 
 class NumberingMap:
-    """只读编号定义索引；运行时计数由 NumberingState 单独维护。"""
+    """Read-only index of numbering definitions; runtime counters are maintained
+    separately by NumberingState.
+    """
 
     def __init__(
         self,
@@ -56,23 +58,26 @@ class NumberingMap:
         self.warnings = warnings
 
     def level_for(self, num_id: str, numbering_level: int) -> NumberingLevel | None:
-        """按 numId/ilvl 找到最终生效的层级规则。"""
+        """Find the effective level rules for a numId/ilvl pair."""
         instance = self.instances.get(num_id)
         if instance is None:
             return None
         if numbering_level in instance.level_overrides:
-            # lvlOverride 中的完整 lvl 定义优先于 abstractNum。
+            # A full lvl definition in lvlOverride takes precedence over abstractNum.
             return instance.level_overrides[numbering_level]
         base = self.abstract_levels.get(instance.abstract_num_id, {}).get(numbering_level)
         if base is None:
             return None
         if numbering_level in instance.start_overrides:
-            # startOverride 只改起始值，其余格式继承 abstractNum。
+            # startOverride only changes the start value; the rest of the format is
+            # inherited from abstractNum.
             return replace(base, start=instance.start_overrides[numbering_level])
         return base
 
     def to_debug_dict(self) -> dict[str, object]:
-        """输出 debug 用编号定义，最终 XML 不直接暴露这些字段。"""
+        """Output numbering definitions for debug; the final XML does not expose these fields
+        directly.
+        """
         return {
             "abstractNums": {
                 abstract_id: {
@@ -100,7 +105,9 @@ class NumberingMap:
 
 
 class NumberingState:
-    """维护单篇文档的编号计数，避免并发任务共享状态。"""
+    """Maintain numbering counters for a single document so concurrent tasks never share
+    state.
+    """
 
     def __init__(self, numbering: NumberingMap, warnings: list[ParseWarning]) -> None:
         self.numbering = numbering
@@ -116,7 +123,9 @@ class NumberingState:
         part: str | None = None,
         block_id: str | None = None,
     ) -> NumberingLabel | None:
-        """推进指定编号序列，并返回应该插入段落开头的可见编号。"""
+        """Advance the specified numbering sequence and return the visible number to insert
+        at the paragraph start.
+        """
         level = self.numbering.level_for(num_id, numbering_level)
         if level is None:
             self.warnings.append(
@@ -154,13 +163,14 @@ class NumberingState:
         }
 
     def _render_label(self, num_id: str, numbering_level: int, counters: dict[int, int]) -> str:
-        """把 lvlText 中的 %1、%2 等占位符替换成真实编号。"""
+        """Replace %1, %2, etc. placeholders in lvlText with the actual numbers."""
         current_level = self.numbering.level_for(num_id, numbering_level)
         if current_level is None:
             return ""
         template = current_level.level_text
         if not template:
-            # bullet 通常会把符号直接放在 lvlText；缺失时给一个轻量符号。
+            # Bullets usually put the symbol directly in lvlText; use a lightweight symbol
+            # when missing.
             return (
                 "•"
                 if current_level.number_format == "bullet"
@@ -178,7 +188,7 @@ class NumberingState:
         return re.sub(r"%([1-9])", replace_match, template)
 
     def _format_number(self, value: int, number_format: str) -> str:
-        """按 OOXML numFmt 把整数转换成可见编号文本。"""
+        """Convert an integer to visible numbering text per the OOXML numFmt."""
         if number_format in {"decimal", "ordinal"}:
             return str(value)
         if number_format == "decimalZero":
@@ -203,7 +213,8 @@ class NumberingState:
             return "•"
 
         if number_format not in self._warned_formats:
-            # 未覆盖格式不阻断解析，先用十进制兜底并在 debug 中暴露风险。
+            # Uncovered formats do not block parsing; fall back to decimal and surface the
+            # risk in debug output.
             self._warned_formats.add(number_format)
             self.warnings.append(
                 ParseWarning(
@@ -218,7 +229,7 @@ class NumberingState:
 
     @staticmethod
     def _suffix_text(suffix: str) -> str:
-        """把 Word 编号后缀转换成最终文本中的轻量空白。"""
+        """Convert a Word numbering suffix into lightweight whitespace in the final text."""
         if suffix == "nothing":
             return ""
         if suffix == "space":
@@ -227,7 +238,7 @@ class NumberingState:
 
     @staticmethod
     def _alpha(value: int) -> str:
-        """生成 A/B/.../AA 风格字母编号。"""
+        """Generate A/B/.../AA style letter numbering."""
         value = max(1, value)
         chars: list[str] = []
         while value:
@@ -238,7 +249,9 @@ class NumberingState:
 
     @staticmethod
     def _roman(value: int) -> str:
-        """生成罗马数字；超大值退化为十进制，避免输出错误长串。"""
+        """Generate Roman numerals; oversized values degrade to decimal to avoid a wrong long
+        output.
+        """
         if value <= 0 or value > 3999:
             return str(value)
         pairs = [
@@ -265,7 +278,7 @@ class NumberingState:
 
     @staticmethod
     def _chinese_counting(value: int) -> str:
-        """生成简体中文计数，覆盖常见章节/条目编号。"""
+        """Generate Simplified Chinese counting, covering common section/item numbering."""
         if value <= 0:
             return str(value)
         digits = "零一二三四五六七八九"
@@ -296,14 +309,14 @@ class NumberingState:
 
 
 class NumberingParser:
-    """读取 word/numbering.xml 并构建编号定义。"""
+    """Read word/numbering.xml and build the numbering definitions."""
 
     def __init__(self, package: PackageReader, warnings: list[ParseWarning]) -> None:
         self.package = package
         self.warnings = warnings
 
     def parse(self) -> NumberingMap:
-        """解析编号 part；缺失时返回空编号表。"""
+        """Parse the numbering part; return an empty numbering map when missing."""
         if not self.package.exists("word/numbering.xml"):
             return NumberingMap({}, {}, self.warnings)
 
@@ -350,7 +363,7 @@ class NumberingParser:
         return NumberingMap(abstract_levels, instances, self.warnings)
 
     def _parse_level(self, lvl: ET.Element | None) -> NumberingLevel | None:
-        """解析一个 w:lvl 节点。"""
+        """Parse a single w:lvl node."""
         if lvl is None:
             return None
         level_value = self._parse_int(attr(lvl, "w", "ilvl"))
@@ -372,13 +385,15 @@ class NumberingParser:
 
     @staticmethod
     def _child_attr(node: ET.Element, child_name: str, attr_name: str) -> str | None:
-        """读取直接子节点上的 w 属性，子节点缺失时返回 None。"""
+        """Read a w attribute from a direct child node; return None when the child is
+        missing.
+        """
         child = first_child(node, "w", child_name)
         return attr(child, "w", attr_name) if child is not None else None
 
     @staticmethod
     def _parse_int(value: str | None, default: int | None = None) -> int | None:
-        """安全读取 OOXML 整数字段。"""
+        """Safely read an OOXML integer field."""
         if value is None:
             return default
         try:

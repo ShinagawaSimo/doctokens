@@ -123,9 +123,14 @@ class HiddenColumnTests(unittest.TestCase):
         # Columns annotation appears before grid
         self.assertIn("<columns ref=B:C hidden>", structural)
 
+        plain = parse_xlsx(data, density="plain")
+        self.assertIn("\nA\n", plain)
+        self.assertNotIn("B", plain)
+        self.assertNotIn("C", plain)
+
 
 class OutlineTests(unittest.TestCase):
-    def test_outline_level_and_collapsed_in_semantic(self) -> None:
+    def test_outline_level_and_collapsed_in_structural_and_semantic(self) -> None:
         data = _make_xlsx(
             {
                 "[Content_Types].xml": (
@@ -169,13 +174,11 @@ class OutlineTests(unittest.TestCase):
         semantic = parse_xlsx(data, density="semantic")
         structural = parse_xlsx(data, density="structural")
 
-        # semantic outputs outline info
+        # Both structural and semantic output outline info
         self.assertIn("outlineLevel=1", semantic)
         self.assertIn("collapsed", semantic)
-
-        # structural omits outline info
-        self.assertNotIn("outlineLevel", structural)
-        self.assertNotIn("collapsed", structural)
+        self.assertIn("outlineLevel=1", structural)
+        self.assertIn("collapsed", structural)
 
 
 if __name__ == "__main__":

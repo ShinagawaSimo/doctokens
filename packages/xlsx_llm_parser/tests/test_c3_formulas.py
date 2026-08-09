@@ -69,12 +69,16 @@ class SharedFormulaTests(unittest.TestCase):
                 ),
             },
         )
-        html = parse_xlsx(data, density="semantic")
+        semantic = parse_xlsx(data, density="semantic")
+        structural = parse_xlsx(data, density="structural")
         # Master formula unchanged
-        self.assertIn('formula="B2+C2"', html)
+        self.assertIn('formula="B2+C2"', semantic)
+        self.assertIn('formula="B2+C2"', structural)
         # Slave formulas expanded
-        self.assertIn('formula="B3+C3"', html)
-        self.assertIn('formula="B4+C4"', html)
+        self.assertIn('formula="B3+C3"', semantic)
+        self.assertIn('formula="B4+C4"', semantic)
+        self.assertIn('formula="B3+C3"', structural)
+        self.assertIn('formula="B4+C4"', structural)
 
     def test_absolute_reference_preserved(self) -> None:
         """Absolute references ($col/$row) are not offset."""
@@ -120,10 +124,13 @@ class SharedFormulaTests(unittest.TestCase):
                 ),
             },
         )
-        html = parse_xlsx(data, density="semantic")
+        semantic = parse_xlsx(data, density="semantic")
+        structural = parse_xlsx(data, density="structural")
         # $B$1 stays absolute
-        self.assertIn('formula="A2*$B$1"', html)
-        self.assertIn('formula="A3*$B$1"', html)
+        self.assertIn('formula="A2*$B$1"', semantic)
+        self.assertIn('formula="A3*$B$1"', semantic)
+        self.assertIn('formula="A2*$B$1"', structural)
+        self.assertIn('formula="A3*$B$1"', structural)
 
     def test_cross_sheet_ref_preserved(self) -> None:
         """Cross-sheet references are not expanded."""
@@ -170,9 +177,11 @@ class SharedFormulaTests(unittest.TestCase):
                 ),
             },
         )
-        html = parse_xlsx(data, density="semantic")
+        semantic = parse_xlsx(data, density="semantic")
+        structural = parse_xlsx(data, density="structural")
         # Cross-sheet refs preserved verbatim
-        self.assertIn('formula="Sheet2!A1+Sheet2!B1"', html)
+        self.assertIn('formula="Sheet2!A1+Sheet2!B1"', semantic)
+        self.assertIn('formula="Sheet2!A1+Sheet2!B1"', structural)
 
 
 class ArrayFormulaTests(unittest.TestCase):
@@ -221,9 +230,12 @@ class ArrayFormulaTests(unittest.TestCase):
                 ),
             },
         )
-        html = parse_xlsx(data, density="semantic")
-        self.assertIn("formulaType=array", html)
-        self.assertIn("formulaRange=A1:C3", html)
+        semantic = parse_xlsx(data, density="semantic")
+        structural = parse_xlsx(data, density="structural")
+        self.assertIn("formulaType=array", semantic)
+        self.assertIn("formulaRange=A1:C3", semantic)
+        self.assertIn("formulaType=array", structural)
+        self.assertIn("formulaRange=A1:C3", structural)
 
     def test_dynamic_array_spill(self) -> None:
         """Dynamic array: anchor cell marks spillRange, cached recipients get spillFrom."""
@@ -273,15 +285,14 @@ class ArrayFormulaTests(unittest.TestCase):
                 ),
             },
         )
-        html = parse_xlsx(data, density="semantic")
+        semantic = parse_xlsx(data, density="semantic")
+        structural = parse_xlsx(data, density="structural")
 
         # Source cell has both formulaRange and spillRange
-        self.assertIn("spillRange=B1:B3", html)
-
-        # structural omits spill attributes
-        structural = parse_xlsx(data, density="structural")
-        self.assertNotIn("spillRange", structural)
-        self.assertNotIn("spillFrom", structural)
+        self.assertIn("spillRange=B1:B3", semantic)
+        self.assertIn("spillRange=B1:B3", structural)
+        self.assertIn('spillFrom="B1"', semantic)
+        self.assertIn('spillFrom="B1"', structural)
 
 
 if __name__ == "__main__":

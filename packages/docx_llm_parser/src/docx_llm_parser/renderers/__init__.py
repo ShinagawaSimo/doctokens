@@ -1,4 +1,4 @@
-"""最终面向大模型的输出渲染器。"""
+"""Final output renderers for LLM-facing markup."""
 
 from .html5 import iter_html5, to_html5, write_outputs
 

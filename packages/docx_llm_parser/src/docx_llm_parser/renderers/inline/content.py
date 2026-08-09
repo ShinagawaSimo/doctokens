@@ -1,4 +1,4 @@
-"""Inline 内容渲染：run 合并、格式包裹、对象引用。"""
+"""Inline content rendering: run merging, format wrapping, object references."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from ..objects import chart_to_html5, smartart_to_html5
 def inline_content(
     block: InlineContainer, density: str, ocr_results: dict[str, str] | None = None
 ) -> str:
-    """把 run 文本、链接、图片、脚注引用等合成为 inline HTML5。"""
+    """Combine run text, links, images, footnote references, etc. into inline HTML5."""
     if "runs" not in block:
         return escape(block["text"])
 
@@ -49,7 +49,7 @@ def inline_content(
 
 
 def apply_inline_format(text: str, fmt: RunFormat, density: str) -> str:
-    """用 HTML5 inline 标签包裹格式化文本。structural 不做格式包裹。"""
+    """Wrap formatted text with HTML5 inline tags. structural does no format wrapping."""
     if density == "structural":
         return text
     if not text or not fmt:
@@ -78,7 +78,7 @@ def apply_inline_format(text: str, fmt: RunFormat, density: str) -> str:
 def inline_object(
     obj: InlineObject, density: str, ocr_results: dict[str, str] | None = None
 ) -> str:
-    """渲染段落内的非纯文本对象引用。"""
+    """Render non-plain-text object references inside a paragraph."""
     obj_type = obj["type"]
 
     if obj_type == "image":

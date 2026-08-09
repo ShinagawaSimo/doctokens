@@ -2,9 +2,9 @@ density=plain
 Document Title
 
 1. Hellolink	
-after break[fn2][ed3] insertedx [fn2: Footnote text]
+after break[fn2][ed3][cmt4] insertedx [fn2: Footnote text]
 
-[Image]
+[Image alt text]
 
 [Chart Chart Title (bar, 1 series: Series A)]
 
@@ -17,5 +17,14 @@ Body
 
 Last page
 
+[Headers]
+[headers.header1: Header text]
+
+[Footers]
+[footers.footer1: Footer text]
+
 [Endnotes]
 [ed3: Endnote text]
+
+[Comments]
+[cmt4: Comment text]

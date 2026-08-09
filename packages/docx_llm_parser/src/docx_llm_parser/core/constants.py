@@ -1,14 +1,14 @@
-"""OOXML 命名空间和 XML 小工具 — DOCX 专用。
+"""OOXML namespaces and XML utilities - DOCX specific.
 
-通过委托 ``ooxml_llm_core.xml`` 实现共享 XML helper 逻辑，
-仅在 DOCX 的 ``NS`` 基础上提供封装。
+Shared XML helper logic is implemented by delegating to ``ooxml_llm_core.xml``,
+providing a wrapper on top of the DOCX ``NS`` only.
 """
 
 from __future__ import annotations
 
 from xml.etree import ElementTree as ET
 
-# 共享 helper 实现（带别名避免与本地 wrapper 冲突）
+# Shared helper implementations (aliased to avoid conflicts with local wrappers)
 # isort: split
 from ooxml_llm_core.xml import NS as _NS_OPC
 from ooxml_llm_core.xml import (
@@ -27,7 +27,7 @@ from ooxml_llm_core.xml import (
     qualified_name as _core_qualified_name,
 )
 
-# ── DOCX 完整命名空间映射 ──
+# -- Complete DOCX namespace mapping --
 
 NS = {
     **_NS_OPC,
@@ -43,7 +43,7 @@ NS = {
     "wps": "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
 }
 
-# ── 委托包装器 ──
+# -- Delegation wrappers --
 
 
 def qualified_name(prefix: str, local: str) -> str:
@@ -62,11 +62,11 @@ def child_elements(el: ET.Element | None, prefix: str, local: str) -> list[ET.El
     return _core_child_elements(el, prefix, local, NS)
 
 
-# ── Word 专用 helper ──
+# -- Word-specific helpers --
 
 
 def is_on(el: ET.Element | None) -> bool:
-    """判断 Word 布尔属性是否开启。"""
+    """Check whether a Word boolean attribute is enabled."""
     if el is None:
         return False
     val = attr(el, "w", "val")
@@ -75,9 +75,9 @@ def is_on(el: ET.Element | None) -> bool:
     return val.lower() not in {"0", "false", "off", "none"}
 
 
-# ── 预计算热路径标签名 ──
-# 避免每次调用 qualified_name(prefix, local) 时重复做 f"{{{ns}}}{local}" 字符串拼接。
-# body/inline 解析中这些标签名被频繁用于 find/findall/iter 等操作。
+# -- Precomputed hot-path tag names --
+# Avoid repeated f"{{{ns}}}{local}" string concatenation on every qualified_name(prefix, local) call.
+# These tag names are used heavily in find/findall/iter operations during body/inline parsing.
 _TAG_W_BODY = qualified_name("w", "body")
 _TAG_W_PARAGRAPH = qualified_name("w", "p")
 _TAG_W_RUN = qualified_name("w", "r")
@@ -134,7 +134,75 @@ _TAG_W_STYLE = qualified_name("w", "style")
 _TAG_M_OMATH = qualified_name("m", "oMath")
 _TAG_M_OMATH_PARA = qualified_name("m", "oMathPara")
 
-# 绘图/图表/图示命名空间预计算标签
+# Precomputed tags for drawing/chart/diagram namespaces
 _TAG_A_BLIP = qualified_name("a", "blip")
 _TAG_C_CHART = qualified_name("c", "chart")
 _TAG_DGM_REL_IDS = qualified_name("dgm", "relIds")
+
+__all__ = [
+    "NS",
+    "_TAG_A_BLIP",
+    "_TAG_C_CHART",
+    "_TAG_DGM_REL_IDS",
+    "_TAG_M_OMATH",
+    "_TAG_M_OMATH_PARA",
+    "_TAG_W_ANNOTATION_REF",
+    "_TAG_W_BASED_ON",
+    "_TAG_W_BODY",
+    "_TAG_W_BOOKMARK_END",
+    "_TAG_W_BOOKMARK_START",
+    "_TAG_W_BREAK",
+    "_TAG_W_CARRIAGE_RETURN",
+    "_TAG_W_CELL_PROPERTIES",
+    "_TAG_W_COMMENT_RANGE_END",
+    "_TAG_W_COMMENT_RANGE_START",
+    "_TAG_W_COMMENT_REFERENCE",
+    "_TAG_W_DELETION",
+    "_TAG_W_DELETION_TEXT",
+    "_TAG_W_DRAWING",
+    "_TAG_W_ENDNOTE_REF",
+    "_TAG_W_ENDNOTE_REFERENCE",
+    "_TAG_W_FLD_CHAR",
+    "_TAG_W_FOOTNOTE_REF",
+    "_TAG_W_FOOTNOTE_REFERENCE",
+    "_TAG_W_GRID_SPAN",
+    "_TAG_W_HYPERLINK",
+    "_TAG_W_INDENT_LEVEL",
+    "_TAG_W_INSERTION",
+    "_TAG_W_INSTR_TEXT",
+    "_TAG_W_LAST_RENDERED_PAGE_BREAK",
+    "_TAG_W_NAME",
+    "_TAG_W_NEXT",
+    "_TAG_W_NUMBERING_ID",
+    "_TAG_W_NUMBERING_PROPERTIES",
+    "_TAG_W_OBJECT",
+    "_TAG_W_OUTLINE_LEVEL",
+    "_TAG_W_PARAGRAPH",
+    "_TAG_W_PARAGRAPH_PROPERTIES",
+    "_TAG_W_PARAGRAPH_STYLE",
+    "_TAG_W_PERMISSION_END",
+    "_TAG_W_PERMISSION_START",
+    "_TAG_W_PICTURE",
+    "_TAG_W_PROOF_ERROR",
+    "_TAG_W_RUN",
+    "_TAG_W_RUN_PROPERTIES",
+    "_TAG_W_RUN_STYLE",
+    "_TAG_W_SDT_CONTENT",
+    "_TAG_W_SECTION_PROPERTIES",
+    "_TAG_W_SMART_TAG",
+    "_TAG_W_STRUCTURED_DOCUMENT_TAG",
+    "_TAG_W_STYLE",
+    "_TAG_W_TAB",
+    "_TAG_W_TABLE",
+    "_TAG_W_TABLE_CELL",
+    "_TAG_W_TABLE_HEADER",
+    "_TAG_W_TABLE_ROW",
+    "_TAG_W_TEXT",
+    "_TAG_W_VERTICAL_MERGE",
+    "attr",
+    "child_elements",
+    "first_child",
+    "is_on",
+    "local_name",
+    "qualified_name",
+]

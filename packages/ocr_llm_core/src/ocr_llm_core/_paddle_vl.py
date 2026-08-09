@@ -6,12 +6,26 @@ import base64
 import json
 import time
 import urllib.request
+from typing import cast
 
 from ._provider import OcrProvider
 
 _TOKEN_URL = "https://aip.baidubce.com/oauth/2.0/token"
 _SUBMIT_URL = "https://aip.baidubce.com/rest/2.0/brain/online/v2/paddle-vl-parser/task"
 _QUERY_URL = "https://aip.baidubce.com/rest/2.0/brain/online/v2/paddle-vl-parser/task/query"
+
+
+def _json_object(raw: bytes) -> dict[str, object]:
+    parsed: object = json.loads(raw)
+    if not isinstance(parsed, dict):
+        raise RuntimeError("Unexpected JSON response shape")
+    return cast(dict[str, object], parsed)
+
+
+def _object_map(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        return {}
+    return cast(dict[str, object], value)
 
 
 class PaddleVLProvider(OcrProvider):
@@ -65,8 +79,11 @@ class PaddleVLProvider(OcrProvider):
         req = urllib.request.Request(_TOKEN_URL, data=data, method="POST")
         req.add_header("Content-Type", "application/x-www-form-urlencoded")
         with urllib.request.urlopen(req, timeout=30) as resp:
-            body = json.loads(resp.read())
-        return body["access_token"]
+            body = _json_object(resp.read())
+        token = body.get("access_token")
+        if not isinstance(token, str):
+            raise RuntimeError("Token response did not include access_token")
+        return token
 
     def _submit(self, token: str, image_bytes: bytes) -> str:
         b64 = base64.b64encode(image_bytes).decode()
@@ -81,10 +98,14 @@ class PaddleVLProvider(OcrProvider):
         req = urllib.request.Request(url, data=payload, method="POST")
         req.add_header("Content-Type", "application/json")
         with urllib.request.urlopen(req, timeout=60) as resp:
-            body = json.loads(resp.read())
+            body = _json_object(resp.read())
         if body.get("error_code", 0) != 0:
             raise RuntimeError(f"Submit failed: {body.get('error_msg', 'unknown')}")
-        return body["result"]["task_id"]
+        result = _object_map(body.get("result"))
+        task_id = result.get("task_id")
+        if not isinstance(task_id, str):
+            raise RuntimeError("Submit response did not include task_id")
+        return task_id
 
     def _poll(self, token: str, task_id: str) -> tuple[str, str | None]:
         payload = json.dumps({"task_id": task_id}).encode()
@@ -94,13 +115,16 @@ class PaddleVLProvider(OcrProvider):
             req = urllib.request.Request(url, data=payload, method="POST")
             req.add_header("Content-Type", "application/json")
             with urllib.request.urlopen(req, timeout=30) as resp:
-                body = json.loads(resp.read())
+                body = _json_object(resp.read())
             if body.get("error_code", 0) != 0:
-                return ("failed", body.get("error_msg", "unknown"))
-            result = body.get("result", {})
-            status = result.get("status", "failed")
+                error_msg = body.get("error_msg")
+                return ("failed", error_msg if isinstance(error_msg, str) else "unknown")
+            result = _object_map(body.get("result"))
+            status_value = result.get("status", "failed")
+            status = status_value if isinstance(status_value, str) else "failed"
             if status in ("success", "failed"):
-                return (status, result.get("task_error"))
+                task_error = result.get("task_error")
+                return (status, task_error if isinstance(task_error, str) else None)
             time.sleep(self.poll_interval)
         return ("processing", None)
 
@@ -110,9 +134,11 @@ class PaddleVLProvider(OcrProvider):
         req = urllib.request.Request(url, data=payload, method="POST")
         req.add_header("Content-Type", "application/json")
         with urllib.request.urlopen(req, timeout=30) as resp:
-            body = json.loads(resp.read())
-        markdown_url = body["result"].get("markdown_url")
-        if not markdown_url:
+            body = _json_object(resp.read())
+        result = _object_map(body.get("result"))
+        markdown_url = result.get("markdown_url")
+        if not isinstance(markdown_url, str) or not markdown_url:
             return ""
         with urllib.request.urlopen(markdown_url, timeout=30) as resp:
-            return resp.read().decode("utf-8")
+            data = cast(bytes, resp.read())
+        return data.decode("utf-8")

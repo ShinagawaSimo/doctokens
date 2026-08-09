@@ -58,10 +58,18 @@ class NumberingStateTests(unittest.TestCase):
         )
         state = NumberingState(numbering, warnings)
 
-        self.assertEqual(state.advance("9", 0)["text"], "1.\t")
-        self.assertEqual(state.advance("9", 1)["text"], "1.1.\t")
-        self.assertEqual(state.advance("9", 0)["text"], "2.\t")
-        self.assertEqual(state.advance("9", 1)["text"], "2.1.\t")
+        label = state.advance("9", 0)
+        assert label is not None
+        self.assertEqual(label["text"], "1.\t")
+        label = state.advance("9", 1)
+        assert label is not None
+        self.assertEqual(label["text"], "1.1.\t")
+        label = state.advance("9", 0)
+        assert label is not None
+        self.assertEqual(label["text"], "2.\t")
+        label = state.advance("9", 1)
+        assert label is not None
+        self.assertEqual(label["text"], "2.1.\t")
         self.assertEqual(warnings, [])
 
 
@@ -82,15 +90,15 @@ class ReadOnlyIndexContractTests(unittest.TestCase):
         )
 
         with self.assertRaises(TypeError):
-            relationships._by_source_id[("word/document.xml", "r2")] = relationship
+            relationships._by_source_id[("word/document.xml", "r2")] = relationship  # type: ignore[index]
         with self.assertRaises(TypeError):
-            styles.records["other"] = StyleRecord(style_id="other")
+            styles.records["other"] = StyleRecord(style_id="other")  # type: ignore[index]
         with self.assertRaises(TypeError):
-            numbering.abstract_levels["other"] = {}
+            numbering.abstract_levels["other"] = {}  # type: ignore[index]
         with self.assertRaises(TypeError):
-            numbering.abstract_levels["abstract"][1] = NumberingLevel(1)
+            numbering.abstract_levels["abstract"][1] = NumberingLevel(1)  # type: ignore[index]
         with self.assertRaises(TypeError):
-            numbering.instances["1"].start_overrides[1] = 3
+            numbering.instances["1"].start_overrides[1] = 3  # type: ignore[index]
 
 
 if __name__ == "__main__":

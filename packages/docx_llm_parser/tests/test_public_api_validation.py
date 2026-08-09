@@ -35,10 +35,10 @@ class PublicApiValidationTests(unittest.TestCase):
 
     def test_parse_options_reject_invalid_revision_mode(self) -> None:
         with self.assertRaisesRegex(ValueError, "revision_mode"):
-            ParseOptions(revision_mode="typo")
+            ParseOptions(revision_mode="typo")  # type: ignore[arg-type]
 
     def test_parse_options_normalizes_revision_mode(self) -> None:
-        options = ParseOptions(revision_mode="review")
+        options = ParseOptions(revision_mode="review")  # type: ignore[arg-type]
         self.assertIs(options.revision_mode, RevisionMode.REVIEW)
 
     def test_parse_options_reject_non_positive_limits(self) -> None:

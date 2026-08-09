@@ -152,9 +152,7 @@ def iter_l0(parsed: ParsedDocument) -> Iterator[str]:
 
     comment_ids = list(comment_order)
     seen_comment_ids = set(comment_ids)
-    for comment_id in comment_map:
-        if comment_id not in seen_comment_ids:
-            comment_ids.append(comment_id)
+    comment_ids.extend(c for c in comment_map if c not in seen_comment_ids)
     if comment_ids:
         yield "\n\n[Comments]"
         for comment_id in comment_ids:

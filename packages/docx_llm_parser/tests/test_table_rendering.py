@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 from xml.etree import ElementTree as ET
 
-from docx_llm_parser.core.models import ParsedDocument, ParseOptions
+from docx_llm_parser.core.models import ParsedDocument, ParseOptions, ParseWarning
 from docx_llm_parser.core.package import PackageReader
 from docx_llm_parser.core.relationships import RelationshipIndex
 from docx_llm_parser.extractors.body import DocumentBodyParser
@@ -26,7 +26,7 @@ def _table_xml(body: str) -> ET.Element:
 
 
 def _body_parser() -> DocumentBodyParser:
-    warnings = []
+    warnings: list[ParseWarning] = []
     numbering = NumberingMap({}, {}, warnings)
     return DocumentBodyParser(
         cast(PackageReader, object()),
@@ -72,10 +72,10 @@ class TableIdentityTests(unittest.TestCase):
         )
 
     def test_l0_truncation_uses_assigned_table_id(self) -> None:
-        rows = [{"cells": [{"text": "x"}]} for _ in range(11)]
+        rows: list[dict[str, Any]] = [{"cells": [{"text": "x"}]} for _ in range(11)]
 
         rendered = table_text_only(
-            {"type": "table", "tableId": "t7", "rows": rows, "columnCount": 1}
+            cast(Any, {"type": "table", "tableId": "t7", "rows": rows, "columnCount": 1})
         )
 
         self.assertIn("[Table truncated: 11 rows, 1 cols]", rendered)
@@ -108,7 +108,7 @@ class TableIdentityTests(unittest.TestCase):
         parsed = ParsedDocument(
             metadata={},
             package_info={},
-            blocks=segments,
+            blocks=cast(Any, segments),
             relationships=[],
             styles=[],
             warnings=[],
@@ -169,13 +169,13 @@ class TableIdentityTests(unittest.TestCase):
         return ParsedDocument(
             metadata={},
             package_info={},
-            blocks=[table_block],
+            blocks=cast(Any, [table_block]),
             relationships=[],
             styles=[],
             warnings=[],
         )
 
-    def test_table_row_slice(self):
+    def test_table_row_slice(self) -> None:
         parsed = self._make_table(["Name", "Value"], [["A", "1"], ["B", "2"], ["C", "3"]])
         results = _render_resource(parsed, "table", "t1", rows="3-4")
         self.assertEqual(len(results), 1)
@@ -183,7 +183,7 @@ class TableIdentityTests(unittest.TestCase):
         self.assertIn("<tr>B|", html)
         self.assertIn("<tr>C|", html)
 
-    def test_table_column_filter(self):
+    def test_table_column_filter(self) -> None:
         parsed = self._make_table(
             ["Name", "Age", "City"], [["Alice", "30", "NYC"], ["Bob", "25", "LA"]]
         )
@@ -193,7 +193,7 @@ class TableIdentityTests(unittest.TestCase):
         self.assertIn("Name|City", html)
         self.assertIn("Alice|NYC", html)
 
-    def test_table_aggregate_sum(self):
+    def test_table_aggregate_sum(self) -> None:
         parsed = self._make_table(["Item", "Price"], [["A", "10"], ["B", "20"], ["C", "30"]])
         results = _render_resource(
             parsed, "table", "t1", aggregate="sum", aggregate_column="Price"
@@ -202,7 +202,7 @@ class TableIdentityTests(unittest.TestCase):
         html = results[0]
         self.assertIn("<aggregate op=sum column=Price>60.0", html)
 
-    def test_table_aggregate_avg(self):
+    def test_table_aggregate_avg(self) -> None:
         parsed = self._make_table(["Item", "Score"], [["X", "100"], ["Y", "200"]])
         results = _render_resource(
             parsed, "table", "t1", aggregate="avg", aggregate_column="Score"
@@ -211,7 +211,7 @@ class TableIdentityTests(unittest.TestCase):
         html = results[0]
         self.assertIn("<aggregate op=avg column=Score>150.0", html)
 
-    def test_table_aggregate_count(self):
+    def test_table_aggregate_count(self) -> None:
         parsed = self._make_table(["Item", "Qty"], [["A", "5"], ["B", ""], ["C", "15"]])
         results = _render_resource(
             parsed, "table", "t1", aggregate="count", aggregate_column="Qty"
@@ -220,7 +220,7 @@ class TableIdentityTests(unittest.TestCase):
         html = results[0]
         self.assertIn("<aggregate op=count column=Qty>2", html)
 
-    def test_table_rows_and_columns_combined(self):
+    def test_table_rows_and_columns_combined(self) -> None:
         parsed = self._make_table(
             ["Name", "Score", "Rank"], [["A", "100", "1"], ["B", "200", "2"], ["C", "300", "3"]]
         )
@@ -230,12 +230,12 @@ class TableIdentityTests(unittest.TestCase):
         self.assertIn("A|100", html)
         self.assertIn("B|200", html)
 
-    def test_table_aggregate_unknown_column_raises(self):
+    def test_table_aggregate_unknown_column_raises(self) -> None:
         parsed = self._make_table(["A", "B"], [["1", "2"]])
         with self.assertRaises(ValueError):
             _render_resource(parsed, "table", "t1", aggregate="sum", aggregate_column="NoSuch")
 
-    def test_table_rows_invalid_range_raises(self):
+    def test_table_rows_invalid_range_raises(self) -> None:
         parsed = self._make_table(["X"], [["1"], ["2"]])
         with self.assertRaises(ValueError):
             _render_resource(parsed, "table", "t1", rows="5-3")

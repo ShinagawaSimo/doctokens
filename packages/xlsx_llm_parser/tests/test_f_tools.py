@@ -295,6 +295,7 @@ class GetResourceTests(unittest.TestCase):
         )
         r = get_resource(data, "image", "image1")
         self.assertIsNotNone(r)
+        assert r is not None
         self.assertIsInstance(r, str)
         self.assertIn("id=image1", r)
         self.assertIn("ref=A1", r)

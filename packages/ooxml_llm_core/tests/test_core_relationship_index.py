@@ -6,14 +6,16 @@ from ooxml_llm_core.models import RelationshipRecord
 from ooxml_llm_core.relationships import RelationshipIndex
 
 
-def _rec(source, rel_id, rel_type, **kwargs):
+def _rec(
+    source: str, rel_id: str, rel_type: str, **kwargs: str | None
+) -> RelationshipRecord:
     return RelationshipRecord(
         source_part=source,
         id=rel_id,
         type=f"http://schemas.openxmlformats.org/officeDocument/2006/relationships/{rel_type}",
-        target=kwargs.pop("target", f"{rel_type}/target"),
+        target=str(kwargs.pop("target", f"{rel_type}/target")),
         target_mode=kwargs.pop("target_mode", None),
-        resolved_target=kwargs.pop("resolved_target", f"resolved/{rel_type}"),
+        resolved_target=str(kwargs.pop("resolved_target", f"resolved/{rel_type}")),
     )
 
 
@@ -23,7 +25,9 @@ class RelationshipIndexTests(unittest.TestCase):
             [_rec("doc", "rId1", "image"), _rec("doc", "rId2", "chart")]
         )
         self.assertIsNotNone(idx.get("doc", "rId1"))
-        self.assertEqual(idx.get("doc", "rId1").id, "rId1")
+        result = idx.get("doc", "rId1")
+        assert result is not None
+        self.assertEqual(result.id, "rId1")
 
     def test_get_returns_none_on_miss(self) -> None:
         idx = RelationshipIndex.from_records([_rec("doc", "rId1", "image")])

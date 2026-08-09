@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 from io import BytesIO
+from typing import Any, cast
 from xml.etree import ElementTree as ET
 
 from docx_llm_parser.core.models import ContentTypes, ParseWarning, RelationshipRecord
@@ -151,7 +152,11 @@ class NumberingAndAssetTests(unittest.TestCase):
         )
         state = NumberingState(numbering, warnings)
 
-        labels = [state.advance("7", index)["label"] for index in range(len(formats))]
+        labels = []
+        for index in range(len(formats)):
+            label_obj = state.advance("7", index)
+            assert label_obj is not None
+            labels.append(label_obj["label"])
 
         self.assertEqual(labels, [expected for _fmt, _start, expected in formats])
         self.assertEqual(warnings[0].code, "UNSUPPORTED_NUMBER_FORMAT")
@@ -199,7 +204,7 @@ class NumberingAndAssetTests(unittest.TestCase):
         }
 
         assets, lookup = AssetExtractor(
-            package,
+            cast(Any, package),
             relationships,
             content_types,
             warnings,
@@ -240,13 +245,13 @@ class RendererBranchTests(unittest.TestCase):
             "title": "Sales",
         }
 
-        self.assertIn("categories=Q1,Q2", chart_to_html5(chart))
-        self.assertIn("names=Q1,Q2", chart_to_html5({**chart, "chartType": "pie"}))
-        self.assertIn("points=12", chart_to_html5({**chart, "chartType": "scatter"}))
-        self.assertIn("categories=Q1,Q2", chart_to_html5({**chart, "chartType": "stock"}))
-        self.assertIn("names=S1,S2", chart_to_html5({**chart, "chartType": "surface"}))
-        self.assertIn("<chart id=empty type=? series=0 truncated>", chart_to_html5({"id": "empty"}))
-        chart_html = render_chart_resource(chart)
+        self.assertIn("categories=Q1,Q2", chart_to_html5(cast(Any, chart)))
+        self.assertIn("names=Q1,Q2", chart_to_html5(cast(Any, {**chart, "chartType": "pie"})))
+        self.assertIn("points=12", chart_to_html5(cast(Any, {**chart, "chartType": "scatter"})))
+        self.assertIn("categories=Q1,Q2", chart_to_html5(cast(Any, {**chart, "chartType": "stock"})))
+        self.assertIn("names=S1,S2", chart_to_html5(cast(Any, {**chart, "chartType": "surface"})))
+        self.assertIn("<chart id=empty type=? series=0 truncated>", chart_to_html5(cast(Any, {"id": "empty"})))
+        chart_html = render_chart_resource(cast(Any, chart))
         self.assertIn("id=chartX", chart_html)
         self.assertIn("type=bar", chart_html)
         self.assertIn("series=6", chart_html)
@@ -268,11 +273,11 @@ class RendererBranchTests(unittest.TestCase):
             "links": [{"from": index, "to": index + 1, "kind": "parOf"} for index in range(1, 19)],
         }
 
-        rendered_sa = smartart_to_html5(smartart)
+        rendered_sa = smartart_to_html5(cast(Any, smartart))
         self.assertIn("truncated", rendered_sa)
         self.assertIn("Node 1", rendered_sa)
         self.assertIn("Node 14", rendered_sa)
-        sa_html = render_smartart_resource(smartart)
+        sa_html = render_smartart_resource(cast(Any, smartart))
         self.assertIn("Node 1", sa_html)
 
         rows = [
@@ -294,13 +299,13 @@ class RendererBranchTests(unittest.TestCase):
         ]
         table = {"type": "table", "tableId": "t-long", "rows": rows, "columnCount": 1}
 
-        self.assertIn("<table id=t-long truncated>", "".join(render_table(table, "L2")))
+        self.assertIn("<table id=t-long truncated>", "".join(render_table(cast(Any, table), "L2")))
         self.assertIn(
             "<td>R1",
-            "".join(render_table({"tableId": "t-short", "rows": rows[:2], "columnCount": 1}, "L1")),
+            "".join(render_table(cast(Any, {"tableId": "t-short", "rows": rows[:2], "columnCount": 1}), "L1")),
         )
         with self.assertRaisesRegex(TypeError, "tableId"):
-            table_id({"tableId": 123})
+            table_id(cast(Any, {"tableId": 123}))
 
 
 class FakePackage:

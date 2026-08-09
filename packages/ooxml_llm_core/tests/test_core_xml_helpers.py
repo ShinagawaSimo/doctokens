@@ -38,6 +38,7 @@ class XmlHelpersTests(unittest.TestCase):
         el = ET.fromstring(f'<w:p xmlns:w="{NS_DOCX["w"]}"><w:r><w:t>text</w:t></w:r></w:p>')
         result = first_child(el, "w", "r", ns=NS_DOCX)
         self.assertIsNotNone(result)
+        assert result is not None
         self.assertEqual(local_name(result.tag), "r")
 
     def test_first_child_returns_none_on_none_element(self) -> None:
@@ -54,6 +55,7 @@ class XmlHelpersTests(unittest.TestCase):
     def test_first_child_matches_first_of_many(self) -> None:
         el = ET.fromstring(f'<w:p xmlns:w="{NS_DOCX["w"]}"><w:r w:val="1"/><w:r w:val="2"/></w:p>')
         result = first_child(el, "w", "r", ns=NS_DOCX)
+        assert result is not None
         self.assertEqual(attr(result, "w", "val", ns=NS_DOCX), "1")
 
     def test_child_elements_returns_direct_children(self) -> None:

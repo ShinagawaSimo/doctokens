@@ -5,7 +5,7 @@ import unittest
 
 class CoreImportTests(unittest.TestCase):
     def test_version_is_available(self) -> None:
-        from ooxml_llm_core import __version__
+        from ooxml_llm_core import __version__  # type: ignore[attr-defined]
 
         self.assertTrue(__version__)
 

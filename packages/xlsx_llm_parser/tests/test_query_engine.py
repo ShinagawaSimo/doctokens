@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from typing import Any, cast
 
 from xlsx_llm_parser.query import query_data
 
@@ -53,7 +54,7 @@ def _workbook() -> dict[str, object]:
 class QueryEngineTests(unittest.TestCase):
     def test_range_query_uses_header_select_order_and_limit(self) -> None:
         result = query_data(
-            _workbook(),
+            cast(Any, _workbook()),
             sheet="Data",
             range_spec="A1:C4",
             header_row=1,
@@ -91,19 +92,20 @@ class QueryEngineTests(unittest.TestCase):
             "fmt_index": object(),
         }
 
-        result = query_data(workbook, sheet="Data", range_spec="A1:C2", header_row=1)
+        wb = cast(Any, workbook)
+        result = query_data(wb, sheet="Data", range_spec="A1:C2", header_row=1)
 
         self.assertIn("<th><th>Young<th>Adult", result)
         self.assertNotIn("Col1", result)
         self.assertIn("<td>Site A<td>10%<td>90%", result)
 
-        selected = query_data(workbook, sheet="Data", range_spec="A1:C2", header_row=1, select=["A", "Adult"])
+        selected = query_data(wb, sheet="Data", range_spec="A1:C2", header_row=1, select=["A", "Adult"])
         self.assertIn("<th><th>Adult", selected)
         self.assertIn("<td>Site A<td>90%", selected)
 
     def test_table_query_filters_contains_gt_and_lt(self) -> None:
         result = query_data(
-            _workbook(),
+            cast(Any, _workbook()),
             table_id="sales",
             where=[
                 {"column": "Rep", "op": "contains", "value": "a"},
@@ -118,7 +120,7 @@ class QueryEngineTests(unittest.TestCase):
 
     def test_grouped_aggregates_render_aliases(self) -> None:
         result = query_data(
-            _workbook(),
+            cast(Any, _workbook()),
             table_id="sales",
             group_by=["Region"],
             aggregates=[
@@ -139,16 +141,17 @@ class QueryEngineTests(unittest.TestCase):
     def test_empty_and_invalid_sources(self) -> None:
         self.assertEqual(
             query_data(
-                _workbook(),
+                cast(Any, _workbook()),
                 table_id="sales",
                 where=[{"column": "Rep", "op": "unsupported", "value": "Alice"}],
             ),
             "<table>\n",
         )
+        wb = cast(Any, _workbook())
         with self.assertRaises(ValueError):
-            query_data(_workbook(), table_id="missing")
+            query_data(wb, table_id="missing")
         with self.assertRaises(ValueError):
-            query_data(_workbook())
+            query_data(wb)
 
 
 if __name__ == "__main__":

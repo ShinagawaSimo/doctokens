@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from typing import Any, cast
 
 from xlsx_llm_parser.formats import FormatIndex
 from xlsx_llm_parser.renderers.structural import render_range, render_workbook
@@ -102,9 +103,10 @@ def _workbook() -> dict[str, object]:
 
 class StructuralRendererTests(unittest.TestCase):
     def test_workbook_renders_metadata_and_inline_features(self) -> None:
-        structural = render_workbook(_workbook(), density="structural")
-        semantic = render_workbook(_workbook(), density="semantic")
-        plain = render_workbook(_workbook(), density="plain")
+        wb = cast(Any, _workbook())
+        structural = render_workbook(wb, density="structural")
+        semantic = render_workbook(wb, density="semantic")
+        plain = render_workbook(wb, density="plain")
 
         for html in (structural, semantic):
             self.assertIn("<columns ref=B:C hidden>", html)
@@ -135,10 +137,11 @@ class StructuralRendererTests(unittest.TestCase):
         self.assertNotIn("<table id=table1", plain)
 
     def test_render_range_and_missing_sheet(self) -> None:
-        html = render_range(_workbook(), "Data", "A1:B2", density="structural")
+        wb = cast(Any, _workbook())
+        html = render_range(wb, "Data", "A1:B2", density="structural")
         self.assertIn("<grid ref=A1:B2>", html)
         with self.assertRaises(ValueError):
-            render_range(_workbook(), "Missing", "A1:B2")
+            render_range(wb, "Missing", "A1:B2")
 
     def test_semantic_repeated_styles_render_as_range(self) -> None:
         fmt_index = FormatIndex()
@@ -162,7 +165,7 @@ class StructuralRendererTests(unittest.TestCase):
             "fmt_index": fmt_index,
         }
 
-        html = render_workbook(workbook, density="semantic")
+        html = render_workbook(cast(Any, workbook), density="semantic")
 
         self.assertIn('<styleRange ref=A1:C3 attrs="fill=#D9EAD3"/>', html)
         self.assertEqual(html.count("fill=#D9EAD3"), 1)

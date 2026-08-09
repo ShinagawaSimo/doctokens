@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import unittest
 from io import BytesIO
-from typing import cast
+from typing import Any, cast
 from xml.etree import ElementTree as ET
 
-from docx_llm_parser.core.models import ParseOptions, RelationshipRecord
+from docx_llm_parser.core.models import ParseOptions, ParseWarning, RelationshipRecord
 from docx_llm_parser.core.package import PackageReader
 from docx_llm_parser.core.relationships import RelationshipIndex
 from docx_llm_parser.extractors.body import DocumentBodyParser
@@ -42,7 +42,7 @@ class InlineRendererTests(unittest.TestCase):
 
     def setUp(self) -> None:
         # 每个测试创建独立 parser，避免共享 warnings 或解析状态。
-        self.warnings = []
+        self.warnings: list[ParseWarning] = []
         self.parser = InlineParser(
             StyleMap({}, self.warnings),
             ParseOptions(),
@@ -55,9 +55,9 @@ class InlineRendererTests(unittest.TestCase):
         """解析一段 OOXML 并渲染为段落内 XML。"""
         p = ET.fromstring(xml)
         runs, _hints = self.parser.paragraph_runs(p, "word/document.xml", "b-test", None)
-        return _inline_content({"text": "", "runs": runs}, "L2")
+        return _inline_content(cast(Any, {"text": "", "runs": runs}), "L2")
 
-    def _render_with_objects(self, xml: str, object_lookup: dict) -> str:
+    def _render_with_objects(self, xml: str, object_lookup: dict[tuple[str, str], object] | None = None) -> str:
         """使用预解析对象索引渲染一段 OOXML。"""
         parser = InlineParser(
             StyleMap({}, self.warnings),
@@ -65,11 +65,11 @@ class InlineRendererTests(unittest.TestCase):
             self.warnings,
             RelationshipIndex.from_records([]),
             {},
-            object_lookup=object_lookup,
+            object_lookup=cast(Any, object_lookup) if object_lookup else None,
         )
         p = ET.fromstring(xml)
         runs, _hints = parser.paragraph_runs(p, "word/document.xml", "b-test", None)
-        return _inline_content({"text": "", "runs": runs}, "L2")
+        return _inline_content(cast(Any, {"text": "", "runs": runs}), "L2")
 
     def test_omml_equation_renders_as_eq(self) -> None:
         """OMML 公式应进入最终 XML，而不是只进入 debug。"""
@@ -143,7 +143,7 @@ class InlineRendererTests(unittest.TestCase):
         }
 
         self.assertEqual(
-            _nested_table(nested),
+            _nested_table(cast(Any, nested)),
             "<nestedtable rows=1 cols=3><row><td>A<td colspan=2>B",
         )
 
@@ -191,9 +191,9 @@ class InlineRendererTests(unittest.TestCase):
             NumberingState(numbering, self.warnings),
         )
 
-        parser._apply_vertical_merges(rows)
+        parser._apply_vertical_merges(cast(Any, rows))
 
-        self.assertEqual(rows[0]["cells"][0]["rowSpan"], 2)
+        self.assertEqual(rows[0]["cells"][0]["rowSpan"], 2)  # type: ignore[index]
 
     def test_chart_cache_renders_as_chart_summary(self) -> None:
         """图表缓存数据应渲染为轻量 chart 摘要。"""
@@ -281,7 +281,7 @@ class InlineRendererTests(unittest.TestCase):
         )
 
         lookup, charts, smartarts = EmbeddedObjectExtractor(
-            package, relationships, self.warnings
+            cast(Any, package), relationships, self.warnings
         ).extract()
 
         self.assertEqual(charts[0]["chartType"], "line")

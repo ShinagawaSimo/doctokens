@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from typing import Any, cast
 
 from docx_llm_parser.core.models import ParseOptions
 
@@ -137,7 +138,7 @@ class RenderOcrTextTest(unittest.TestCase):
         parsed = ParsedDocument(
             metadata={},
             package_info={},
-            blocks=[block],
+            blocks=cast(Any, [block]),
             relationships=[],
             styles=[],
             warnings=[],

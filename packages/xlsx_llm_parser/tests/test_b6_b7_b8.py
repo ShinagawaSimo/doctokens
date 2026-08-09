@@ -4,7 +4,7 @@ import io
 import unittest
 import zipfile
 
-from xlsx_llm_parser import iter_workbook, parse_xlsx, render_range
+from xlsx_llm_parser import parse_xlsx, render_range
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -20,7 +20,7 @@ def _make_xlsx(entries: dict[str, str]) -> bytes:
 
 
 class StreamingTests(unittest.TestCase):
-    """iter_workbook chunk concatenation matches parse_xlsx."""
+    """parse_xlsx stream=True chunk concatenation matches full render."""
 
     def test_iter_concat_matches_render(self) -> None:
         data = _make_xlsx(
@@ -70,7 +70,7 @@ class StreamingTests(unittest.TestCase):
             },
         )
         full = parse_xlsx(data)
-        streamed = "".join(iter_workbook(data))
+        streamed = "".join(parse_xlsx(data, stream=True))
         self.assertEqual(full, streamed)
         self.assertIn("density=structural", full)
 

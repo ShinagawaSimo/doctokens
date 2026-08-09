@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from _fixtures import write_rich_docx
-from docx_llm_parser import Density, render_document
+from docx_llm_parser import Density, parse_docx
 from docx_llm_parser.core.models import ParseOptions
 from docx_llm_parser.parser import DocxParser
 
@@ -75,7 +75,7 @@ def _render_density(density: Density) -> str:
         temp = Path(temp_dir)
         docx_path = temp / "rich.docx"
         write_rich_docx(docx_path)
-        return render_document(docx_path, density=density)
+        return parse_docx(docx_path, density=density)
 
 
 def _read_golden(path: Path) -> str:

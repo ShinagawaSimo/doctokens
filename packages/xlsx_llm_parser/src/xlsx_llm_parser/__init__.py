@@ -5,17 +5,17 @@ __version__ = "0.1.0"
 from xlsx_llm_parser.api import (
     find_cells,
     get_resource,
-    iter_workbook,
     parse_xlsx,
     query_data,
     render_range,
+    write_document,
 )
 
 __all__ = [
     "find_cells",
     "get_resource",
-    "iter_workbook",
     "parse_xlsx",
     "query_data",
     "render_range",
+    "write_document",
 ]

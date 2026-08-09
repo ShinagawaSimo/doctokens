@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from html import escape
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from .models import Cell, DrawingChart
 from .parser import _parse_workbook
@@ -18,31 +20,65 @@ from .renderers.structural import (
 )
 
 
-def parse_xlsx(source: str | Path | bytes, *, density: str = "structural", start_row: int = 1) -> str:
+def parse_xlsx(
+    source: str | Path | bytes,
+    *,
+    density: str = "structural",
+    start_row: int = 1,
+    stream: bool = False,
+) -> str | Iterator[str]:
     """Parse *source* and render the entire workbook at the given density.
+
+    Returns a string by default.  Set *stream=True* to receive an iterator
+    of rendered chunks for streaming output or large workbooks.
 
     *start_row* (1-based) begins rendering from the specified row for the
     first data sheet, enabling paginated window reads of large grids.
     """
     wb = _parse_workbook(source)
-    parts = [f"density={density}\n"]
-    for sheet in wb["sheets"]:
-        parts.extend(_render_sheet(sheet, density, wb, start_row=start_row))
-        # start_row only applies to first non-chartsheet; subsequent sheets
-        # always render from row 1.
-        if sheet.get("kind") != "chartsheet" and start_row != 1:
-            start_row = 1
-    return "".join(parts)
+    if stream:
+        return _generate_workbook(wb, density, start_row)
+    return "".join(_generate_workbook(wb, density, start_row))
 
 
-def iter_workbook(source: str | Path | bytes, *, density: str = "structural", start_row: int = 1) -> Iterator[str]:
-    """Stream workbook rendering chunks from *source*."""
-    wb = _parse_workbook(source)
+def _generate_workbook(wb: dict, density: str, start_row: int) -> Iterator[str]:
+    """Yield rendered chunks for a parsed workbook."""
     yield f"density={density}\n"
     for sheet in wb["sheets"]:
         yield from _render_sheet(sheet, density, wb, start_row=start_row)
         if sheet.get("kind") != "chartsheet" and start_row != 1:
             start_row = 1
+
+
+def write_document(
+    source: str | Path | bytes,
+    output_dir: str | Path,
+    *,
+    density: str = "structural",
+    start_row: int = 1,
+) -> Path:
+    """Parse *source* and write the rendered file to *output_dir* (atomic write)."""
+    from pathlib import Path as _Path
+
+    output_dir = _Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "parsed.html"
+    temp_path: _Path | None = None
+    try:
+        with NamedTemporaryFile(
+            "w", encoding="utf-8", dir=output_dir, prefix=".parsed.html.", suffix=".tmp", delete=False
+        ) as stream:
+            temp_path = _Path(stream.name)
+            for chunk in _generate_workbook(_parse_workbook(source), density, start_row):
+                stream.write(chunk)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temp_path.replace(output_path)
+    except Exception:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink()
+        raise
+    return output_path
 
 
 def render_range(

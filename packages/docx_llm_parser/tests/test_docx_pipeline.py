@@ -10,7 +10,7 @@ from _fixtures import write_rich_docx
 from docx_llm_parser import (
     Density,
     get_resource,
-    render_document,
+    parse_docx,
     render_window,
     write_document,
 )
@@ -53,7 +53,7 @@ class DocxPipelineTests(unittest.TestCase):
             self.assertIn("paragraphCount", parsed.metrics["counters"])
 
             # Public API: render
-            html = render_document(docx_path, density=Density.SEMANTIC)
+            html = parse_docx(docx_path, density=Density.SEMANTIC)
             self.assertIn("<h1>Document Title", html)
             self.assertIn("<a href=https://example.test>link</a>", html)
             self.assertIn("<chart id=chart1 type=bar", html)
@@ -61,8 +61,8 @@ class DocxPipelineTests(unittest.TestCase):
             self.assertIn("<img id=img1", html)
             self.assertIn("<!-- supplemental -->", html)
 
-            l1 = render_document(docx_path, density=Density.STRUCTURAL)
-            l0 = render_document(docx_path, density=Density.PLAIN)
+            l1 = parse_docx(docx_path, density=Density.STRUCTURAL)
+            l0 = parse_docx(docx_path, density=Density.PLAIN)
             self.assertIn("<chart id=chart1 type=bar", l1)
             self.assertIn("Footnote text", l0)
             self.assertIn("Last page", render_window(docx_path, page=-1))

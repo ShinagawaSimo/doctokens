@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from _fixtures import write_rich_docx
-from docx_llm_parser import Density, ResourceType, get_resource, render_document
+from docx_llm_parser import Density, ResourceType, get_resource, parse_docx
 from docx_llm_parser.concurrency import parse_many
 from docx_llm_parser.core.enums import RevisionMode
 from docx_llm_parser.core.models import ParseOptions
@@ -31,7 +31,7 @@ class PublicApiValidationTests(unittest.TestCase):
             path = Path(temp_dir) / "test.docx"
             write_rich_docx(path)
             with self.assertRaisesRegex(ValueError, "density"):
-                render_document(path, density="typo")
+                parse_docx(path, density="typo")
 
     def test_parse_options_reject_invalid_revision_mode(self) -> None:
         with self.assertRaisesRegex(ValueError, "revision_mode"):

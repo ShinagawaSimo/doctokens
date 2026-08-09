@@ -157,7 +157,7 @@ class EndToEndOcrTest(unittest.TestCase):
         from tempfile import TemporaryDirectory
 
         from _fixtures import write_rich_docx
-        from docx_llm_parser import render_document
+        from docx_llm_parser import parse_docx
         from docx_llm_parser.core.models import ParseOptions
         from ocr_llm_core import OcrProvider
 
@@ -169,7 +169,7 @@ class EndToEndOcrTest(unittest.TestCase):
             docx_path = Path(temp_dir) / "test.docx"
             write_rich_docx(docx_path)
             opts = ParseOptions(ocr=MarkdownProvider(), ocr_workers=1)
-            html = render_document(docx_path, options=opts)
+            html = parse_docx(docx_path, options=opts)
             self.assertIn("density=semantic", html)
             self.assertIsInstance(html, str)
             self.assertTrue(len(html) > 0)

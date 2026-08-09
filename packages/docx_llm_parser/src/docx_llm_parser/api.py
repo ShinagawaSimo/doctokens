@@ -15,26 +15,22 @@ from .renderers.html5 import window as _window
 from .renderers.html5 import write_outputs
 
 
-def render_document(
+def parse_docx(
     source: str | Path | bytes,
     *,
     density: Density | str = Density.SEMANTIC,
+    stream: bool = False,
     options: ParseOptions | None = None,
-) -> str:
-    """Parse *source* and render to the requested text density."""
+) -> str | Iterator[str]:
+    """Parse *source* and render to the requested text density.
+
+    Returns a string by default.  Set *stream=True* to receive an iterator
+    of rendered chunks for streaming output or large documents.
+    """
     parsed = DocxParser().parse(source, options)
+    if stream:
+        return _iter_html5(parsed, density)
     return _to_html5(parsed, density)
-
-
-def iter_document(
-    source: str | Path | bytes,
-    *,
-    density: Density | str = Density.SEMANTIC,
-    options: ParseOptions | None = None,
-) -> Iterator[str]:
-    """Stream rendered chunks from *source* without building the full string."""
-    parsed = DocxParser().parse(source, options)
-    yield from _iter_html5(parsed, density)
 
 
 def write_document(

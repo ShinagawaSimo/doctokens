@@ -154,7 +154,9 @@ class EndToEndOcrTest(unittest.TestCase):
     def test_full_ocr_pipeline_with_mock_provider(self) -> None:
         """Simulate a complete parse->OCR->render cycle."""
         from pathlib import Path
+        from tempfile import TemporaryDirectory
 
+        from _fixtures import write_rich_docx
         from docx_llm_parser import render_document
         from docx_llm_parser.core.models import ParseOptions
         from ocr_llm_core import OcrProvider
@@ -163,17 +165,14 @@ class EndToEndOcrTest(unittest.TestCase):
             def extract(self, image_bytes: bytes) -> str:
                 return "## Screenshot\n\nThis is OCR extracted text."
 
-        import glob as _g
-        import os as _os
-
-        candidates = _g.glob("packages/docx_llm_parser/tests/**/*.docx", recursive=True)
-        self.assertTrue(candidates, "No test docx found")
-        docx_path = Path(_os.path.abspath(candidates[0]))
-        opts = ParseOptions(ocr=MarkdownProvider(), ocr_workers=1)
-        html = render_document(docx_path, options=opts)
-        self.assertIn("density=semantic", html)
-        self.assertIsInstance(html, str)
-        self.assertTrue(len(html) > 0)
+        with TemporaryDirectory() as temp_dir:
+            docx_path = Path(temp_dir) / "test.docx"
+            write_rich_docx(docx_path)
+            opts = ParseOptions(ocr=MarkdownProvider(), ocr_workers=1)
+            html = render_document(docx_path, options=opts)
+            self.assertIn("density=semantic", html)
+            self.assertIsInstance(html, str)
+            self.assertTrue(len(html) > 0)
 
 
 if __name__ == "__main__":

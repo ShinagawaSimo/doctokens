@@ -39,11 +39,11 @@ class EmbeddedObjectExtractor:
 
     def extract(self) -> tuple[ObjectLookup, list[Chart], list[SmartArt]]:
         """Parse charts and SmartArt, returning a `(sourcePart, rId)` index."""
-        lookup: ObjectLookup = {}
-        layout_map = self._build_layout_map()
-        charts = self._extract_charts(lookup)
-        smartarts = self._extract_smartarts(lookup, layout_map)
-        return lookup, charts, smartarts
+        object_lookup: ObjectLookup = {}
+        layout_types_by_part = self._build_layout_map()
+        charts = self._extract_charts(object_lookup)
+        smartarts = self._extract_smartarts(object_lookup, layout_types_by_part)
+        return object_lookup, charts, smartarts
 
     def _build_layout_map(self) -> dict[str, str]:
         """Build a mapping from SmartArt data parts to layout types.
@@ -51,7 +51,7 @@ class EmbeddedObjectExtractor:
         Reads layoutN.xml parts via DIAGRAM_LAYOUT_REL_TYPE relationships
         and extracts the trailing category name of catLst/cat@type.
         """
-        layout_map: dict[str, str] = {}
+        layout_types_by_part: dict[str, str] = {}
         for rel in self.relationships.by_type(DIAGRAM_LAYOUT_REL_TYPE):
             target = rel.resolved_target
             if not target or not self.package.exists(target):
@@ -59,16 +59,16 @@ class EmbeddedObjectExtractor:
             try:
                 with self.package.open_entry(target) as stream:
                     root = ET.parse(stream).getroot()
-                layout_type = _layout_type(root)
+                layout_type = _layout_category(root)
                 if layout_type:
-                    layout_map[rel.source_part] = layout_type
+                    layout_types_by_part[rel.source_part] = layout_type
             except Exception as exc:
                 self._warn(
                     "LAYOUT_PARSE_FAILED",
                     f"Failed to parse layout part {target}: {exc}",
                     part=target,
                 )
-        return layout_map
+        return layout_types_by_part
 
     def _extract_charts(self, lookup: ObjectLookup) -> list[Chart]:
         """Parse the chart parts targeted by chart relationships."""
@@ -105,7 +105,7 @@ class EmbeddedObjectExtractor:
     def _extract_smartarts(
         self,
         lookup: ObjectLookup,
-        layout_map: dict[str, str],
+        layout_types_by_part: dict[str, str],
     ) -> list[SmartArt]:
         """Parse the diagram data parts targeted by SmartArt data model relationships."""
         smartarts: list[SmartArt] = []
@@ -131,7 +131,7 @@ class EmbeddedObjectExtractor:
                 )
                 continue
             # Inject the layout type (the category name extracted from layoutN.xml)
-            layout_type = layout_map.get(rel.source_part)
+            layout_type = layout_types_by_part.get(rel.source_part)
             if layout_type:
                 smartart["layoutType"] = layout_type
             smartart["sourcePart"] = rel.source_part
@@ -190,7 +190,7 @@ def parse_smartart_root(root: ET.Element, smartart_id: str, part_name: str) -> S
     node_index_by_model_id: dict[str, int] = {}
     for point in root.iter(qualified_name("dgm", "pt")):
         model_id = point.attrib["modelId"]
-        text = _drawing_text(point)
+        text = _node_text(point)
         if not text:
             continue
         node: SmartArtNode = {"modelId": model_id, "text": text}
@@ -230,13 +230,13 @@ def parse_smartart_root(root: ET.Element, smartart_id: str, part_name: str) -> S
     }
 
 
-def _drawing_text(node: ET.Element) -> str:
+def _node_text(node: ET.Element) -> str:
     """Read the a:t text inside DrawingML/diagram rich text."""
     parts = [item.text or "" for item in node.iter() if item.tag == qualified_name("a", "t")]
     return "".join(parts).strip()
 
 
-def _layout_type(root: ET.Element) -> str | None:
+def _layout_category(root: ET.Element) -> str | None:
     """Extract the layout category name from a dgm:layoutDef.
 
     Reads the type attribute of the first cat element in catLst and takes

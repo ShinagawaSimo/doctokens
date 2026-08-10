@@ -57,18 +57,18 @@ class RowAttrs(NamedTuple):
 
 
 def parse_sheet(
-    pkg: PackageReader,
-    part: str,
-    sst: list[str],
-    rich_map: dict[int, list[RichTextRun]] | None = None,
-    fmt_index: FormatIndex | None = None,
-    sheet_rels: list[RelationshipRecord] | None = None,
+    package: PackageReader,
+    sheet_part: str,
+    shared_strings: list[str],
+    rich_text_map: dict[int, list[RichTextRun]] | None = None,
+    format_index: FormatIndex | None = None,
+    sheet_relationships: list[RelationshipRecord] | None = None,
 ) -> SheetParseResult:
     """Parse a worksheet XML part into typed cell rows and sheet-level metadata."""
-    if not pkg.exists(part):
+    if not package.exists(sheet_part):
         return SheetParseResult([], [], False, "", [], [], [])
 
-    with pkg.open_entry(part) as stream:
+    with package.open_entry(sheet_part) as stream:
         root = ET.parse(stream).getroot()
 
     sheet_protection = root.find(f"{{{NS_S}}}sheetProtection") is not None
@@ -76,13 +76,13 @@ def parse_sheet(
     data_validations = _parse_data_validations(root)
     conditional_formats = _parse_conditional_formats(root)
     hidden_cols = _parse_hidden_cols(root)
-    rows = _parse_rows(root, sst, rich_map, fmt_index)
+    rows = _parse_rows(root, shared_strings, rich_text_map, format_index)
 
     # Expand shared formulas in-place before post-processing.
     flat_cells = [cell for row_cells in rows for cell in row_cells]
     expand_shared_formulas(flat_cells)
 
-    _post_process_rows(root, rows, pkg, sheet_rels or [])
+    _post_process_rows(root, rows, package, sheet_relationships or [])
 
     return SheetParseResult(
         rows,
@@ -162,9 +162,9 @@ def _parse_hidden_cols(root: ET.Element) -> list[tuple[int, int]]:
 
 def _parse_rows(
     root: ET.Element,
-    sst: list[str],
-    rich_map: dict[int, list[RichTextRun]] | None,
-    fmt_index: FormatIndex | None,
+    shared_strings: list[str],
+    rich_text_map: dict[int, list[RichTextRun]] | None,
+    format_index: FormatIndex | None,
 ) -> list[list[Cell]]:
     sheet_data = root.find(f"{{{NS_S}}}sheetData")
     if sheet_data is None:
@@ -174,7 +174,10 @@ def _parse_rows(
     for row_elem in sheet_data.findall(f"{{{NS_S}}}row"):
         row_attrs = _row_attrs(row_elem)
         rows.append(
-            [_parse_cell(cell_elem, row_attrs, sst, rich_map, fmt_index) for cell_elem in row_elem.findall(f"{{{NS_S}}}c")]
+            [
+                _parse_cell(cell_elem, row_attrs, shared_strings, rich_text_map, format_index)
+                for cell_elem in row_elem.findall(f"{{{NS_S}}}c")
+            ]
         )
     return rows
 
@@ -192,20 +195,20 @@ def _row_attrs(row_elem: ET.Element) -> RowAttrs:
 def _parse_cell(
     cell_elem: ET.Element,
     row_attrs: RowAttrs,
-    sst: list[str],
-    rich_map: dict[int, list[RichTextRun]] | None,
-    fmt_index: FormatIndex | None,
+    shared_strings: list[str],
+    rich_text_map: dict[int, list[RichTextRun]] | None,
+    format_index: FormatIndex | None,
 ) -> Cell:
     ref = cell_elem.get("r", "")
     col, row = parse_ref(ref)
     cell_type = cell_elem.get("t", "n")
-    text, value_elem = _cell_text(cell_elem, cell_type, sst)
-    text = _formatted_text(cell_elem, cell_type, text, fmt_index)
+    text, value_elem = _cell_text(cell_elem, cell_type, shared_strings)
+    text = _formatted_text(cell_elem, cell_type, text, format_index)
     formula, formula_meta = _formula_metadata(cell_elem)
 
     cell: Cell = {"ref": ref, "row": row_attrs.number or row, "col": col, "text": text}
     _apply_row_attrs(cell, row_attrs)
-    _attach_rich_text(cell, cell_type, value_elem, rich_map)
+    _attach_rich_text(cell, cell_type, value_elem, rich_text_map)
     _attach_style(cell, cell_elem)
     if formula is not None:
         cell["formula"] = formula
@@ -220,7 +223,7 @@ def _parse_cell(
 def _cell_text(
     cell_elem: ET.Element,
     cell_type: str,
-    sst: list[str],
+    shared_strings: list[str],
 ) -> tuple[str, ET.Element | None]:
     if cell_type == "inlineStr":
         inline_text = cell_elem.find(f"{{{NS_S}}}is/{{{NS_S}}}t")
@@ -233,8 +236,8 @@ def _cell_text(
     if cell_type == "s":
         with suppress(ValueError):
             idx = int(value_elem.text)
-            if 0 <= idx < len(sst):
-                return sst[idx], value_elem
+            if 0 <= idx < len(shared_strings):
+                return shared_strings[idx], value_elem
         return "", value_elem
 
     if cell_type == "b":
@@ -246,15 +249,15 @@ def _formatted_text(
     cell_elem: ET.Element,
     cell_type: str,
     text: str,
-    fmt_index: FormatIndex | None,
+    format_index: FormatIndex | None,
 ) -> str:
-    if fmt_index is None or cell_type != "n" or not text:
+    if format_index is None or cell_type != "n" or not text:
         return text
     style_str = cell_elem.get("s")
     if style_str is None:
         return text
     with suppress(ValueError, IndexError):
-        return fmt_index.format_value(int(style_str), text)
+        return format_index.format_value(int(style_str), text)
     return text
 
 
@@ -297,14 +300,14 @@ def _attach_rich_text(
     cell: Cell,
     cell_type: str,
     value_elem: ET.Element | None,
-    rich_map: dict[int, list[RichTextRun]] | None,
+    rich_text_map: dict[int, list[RichTextRun]] | None,
 ) -> None:
-    if rich_map is None or cell_type != "s" or value_elem is None or not value_elem.text:
+    if rich_text_map is None or cell_type != "s" or value_elem is None or not value_elem.text:
         return
     with suppress(ValueError):
         idx = int(value_elem.text)
-        if idx in rich_map:
-            cell["rich"] = rich_map[idx]
+        if idx in rich_text_map:
+            cell["rich"] = rich_text_map[idx]
 
 
 def _attach_style(cell: Cell, cell_elem: ET.Element) -> None:

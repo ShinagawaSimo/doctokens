@@ -25,8 +25,6 @@ _GRACE_ENTRY_SIZE = 100_000
 class PackageError(RuntimeError):
     """OPC package structure or security check failed."""
 
-    pass
-
 
 class PackageReader:
     """On-demand OPC ZIP reader. Never extracts entries to disk."""
@@ -86,19 +84,19 @@ class PackageReader:
         if self._entry_index is not None:
             return self._entry_index
 
-        infos = self.zip_file.infolist()
-        if len(infos) > self.limits.max_zip_entries:
-            raise PackageError(f"Too many zip entries: {len(infos)}")
+        zip_entries = self.zip_file.infolist()
+        if len(zip_entries) > self.limits.max_zip_entries:
+            raise PackageError(f"Too many zip entries: {len(zip_entries)}")
 
         total_uncompressed = 0
-        rows: list[ZipEntryInfo] = []
+        entry_index: list[ZipEntryInfo] = []
         names: set[str] = set()
         seen_lower: set[str] = set()
-        for info in infos:
-            name = info.filename.replace("\\", "/")
+        for zip_entry in zip_entries:
+            name = zip_entry.filename.replace("\\", "/")
             self._validate_entry_name(name)
 
-            if info.flag_bits & 0x1:
+            if zip_entry.flag_bits & 0x1:
                 raise PackageError(f"Encrypted entry is not supported: {name}")
 
             lower_name = name.lower()
@@ -108,30 +106,32 @@ class PackageReader:
                 raise PackageError("Zip entry with empty name")
             seen_lower.add(lower_name)
 
-            if info.file_size > self.limits.max_entry_uncompressed_bytes:
-                raise PackageError(f"Entry too large: {name} ({info.file_size} bytes)")
-            total_uncompressed += info.file_size
+            if zip_entry.file_size > self.limits.max_entry_uncompressed_bytes:
+                raise PackageError(f"Entry too large: {name} ({zip_entry.file_size} bytes)")
+            total_uncompressed += zip_entry.file_size
             if total_uncompressed > self.limits.max_total_uncompressed_bytes:
                 raise PackageError(f"Package uncompressed size too large: {total_uncompressed} bytes")
 
-            if info.file_size > _GRACE_ENTRY_SIZE and info.compress_size > 0:
-                ratio = info.compress_size / info.file_size
-                if ratio < _MIN_INFLATE_RATIO:
-                    raise PackageError(f"Suspicious compression ratio for {name}: {info.compress_size}/{info.file_size}")
+            if zip_entry.file_size > _GRACE_ENTRY_SIZE and zip_entry.compress_size > 0:
+                compression_ratio = zip_entry.compress_size / zip_entry.file_size
+                if compression_ratio < _MIN_INFLATE_RATIO:
+                    raise PackageError(
+                        f"Suspicious compression ratio for {name}: {zip_entry.compress_size}/{zip_entry.file_size}"
+                    )
 
             names.add(name)
-            rows.append(
+            entry_index.append(
                 {
                     "name": name,
-                    "compressedSize": info.compress_size,
-                    "uncompressedSize": info.file_size,
-                    "crc": info.CRC,
+                    "compressedSize": zip_entry.compress_size,
+                    "uncompressedSize": zip_entry.file_size,
+                    "crc": zip_entry.CRC,
                 }
             )
 
-        self._entry_index = rows
+        self._entry_index = entry_index
         self._names = names
-        return rows
+        return entry_index
 
     def read_content_types(self) -> ContentTypes:
         with self.open_entry("[Content_Types].xml") as stream:

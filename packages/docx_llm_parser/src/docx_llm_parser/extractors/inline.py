@@ -34,6 +34,7 @@ from ..core.constants import (
 from ..core.locator import part_block_locator as locator
 from ..core.models import (
     AssetLookup,
+    InlineObject,
     LinkInfo,
     ObjectLookup,
     ParseOptions,
@@ -106,72 +107,33 @@ class InlineParser:
             return
         if lname == "r":
             # A run is Word's common carrier for text and inline objects.
-            run = self._parse_run(node, part, block_id, paragraph_style_id, raw_hints)
-            if run["text"] or "objects" in run or self.options.preserve_empty_paragraphs:
-                runs.append(run)
+            self._append_run(node, part, block_id, paragraph_style_id, raw_hints, runs)
             return
         if lname == "hyperlink":
             # Hyperlink display text reuses the normal inline parsing; the link target is attached as a lightweight attribute.
-            link = self._hyperlink_info(node, part)
-            raw_hints.append({"type": "hyperlink", **link})
-            temp_runs: list[Run] = []
-            for child in node:
-                self._extract_inline_runs(child, part, block_id, paragraph_style_id, raw_hints, temp_runs)
-            for run in temp_runs:
-                run["link"] = link
-                runs.append(run)
+            self._append_hyperlink_runs(node, part, block_id, paragraph_style_id, raw_hints, runs)
             return
         if lname == "ins":
             # Insertion revisions are visible text in final/review views.
-            self._warn(
-                "REVISION_INSERTION_INCLUDED",
-                "Encountered insertion revision; parser includes inserted text in final/review mode.",
-                part=part,
-                block_id=block_id,
-            )
-            if self.options.revision_mode in {"final", "review"}:
-                revision_runs: list[Run] = []
-                for child in node:
-                    self._extract_inline_runs(child, part, block_id, paragraph_style_id, raw_hints, revision_runs)
-                for run in revision_runs:
-                    if self.options.revision_mode == "review":
-                        run["revision"] = "inserted"
-                    runs.append(run)
+            self._append_inserted_runs(node, part, block_id, paragraph_style_id, raw_hints, runs)
             return
         if lname == "del":
             # Deletion revisions are only emitted in original/review views.
-            self._warn(
-                "REVISION_DELETION_SKIPPED",
-                "Encountered deletion revision; deletion handling depends on revision_mode.",
-                part=part,
-                block_id=block_id,
-            )
-            if self.options.revision_mode in {"original", "review"}:
-                text = "".join((item.text or "") for item in node.iter(_TAG_W_DELETION_TEXT))
-                if text:
-                    deletion_run: Run = {"text": text}
-                    if self.options.revision_mode == "review":
-                        deletion_run["revision"] = "deleted"
-                    runs.append(deletion_run)
+            self._append_deleted_run(node, part, block_id, runs)
             return
         if lname in {"sdt", "sdtContent", "smartTag"}:
             # Content controls and smart tags are wrapper layers; keep reading their visible content.
-            for child in node:
-                self._extract_inline_runs(child, part, block_id, paragraph_style_id, raw_hints, runs)
+            self._append_child_runs(node, part, block_id, paragraph_style_id, raw_hints, runs)
             return
         if lname in {"oMath", "oMathPara"}:
             # Paragraph-level OMML equations enter the final XML as lightweight objects.
-            obj = equation_object(node)
-            runs.append({"text": "", "objects": [obj]})
-            raw_hints.append(obj)
+            self._append_object_run(equation_object(node), raw_hints, runs)
             return
         if lname in {"bookmarkStart", "bookmarkEnd", "proofErr", "permStart", "permEnd"}:
             # These markers don't contribute readable text.
             return
         if lname == "object":
-            obj = parse_embedded_object(node)
-            runs.append({"text": "", "objects": [obj]})
-            raw_hints.append(obj)
+            self._append_object_run(parse_embedded_object(node), raw_hints, runs)
             return
         if lname.startswith("commentRange"):
             # A comment range itself carries no content; commentReference and comments.xml handle the association.
@@ -189,9 +151,106 @@ class InlineParser:
             block_id=block_id,
         )
 
+    def _append_run(
+        self,
+        run_element: ET.Element,
+        part: str,
+        block_id: str,
+        paragraph_style_id: str | None,
+        raw_hints: list[RawHint],
+        runs: list[Run],
+    ) -> None:
+        run = self._parse_run(run_element, part, block_id, paragraph_style_id, raw_hints)
+        if run["text"] or "objects" in run or self.options.preserve_empty_paragraphs:
+            runs.append(run)
+
+    def _append_child_runs(
+        self,
+        container: ET.Element,
+        part: str,
+        block_id: str,
+        paragraph_style_id: str | None,
+        raw_hints: list[RawHint],
+        runs: list[Run],
+    ) -> None:
+        for child in container:
+            self._extract_inline_runs(child, part, block_id, paragraph_style_id, raw_hints, runs)
+
+    def _append_hyperlink_runs(
+        self,
+        hyperlink: ET.Element,
+        part: str,
+        block_id: str,
+        paragraph_style_id: str | None,
+        raw_hints: list[RawHint],
+        runs: list[Run],
+    ) -> None:
+        link = self._hyperlink_info(hyperlink, part)
+        raw_hints.append({"type": "hyperlink", **link})
+        linked_runs: list[Run] = []
+        self._append_child_runs(hyperlink, part, block_id, paragraph_style_id, raw_hints, linked_runs)
+        for linked_run in linked_runs:
+            linked_run["link"] = link
+            runs.append(linked_run)
+
+    def _append_inserted_runs(
+        self,
+        insertion: ET.Element,
+        part: str,
+        block_id: str,
+        paragraph_style_id: str | None,
+        raw_hints: list[RawHint],
+        runs: list[Run],
+    ) -> None:
+        self._warn(
+            "REVISION_INSERTION_INCLUDED",
+            "Encountered insertion revision; parser includes inserted text in final/review mode.",
+            part=part,
+            block_id=block_id,
+        )
+        if self.options.revision_mode not in {"final", "review"}:
+            return
+
+        inserted_runs: list[Run] = []
+        self._append_child_runs(insertion, part, block_id, paragraph_style_id, raw_hints, inserted_runs)
+        for inserted_run in inserted_runs:
+            if self.options.revision_mode == "review":
+                inserted_run["revision"] = "inserted"
+            runs.append(inserted_run)
+
+    def _append_deleted_run(
+        self,
+        deletion: ET.Element,
+        part: str,
+        block_id: str,
+        runs: list[Run],
+    ) -> None:
+        self._warn(
+            "REVISION_DELETION_SKIPPED",
+            "Encountered deletion revision; deletion handling depends on revision_mode.",
+            part=part,
+            block_id=block_id,
+        )
+        if self.options.revision_mode not in {"original", "review"}:
+            return
+
+        deleted_text = "".join((item.text or "") for item in deletion.iter(_TAG_W_DELETION_TEXT))
+        if not deleted_text:
+            return
+
+        deleted_run: Run = {"text": deleted_text}
+        if self.options.revision_mode == "review":
+            deleted_run["revision"] = "deleted"
+        runs.append(deleted_run)
+
+    @staticmethod
+    def _append_object_run(obj: InlineObject, raw_hints: list[RawHint], runs: list[Run]) -> None:
+        runs.append({"text": "", "objects": [obj]})
+        raw_hints.append(obj)
+
     def _parse_run(
         self,
-        run: ET.Element,
+        run_element: ET.Element,
         part: str,
         block_id: str,
         paragraph_style_id: str | None,
@@ -206,7 +265,7 @@ class InlineParser:
         parsed_run: Run = {"text": ""}
 
         # Single pass: collect rPr and process text/object children at the same time.
-        for child in run:
+        for child in run_element:
             # Optimization: compare against precomputed tag names to avoid repeated qualified_name() calls.
             child_tag = child.tag
             if child_tag == _TAG_W_RUN_PROPERTIES:

@@ -6,7 +6,7 @@ import json
 import unittest
 from unittest.mock import MagicMock, patch
 
-from ocr_llm_core._paddle_vl import PaddleVLProvider, _json_object, _object_map
+from ocr_llm_core._paddle_vl import PaddleVLProvider, _object_mapping, _parse_json_object
 
 
 def _response(payload: object) -> MagicMock:
@@ -97,8 +97,8 @@ class PaddleVLProviderTest(unittest.TestCase):
 
     def test_json_response_guards(self) -> None:
         with self.assertRaises(RuntimeError):
-            _json_object(b"[]")
-        self.assertEqual(_object_map("not-a-map"), {})
+            _parse_json_object(b"[]")
+        self.assertEqual(_object_mapping("not-a-map"), {})
 
     def test_get_access_token_requires_token_field(self) -> None:
         p = PaddleVLProvider("key1", "secret1")

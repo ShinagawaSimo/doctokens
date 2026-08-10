@@ -52,7 +52,6 @@ def render_range(
     return _render_grid(
         filtered,
         density,
-        sheet_protection=bool(sheet_info.get("sheet_protection")),
     )
 
 
@@ -108,7 +107,6 @@ def _render_sheet(
             density,
             wb,
             start_row=start_row,
-            sheet_protection=bool(sheet.get("sheet_protection")),
         )
 
 
@@ -301,34 +299,15 @@ def _render_grid(
     density: Density,
     wb: ParsedWorkbook | None = None,
     start_row: int = 1,
-    sheet_protection: bool = False,
 ) -> str:
     if not rows:
         return ""
 
-    # Compute grid ref from visible rows (start_row onwards)
-    min_col = _GRID_BOUND_SENTINEL
-    max_col = 0
-    min_row = _GRID_BOUND_SENTINEL
-    max_row = 0
-    for row_cells in rows:
-        if not row_cells:
-            continue
-        if row_cells[0]["row"] < start_row:
-            continue
-        for cell in row_cells:
-            if cell["col"] < min_col:
-                min_col = cell["col"]
-            if cell["col"] > max_col:
-                max_col = cell["col"]
-            if cell["row"] < min_row:
-                min_row = cell["row"]
-            if cell["row"] > max_row:
-                max_row = cell["row"]
-
-    if min_col == _GRID_BOUND_SENTINEL:
+    bounds = _visible_grid_bounds(rows, start_row)
+    if bounds is None:
         return ""  # start_row beyond all data rows
 
+    min_col, min_row, max_col, max_row = bounds
     ref = f"{col_letter(min_col)}{min_row}:{col_letter(max_col)}{max_row}"
     tag = f"<grid ref={ref}"
 
@@ -355,20 +334,42 @@ def _render_grid(
                 wb,
                 comments,
                 suppressed_styles,
-                sheet_protection,
             )
         )
         if cell_count >= _CELL_BUDGET:
             break
 
-    # Output comment blocks after the grid
-    for idx, ((_col, _row), (ref, author, text)) in enumerate(sorted(comments.items(), key=lambda x: (x[0][1], x[0][0]))):
-        attrs = f'id=comment{idx} cell="{escape(ref, quote=True)}"'
-        if author:
-            attrs += f" author={escape(author, quote=True)}"
-        parts.append(f"<comment {attrs}>{escape(text)}\n")
+    parts.extend(_render_comments(comments))
 
     return "".join(parts)
+
+
+def _visible_grid_bounds(rows: list[list[Cell]], start_row: int) -> tuple[int, int, int, int] | None:
+    min_col = _GRID_BOUND_SENTINEL
+    max_col = 0
+    min_row = _GRID_BOUND_SENTINEL
+    max_row = 0
+    for row_cells in rows:
+        if not row_cells or row_cells[0]["row"] < start_row:
+            continue
+        for cell in row_cells:
+            min_col = min(min_col, cell["col"])
+            max_col = max(max_col, cell["col"])
+            min_row = min(min_row, cell["row"])
+            max_row = max(max_row, cell["row"])
+    if min_col == _GRID_BOUND_SENTINEL:
+        return None
+    return min_col, min_row, max_col, max_row
+
+
+def _render_comments(comments: dict[tuple[int, int], tuple[str, str, str]]) -> Iterator[str]:
+    for comment_id, ((_col, _row), (ref, author, text)) in enumerate(
+        sorted(comments.items(), key=lambda item: (item[0][1], item[0][0]))
+    ):
+        attrs = f'id=comment{comment_id} cell="{escape(ref, quote=True)}"'
+        if author:
+            attrs += f" author={escape(author, quote=True)}"
+        yield f"<comment {attrs}>{escape(text)}\n"
 
 
 def _render_row(
@@ -378,73 +379,106 @@ def _render_row(
     wb: ParsedWorkbook | None = None,
     comments: dict[tuple[int, int], tuple[str, str, str]] | None = None,
     suppressed_styles: set[str] | None = None,
-    sheet_protection: bool = False,
 ) -> str:
     actual_row = row_cells[0]["row"]
-    first_cell = row_cells[0]
+    parts = [_row_start_tag(row_cells[0], actual_row, density)]
+    fmt_index = _workbook_format_index(wb)
+    expected_col = grid_min_col
+    for cell in row_cells:
+        if cell.get("shadow"):
+            expected_col = cell["col"] + cell.get("colspan", 1)
+            continue
+
+        parts.append(f"<{_cell_tag_attrs(cell, expected_col, density, fmt_index, suppressed_styles)}>")
+        body = _cell_body(cell, density)
+        if comments is not None:
+            body = _body_with_comment_reference(cell, body, comments)
+        parts.append(body)
+        expected_col = cell["col"] + cell.get("colspan", 1)
+
+    parts.append("\n")
+    return "".join(parts)
+
+
+def _row_start_tag(first_cell: Cell, row_number: int, density: Density) -> str:
     row_hidden = " hidden" if first_cell.get("hidden") else ""
-    parts = [f"<tr row={actual_row}{row_hidden}"]
+    parts = [f"<tr row={row_number}{row_hidden}"]
     if density in {"structural", "semantic"} and first_cell.get("outlineLevel"):
         parts.append(f" outlineLevel={first_cell['outlineLevel']}")
         if first_cell.get("collapsed"):
             parts.append(" collapsed")
     parts.append(">")
-
-    fmt_index = wb["fmt_index"] if wb is not None else None
-    if not isinstance(fmt_index, FormatIndex):
-        fmt_index = None
-
-    next_col = grid_min_col
-    for cell in row_cells:
-        if cell.get("shadow"):
-            next_col = cell["col"] + (cell.get("colspan", 1))
-            continue
-
-        c = cell["col"]
-        tag_attrs = "td"
-        if density in {"structural", "semantic"}:
-            if cell.get("colspan", 1) > 1:
-                tag_attrs += f" colspan={cell['colspan']}"
-            if cell.get("rowspan", 1) > 1:
-                tag_attrs += f" rowspan={cell['rowspan']}"
-            if cell.get("formula"):
-                tag_attrs += f' formula="{escape(cell["formula"], quote=True)}"'
-            if cell.get("formulaType"):
-                tag_attrs += f" formulaType={escape(cell['formulaType'], quote=True)}"
-            if cell.get("formulaRange"):
-                tag_attrs += f" formulaRange={escape(cell['formulaRange'], quote=True)}"
-            if cell.get("spillRange"):
-                tag_attrs += f" spillRange={escape(cell['spillRange'], quote=True)}"
-            if cell.get("spillFrom"):
-                tag_attrs += f' spillFrom="{escape(cell["spillFrom"], quote=True)}"'
-            if fmt_index is not None and "style" in cell:
-                prot = fmt_index.protection_attrs(cell["style"])
-                if prot:
-                    tag_attrs += f" {prot}"
-        if density == "semantic" and fmt_index is not None and "style" in cell:
-            style = fmt_index.style_attrs(cell["style"])
-            if style and (suppressed_styles is None or style not in suppressed_styles):
-                tag_attrs += f" {style}"
-        if c != next_col:
-            tag_attrs += f" col={col_letter(c)}"
-        parts.append(f"<{tag_attrs}>")
-        body = _render_rich_text(cell["rich"]) if density == "semantic" and cell.get("rich") else escape(cell["text"])
-        if cell.get("hyperlink"):
-            body = f'<a href="{escape(cell["hyperlink"], quote=True)}">{body}</a>'
-        # Inline comment reference + register for post-grid output
-        if cell.get("comment") and comments is not None:
-            cid = len(comments)
-            body += f"<commentref id=comment{cid}/>"
-            comments[(cell["col"], cell["row"])] = (
-                cell["ref"],
-                cell.get("commentAuthor", ""),
-                cell["comment"],
-            )
-        parts.append(body)
-        next_col = c + (cell.get("colspan", 1))
-
-    parts.append("\n")
     return "".join(parts)
+
+
+def _workbook_format_index(wb: ParsedWorkbook | None) -> FormatIndex | None:
+    fmt_index = wb["fmt_index"] if wb is not None else None
+    return fmt_index if isinstance(fmt_index, FormatIndex) else None
+
+
+def _cell_tag_attrs(
+    cell: Cell,
+    expected_col: int,
+    density: Density,
+    fmt_index: FormatIndex | None,
+    suppressed_styles: set[str] | None,
+) -> str:
+    attrs = "td"
+    if density in {"structural", "semantic"}:
+        attrs += _structural_cell_attrs(cell, fmt_index)
+    if density == "semantic" and fmt_index is not None and "style" in cell:
+        style = fmt_index.style_attrs(cell["style"])
+        if style and (suppressed_styles is None or style not in suppressed_styles):
+            attrs += f" {style}"
+    if cell["col"] != expected_col:
+        attrs += f" col={col_letter(cell['col'])}"
+    return attrs
+
+
+def _structural_cell_attrs(cell: Cell, fmt_index: FormatIndex | None) -> str:
+    attrs = ""
+    if cell.get("colspan", 1) > 1:
+        attrs += f" colspan={cell['colspan']}"
+    if cell.get("rowspan", 1) > 1:
+        attrs += f" rowspan={cell['rowspan']}"
+    if cell.get("formula"):
+        attrs += f' formula="{escape(cell["formula"], quote=True)}"'
+    if cell.get("formulaType"):
+        attrs += f" formulaType={escape(cell['formulaType'], quote=True)}"
+    if cell.get("formulaRange"):
+        attrs += f" formulaRange={escape(cell['formulaRange'], quote=True)}"
+    if cell.get("spillRange"):
+        attrs += f" spillRange={escape(cell['spillRange'], quote=True)}"
+    if cell.get("spillFrom"):
+        attrs += f' spillFrom="{escape(cell["spillFrom"], quote=True)}"'
+    if fmt_index is not None and "style" in cell:
+        protection = fmt_index.protection_attrs(cell["style"])
+        if protection:
+            attrs += f" {protection}"
+    return attrs
+
+
+def _cell_body(cell: Cell, density: Density) -> str:
+    body = _render_rich_text(cell["rich"]) if density == "semantic" and cell.get("rich") else escape(cell["text"])
+    if cell.get("hyperlink"):
+        return f'<a href="{escape(cell["hyperlink"], quote=True)}">{body}</a>'
+    return body
+
+
+def _body_with_comment_reference(
+    cell: Cell,
+    body: str,
+    comments: dict[tuple[int, int], tuple[str, str, str]],
+) -> str:
+    if not cell.get("comment"):
+        return body
+    comment_id = len(comments)
+    comments[(cell["col"], cell["row"])] = (
+        cell["ref"],
+        cell.get("commentAuthor", ""),
+        cell["comment"],
+    )
+    return f"{body}<commentref id=comment{comment_id}/>"
 
 
 def _repeated_style_ranges(

@@ -72,8 +72,8 @@ def table_groups(parsed: ParsedDocument) -> dict[str, list[TableBlock]]:
 
 def _render_images(parsed: ParsedDocument, resource_id: str | None) -> list[str]:
     source_path = parsed.metadata.get("sourcePath")
-    ocr = getattr(parsed, "ocr_results", None) or {}
-    result: list[str] = []
+    ocr_results = getattr(parsed, "ocr_results", None) or {}
+    resources: list[str] = []
     for asset in parsed.assets:
         if resource_id and asset["id"] != resource_id:
             continue
@@ -88,11 +88,11 @@ def _render_images(parsed: ParsedDocument, resource_id: str | None) -> list[str]
             with zipfile.ZipFile(source_path, "r") as zf:
                 data = zf.read(zip_path)
             parts.append(base64.b64encode(data).decode())
-        ocr_text = ocr.get(asset["id"])
+        ocr_text = ocr_results.get(asset["id"])
         if ocr_text is not None:
             parts.append(f"\n<ocr-text id={asset['id']}>{ocr_text}")
-        result.append("".join(parts))
-    return result
+        resources.append("".join(parts))
+    return resources
 
 
 def _render_charts(parsed: ParsedDocument, resource_id: str | None) -> list[str]:
@@ -127,13 +127,13 @@ def _render_table_resource(
     parts = [f"<table {attrs}>"]
 
     if aggregate is not None:
-        agg_result = _compute_aggregate(all_rows, aggregate, aggregate_column or "")
-        op = agg_result.get("aggregate", "")
-        col = agg_result.get("aggregate_column", "")
-        val = agg_result.get("aggregate_value", "")
+        aggregate_result = _aggregate_rows(all_rows, aggregate, aggregate_column or "")
+        op = aggregate_result.get("aggregate", "")
+        col = aggregate_result.get("aggregate_column", "")
+        val = aggregate_result.get("aggregate_value", "")
         parts.append(f"\n<aggregate op={op} column={col}>{val}")
     else:
-        filtered = _slice_and_filter_rows(all_rows, rows, columns)
+        filtered = _filter_and_slice_rows(all_rows, rows, columns)
         for row in filtered:
             cells = "|".join(cell.get("text", "") for cell in row["cells"])
             if row.get("isHeader"):
@@ -143,7 +143,7 @@ def _render_table_resource(
     return "".join(parts)
 
 
-def _slice_and_filter_rows(
+def _filter_and_slice_rows(
     rows: list[TableRow],
     rows_spec: str | None,
     columns: list[str] | None,
@@ -199,11 +199,11 @@ _AGGREGATORS: dict[str, Callable[[list[float]], float | int]] = {
 }
 
 
-def _compute_aggregate(rows: list[TableRow], operation: str, column: str) -> ResourceDetail:
+def _aggregate_rows(rows: list[TableRow], operation: str, column: str) -> ResourceDetail:
     operation = operation.lower()
     if operation not in _AGGREGATORS:
         raise ValueError(f"Unknown aggregate {operation!r}; expected one of: {', '.join(sorted(_AGGREGATORS))}")
-    values = _column_values(rows, column)
+    values = _numeric_column_values(rows, column)
     return {
         "aggregate": operation,
         "aggregate_column": column,
@@ -211,7 +211,7 @@ def _compute_aggregate(rows: list[TableRow], operation: str, column: str) -> Res
     }
 
 
-def _column_values(rows: list[TableRow], column: str) -> list[float]:
+def _numeric_column_values(rows: list[TableRow], column: str) -> list[float]:
     if not rows:
         return []
     header = rows[0]

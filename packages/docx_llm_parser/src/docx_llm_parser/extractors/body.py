@@ -39,7 +39,7 @@ class BlockIdAllocator:
     def __init__(self) -> None:
         self._next = 1
 
-    def next(self) -> str:
+    def allocate(self) -> str:
         # Count independently per document to avoid shared state across concurrent parses.
         block_id = f"b{self._next}"
         self._next += 1
@@ -74,7 +74,7 @@ class DocumentBodyParser:
             object_lookup=object_lookup,
             on_page_break=self._mark_page_break,
         )
-        self.ids = BlockIdAllocator()
+        self.block_ids = BlockIdAllocator()
         self._order = 0
         self._table_index = 0
         self._page_hint = 1
@@ -127,16 +127,16 @@ class DocumentBodyParser:
             self._add_body_event(parsed_block)
         return blocks
 
-    def parse_paragraph(self, p: ET.Element, part: str) -> TextBlock | None:
+    def parse_paragraph(self, paragraph: ET.Element, part: str) -> TextBlock | None:
         """Parse a paragraph; emit a heading only when the style outline level is explicit."""
-        block_id = self.ids.next()
+        block_id = self.block_ids.allocate()
         self._order += 1
         # Apply the page-break count accumulated by the previous block.
         page_start = self._flush_pending_page_breaks()
 
-        style_id = self._paragraph_style_id(p)
-        runs, raw_hints = self.inline.paragraph_runs(p, part, block_id, style_id)
-        numbering = self._paragraph_numbering(p, style_id, part, block_id)
+        style_id = self._paragraph_style_id(paragraph)
+        runs, raw_hints = self.inline.paragraph_runs(paragraph, part, block_id, style_id)
+        numbering = self._paragraph_numbering(paragraph, style_id, part, block_id)
         if numbering is not None:
             # Auto-numbering is visible Word text; insert it into the text stream as a synthetic run.
             runs.insert(0, {"text": numbering["text"], "kind": "numberingLabel"})
@@ -195,7 +195,7 @@ class DocumentBodyParser:
             block["rawHints"] = raw_hints
         return block
 
-    def parse_table(self, tbl: ET.Element, part: str) -> list[TableBlock]:
+    def parse_table(self, table: ET.Element, part: str) -> list[TableBlock]:
         """Parse a Word table, preserving rows/columns, merged cells, and cell blocks.
         When a page break occurs inside the table, split it into multiple blocks so the
         renderer can emit <page n=N> between sub-tables.
@@ -204,73 +204,49 @@ class DocumentBodyParser:
         self._order += 1
         table_id = self._next_table_id()
         # Apply the page-break count accumulated by the previous block.
-        current_page = self._flush_pending_page_breaks()
+        segment_page = self._flush_pending_page_breaks()
 
         sub_tables: list[TableBlock] = []
-        current_rows: list[TableRow] = []
-        max_col = 0
+        segment_rows: list[TableRow] = []
+        widest_column_count = 0
         # Record the page number before processing this row, to tell whether the row triggered a page break.
         page_before_row = self._page_hint
 
-        for row_index, tr in enumerate(child_elements(tbl, "w", "tr")):
-            cells: list[TableCell] = []
-            col_index = 0
-            is_header = first_child(first_child(tr, "w", "trPr"), "w", "tblHeader") is not None
-            for tc in child_elements(tr, "w", "tc"):
-                # A Word table is not a simple 2D array; colSpan/vMerge info must be recorded.
-                col_span = self._cell_col_span(tc)
-                v_merge = self._cell_v_merge(tc)
-                cell_blocks = self._parse_cell_blocks(tc, part)
-                text = self._blocks_text(cell_blocks)
-                cell: TableCell = {
-                    "rowIndex": row_index,
-                    "colIndex": col_index,
-                    "rowSpan": 1,
-                    "colSpan": col_span,
-                    "text": text,
-                    "blocks": cell_blocks,
-                }
-                if v_merge:
-                    cell["vMerge"] = v_merge
-                cells.append(cell)
-                col_index += col_span
-            max_col = max(max_col, col_index)
-            row: TableRow = {"rowIndex": row_index, "cells": cells}
-            if is_header:
-                # Repeated header rows help LLMs understand table semantics, so keep them as a lightweight flag.
-                row["isHeader"] = True
+        for row_index, row_element in enumerate(child_elements(table, "w", "tr")):
+            row, row_width = self._parse_table_row(row_element, row_index, part)
+            widest_column_count = max(widest_column_count, row_width)
 
             # Did _page_hint change after processing this row? Multiple lrpb in one row count as a single page break.
             if self._page_hint != page_before_row:
-                if current_rows:
+                if segment_rows:
                     sub_tables.append(
                         self._make_table_block(
                             part,
-                            current_page,
-                            current_rows,
-                            max_col,
+                            segment_page,
+                            segment_rows,
+                            widest_column_count,
                             table_id,
                             len(sub_tables) + 1,
                         )
                     )
-                    current_rows = []
+                    segment_rows = []
                 # Multiple lrpb across cells in the same row collapse into one page break: the page number only increments by 1.
                 self._page_hint = page_before_row + 1
                 self._pending_page_breaks = 0
-                current_page = self._page_hint
+                segment_page = self._page_hint
 
-            current_rows.append(row)
+            segment_rows.append(row)
             page_before_row = self._page_hint
 
         # Commit the final batch of rows.
-        if current_rows:
-            self._apply_vertical_merges(current_rows)
+        if segment_rows:
+            self._apply_vertical_merges(segment_rows)
             sub_tables.append(
                 self._make_table_block(
                     part,
-                    current_page,
-                    current_rows,
-                    max_col,
+                    segment_page,
+                    segment_rows,
+                    widest_column_count,
                     table_id,
                     len(sub_tables) + 1,
                 )
@@ -288,7 +264,7 @@ class DocumentBodyParser:
         segment_index: int,
     ) -> TableBlock:
         """Build a table block dictionary."""
-        block_id = self.ids.next()
+        block_id = self.block_ids.allocate()
         return {
             "id": block_id,
             "type": "table",
@@ -300,6 +276,35 @@ class DocumentBodyParser:
             "rows": rows,
             "columnCount": max_col,
         }
+
+    def _parse_table_row(self, row_element: ET.Element, row_index: int, part: str) -> tuple[TableRow, int]:
+        """Parse one table row and return the row plus its visual column count."""
+        cells: list[TableCell] = []
+        next_column = 0
+        is_header = first_child(first_child(row_element, "w", "trPr"), "w", "tblHeader") is not None
+        for cell_element in child_elements(row_element, "w", "tc"):
+            # A Word table is not a simple 2D array; colSpan/vMerge info must be recorded.
+            col_span = self._cell_col_span(cell_element)
+            vertical_merge = self._cell_v_merge(cell_element)
+            cell_blocks = self._parse_cell_blocks(cell_element, part)
+            cell: TableCell = {
+                "rowIndex": row_index,
+                "colIndex": next_column,
+                "rowSpan": 1,
+                "colSpan": col_span,
+                "text": self._cell_text_from_blocks(cell_blocks),
+                "blocks": cell_blocks,
+            }
+            if vertical_merge:
+                cell["vMerge"] = vertical_merge
+            cells.append(cell)
+            next_column += col_span
+
+        row: TableRow = {"rowIndex": row_index, "cells": cells}
+        if is_header:
+            # Repeated header rows help LLMs understand table semantics, so keep them as a lightweight flag.
+            row["isHeader"] = True
+        return row, next_column
 
     def _next_table_id(self) -> str:
         """Allocate a stable document-order ID for one logical table."""
@@ -347,18 +352,20 @@ class DocumentBodyParser:
                     for column in columns:
                         active.pop(column, None)
 
-    def _paragraph_style_id(self, p: ET.Element) -> str | None:
+    def _paragraph_style_id(self, paragraph: ET.Element) -> str | None:
         """Read the paragraph style ID."""
-        paragraph_properties = first_child(p, "w", "pPr")
+        paragraph_properties = first_child(paragraph, "w", "pPr")
         pstyle = first_child(paragraph_properties, "w", "pStyle")
         return attr(pstyle, "w", "val") if pstyle is not None else None
 
-    def _paragraph_numbering(self, p: ET.Element, style_id: str | None, part: str, block_id: str) -> NumberingLabel | None:
+    def _paragraph_numbering(
+        self, paragraph: ET.Element, style_id: str | None, part: str, block_id: str
+    ) -> NumberingLabel | None:
         """Read the paragraph numbering and advance the numbering counter."""
-        paragraph_properties = first_child(p, "w", "pPr")
+        paragraph_properties = first_child(paragraph, "w", "pPr")
         numbering_properties = first_child(paragraph_properties, "w", "numPr")
         style_numbering = self.styles.resolve_numbering(style_id)
-        direct_num_id, direct_level = self._num_pr_values(numbering_properties)
+        direct_num_id, direct_numbering_level = self._num_pr_values(numbering_properties)
 
         if direct_num_id == "0":
             # numId=0 means numbering is off in Word; it also doesn't fall back to the style's numbering.
@@ -366,7 +373,7 @@ class DocumentBodyParser:
         num_id = direct_num_id or (style_numbering[0] if style_numbering else None)
         if num_id is None:
             return None
-        level = direct_level if direct_level is not None else (style_numbering[1] if style_numbering else 0)
+        level = direct_numbering_level if direct_numbering_level is not None else (style_numbering[1] if style_numbering else 0)
         return self.numbering_state.advance(num_id, level, part=part, block_id=block_id)
 
     def _num_pr_values(self, numbering_properties: ET.Element | None) -> tuple[str | None, int | None]:
@@ -416,7 +423,7 @@ class DocumentBodyParser:
             return None
         return attr(vmerge, "w", "val") or "continue"
 
-    def _blocks_text(self, blocks: list[Block]) -> str:
+    def _cell_text_from_blocks(self, blocks: list[Block]) -> str:
         """Combine the cell's nested blocks into human-readable cell text."""
         parts: list[str] = []
         for block in blocks:

@@ -15,14 +15,14 @@ _SUBMIT_URL = "https://aip.baidubce.com/rest/2.0/brain/online/v2/paddle-vl-parse
 _QUERY_URL = "https://aip.baidubce.com/rest/2.0/brain/online/v2/paddle-vl-parser/task/query"
 
 
-def _json_object(raw: bytes) -> dict[str, object]:
+def _parse_json_object(raw: bytes) -> dict[str, object]:
     parsed: object = json.loads(raw)
     if not isinstance(parsed, dict):
         raise RuntimeError("Unexpected JSON response shape")
     return cast(dict[str, object], parsed)
 
 
-def _object_map(value: object) -> dict[str, object]:
+def _object_mapping(value: object) -> dict[str, object]:
     if not isinstance(value, dict):
         return {}
     return cast(dict[str, object], value)
@@ -58,7 +58,7 @@ class PaddleVLProvider(OcrProvider):
         try:
             token = self._get_access_token()
             task_id = self._submit(token, image_bytes)
-            status, _error_msg = self._poll(token, task_id)
+            status, _error_message = self._poll(token, task_id)
             if status != "success":
                 return ""
             text = self._download_markdown(token, task_id)
@@ -75,7 +75,7 @@ class PaddleVLProvider(OcrProvider):
         req = urllib.request.Request(_TOKEN_URL, data=data, method="POST")
         req.add_header("Content-Type", "application/x-www-form-urlencoded")
         with urllib.request.urlopen(req, timeout=30) as resp:
-            body = _json_object(resp.read())
+            body = _parse_json_object(resp.read())
         token = body.get("access_token")
         if not isinstance(token, str):
             raise RuntimeError("Token response did not include access_token")
@@ -94,10 +94,10 @@ class PaddleVLProvider(OcrProvider):
         req = urllib.request.Request(url, data=payload, method="POST")
         req.add_header("Content-Type", "application/json")
         with urllib.request.urlopen(req, timeout=60) as resp:
-            body = _json_object(resp.read())
+            body = _parse_json_object(resp.read())
         if body.get("error_code", 0) != 0:
             raise RuntimeError(f"Submit failed: {body.get('error_msg', 'unknown')}")
-        result = _object_map(body.get("result"))
+        result = _object_mapping(body.get("result"))
         task_id = result.get("task_id")
         if not isinstance(task_id, str):
             raise RuntimeError("Submit response did not include task_id")
@@ -111,11 +111,11 @@ class PaddleVLProvider(OcrProvider):
             req = urllib.request.Request(url, data=payload, method="POST")
             req.add_header("Content-Type", "application/json")
             with urllib.request.urlopen(req, timeout=30) as resp:
-                body = _json_object(resp.read())
+                body = _parse_json_object(resp.read())
             if body.get("error_code", 0) != 0:
                 error_msg = body.get("error_msg")
                 return ("failed", error_msg if isinstance(error_msg, str) else "unknown")
-            result = _object_map(body.get("result"))
+            result = _object_mapping(body.get("result"))
             status_value = result.get("status", "failed")
             status = status_value if isinstance(status_value, str) else "failed"
             if status in ("success", "failed"):
@@ -130,8 +130,8 @@ class PaddleVLProvider(OcrProvider):
         req = urllib.request.Request(url, data=payload, method="POST")
         req.add_header("Content-Type", "application/json")
         with urllib.request.urlopen(req, timeout=30) as resp:
-            body = _json_object(resp.read())
-        result = _object_map(body.get("result"))
+            body = _parse_json_object(resp.read())
+        result = _object_mapping(body.get("result"))
         markdown_url = result.get("markdown_url")
         if not isinstance(markdown_url, str) or not markdown_url:
             return ""

@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Iterator
 from html import escape
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from .models import Cell, DrawingChart
+from .models import Cell, DefinedName, DrawingChart, ParsedWorkbook, SheetInfo
 from .parser import _parse_workbook
 from .query import AggregateSpec, OrderSpec, WhereCondition
 from .query import query_data as _query_data
 from .renderers.structural import (
+    _filter_rows,
     _find_sheet,
     _parse_range,
     _render_grid,
@@ -37,11 +39,11 @@ def parse_xlsx(
     """
     wb = _parse_workbook(source)
     if stream:
-        return _generate_workbook(wb, density, start_row)
-    return "".join(_generate_workbook(wb, density, start_row))
+        return _iter_rendered_workbook(wb, density, start_row)
+    return "".join(_iter_rendered_workbook(wb, density, start_row))
 
 
-def _generate_workbook(wb: dict, density: str, start_row: int) -> Iterator[str]:
+def _iter_rendered_workbook(wb: ParsedWorkbook, density: str, start_row: int) -> Iterator[str]:
     """Yield rendered chunks for a parsed workbook."""
     yield f"density={density}\n"
     for sheet in wb["sheets"]:
@@ -69,7 +71,7 @@ def write_document(
             "w", encoding="utf-8", dir=output_dir, prefix=".parsed.html.", suffix=".tmp", delete=False
         ) as stream:
             temp_path = _Path(stream.name)
-            for chunk in _generate_workbook(_parse_workbook(source), density, start_row):
+            for chunk in _iter_rendered_workbook(_parse_workbook(source), density, start_row):
                 stream.write(chunk)
             stream.flush()
             os.fsync(stream.fileno())
@@ -92,14 +94,7 @@ def render_range(
     wb = _parse_workbook(source)
     sheet_info = _find_sheet(wb, sheet)
     start_col, start_row, end_col, end_row = _parse_range(range_spec)
-
-    rows = sheet_info.get("rows", [])
-    filtered: list[list[Cell]] = []
-    for row_cells in rows:
-        kept = [c for c in row_cells if start_col <= c["col"] <= end_col and start_row <= c["row"] <= end_row]
-        if kept:
-            filtered.append(kept)
-
+    filtered = _filter_rows(sheet_info.get("rows", []), start_col, start_row, end_col, end_row)
     return _render_grid(filtered, density, wb)
 
 
@@ -116,52 +111,82 @@ def find_cells(
     *kind* narrows to one of ``value``, ``formula``, ``comment``, ``hyperlink``,
     ``definedName``.
     """
-    import re as _re
-
     if not query:
         return "<matches>\n"
     wb = _parse_workbook(source)
-    pattern = _re.compile(_re.escape(query))  # exact match by default
+    pattern = re.compile(re.escape(query))  # exact match by default
     matches: list[str] = []
     sheets_to_search = sheets or [s["name"] for s in wb["sheets"]]
 
     for sheet_name in sheets_to_search:
         if len(matches) >= limit:
             break
-        sheet = _find_sheet(wb, sheet_name)
-        for row_cells in sheet.get("rows", []):
-            for cell in row_cells:
-                if len(matches) >= limit:
-                    break
-                cell_ref = f"{escape(sheet_name, quote=True)}!{cell['ref']}"
-                if (kind is None or kind == "value") and pattern.search(cell.get("text", "")):
-                    matches.append(f'<match cell="{cell_ref}" field=value>{escape(cell["text"])}')
-                    continue
-                if (kind is None or kind == "formula") and pattern.search(cell.get("formula", "")):
-                    matches.append(f'<match cell="{cell_ref}" field=formula>{escape(cell.get("formula", ""))}')
-                    continue
-                if (kind is None or kind == "comment") and pattern.search(cell.get("comment", "")):
-                    matches.append(f'<match cell="{cell_ref}" field=comment>{escape(cell.get("comment", ""))}')
-                    continue
-                if (kind is None or kind == "hyperlink") and pattern.search(cell.get("hyperlink", "")):
-                    matches.append(f'<match cell="{cell_ref}" field=hyperlink>{escape(cell.get("hyperlink", ""))}')
-            if len(matches) >= limit:
-                break
-
-        # Defined names
-        if (kind is None or kind == "definedName") and len(matches) < limit:
-            for dn in wb["metadata"].get("defined_names", []):
-                if len(matches) >= limit:
-                    break
-                scope = dn.get("scopeSheet")
-                if scope and scope != sheet_name:
-                    continue
-                if pattern.search(dn["name"]) or pattern.search(dn.get("ref", "")):
-                    matches.append(f"<match field=definedName>{escape(dn['name'])} = {escape(dn['ref'])}")
+        sheet_info = _find_sheet(wb, sheet_name)
+        remaining = limit - len(matches)
+        matches.extend(_find_cell_matches(sheet_info, sheet_name, pattern, kind, remaining))
+        if len(matches) < limit and kind in {None, "definedName"}:
+            remaining = limit - len(matches)
+            defined_names = wb["metadata"].get("defined_names", [])
+            matches.extend(_find_defined_name_matches(defined_names, sheet_name, pattern, remaining))
 
     parts = ["<matches>\n"]
     parts.append("\n".join(matches[:limit]))
     return "".join(parts) + "\n"
+
+
+def _find_cell_matches(
+    sheet: SheetInfo,
+    sheet_name: str,
+    pattern: re.Pattern[str],
+    kind: str | None,
+    limit: int,
+) -> list[str]:
+    matches: list[str] = []
+    for row_cells in sheet.get("rows", []):
+        for cell in row_cells:
+            if len(matches) >= limit:
+                return matches
+            match = _cell_match(sheet_name, cell, pattern, kind)
+            if match is not None:
+                matches.append(match)
+    return matches
+
+
+def _cell_match(sheet_name: str, cell: Cell, pattern: re.Pattern[str], kind: str | None) -> str | None:
+    cell_ref = f"{escape(sheet_name, quote=True)}!{cell['ref']}"
+    fields = (
+        ("value", cell["text"]),
+        ("formula", cell.get("formula", "")),
+        ("comment", cell.get("comment", "")),
+        ("hyperlink", cell.get("hyperlink", "")),
+    )
+    for field_name, raw_value in fields:
+        if kind not in {None, field_name}:
+            continue
+        value = str(raw_value)
+        if pattern.search(value):
+            return f'<match cell="{cell_ref}" field={field_name}>{escape(value)}'
+    return None
+
+
+def _find_defined_name_matches(
+    defined_names: list[DefinedName],
+    sheet_name: str,
+    pattern: re.Pattern[str],
+    limit: int,
+) -> list[str]:
+    matches: list[str] = []
+    for defined_name in defined_names:
+        if len(matches) >= limit:
+            break
+        scope = defined_name.get("scopeSheet")
+        if scope and scope != sheet_name:
+            continue
+        if pattern.search(defined_name["name"]) or pattern.search(defined_name.get("ref", "")):
+            name = escape(defined_name["name"])
+            ref = escape(defined_name["ref"])
+            matches.append(f"<match field=definedName>{name} = {ref}")
+    return matches
 
 
 def query_data(
@@ -209,50 +234,50 @@ def get_resource(
     wb = _parse_workbook(source)
 
     if resource_type == "image":
-        for s in wb["sheets"]:
-            for img in s.get("images", []):
-                if img["id"] == resource_id:
-                    return f"<image id={resource_id} ref={img['ref']}/>"
+        for sheet_info in wb["sheets"]:
+            for image in sheet_info.get("images", []):
+                if image["id"] == resource_id:
+                    return f"<image id={resource_id} ref={image['ref']}/>"
     elif resource_type == "chart":
-        for s in wb["sheets"]:
-            for ch in s.get("charts", []):
-                if ch["id"] == resource_id:
-                    return _render_chart_resource(ch)
+        for sheet_info in wb["sheets"]:
+            for chart in sheet_info.get("charts", []):
+                if chart["id"] == resource_id:
+                    return _render_chart_resource(chart)
     elif resource_type == "pivot_table":
-        for s in wb["sheets"]:
-            for pv in s.get("pivot_tables", []):
-                if pv["id"] == resource_id:
-                    return f"<pivotTable id={resource_id} name={pv.get('name', '')}/>"
+        for sheet_info in wb["sheets"]:
+            for pivot_table in sheet_info.get("pivot_tables", []):
+                if pivot_table["id"] == resource_id:
+                    return f"<pivotTable id={resource_id} name={pivot_table.get('name', '')}/>"
     return None
 
 
-def _render_chart_resource(ch: DrawingChart) -> str:
+def _render_chart_resource(chart: DrawingChart) -> str:
     """Render a chart as an HTML string — full series data."""
     from html import escape
 
-    attrs = f"id={ch['id']} ref={ch['ref']} type={ch.get('type', '?')}"
-    attrs += f" series={ch.get('series_count', 0)}"
-    if ch.get("title"):
-        attrs += f" title={escape(ch['title'], quote=True)}"
+    attrs = f"id={chart['id']} ref={chart['ref']} type={chart.get('type', '?')}"
+    attrs += f" series={chart.get('series_count', 0)}"
+    if chart.get("title"):
+        attrs += f" title={escape(chart['title'], quote=True)}"
     parts = [f"<chart {attrs}>"]
 
-    for s in ch.get("series", []):
-        s_attrs = f"index={s.get('index', 0)}"
-        if s.get("name"):
-            s_attrs += f" name={escape(s['name'], quote=True)}"
-        if "min" in s:
-            s_attrs += f" min={s['min']}"
-        if "max" in s:
-            s_attrs += f" max={s['max']}"
-        parts.append(f"\n<series {s_attrs}>")
-        for pt in s.get("points", []):
-            pt_attrs = ""
-            cat = pt.get("category", "")
-            val = pt.get("value", "")
-            if cat:
-                pt_attrs += f" category={escape(cat, quote=True)}"
-            if val:
-                pt_attrs += f" value={escape(val, quote=True)}"
-            parts.append(f"\n<point{pt_attrs}/>")
+    for series in chart.get("series", []):
+        series_attrs = f"index={series.get('index', 0)}"
+        if series.get("name"):
+            series_attrs += f" name={escape(series['name'], quote=True)}"
+        if "min" in series:
+            series_attrs += f" min={series['min']}"
+        if "max" in series:
+            series_attrs += f" max={series['max']}"
+        parts.append(f"\n<series {series_attrs}>")
+        for point in series.get("points", []):
+            point_attrs = ""
+            category = point.get("category", "")
+            value = point.get("value", "")
+            if category:
+                point_attrs += f" category={escape(category, quote=True)}"
+            if value:
+                point_attrs += f" value={escape(value, quote=True)}"
+            parts.append(f"\n<point{point_attrs}/>")
 
     return "".join(parts)

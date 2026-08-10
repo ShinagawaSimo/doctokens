@@ -28,8 +28,8 @@ class BatchParseResult:
 
 
 def parse_many(
-    docx_paths: Iterable[str | Path],
-    output_base: str | Path,
+    source_paths: Iterable[str | Path],
+    output_root: str | Path,
     *,
     max_workers: int | None = None,
     revision_mode: RevisionMode | str = RevisionMode.FINAL,
@@ -38,7 +38,7 @@ def parse_many(
     if max_workers is not None and max_workers <= 0:
         raise ValueError("max_workers must be greater than zero")
     resolved_revision_mode = RevisionMode.parse(revision_mode)
-    paths = [Path(item) for item in docx_paths]
+    paths = [Path(item) for item in source_paths]
     if not paths:
         return []
 
@@ -46,7 +46,7 @@ def parse_many(
     results: list[BatchParseResult | None] = [None] * len(paths)
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         futures = {
-            executor.submit(_parse_one, path, Path(output_base), resolved_revision_mode): index
+            executor.submit(_parse_one, path, Path(output_root), resolved_revision_mode): index
             for index, path in enumerate(paths)
         }
         for future in as_completed(futures):
@@ -56,15 +56,15 @@ def parse_many(
     return [cast(BatchParseResult, item) for item in results]
 
 
-def _parse_one(docx_path: Path, output_base: Path, revision_mode: RevisionMode) -> BatchParseResult:
+def _parse_one(source_path: Path, output_root: Path, revision_mode: RevisionMode) -> BatchParseResult:
     """Parse a single document; exceptions are folded into the batch result so others continue."""
-    output_dir = output_base / docx_path.stem
+    output_dir = output_root / source_path.stem
     try:
         options = ParseOptions(debug=False, revision_mode=revision_mode, output_dir=output_dir)
-        parsed = DocxParser().parse(docx_path, options)
+        parsed = DocxParser().parse(source_path, options)
         paths = write_outputs(parsed, output_dir)
         return BatchParseResult(
-            docx=docx_path,
+            docx=source_path,
             output_dir=output_dir,
             ok=True,
             output_path=Path(paths["html"]),
@@ -73,7 +73,7 @@ def _parse_one(docx_path: Path, output_base: Path, revision_mode: RevisionMode) 
     except Exception as exc:
         # Batch mode records per-document failures so one bad input does not block the queue.
         return BatchParseResult(
-            docx=docx_path,
+            docx=source_path,
             output_dir=output_dir,
             ok=False,
             error=f"{type(exc).__name__}: {exc}",

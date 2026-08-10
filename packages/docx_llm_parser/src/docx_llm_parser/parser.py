@@ -246,8 +246,8 @@ class DocxParser:
             return {}
 
         # Collect unique images by content hash.
-        hashes: dict[str, str] = {}  # assetId -> sha256 hex
-        unique_images: dict[str, bytes] = {}  # sha256 -> image bytes
+        asset_hashes: dict[str, str] = {}  # assetId -> sha256 hex
+        unique_image_bytes: dict[str, bytes] = {}  # sha256 -> image bytes
         for asset in assets:
             if asset["type"] != "image" or asset.get("source") != "embedded":
                 continue
@@ -255,30 +255,32 @@ class DocxParser:
             if not zip_path:
                 continue
             image_bytes = package.open_entry(zip_path).read()
-            h = hashlib.sha256(image_bytes).hexdigest()
-            hashes[asset["id"]] = h
-            if h not in unique_images:
-                unique_images[h] = image_bytes
+            image_hash = hashlib.sha256(image_bytes).hexdigest()
+            asset_hashes[asset["id"]] = image_hash
+            if image_hash not in unique_image_bytes:
+                unique_image_bytes[image_hash] = image_bytes
 
-        if not unique_images:
+        if not unique_image_bytes:
             return {}
 
         # Submit OCR jobs in parallel.
-        ocr_raw: dict[str, str] = {}  # sha256 -> OCR text
+        ocr_text_by_hash: dict[str, str] = {}  # sha256 -> OCR text
         max_workers = getattr(opts, "ocr_workers", 4)
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(provider.extract, img): h for h, img in unique_images.items()}
+            futures = {
+                pool.submit(provider.extract, image_bytes): image_hash for image_hash, image_bytes in unique_image_bytes.items()
+            }
             for future in as_completed(futures):
-                h = futures[future]
+                image_hash = futures[future]
                 try:
-                    ocr_raw[h] = future.result()
+                    ocr_text_by_hash[image_hash] = future.result()
                 except Exception:
-                    ocr_raw[h] = ""
+                    ocr_text_by_hash[image_hash] = ""
 
         # Map back to asset IDs.
         result: dict[str, str] = {}
-        for asset_id, h in hashes.items():
-            result[asset_id] = ocr_raw.get(h, "")
+        for asset_id, image_hash in asset_hashes.items():
+            result[asset_id] = ocr_text_by_hash.get(image_hash, "")
         return result
 
     # Document assembly

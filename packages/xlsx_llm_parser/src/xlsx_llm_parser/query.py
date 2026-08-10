@@ -49,7 +49,7 @@ def query_data(
     limit: int | None = None,
 ) -> str:
     """Query a declared table or explicit range and return lightweight table HTML."""
-    sheet_obj, columns, bounds, skip_rows_through = _resolve_source(
+    source_sheet, columns, bounds, skip_rows_through = _resolve_query_source(
         wb,
         table_id=table_id,
         sheet=sheet,
@@ -57,48 +57,34 @@ def query_data(
         header_row=header_row,
     )
     start_col, start_row, end_col, end_row = bounds
-    source_rows = _rows_in_range(sheet_obj, start_col, start_row, end_col, end_row)
-
-    if not columns and header_row is not None:
-        for row_cells in source_rows:
-            if row_cells[0]["row"] == header_row:
-                columns = _columns_from_header(row_cells, start_col, end_col)
-                break
-
-    typed_rows: list[dict[str, object]] = []
-    for row_cells in source_rows:
-        row_num = row_cells[0]["row"]
-        if skip_rows_through is not None and row_num <= skip_rows_through:
-            continue
-        row_dict = _row_to_dict(row_cells, columns, start_col, end_col)
-        if row_dict:
-            row_dict["__row"] = row_num
-            typed_rows.append(row_dict)
+    source_rows = _rows_in_range(source_sheet, start_col, start_row, end_col, end_row)
+    columns = _columns_from_optional_header(source_rows, columns, header_row, start_col, end_col)
+    rows = _materialize_rows(source_rows, columns, start_col, end_col, skip_rows_through)
 
     if where:
-        typed_rows = _apply_where(typed_rows, _resolve_where_conditions(where, columns))
+        rows = _apply_where(rows, _resolve_where_conditions(where, columns))
 
     if group_by and aggregates:
         resolved_group_by = [_resolve_column_key(item, columns) for item in group_by]
         resolved_aggregates = _resolve_aggregates(aggregates, columns)
-        typed_rows = _apply_aggregation(typed_rows, resolved_group_by, resolved_aggregates)
+        rows = _apply_aggregation(rows, resolved_group_by, resolved_aggregates)
         columns = _aggregation_columns(resolved_group_by, resolved_aggregates, columns)
 
-    if select and typed_rows:
+    if select and rows:
         columns = _select_columns(select, columns)
         keep_cols = [item["key"] for item in columns]
-        typed_rows = [{col: row.get(col, "") for col in keep_cols if col in row} for row in typed_rows]
+        rows = [{col: row.get(col, "") for col in keep_cols if col in row} for row in rows]
 
     if order_by:
-        typed_rows = _apply_order_by(typed_rows, _resolve_order_specs(order_by, columns))
+        rows = _apply_order_by(rows, _resolve_order_specs(order_by, columns))
 
     if limit and limit > 0:
-        typed_rows = typed_rows[:limit]
+        rows = rows[:limit]
 
-    return _render_query_result(typed_rows, columns)
+    return _render_query_result(rows, columns)
 
 
-def _resolve_source(
+def _resolve_query_source(
     wb: ParsedWorkbook,
     *,
     table_id: str | None,
@@ -122,6 +108,40 @@ def _resolve_source(
         return sheet_obj, [], _parse_range(range_spec), header_row
 
     raise ValueError("Provide table_id or (sheet + range_spec + header_row)")
+
+
+def _columns_from_optional_header(
+    source_rows: list[list[Cell]],
+    columns: list[QueryColumn],
+    header_row: int | None,
+    start_col: int,
+    end_col: int,
+) -> list[QueryColumn]:
+    if columns or header_row is None:
+        return columns
+    for row_cells in source_rows:
+        if row_cells[0]["row"] == header_row:
+            return _columns_from_header(row_cells, start_col, end_col)
+    return columns
+
+
+def _materialize_rows(
+    source_rows: list[list[Cell]],
+    columns: list[QueryColumn],
+    start_col: int,
+    end_col: int,
+    skip_rows_through: int | None,
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for row_cells in source_rows:
+        row_number = row_cells[0]["row"]
+        if skip_rows_through is not None and row_number <= skip_rows_through:
+            continue
+        row = _row_to_dict(row_cells, columns, start_col, end_col)
+        if row:
+            row["__row"] = row_number
+            rows.append(row)
+    return rows
 
 
 def _rows_in_range(

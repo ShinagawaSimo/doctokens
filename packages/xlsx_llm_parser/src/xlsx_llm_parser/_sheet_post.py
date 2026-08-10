@@ -46,25 +46,25 @@ def apply_merge_cells(root: ET.Element, cell_map: dict[tuple[int, int], Cell]) -
     if merge_cells is None:
         return
 
-    for mc in merge_cells.findall(f"{{{NS_S}}}mergeCell"):
-        ref = mc.get("ref", "")
+    for merge_cell in merge_cells.findall(f"{{{NS_S}}}mergeCell"):
+        ref = merge_cell.get("ref", "")
         if ":" not in ref:
             continue
         start_ref, end_ref = ref.split(":", 1)
-        sc, sr = parse_ref(start_ref)
-        ec, er = parse_ref(end_ref)
+        start_col, start_row = parse_ref(start_ref)
+        end_col, end_row = parse_ref(end_ref)
 
-        anchor = cell_map.get((sc, sr))
+        anchor = cell_map.get((start_col, start_row))
         if anchor is not None:
-            anchor["colspan"] = ec - sc + 1
-            anchor["rowspan"] = er - sr + 1
+            anchor["colspan"] = end_col - start_col + 1
+            anchor["rowspan"] = end_row - start_row + 1
 
         # Mark shadow cells
-        for r in range(sr, er + 1):
-            for c in range(sc, ec + 1):
-                if c == sc and r == sr:
+        for row in range(start_row, end_row + 1):
+            for col in range(start_col, end_col + 1):
+                if col == start_col and row == start_row:
                     continue
-                shadow = cell_map.get((c, r))
+                shadow = cell_map.get((col, row))
                 if shadow is not None:
                     shadow["shadow"] = True
 
@@ -87,21 +87,24 @@ def apply_spill_ranges(rows: list[list[Cell]], cell_map: dict[tuple[int, int], C
             if ":" not in formula_range:
                 continue
             start_ref, end_ref = formula_range.split(":", 1)
-            sc, sr = parse_ref(start_ref)
-            ec, er = parse_ref(end_ref)
+            start_col, start_row = parse_ref(start_ref)
+            end_col, end_row = parse_ref(end_ref)
 
             # Skip if the range covers only the cell itself
-            if sc == cell["col"] and sr == cell["row"] and ec == cell["col"] and er == cell["row"]:
+            spills_only_to_source = (
+                start_col == cell["col"] and start_row == cell["row"] and end_col == cell["col"] and end_row == cell["row"]
+            )
+            if spills_only_to_source:
                 continue
 
             cell["spillRange"] = formula_range
 
             # Mark spill recipients: cells inside the range without their own formula
-            for r in range(sr, er + 1):
-                for col in range(sc, ec + 1):
-                    if col == cell["col"] and r == cell["row"]:
+            for row in range(start_row, end_row + 1):
+                for col in range(start_col, end_col + 1):
+                    if col == cell["col"] and row == cell["row"]:
                         continue
-                    recipient = cell_map.get((col, r))
+                    recipient = cell_map.get((col, row))
                     if recipient is not None and "formula" not in recipient and "si" not in recipient:
                         recipient["spillFrom"] = cell["ref"]
 
@@ -126,10 +129,10 @@ def apply_hyperlinks(
         if target:
             rel_targets[rel.id] = target
 
-    for hl in hyperlinks.findall(f"{{{NS_S}}}hyperlink"):
-        ref = hl.get("ref", "")
-        location = hl.get("location", "")
-        r_id = hl.get(f"{{{NS_R}}}id", "")
+    for hyperlink in hyperlinks.findall(f"{{{NS_S}}}hyperlink"):
+        ref = hyperlink.get("ref", "")
+        location = hyperlink.get("location", "")
+        relationship_id = hyperlink.get(f"{{{NS_R}}}id", "")
 
         col, row = parse_ref(ref)
         cell = cell_map.get((col, row))
@@ -137,7 +140,7 @@ def apply_hyperlinks(
             continue
 
         # External URL takes precedence; fallback to internal location.
-        link_target = rel_targets.get(r_id) if r_id else None
+        link_target = rel_targets.get(relationship_id) if relationship_id else None
         if link_target:
             if location:
                 cell["hyperlink"] = f"{link_target}#{location}"
@@ -177,9 +180,9 @@ def apply_comments(
     comment_list = root.find(f"{{{NS_S}}}commentList")
     if comment_list is None:
         return
-    for cmt in comment_list.findall(f"{{{NS_S}}}comment"):
-        ref = cmt.get("ref", "")
-        author_id_str = cmt.get("authorId", "0")
+    for comment in comment_list.findall(f"{{{NS_S}}}comment"):
+        ref = comment.get("ref", "")
+        author_id_str = comment.get("authorId", "0")
         col, row = parse_ref(ref)
         cell = cell_map.get((col, row))
         if cell is None:
@@ -189,17 +192,17 @@ def apply_comments(
             cell["commentAuthor"] = authors[author_id] if author_id < len(authors) else ""
         except (ValueError, IndexError):
             cell["commentAuthor"] = ""
-        text_elem = cmt.find(f"{{{NS_S}}}text")
+        text_elem = comment.find(f"{{{NS_S}}}text")
         if text_elem is not None:
             if text_elem.text:
                 cell["comment"] = text_elem.text
             else:
                 # Rich-text body: concatenate <r><t> runs
-                parts = []
-                for r_elem in text_elem.findall(f"{{{NS_S}}}r"):
-                    t = r_elem.find(f"{{{NS_S}}}t")
-                    if t is not None and t.text:
-                        parts.append(t.text)
+                parts: list[str] = []
+                for run_element in text_elem.findall(f"{{{NS_S}}}r"):
+                    text_run = run_element.find(f"{{{NS_S}}}t")
+                    if text_run is not None and text_run.text:
+                        parts.append(text_run.text)
                 cell["comment"] = "".join(parts)
         else:
             cell["comment"] = ""
@@ -232,10 +235,10 @@ def parse_tables(
         totals_row = root.get("totalsRowCount", "0") == "1"
         table_cols = root.find(f"{{{NS_S}}}tableColumns")
         if table_cols is not None:
-            for tc in table_cols.findall(f"{{{NS_S}}}tableColumn"):
-                col_name = tc.get("name", "")
-                if col_name:
-                    columns.append(col_name)
+            for table_column in table_cols.findall(f"{{{NS_S}}}tableColumn"):
+                column_name = table_column.get("name", "")
+                if column_name:
+                    columns.append(column_name)
         tables.append(
             {
                 "id": table_id,
@@ -283,16 +286,16 @@ def parse_drawings(
         _parse_drawing_anchor(anchor, drawing_rels, images, charts, image_start, chart_start)
 
     # Parse chart parts for richer metadata
-    for ch in charts:
-        if ch.get("part"):
-            ch_data = _parse_chart_part(pkg, ch["part"])
-            if ch_data.get("type"):
-                ch["type"] = ch_data["type"]
-            if ch_data.get("title"):
-                ch["title"] = ch_data["title"]
-            ch["series_count"] = ch_data.get("series_count", 0)
-            if ch_data.get("series"):
-                ch["series"] = ch_data["series"]
+    for chart in charts:
+        if chart.get("part"):
+            chart_data = _parse_chart_part(pkg, chart["part"])
+            if chart_data.get("type"):
+                chart["type"] = chart_data["type"]
+            if chart_data.get("title"):
+                chart["title"] = chart_data["title"]
+            chart["series_count"] = chart_data.get("series_count", 0)
+            if chart_data.get("series"):
+                chart["series"] = chart_data["series"]
 
     return images, charts
 
@@ -323,9 +326,9 @@ def _parse_drawing_anchor(
             break  # one image per anchor
 
     # Chart reference (namespace: drawingml/2006/chart, NOT spreadsheetDrawing)
-    for ch_elem in anchor.iter(f"{{{NS_C}}}chart"):
-        chart_r_id = ch_elem.get(f"{{{NS_R}}}id", "")
-        chart_part = drawing_rels.get(chart_r_id, "")
+    for chart_element in anchor.iter(f"{{{NS_C}}}chart"):
+        chart_relationship_id = chart_element.get(f"{{{NS_R}}}id", "")
+        chart_part = drawing_rels.get(chart_relationship_id, "")
         chart_id = f"chart{chart_start + len(charts)}"
         charts.append(
             {
@@ -347,42 +350,43 @@ def _parse_chart_part(pkg: PackageReader, chart_part: str) -> DrawingChart:
     try:
         with pkg.open_entry(chart_part) as stream:
             root = ET.parse(stream).getroot()
-        info = parse_chart_xml(root)
+        chart_info = parse_chart_xml(root)
     except Exception:
         return {"type": "", "title": "", "series_count": 0}
 
     series_list: list[DrawingChartSeries] = []
-    for s in info.get("series", []):
-        s_item: DrawingChartSeries = {
-            "index": s["index"],
-            "pointCount": max(len(s.get("categories", [])), len(s.get("values", []))),
+    for source_series in chart_info.get("series", []):
+        point_count = max(len(source_series.get("categories", [])), len(source_series.get("values", [])))
+        series_item: DrawingChartSeries = {
+            "index": source_series["index"],
+            "pointCount": point_count,
         }
-        if s.get("name"):
-            s_item["name"] = s["name"]
-        if "min" in s:
-            s_item["min"] = s["min"]
-        if "max" in s:
-            s_item["max"] = s["max"]
+        if source_series.get("name"):
+            series_item["name"] = source_series["name"]
+        if "min" in source_series:
+            series_item["min"] = source_series["min"]
+        if "max" in source_series:
+            series_item["max"] = source_series["max"]
         # Full data points
-        cats = s.get("categories", [])
-        vals = s.get("values", [])
+        categories = source_series.get("categories", [])
+        values = source_series.get("values", [])
         points: list[ChartPoint] = []
-        for i in range(max(len(cats), len(vals))):
-            pt: ChartPoint = {}
-            if i < len(cats):
-                pt["category"] = cats[i]
-            if i < len(vals):
-                pt["value"] = vals[i]
-            if pt:
-                points.append(pt)
+        for index in range(max(len(categories), len(values))):
+            point: ChartPoint = {}
+            if index < len(categories):
+                point["category"] = categories[index]
+            if index < len(values):
+                point["value"] = values[index]
+            if point:
+                points.append(point)
         if points:
-            s_item["points"] = points
-        series_list.append(s_item)
+            series_item["points"] = points
+        series_list.append(series_item)
 
     return {
-        "type": info.get("chart_type", ""),
-        "title": info.get("title", ""),
-        "series_count": info.get("series_count", 0),
+        "type": chart_info.get("chart_type", ""),
+        "title": chart_info.get("title", ""),
+        "series_count": chart_info.get("series_count", 0),
         "series": series_list,
     }
 

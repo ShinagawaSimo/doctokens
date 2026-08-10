@@ -41,7 +41,7 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
         pkg.validate(required_part="xl/workbook.xml")
 
         date_1904, sheets, defined_names, external_links = _parse_workbook_xml(pkg)
-        sst, rich_map = _parse_shared_strings(pkg)
+        shared_strings, rich_text_map = _parse_shared_strings(pkg)
         fmt_index = parse_styles(pkg)
         fmt_index.set_date_system(date_1904)
         next_table_index = 0
@@ -54,7 +54,7 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
                 # Read sheet relationships once — shared across all helpers.
                 sheet_rels = list(pkg.read_relationships_for_part(sheet["part"]))
 
-                sheet_parse = parse_sheet(pkg, sheet["part"], sst, rich_map, fmt_index, sheet_rels)
+                sheet_parse = parse_sheet(pkg, sheet["part"], shared_strings, rich_text_map, fmt_index, sheet_rels)
                 sheet["rows"] = sheet_parse.rows
                 if sheet_parse.hidden_cols:
                     sheet["hidden_cols"] = sheet_parse.hidden_cols
@@ -119,7 +119,7 @@ def _parse_workbook_xml(
     date_1904 = wb_pr is not None and wb_pr.get("date1904") == "1"
 
     # Build a lookup of rel_id → (resolved_target, rel_type)
-    rels = {r.id: (r.resolved_target, r.type) for r in pkg.read_relationships_for_part("xl/workbook.xml")}
+    rels = {rel.id: (rel.resolved_target, rel.type) for rel in pkg.read_relationships_for_part("xl/workbook.xml")}
 
     sheets: list[SheetInfo] = []
     sheets_elem = root.find(f"{{{NS_S}}}sheets")
@@ -154,14 +154,7 @@ def _parse_workbook_xml(
                 continue
             is_hidden = dn.get("hidden") == "1"
             scope_sheet_id_str = dn.get("localSheetId")
-            scope_sheet: str | None = None
-            if scope_sheet_id_str is not None:
-                try:
-                    si = int(scope_sheet_id_str)
-                    if 0 <= si < len(sheets):
-                        scope_sheet = sheets[si]["name"]
-                except ValueError:
-                    pass
+            scope_sheet = _scope_sheet_name(scope_sheet_id_str, sheets)
             defined_names.append(
                 {
                     "name": name,
@@ -172,16 +165,30 @@ def _parse_workbook_xml(
             )
 
     # External references in defined names, excluding table structured references.
-    external_links: list[str] = []
-    dn_elem2 = root.find(f"{{{NS_S}}}definedNames")
-    if dn_elem2 is not None:
-        for dn in dn_elem2.findall(f"{{{NS_S}}}definedName"):
-            ref_text = dn.text or ""
-            for target in _external_link_targets(ref_text):
-                if target not in external_links:
-                    external_links.append(target)
+    external_links = _external_links_from_defined_names(defined_names)
 
     return date_1904, sheets, defined_names, external_links
+
+
+def _scope_sheet_name(scope_sheet_id: str | None, sheets: list[SheetInfo]) -> str | None:
+    if scope_sheet_id is None:
+        return None
+    try:
+        sheet_index = int(scope_sheet_id)
+    except ValueError:
+        return None
+    if 0 <= sheet_index < len(sheets):
+        return sheets[sheet_index]["name"]
+    return None
+
+
+def _external_links_from_defined_names(defined_names: list[DefinedName]) -> list[str]:
+    external_links: list[str] = []
+    for defined_name in defined_names:
+        for target in _external_link_targets(defined_name["ref"]):
+            if target not in external_links:
+                external_links.append(target)
+    return external_links
 
 
 def _external_link_targets(ref_text: str) -> list[str]:

@@ -74,7 +74,7 @@ def parse_chart_xml(root: ET.Element) -> ChartInfo:
     """Extract chart type, title, and full series data from a ChartML root."""
     plot_area = root.find(f".//{{{NS_C}}}plotArea")
     chart_type = _chart_type(plot_area) or "unknown"
-    series = _chart_series(plot_area)
+    series = _parse_series(plot_area)
     point_count = sum(len(s.get("categories", [])) for s in series)
     title = _chart_title(root) or ""
 
@@ -104,23 +104,25 @@ def _chart_title(root: ET.Element) -> str | None:
     title = root.find(f".//{{{NS_C}}}title")
     if title is None:
         # autoTitleDeleted — the chart has no explicit title
-        if root.find(f".//{{{NS_C}}}autoTitleDeleted") is not None:
-            return None
         return None
     parts = [t.text or "" for t in title.iter(f"{{{NS_A}}}t")]
     text = "".join(parts).strip()
     return text or None
 
 
-def _chart_series(plot_area: ET.Element | None) -> list[ChartSeriesInfo]:
+def _parse_series(plot_area: ET.Element | None) -> list[ChartSeriesInfo]:
     if plot_area is None:
         return []
 
-    rows: list[ChartSeriesInfo] = []
-    for ser_index, ser in enumerate(plot_area.iter(f"{{{NS_C}}}ser"), start=1):
-        categories = _cached_values(_first_child(ser, "cat")) or _cached_values(_first_child(ser, "xVal"))
-        values = _cached_values(_first_child(ser, "val")) or _cached_values(_first_child(ser, "yVal"))
-        name = _series_name(ser)
+    series_rows: list[ChartSeriesInfo] = []
+    for series_index, series_element in enumerate(plot_area.iter(f"{{{NS_C}}}ser"), start=1):
+        categories = _cached_values_from(_find_child(series_element, "cat")) or _cached_values_from(
+            _find_child(series_element, "xVal")
+        )
+        values = _cached_values_from(_find_child(series_element, "val")) or _cached_values_from(
+            _find_child(series_element, "yVal")
+        )
+        name = _series_name(series_element)
         point_count = max(len(categories), len(values))
 
         preview_items: list[str] = []
@@ -130,7 +132,7 @@ def _chart_series(plot_area: ET.Element | None) -> list[ChartSeriesInfo]:
             preview_items.append(f"{cat}={val}" if val else cat)
 
         row: ChartSeriesInfo = {
-            "index": ser_index,
+            "index": series_index,
             "categories": categories,
             "values": values,
             "preview": "; ".join(preview_items),
@@ -149,15 +151,15 @@ def _chart_series(plot_area: ET.Element | None) -> list[ChartSeriesInfo]:
             row["min"] = min(value_numbers)
             row["max"] = max(value_numbers)
 
-        formula = _first_formula(ser)
+        formula = _first_formula(series_element)
         if formula:
             row["formula"] = formula
 
-        rows.append(row)
-    return rows
+        series_rows.append(row)
+    return series_rows
 
 
-def _first_child(node: ET.Element, local_tag: str) -> ET.Element | None:
+def _find_child(node: ET.Element, local_tag: str) -> ET.Element | None:
     """Find the first direct child with the given local name in NS_C."""
     for child in node:
         tag = child.tag.split("}", 1)[-1] if "}" in child.tag else child.tag
@@ -166,11 +168,11 @@ def _first_child(node: ET.Element, local_tag: str) -> ET.Element | None:
     return None
 
 
-def _series_name(ser: ET.Element) -> str | None:
-    tx = _first_child(ser, "tx")
+def _series_name(series_element: ET.Element) -> str | None:
+    tx = _find_child(series_element, "tx")
     if tx is None:
         return None
-    values = _cached_values(tx)
+    values = _cached_values_from(tx)
     if values:
         return values[0]
     # Fallback: first <c:v> anywhere in tx
@@ -178,17 +180,17 @@ def _series_name(ser: ET.Element) -> str | None:
     return v_elem.text if v_elem is not None and v_elem.text else None
 
 
-def _cached_values(node: ET.Element | None) -> list[str]:
+def _cached_values_from(node: ET.Element | None) -> list[str]:
     """Read strCache/numCache cached point values."""
     if node is None:
         return []
     points: list[tuple[int, str]] = []
-    for pt in node.iter(f"{{{NS_C}}}pt"):
-        v_elem = pt.find(f"{{{NS_C}}}v")
-        if v_elem is None:
+    for point in node.iter(f"{{{NS_C}}}pt"):
+        value_element = point.find(f"{{{NS_C}}}v")
+        if value_element is None:
             continue
-        idx = int(pt.get("idx") or len(points))
-        points.append((idx, v_elem.text or ""))
+        point_index = int(point.get("idx") or len(points))
+        points.append((point_index, value_element.text or ""))
     return [val for _idx, val in sorted(points, key=lambda item: item[0])]
 
 

@@ -24,14 +24,25 @@ def iter_plain(parsed: ParsedPresentation) -> Iterator[str]:
         if slide["n"] > 1:
             yield "\n"
         yield f"=== Slide {slide['n']} ===\n"
-        parts = [_plain_shape_text(shape) for shape in slide["shapes"]]
-        if slide["notes"]:
-            parts.append(f"[Notes: {slide['notes']}]")
-        yield "\n\n".join(parts)
-    if parsed.comments:
-        yield "\n\n[Comments]"
-        for comment in parsed.comments:
-            yield f"\n[{comment['id']}: {comment['text']}]"
+        yield _plain_slide_body(slide)
+    comments = _plain_comments_block(parsed)
+    if comments:
+        yield comments
+
+
+def _plain_slide_body(slide: SlideBlock) -> str:
+    parts = [_plain_shape_text(shape) for shape in slide["shapes"]]
+    if slide["notes"]:
+        parts.append(f"[Notes: {slide['notes']}]")
+    return "\n\n".join(parts)
+
+
+def _plain_comments_block(parsed: ParsedPresentation) -> str:
+    if not parsed.comments:
+        return ""
+    lines = ["[Comments]"]
+    lines.extend(f"[{comment['id']}: {comment['text']}]" for comment in parsed.comments)
+    return "\n\n" + "\n".join(lines)
 
 
 def _plain_shape_text(shape: ShapeBlock) -> str:
@@ -73,17 +84,30 @@ def iter_structural(parsed: ParsedPresentation) -> Iterator[str]:
     yield "density=structural\n"
     smartart_nodes = {smartart["id"]: smartart for smartart in parsed.smartarts}
     for slide in parsed.slides:
-        yield _slide_open(slide)
-        for shape in slide["shapes"]:
-            line = _structural_shape_line(shape, smartart_nodes)
-            if line:
-                yield line + "\n"
-        if slide["notes"]:
-            yield f"<notes>{escape(slide['notes'])}\n"
-    if parsed.comments:
-        yield "<!-- supplemental -->\n"
-        for comment in parsed.comments:
-            yield _structural_comment_line(comment) + "\n"
+        yield _html_slide_block(slide, smartart_nodes, semantic=False)
+    comments = _html_comments_block(parsed)
+    if comments:
+        yield comments
+
+
+def _html_slide_block(slide: SlideBlock, smartart_nodes: dict[str, SmartArtRecord], *, semantic: bool) -> str:
+    line_fn = _semantic_shape_line if semantic else _structural_shape_line
+    lines = [_slide_open(slide).rstrip("\n")]
+    for shape in slide["shapes"]:
+        line = line_fn(shape, smartart_nodes)
+        if line:
+            lines.append(line)
+    if slide["notes"]:
+        lines.append(f"<notes>{escape(slide['notes'])}")
+    return "\n".join(lines) + "\n"
+
+
+def _html_comments_block(parsed: ParsedPresentation) -> str:
+    if not parsed.comments:
+        return ""
+    lines = ["<!-- supplemental -->"]
+    lines.extend(_structural_comment_line(comment) for comment in parsed.comments)
+    return "\n".join(lines) + "\n"
 
 
 def _slide_open(slide: SlideBlock) -> str:
@@ -173,17 +197,10 @@ def iter_semantic(parsed: ParsedPresentation) -> Iterator[str]:
     yield "density=semantic\n"
     smartart_nodes = {smartart["id"]: smartart for smartart in parsed.smartarts}
     for slide in parsed.slides:
-        yield _slide_open(slide)
-        for shape in slide["shapes"]:
-            line = _semantic_shape_line(shape, smartart_nodes)
-            if line:
-                yield line + "\n"
-        if slide["notes"]:
-            yield f"<notes>{escape(slide['notes'])}\n"
-    if parsed.comments:
-        yield "<!-- supplemental -->\n"
-        for comment in parsed.comments:
-            yield _structural_comment_line(comment) + "\n"
+        yield _html_slide_block(slide, smartart_nodes, semantic=True)
+    comments = _html_comments_block(parsed)
+    if comments:
+        yield comments
 
 
 def _semantic_shape_line(shape: ShapeBlock, smartart_nodes: dict[str, SmartArtRecord]) -> str | None:

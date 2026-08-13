@@ -123,6 +123,17 @@ class PptxParser:
             return []
 
         slides: list[SlideBlock] = []
+        slide_parser = SlideParser(
+            warnings,
+            asset_lookup,
+            chart_lookup,
+            smartart_lookup,
+            layout_lookup,
+            resolver,
+            slide_size,
+            theme,
+            hyperlink_lookup,
+        )
         for sld_id_el in list(sld_id_lst):
             if local_name(sld_id_el.tag) != "sldId":
                 continue
@@ -157,17 +168,7 @@ class PptxParser:
                 )
                 continue
             root = self._read_xml(pkg, part)
-            hidden, shapes = SlideParser(
-                warnings,
-                asset_lookup,
-                chart_lookup,
-                smartart_lookup,
-                layout_lookup,
-                resolver,
-                slide_size,
-                theme,
-                hyperlink_lookup,
-            ).parse_slide(root, part)
+            hidden, shapes = slide_parser.parse_slide(root, part)
             n = len(slides) + 1
             slides.append(
                 SlideBlock(

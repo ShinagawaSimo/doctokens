@@ -47,6 +47,7 @@ class SlideParser:
         self._slide_size = slide_size
         self._theme = theme
         self._hyperlink_lookup = hyperlink_lookup
+        self._table_index = 0
 
     def parse_slide(self, root: ET.Element, part: str) -> tuple[bool, list[ShapeBlock]]:
         """Return (hidden, shapes) for one p:sld root."""
@@ -364,11 +365,13 @@ class SlideParser:
                 tx_body = first_child(cell, "a", "txBody")
                 row.append(tx_body_text(tx_body, part, self._warnings) or "")
             rows.append(row)
+        self._table_index += 1
         return {
             "id": f"s{ordinal}",
             "type": "table",
             "name": self._shape_name(frame) or "",
             "rows": rows,
+            "tableId": f"table{self._table_index}",
         }
 
     @staticmethod

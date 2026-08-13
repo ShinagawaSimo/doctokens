@@ -63,6 +63,7 @@ class ShapeBlock(TypedDict, total=False):
     href: str
     kind: str
     rows: list[list[str]]
+    tableId: str
     chartId: str
     chartType: str
     seriesCount: int

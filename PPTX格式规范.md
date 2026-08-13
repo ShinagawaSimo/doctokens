@@ -128,9 +128,29 @@ structural/semantic 在全部幻灯片之后输出批注区；plain 以文本区
 - **资产惰性**：图片/媒体二进制在解析期绝不读取，按需经 `get_resource`（M5）获取。
 - **失败软降级**：悬空关系/缺失 part/畸形值 → `ParseWarning`（含 code 与 locator）并继续解析，绝不中断。
 
-## 未实现（M5 落地）
+## 公共 API
 
-- `iter_slides(source, *, density, start_slide)` —— 每幻灯片一个 chunk 的流式输出
-- `render_window(source, *, slide, span, density)` —— 幻灯片窗口
-- `get_resource(source, resource_type, resource_id)` —— image/chart/smartart/table/media 按需取全（含表格 rows/columns/aggregate）
-- `ParseOptions.ocr` —— 图片 OCR（`<ocr-text>` 兄弟元素契约，同 DOCX §12）
+```python
+parse_pptx(source, *, density=SEMANTIC, stream=False, options=None) -> str | Iterator[str]
+iter_slides(source, *, density=SEMANTIC, start_slide=1, options=None) -> Iterator[str]
+render_window(source, *, slide, span=1, density=SEMANTIC, options=None) -> str
+get_resource(source, resource_type, resource_id, *, rows=None, columns=None,
+             aggregate=None, aggregate_column=None, options=None) -> str | None
+write_document(source, output_dir, *, density=SEMANTIC, options=None) -> Path
+```
+
+- `iter_slides`：每幻灯片一个 chunk（首个 chunk 含 `density=` 头行），批注为尾部独立 chunk；`start_slide` 1 基。`parse_pptx(stream=True)` 等价于 `iter_slides`。
+- `render_window`：`slide` 1 基，`slide=-1` 选最后一页，`span` 越界截断在末尾；越界窗口渲染为仅含密度头的空文档。
+- `get_resource`：
+  - `image` / `media` → 内嵌二进制的 base64（解析期惰性，此处才读 ZIP）；external 资产与未知 id 返回 None
+  - `chart` → 全量 series 记录（name/categories/values/min/max）
+  - `smartart` → 节点/链接全量记录
+  - `table` → 完整表格（不受 30 行截断），`rows="a-b"` 行切片（1 基含两端）、`columns=[i...]` 列筛选、`aggregate=sum|count|avg|min|max` 配合 `aggregate_column` 输出 `<aggregate op=… column=… value=…>`（数值单元格按文本强转，非数值跳过）
+  - 复数类型（`images` 等）抛 ValueError；`resource_type` 接受 `ResourceType` 枚举或字符串
+- 表格资源 id 为包级 `tableN`（解析器按出现顺序分配，与幻灯片无关；渲染输出中的 `id=sN` 是幻灯片内序号，两者不可混用）。
+
+## 未实现（backlog）
+
+- `ParseOptions.ocr` —— 图片 OCR（`<ocr-text>` 兄弟元素契约，同 DOCX §12 架构）
+- 背景 `p:bg`（契约见 docs/PPTX开发大纲.md §5.10，OCR 提升路径随之落地）
+- 组合形状 grpSp 递归与组坐标换算；装饰折叠 `collapse_repeated_shapes`

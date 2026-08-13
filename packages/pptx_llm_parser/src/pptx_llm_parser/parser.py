@@ -9,8 +9,18 @@ from ooxml_llm_core.models import ParseWarning
 from ooxml_llm_core.relationships import RelationshipIndex
 
 from .core.constants import attr, first_child, local_name
-from .core.models import ParsedPresentation, ParseOptions, SlideBlock
+from .core.models import (
+    AssetLookup,
+    ChartLookup,
+    LayoutLookup,
+    ParsedPresentation,
+    ParseOptions,
+    SlideBlock,
+    SmartArtLookup,
+)
 from .core.package import PackageReader
+from .extractors.assets import AssetExtractor
+from .extractors.objects import EmbeddedObjectExtractor
 from .extractors.slides import SlideParser
 
 PRESENTATION_PART = "ppt/presentation.xml"
@@ -24,10 +34,30 @@ class PptxParser:
         with PackageReader(source, options) as pkg:
             pkg.validate()
             relationships = RelationshipIndex.from_records(pkg.read_all_relationships())
+            assets, asset_lookup = AssetExtractor(pkg, relationships, warnings).extract()
+            objects = EmbeddedObjectExtractor(pkg, relationships, warnings)
+            charts, chart_lookup = objects.extract_charts()
+            smartarts, smartart_lookup, layout_lookup = objects.extract_smartarts()
             presentation_root = self._read_xml(pkg, PRESENTATION_PART)
             slide_size = self._parse_slide_size(presentation_root, warnings)
-            slides = self._parse_slide_refs(pkg, relationships, presentation_root, warnings)
-        return ParsedPresentation(slides=slides, slide_size=slide_size, warnings=warnings)
+            slides = self._parse_slide_refs(
+                pkg,
+                relationships,
+                presentation_root,
+                warnings,
+                asset_lookup,
+                chart_lookup,
+                smartart_lookup,
+                layout_lookup,
+            )
+        return ParsedPresentation(
+            slides=slides,
+            slide_size=slide_size,
+            assets=assets,
+            charts=charts,
+            smartarts=smartarts,
+            warnings=warnings,
+        )
 
     @staticmethod
     def _read_xml(pkg: PackageReader, part: str) -> ET.Element:
@@ -51,6 +81,10 @@ class PptxParser:
         relationships: RelationshipIndex,
         presentation_root: ET.Element,
         warnings: list[ParseWarning],
+        asset_lookup: AssetLookup,
+        chart_lookup: ChartLookup,
+        smartart_lookup: SmartArtLookup,
+        layout_lookup: LayoutLookup,
     ) -> list[SlideBlock]:
         sld_id_lst = first_child(presentation_root, "p", "sldIdLst")
         if sld_id_lst is None:
@@ -98,7 +132,9 @@ class PptxParser:
                 )
                 continue
             root = self._read_xml(pkg, part)
-            hidden, texts = SlideParser(warnings).parse_slide(root, part)
+            hidden, shapes = SlideParser(warnings, asset_lookup, chart_lookup, smartart_lookup, layout_lookup).parse_slide(
+                root, part
+            )
             n = len(slides) + 1
             slides.append(
                 SlideBlock(
@@ -108,7 +144,7 @@ class PptxParser:
                     part=part,
                     sldId=sld_id_el.get("id", ""),
                     hidden=hidden,
-                    text=texts,
+                    shapes=shapes,
                 )
             )
         return slides

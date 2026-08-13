@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypedDict
 
+from ooxml_llm_core.chart_ml import ChartSeriesInfo
 from ooxml_llm_core.models import ParseWarning
 
 DEFAULT_MAX_ZIP_ENTRIES = 10_000
@@ -33,6 +34,79 @@ class ParseOptions:
                 raise ValueError(f"{name} must be greater than zero")
 
 
+class ShapeBlock(TypedDict, total=False):
+    """One shape on a slide, in XML (z-order) sequence."""
+
+    id: str
+    type: str
+    name: str
+    text: str
+    assetId: str
+    alt: str
+    href: str
+    kind: str
+    rows: list[list[str]]
+    chartId: str
+    chartType: str
+    seriesCount: int
+    pointCount: int
+    smartartId: str
+    layoutType: str
+    nodeCount: int
+    linkCount: int
+
+
+class ImageAsset(TypedDict, total=False):
+    """Metadata for an embedded or external image/media part (no binary data)."""
+
+    id: str
+    type: str
+    source: str
+    href: str
+    contentType: str
+    zipPath: str
+    file: str
+
+
+AssetLookup = dict[tuple[str, str], ImageAsset]
+
+
+class SmartArtNode(TypedDict):
+    id: int
+    text: str
+
+
+SmartArtLink = TypedDict("SmartArtLink", {"from": int, "to": int})
+
+
+class ChartRecord(TypedDict, total=False):
+    """ChartML record produced by the shared chart_ml parser plus locator fields."""
+
+    id: str
+    part: str
+    chart_type: str
+    title: str
+    series: list[ChartSeriesInfo]
+    series_count: int
+    point_count: int
+
+
+class SmartArtRecord(TypedDict, total=False):
+    """Diagram data model with 1-based node ordinals."""
+
+    id: str
+    part: str
+    nodes: list[SmartArtNode]
+    links: list[SmartArtLink]
+    nodeCount: int
+    linkCount: int
+
+
+ChartLookup = dict[tuple[str, str], ChartRecord]
+SmartArtLookup = dict[tuple[str, str], SmartArtRecord]
+LayoutLookup = dict[tuple[str, str], str]
+
+
 class SlideBlock(TypedDict):
     """One slide in presentation order (sldIdLst)."""
 
@@ -42,7 +116,7 @@ class SlideBlock(TypedDict):
     part: str
     sldId: str
     hidden: bool
-    text: list[str]
+    shapes: list[ShapeBlock]
 
 
 @dataclass
@@ -51,4 +125,7 @@ class ParsedPresentation:
 
     slides: list[SlideBlock] = field(default_factory=list)
     slide_size: tuple[int, int] | None = None
+    assets: list[ImageAsset] = field(default_factory=list)
+    charts: list[ChartRecord] = field(default_factory=list)
+    smartarts: list[SmartArtRecord] = field(default_factory=list)
     warnings: list[ParseWarning] = field(default_factory=list)

@@ -13,12 +13,12 @@ from _pptx_fixtures import (
     slide_xml_shapes,
     text_shape_xml,
 )
-from pptx_llm_parser.core.models import ParseOptions
+from pptx_llm_parser.core.models import ParseOptions, ShapeBlock
 from pptx_llm_parser.parser import PptxParser
 
 
 class SlideTextParsingTests(unittest.TestCase):
-    def _parse(self, shapes_xml: str) -> list[str]:
+    def _parse(self, shapes_xml: str) -> list[ShapeBlock]:
         entries = {
             "[Content_Types].xml": content_types_xml(1),
             "_rels/.rels": root_rels_xml(),
@@ -27,32 +27,37 @@ class SlideTextParsingTests(unittest.TestCase):
             "ppt/slides/slide1.xml": slide_xml_shapes(shapes_xml),
         }
         parsed = PptxParser().parse(make_pptx(entries), ParseOptions())
-        return parsed.slides[0]["text"]
+        return parsed.slides[0]["shapes"]
 
     def test_runs_concatenate(self) -> None:
         shapes = text_shape_xml([[("t", "Hello"), ("t", " World")]])
-        self.assertEqual(self._parse(shapes), ["Hello World"])
+        self.assertEqual(
+            self._parse(shapes),
+            [{"id": "s1", "type": "text", "name": "TextBox 1", "text": "Hello World"}],
+        )
 
     def test_soft_break_and_tab(self) -> None:
         shapes = text_shape_xml([[("t", "A"), ("br", ""), ("t", "B"), ("tab", ""), ("t", "C")]])
-        self.assertEqual(self._parse(shapes), ["A\nB\tC"])
+        self.assertEqual(self._parse(shapes)[0]["text"], "A\nB\tC")
 
     def test_multiple_paragraphs_join_with_newline(self) -> None:
         shapes = text_shape_xml([[("t", "First")], [("t", "Second")]])
-        self.assertEqual(self._parse(shapes), ["First\nSecond"])
+        self.assertEqual(self._parse(shapes)[0]["text"], "First\nSecond")
 
     def test_empty_and_textless_shapes_skipped(self) -> None:
         shapes = text_shape_xml([]) + text_shape_xml([[("t", "Only")]], name="Body")
-        self.assertEqual(self._parse(shapes), ["Only"])
+        self.assertEqual(len(self._parse(shapes)), 1)
+        self.assertEqual(self._parse(shapes)[0]["text"], "Only")
 
     def test_shape_order_follows_xml(self) -> None:
         shapes = text_shape_xml([[("t", "One")]], name="A") + text_shape_xml([[("t", "Two")]], name="B")
-        self.assertEqual(self._parse(shapes), ["One", "Two"])
+        self.assertEqual([shape["text"] for shape in self._parse(shapes)], ["One", "Two"])
 
     def test_shape_without_txbody_skipped(self) -> None:
         bare = '<p:sp><p:nvSpPr><p:cNvPr id="3" name="Decor"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/></p:sp>'
         shapes = bare + text_shape_xml([[("t", "Keep")]])
-        self.assertEqual(self._parse(shapes), ["Keep"])
+        self.assertEqual(len(self._parse(shapes)), 1)
+        self.assertEqual(self._parse(shapes)[0]["text"], "Keep")
 
 
 if __name__ == "__main__":

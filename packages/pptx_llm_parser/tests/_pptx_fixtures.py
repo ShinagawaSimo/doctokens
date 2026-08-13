@@ -68,7 +68,7 @@ def presentation_xml(slide_count: int = 0) -> str:
 </p:presentation>"""
 
 
-def presentation_rels_xml(slide_count: int) -> str:
+def presentation_rels_xml(slide_count: int, *, extra: str = "") -> str:
     items = "".join(
         f'<Relationship Id="rId{i + 1}" '
         'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" '
@@ -78,7 +78,32 @@ def presentation_rels_xml(slide_count: int) -> str:
     return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 {items}
+{extra}
 </Relationships>"""
+
+
+def theme_xml() -> str:
+    """Theme part with a clrScheme: srgb values plus one sysClr slot."""
+    a = "http://schemas.openxmlformats.org/drawingml/2006/main"
+    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<a:theme xmlns:a="{a}" name="Test Theme">
+<a:themeElements>
+<a:clrScheme name="Test">
+<a:dk1><a:sysClr val="windowText" lastClr="1A1A1A"/></a:dk1>
+<a:lt1><a:sysClr val="window" lastClr="FEFEFE"/></a:lt1>
+<a:dk2><a:srgbClr val="44546A"/></a:dk2>
+<a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>
+<a:accent1><a:srgbClr val="4472C4"/></a:accent1>
+<a:accent2><a:srgbClr val="ED7D31"/></a:accent2>
+<a:accent3><a:srgbClr val="A5A5A5"/></a:accent3>
+<a:accent4><a:srgbClr val="FFC000"/></a:accent4>
+<a:accent5><a:srgbClr val="5B9BD5"/></a:accent5>
+<a:accent6><a:srgbClr val="70AD47"/></a:accent6>
+<a:hlink><a:srgbClr val="0563C1"/></a:hlink>
+<a:folHlink><a:srgbClr val="954F72"/></a:folHlink>
+</a:clrScheme>
+</a:themeElements>
+</a:theme>"""
 
 
 def slide_xml(*, hidden: bool = False) -> str:
@@ -99,10 +124,18 @@ def slide_xml_shapes(shapes_xml: str, *, hidden: bool = False) -> str:
 </p:sld>"""
 
 
-def text_shape_xml(paragraphs: list[list[tuple[str, str]]], *, name: str = "TextBox 1", shape_id: int = 2) -> str:
+def text_shape_xml(
+    paragraphs: list[list[tuple[str, str]]],
+    *,
+    name: str = "TextBox 1",
+    shape_id: int = 2,
+    geometry: tuple[int, int, int, int] | None = None,
+    ph: str | None = None,
+) -> str:
     """Build a p:sp with a txBody.
 
     Each paragraph is a list of segments: ("t", text), ("br", ""), or ("tab", "").
+    geometry is (x, y, cx, cy) in EMU; ph is an optional placeholder type.
     """
     body = ""
     for segments in paragraphs:
@@ -115,8 +148,13 @@ def text_shape_xml(paragraphs: list[list[tuple[str, str]]], *, name: str = "Text
             elif kind == "tab":
                 runs += "<a:tab/>"
         body += f"<a:p>{runs}</a:p>"
-    return f"""<p:sp><p:nvSpPr><p:cNvPr id="{shape_id}" name="{name}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-<p:spPr/>
+    xfrm = ""
+    if geometry:
+        x, y, cx, cy = geometry
+        xfrm = f'<a:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
+    nv_pr = f'<p:nvPr><p:ph type="{ph}" idx="0"/></p:nvPr>' if ph else "<p:nvPr/>"
+    return f"""<p:sp><p:nvSpPr><p:cNvPr id="{shape_id}" name="{name}"/><p:cNvSpPr/>{nv_pr}</p:nvSpPr>
+<p:spPr>{xfrm}</p:spPr>
 <p:txBody><a:bodyPr/><a:lstStyle/>{body}</p:txBody>
 </p:sp>"""
 
@@ -150,6 +188,40 @@ def slide_rels_xml(rel_xml: str) -> str:
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 {rel_xml}
 </Relationships>"""
+
+
+def ph_shape_xml(*, idx: str, ph_type: str, geometry: tuple[int, int, int, int] | None = None, shape_id: int = 2) -> str:
+    """A placeholder p:sp (as found in layouts/masters), optionally with geometry."""
+    xfrm = ""
+    if geometry:
+        x, y, cx, cy = geometry
+        xfrm = f'<a:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
+    return f"""<p:sp><p:nvSpPr><p:cNvPr id="{shape_id}" name="PH {idx}"/><p:cNvSpPr/>
+<p:nvPr><p:ph type="{ph_type}" idx="{idx}"/></p:nvPr></p:nvSpPr>
+<p:spPr>{xfrm}</p:spPr>
+<p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody>
+</p:sp>"""
+
+
+def clr_map_xml(**mapping: str) -> str:
+    attrs = " ".join(f'{name}="{value}"' for name, value in mapping.items())
+    return f"<p:clrMap {attrs}/>"
+
+
+def layout_xml(shapes_xml: str = "", *, clr_map: str = "") -> str:
+    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sldLayout xmlns:p="{P_NS}" xmlns:a="{A_NS}" xmlns:r="{R_NS}">
+<p:cSld><p:spTree><p:nvGrpSpPr/><p:grpSpPr/>{shapes_xml}</p:spTree></p:cSld>
+{clr_map}
+</p:sldLayout>"""
+
+
+def master_xml(shapes_xml: str = "", *, clr_map: str = "") -> str:
+    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sldMaster xmlns:p="{P_NS}" xmlns:a="{A_NS}" xmlns:r="{R_NS}">
+<p:cSld><p:spTree><p:nvGrpSpPr/><p:grpSpPr/>{shapes_xml}</p:spTree></p:cSld>
+{clr_map}
+</p:sldMaster>"""
 
 
 def chart_shape_xml(*, rid: str = "rId2", name: str = "Chart 7", shape_id: int = 6) -> str:

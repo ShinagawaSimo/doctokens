@@ -54,6 +54,11 @@ class ShapeBlock(TypedDict, total=False):
     layoutType: str
     nodeCount: int
     linkCount: int
+    placeholderType: str
+    x: int
+    y: int
+    w: int
+    h: int
 
 
 class ImageAsset(TypedDict, total=False):
@@ -107,6 +112,23 @@ SmartArtLookup = dict[tuple[str, str], SmartArtRecord]
 LayoutLookup = dict[tuple[str, str], str]
 
 
+class PlaceholderInfo(TypedDict, total=False):
+    """Placeholder declaration from a layout, geometry resolved two levels up."""
+
+    type: str
+    x: int
+    y: int
+    w: int
+    h: int
+
+
+class LayoutContext(TypedDict):
+    """Per-slide inheritance resolution products."""
+
+    placeholders: dict[str, PlaceholderInfo]
+    color_map: dict[str, str]
+
+
 class SlideBlock(TypedDict):
     """One slide in presentation order (sldIdLst)."""
 
@@ -128,4 +150,5 @@ class ParsedPresentation:
     assets: list[ImageAsset] = field(default_factory=list)
     charts: list[ChartRecord] = field(default_factory=list)
     smartarts: list[SmartArtRecord] = field(default_factory=list)
+    theme: dict[str, str] = field(default_factory=dict)
     warnings: list[ParseWarning] = field(default_factory=list)

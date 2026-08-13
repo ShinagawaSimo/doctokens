@@ -7,11 +7,19 @@ from xml.etree import ElementTree as ET
 from ooxml_llm_core.models import ParseWarning
 
 from ..core.constants import attr, first_child, local_name
-from ..core.models import AssetLookup, ChartLookup, LayoutLookup, ShapeBlock, SmartArtLookup
+from ..core.models import (
+    AssetLookup,
+    ChartLookup,
+    LayoutContext,
+    LayoutLookup,
+    ShapeBlock,
+    SmartArtLookup,
+)
+from ..ooxml.inheritance import LayoutMasterResolver, shape_geometry
 
 
 class SlideParser:
-    """Extract per-slide shapes from slide part XML, in XML (z-order) sequence."""
+    """Extract per-slide shapes from slide part XML, in geometric reading order."""
 
     def __init__(
         self,
@@ -20,12 +28,16 @@ class SlideParser:
         chart_lookup: ChartLookup,
         smartart_lookup: SmartArtLookup,
         layout_lookup: LayoutLookup,
+        resolver: LayoutMasterResolver,
+        slide_size: tuple[int, int] | None,
     ) -> None:
         self._warnings = warnings
         self._asset_lookup = asset_lookup
         self._chart_lookup = chart_lookup
         self._smartart_lookup = smartart_lookup
         self._layout_lookup = layout_lookup
+        self._resolver = resolver
+        self._slide_size = slide_size
 
     def parse_slide(self, root: ET.Element, part: str) -> tuple[bool, list[ShapeBlock]]:
         """Return (hidden, shapes) for one p:sld root."""
@@ -52,6 +64,7 @@ class SlideParser:
                 )
             )
             return []
+        context = self._resolver.resolve(part, root)
         shapes: list[ShapeBlock] = []
         for child in sp_tree:
             name = local_name(child.tag)
@@ -75,8 +88,42 @@ class SlideParser:
                 )
                 continue
             if shape is not None:
+                self._attach_inheritance(shape, child, context)
                 shapes.append(shape)
+        # Geometric reading order: top→bottom, left→right; stable sort keeps
+        # XML order (z-order) for ties; shapes without coordinates sort last.
+        shapes.sort(key=self._geometric_key)
         return shapes
+
+    def _attach_inheritance(self, shape: ShapeBlock, element: ET.Element, context: LayoutContext) -> None:
+        """Attach placeholder type (own declaration or layout-by-idx) and per-mille coordinates."""
+        ph = self._find_descendant(element, "ph")
+        idx = ph.get("idx") if ph is not None else None
+        if ph is not None and ph.get("type"):
+            shape["placeholderType"] = ph.get("type") or ""
+        elif idx is not None:
+            info = context["placeholders"].get(idx)
+            if info is not None and info.get("type"):
+                shape["placeholderType"] = info["type"]
+        geometry = shape_geometry(element, self._warnings)
+        if geometry is None and idx is not None:
+            info = context["placeholders"].get(idx)
+            if info is not None and all(info.get(key) is not None for key in ("x", "y", "w", "h")):
+                geometry = (info["x"], info["y"], info["w"], info["h"])
+        if geometry is not None and self._slide_size is not None:
+            x, y, w, h = geometry
+            shape["x"] = round(x / self._slide_size[0] * 1000)
+            shape["y"] = round(y / self._slide_size[1] * 1000)
+            shape["w"] = round(w / self._slide_size[0] * 1000)
+            shape["h"] = round(h / self._slide_size[1] * 1000)
+
+    @staticmethod
+    def _geometric_key(shape: ShapeBlock) -> tuple[int, int]:
+        y = shape.get("y")
+        x = shape.get("x")
+        if y is None or x is None:
+            return (2**31, 0)
+        return (y, x)
 
     def _text_shape(self, sp: ET.Element, part: str, ordinal: int) -> ShapeBlock | None:
         text = self._tx_body_text(first_child(sp, "p", "txBody"), part)

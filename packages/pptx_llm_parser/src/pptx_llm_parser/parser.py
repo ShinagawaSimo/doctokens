@@ -22,6 +22,8 @@ from .core.package import PackageReader
 from .extractors.assets import AssetExtractor
 from .extractors.objects import EmbeddedObjectExtractor
 from .extractors.slides import SlideParser
+from .ooxml.inheritance import LayoutMasterResolver
+from .ooxml.theme import ThemeParser
 
 PRESENTATION_PART = "ppt/presentation.xml"
 
@@ -38,6 +40,8 @@ class PptxParser:
             objects = EmbeddedObjectExtractor(pkg, relationships, warnings)
             charts, chart_lookup = objects.extract_charts()
             smartarts, smartart_lookup, layout_lookup = objects.extract_smartarts()
+            theme = ThemeParser(pkg, relationships, warnings).parse()
+            resolver = LayoutMasterResolver(pkg, relationships, warnings)
             presentation_root = self._read_xml(pkg, PRESENTATION_PART)
             slide_size = self._parse_slide_size(presentation_root, warnings)
             slides = self._parse_slide_refs(
@@ -49,6 +53,8 @@ class PptxParser:
                 chart_lookup,
                 smartart_lookup,
                 layout_lookup,
+                resolver,
+                slide_size,
             )
         return ParsedPresentation(
             slides=slides,
@@ -56,6 +62,7 @@ class PptxParser:
             assets=assets,
             charts=charts,
             smartarts=smartarts,
+            theme=theme,
             warnings=warnings,
         )
 
@@ -85,6 +92,8 @@ class PptxParser:
         chart_lookup: ChartLookup,
         smartart_lookup: SmartArtLookup,
         layout_lookup: LayoutLookup,
+        resolver: LayoutMasterResolver,
+        slide_size: tuple[int, int] | None,
     ) -> list[SlideBlock]:
         sld_id_lst = first_child(presentation_root, "p", "sldIdLst")
         if sld_id_lst is None:
@@ -132,9 +141,15 @@ class PptxParser:
                 )
                 continue
             root = self._read_xml(pkg, part)
-            hidden, shapes = SlideParser(warnings, asset_lookup, chart_lookup, smartart_lookup, layout_lookup).parse_slide(
-                root, part
-            )
+            hidden, shapes = SlideParser(
+                warnings,
+                asset_lookup,
+                chart_lookup,
+                smartart_lookup,
+                layout_lookup,
+                resolver,
+                slide_size,
+            ).parse_slide(root, part)
             n = len(slides) + 1
             slides.append(
                 SlideBlock(

@@ -1,0 +1,121 @@
+"""Theme part parsing — color scheme with Office default fallback."""
+
+from __future__ import annotations
+
+from xml.etree import ElementTree as ET
+
+from ooxml_llm_core.models import ParseWarning
+from ooxml_llm_core.relationships import RelationshipIndex
+
+from ..core.constants import local_name
+from ..core.package import PackageReader
+
+THEME_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme"
+PRESENTATION_PART = "ppt/presentation.xml"
+
+_THEME_SLOTS = (
+    "dk1",
+    "lt1",
+    "dk2",
+    "lt2",
+    "accent1",
+    "accent2",
+    "accent3",
+    "accent4",
+    "accent5",
+    "accent6",
+    "hlink",
+    "folHlink",
+)
+
+# Office default theme colors (fallback when theme1.xml is absent) — same
+# values the xlsx FormatIndex uses.
+_DEFAULT_THEME: dict[str, str] = {
+    "dk1": "#000000",
+    "lt1": "#FFFFFF",
+    "dk2": "#44546A",
+    "lt2": "#E7E6E6",
+    "accent1": "#4472C4",
+    "accent2": "#ED7D31",
+    "accent3": "#A5A5A5",
+    "accent4": "#FFC000",
+    "accent5": "#5B9BD5",
+    "accent6": "#70AD47",
+    "hlink": "#0563C1",
+    "folHlink": "#954F72",
+}
+
+
+class ThemeParser:
+    """Resolve the deck's clrScheme into slot name → #RRGGBB."""
+
+    def __init__(
+        self,
+        pkg: PackageReader,
+        relationships: RelationshipIndex,
+        warnings: list[ParseWarning],
+    ) -> None:
+        self._pkg = pkg
+        self._relationships = relationships
+        self._warnings = warnings
+
+    def parse(self) -> dict[str, str]:
+        part: str | None = None
+        for record in self._relationships.by_type(THEME_REL_TYPE):
+            if record.source_part == PRESENTATION_PART:
+                part = record.resolved_target
+        if part is None or not self._pkg.exists(part):
+            self._warnings.append(
+                ParseWarning(
+                    code="THEME_PART_MISSING",
+                    message=f"Theme part missing: {part}",
+                    locator=PRESENTATION_PART,
+                )
+            )
+            return dict(_DEFAULT_THEME)
+        root = self._read_xml(part)
+        scheme = self._find_descendant(root, "clrScheme")
+        if scheme is None:
+            self._warnings.append(
+                ParseWarning(
+                    code="THEME_MISSING_CLRSCHEME",
+                    message="a:theme without a:clrScheme",
+                    locator=part,
+                )
+            )
+            return dict(_DEFAULT_THEME)
+        colors: dict[str, str] = {}
+        for slot in _THEME_SLOTS:
+            colors[slot] = _DEFAULT_THEME.get(slot, "#000000")
+            for child in scheme:
+                if local_name(child.tag) != slot:
+                    continue
+                value = self._slot_value(child)
+                if value:
+                    colors[slot] = value
+        return colors
+
+    @staticmethod
+    def _slot_value(slot_element: ET.Element) -> str | None:
+        for child in slot_element:
+            name = local_name(child.tag)
+            if name == "srgbClr":
+                raw = child.get("val")
+            elif name == "sysClr":
+                raw = child.get("lastClr")
+            else:
+                continue
+            if raw and len(raw) == 6:
+                return "#" + raw.upper()
+        return None
+
+    @staticmethod
+    def _find_descendant(element: ET.Element, local: str) -> ET.Element | None:
+        for descendant in element.iter():
+            if local_name(descendant.tag) == local:
+                return descendant
+        return None
+
+    def _read_xml(self, part: str) -> ET.Element:
+        with self._pkg.open_entry(part) as stream:
+            return ET.parse(stream).getroot()

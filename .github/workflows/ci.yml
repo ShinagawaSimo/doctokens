@@ -37,6 +37,7 @@ jobs:
           python -m pip install -e packages/docx_llm_parser
           python -m pip install -e packages/xlsx_llm_parser
           python -m pip install -e packages/ocr_llm_core
+          python -m pip install -e packages/pptx_llm_parser
       - name: Check formatting
         run: python -m ruff format --check .
       - name: Lint
@@ -44,4 +45,9 @@ jobs:
       - name: Type check
         run: python -m mypy
       - name: Test
-        run: python -m pytest
+        run: >-
+          python -m pytest
+          --cov=ooxml_llm_core --cov=docx_llm_parser
+          --cov=xlsx_llm_parser --cov=ocr_llm_core
+          --cov=pptx_llm_parser
+          --cov-branch --cov-fail-under=85

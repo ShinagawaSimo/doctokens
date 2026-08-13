@@ -3,8 +3,10 @@
 import io
 import unittest
 import zipfile
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-from xlsx_llm_parser import parse_xlsx, render_range
+from xlsx_llm_parser import iter_workbook, parse_xlsx, render_range, write_document
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -72,6 +74,7 @@ class StreamingTests(unittest.TestCase):
         full = parse_xlsx(data)
         streamed = "".join(parse_xlsx(data, stream=True))
         self.assertEqual(full, streamed)
+        self.assertEqual(full, "".join(iter_workbook(data)))
         self.assertIn("density=structural", full)
 
     def test_density_marker_emitted(self) -> None:
@@ -110,6 +113,94 @@ class StreamingTests(unittest.TestCase):
             with self.subTest(density=density):
                 html = parse_xlsx(data, density=density)
                 self.assertTrue(html.startswith(f"density={density}"))
+
+    def test_invalid_density_raises(self) -> None:
+        data = _make_xlsx(
+            {
+                "[Content_Types].xml": (
+                    f'<Types xmlns="{NS_CT}">'
+                    '<Default Extension="xml" ContentType="application/xml"/>'
+                    '<Default Extension="rels" ContentType='
+                    '"application/vnd.openxmlformats-package.relationships+xml"/>'
+                    '<Override PartName="/xl/workbook.xml" '
+                    'ContentType="application/vnd.openxmlformats-officedocument.'
+                    'spreadsheetml.sheet.main+xml"/>'
+                    "</Types>"
+                ),
+                "_rels/.rels": (
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    f'<Relationship Id="r1" Type="{NS_O}/officeDocument" Target="xl/workbook.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/workbook.xml": (
+                    f'<workbook xmlns="{NS_S}" '
+                    'xmlns:r="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    "<sheets>"
+                    '<sheet name="S" sheetId="1" r:id="rSheet1"/>'
+                    "</sheets>"
+                    "</workbook>"
+                ),
+                "xl/_rels/workbook.xml.rels": (
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    f'<Relationship Id="rSheet1" Type="{NS_O}/worksheet" '
+                    'Target="worksheets/sheet1.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/worksheets/sheet1.xml": (f'<worksheet xmlns="{NS_S}"><sheetData/></worksheet>'),
+            },
+        )
+        with self.assertRaises(ValueError):
+            parse_xlsx(data, density="semntic")
+
+
+class WriteDocumentTests(unittest.TestCase):
+    def test_write_document_atomic_output(self) -> None:
+        """write_document produces parsed.html matching the full render and
+        leaves no temporary files behind."""
+        data = _make_xlsx(
+            {
+                "[Content_Types].xml": (
+                    f'<Types xmlns="{NS_CT}">'
+                    '<Default Extension="xml" ContentType="application/xml"/>'
+                    '<Default Extension="rels" ContentType='
+                    '"application/vnd.openxmlformats-package.relationships+xml"/>'
+                    '<Override PartName="/xl/workbook.xml" '
+                    'ContentType="application/vnd.openxmlformats-officedocument.'
+                    'spreadsheetml.sheet.main+xml"/>'
+                    "</Types>"
+                ),
+                "_rels/.rels": (
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    f'<Relationship Id="r1" Type="{NS_O}/officeDocument" Target="xl/workbook.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/workbook.xml": (
+                    f'<workbook xmlns="{NS_S}" '
+                    'xmlns:r="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    "<sheets>"
+                    '<sheet name="S" sheetId="1" r:id="rSheet1"/>'
+                    "</sheets>"
+                    "</workbook>"
+                ),
+                "xl/_rels/workbook.xml.rels": (
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    f'<Relationship Id="rSheet1" Type="{NS_O}/worksheet" '
+                    'Target="worksheets/sheet1.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/worksheets/sheet1.xml": (
+                    f'<worksheet xmlns="{NS_S}"><sheetData>'
+                    '<row r="1"><c r="A1" t="inlineStr"><is><t>X</t></is></c></row>'
+                    "</sheetData></worksheet>"
+                ),
+            },
+        )
+        with TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            path = write_document(data, output_dir)
+            self.assertEqual(path.name, "parsed.html")
+            self.assertEqual(path.read_text(encoding="utf-8"), parse_xlsx(data))
+            self.assertEqual(list(output_dir.glob(".*.tmp")), [])
 
 
 class TruncationTests(unittest.TestCase):
@@ -159,12 +250,13 @@ class TruncationTests(unittest.TestCase):
         self.assertNotIn("truncated", html)
 
     def test_large_sheet_windowed(self) -> None:
-        """600 rows exceeds cell budget: shows window, not bare truncated."""
+        """600 rows exceeds cell budget: window plus truncated marker."""
         data = self._make_sheet(600)
         html = parse_xlsx(data)
-        # Shows first rows (within budget), not bare truncated marker
+        # Shows first rows (within budget) and marks the grid as truncated.
         self.assertIn("<tr row=1>", html)
         self.assertNotIn("<tr row=600>", html)
+        self.assertIn("truncated", html)
 
     def test_range_reading_not_truncated(self) -> None:
         """render_range always shows full results, no truncation."""
@@ -173,6 +265,13 @@ class TruncationTests(unittest.TestCase):
         self.assertNotIn("truncated", html)
         self.assertIn("Row1", html)
         self.assertIn("Row5", html)
+
+    def test_range_reading_beyond_cell_budget_is_exact(self) -> None:
+        """render_range is exact even past the default-view cell budget."""
+        data = self._make_sheet(600)
+        html = render_range(data, "Data", "A1:A600")
+        self.assertIn("Row600", html)
+        self.assertNotIn("truncated", html)
 
 
 class PlainDensityTests(unittest.TestCase):

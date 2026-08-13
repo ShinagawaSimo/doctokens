@@ -8,7 +8,7 @@ from types import MappingProxyType
 from xml.etree import ElementTree as ET
 
 from ..core.constants import attr, first_child, qualified_name
-from ..core.models import ParseWarning, RunFormat, StyleRecord
+from ..core.models import ParseWarning, RunFormat, StyleRecord, append_warning
 from ..core.package import PackageReader
 from .formatting import merge_run_formats, parse_run_format
 
@@ -64,12 +64,11 @@ class StyleMap:
         """Recursively resolve the outline level along the basedOn inheritance chain."""
         if style_id in visited:
             # Cyclic style inheritance cannot be recursed to the end; record a warning and stop.
-            self.warnings.append(
-                ParseWarning(
-                    code="STYLE_INHERITANCE_CYCLE",
-                    message=f"Style inheritance cycle detected at {style_id}",
-                    locator="word/styles.xml",
-                )
+            append_warning(
+                self.warnings,
+                "STYLE_INHERITANCE_CYCLE",
+                f"Style inheritance cycle detected at {style_id}",
+                part="word/styles.xml",
             )
             return None
 

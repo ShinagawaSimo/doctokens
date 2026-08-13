@@ -31,6 +31,7 @@ class Cell(TypedDict, total=False):
     shadow: bool  # merge: true for cells covered by a merge anchor
     spillRange: str  # dynamic array: A1-style spill range on the anchor cell
     spillFrom: str  # dynamic array: A1 ref of the source cell on spill recipients
+    dynamicArray: bool  # true when the formula carries the dynamic-array aca marker
     hidden: bool  # row hidden state
     outlineLevel: int  # row outline level (0 = none)
     collapsed: bool  # row collapsed state
@@ -135,7 +136,6 @@ class SheetInfo(TypedDict, total=False):
     filter_cols: list[FilterColumn]  # [{col, type, values}] from filter columns (semantic)
     data_validations: list[DataValidation]  # [{ranges, type, formula1, allowBlank}]
     conditional_formats: list[ConditionalFormat]  # [{ranges, priority, rule_type, formula}]
-    external_links: list[str]  # detected external workbook references
     images: list[DrawingImage]  # [{id, ref, alt}] from drawing anchors
     charts: list[DrawingChart]  # [{id, ref, type, title, series_count}]
     pivot_tables: list[PivotTableInfo]  # [{id, ref, name}] detected pivot tables

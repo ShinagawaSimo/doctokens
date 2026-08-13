@@ -9,8 +9,8 @@
 | 密度 | 枚举值 | 文件 | 内容 |
 |---|---|---|---|
 | 语义级 | `SEMANTIC` (`"semantic"`) | `parsed.html` | 完整 HTML5 标记，含所有内联格式、对象引用和表格结构 |
-| 结构级 | `STRUCTURAL` (`"structural"`) | `l1.html` | 块级结构 + 语义对象，去除粗体/斜体/颜色等视觉格式 |
-| 纯文本 | `PLAIN` (`"plain"`) | `l0.txt` | 纯文本流，段落间以空行分隔，脚注拼接到段末 |
+| 结构级 | `STRUCTURAL` (`"structural"`) | `structural.html` | 块级结构 + 语义对象，去除粗体/斜体/颜色等视觉格式 |
+| 纯文本 | `PLAIN` (`"plain"`) | `plain.txt` | 纯文本流，段落间以空行分隔；脚注拼接到段末，尾注与批注拼接在文末 |
 
 输出第一行标记密度：
 
@@ -251,7 +251,7 @@ supplemental 区（资产索引）：
 | 段落 | `<p>` + `\n\n` | 同 semantic | 纯文本 `\n\n` |
 | 段落内换行 | `\n` | `\n` | `\n` |
 | 粗体/斜体/颜色等 | `<b>` `<i>` `<color value=>` 等 | 全部去除 | 无 |
-| 表格 | 完整 HTML 表格 + 合并单元格 | 完整 HTML 表格（无合并属性） | `\t` 分隔纯文本，>10 行截断 |
+| 表格 | 完整 HTML 表格 + 合并单元格 | 完整 HTML 表格 + 合并单元格 | `\t` 分隔纯文本，>10 行截断 |
 | 表格截断阈值 | 30 行 | 30 行 | 10 行 |
 | 图表 | `<chart>` + 属性 + `truncated` | 同 semantic | `[Chart: ...]` 纯文本摘要 |
 | SmartArt | `<smartart>` + 属性 + 全部节点文本 | 同 semantic | `[SmartArt ...]` 纯文本摘要 |
@@ -263,7 +263,7 @@ supplemental 区（资产索引）：
 | 尾注 | `<endnoteref/>` + supplemental | 同 semantic | 拼接到文末 `[edN: content]` |
 | 页码 | `<page=N>` | `<page=N>` | 无 |
 | 页眉/页脚 | supplemental 区 | 不输出 | 不输出 |
-| 批注 | `<commentref/>` + supplemental | `<commentref/>` + supplemental | 不输出 |
+| 批注 | `<commentref/>` + supplemental | `<commentref/>` + supplemental | 拼接到文末 `[cmtN: content]` |
 
 ## 资源提取 API
 

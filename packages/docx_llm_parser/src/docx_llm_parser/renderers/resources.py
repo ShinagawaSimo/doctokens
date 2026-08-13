@@ -73,25 +73,30 @@ def table_groups(parsed: ParsedDocument) -> dict[str, list[TableBlock]]:
 def _render_images(parsed: ParsedDocument, resource_id: str | None) -> list[str]:
     source_path = parsed.metadata.get("sourcePath")
     ocr_results = getattr(parsed, "ocr_results", None) or {}
+    archive: zipfile.ZipFile | None = None
+    if isinstance(source_path, str) and source_path:
+        archive = zipfile.ZipFile(source_path, "r")
     resources: list[str] = []
-    for asset in parsed.assets:
-        if resource_id and asset["id"] != resource_id:
-            continue
-        attrs = f"id={asset['id']}"
-        if asset.get("href"):
-            attrs += f" href={asset['href']}"
-        if asset.get("contentType"):
-            attrs += f" contentType={asset['contentType']}"
-        parts = [f"<image {attrs}>"]
-        zip_path = asset.get("zipPath")
-        if zip_path and isinstance(source_path, str) and source_path:
-            with zipfile.ZipFile(source_path, "r") as zf:
-                data = zf.read(zip_path)
-            parts.append(base64.b64encode(data).decode())
-        ocr_text = ocr_results.get(asset["id"])
-        if ocr_text is not None:
-            parts.append(f"\n<ocr-text id={asset['id']}>{ocr_text}")
-        resources.append("".join(parts))
+    try:
+        for asset in parsed.assets:
+            if resource_id and asset["id"] != resource_id:
+                continue
+            attrs = f"id={asset['id']}"
+            if asset.get("href"):
+                attrs += f" href={asset['href']}"
+            if asset.get("contentType"):
+                attrs += f" contentType={asset['contentType']}"
+            parts = [f"<image {attrs}>"]
+            zip_path = asset.get("zipPath")
+            if zip_path and archive is not None:
+                parts.append(base64.b64encode(archive.read(zip_path)).decode())
+            ocr_text = ocr_results.get(asset["id"])
+            if ocr_text is not None:
+                parts.append(f"\n<ocr-text id={asset['id']}>{ocr_text}")
+            resources.append("".join(parts))
+    finally:
+        if archive is not None:
+            archive.close()
     return resources
 
 

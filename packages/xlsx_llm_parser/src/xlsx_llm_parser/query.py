@@ -34,6 +34,11 @@ class QueryColumn(TypedDict):
     col: int
 
 
+_WHERE_OPS = {"eq", "contains", "gt", "lt"}
+_AGGREGATE_OPS = {"sum", "count", "avg", "min", "max"}
+_ORDER_DIRECTIONS = {"asc", "desc"}
+
+
 def query_data(
     wb: ParsedWorkbook,
     *,
@@ -207,10 +212,14 @@ def _resolve_where_conditions(
     resolved: list[WhereCondition] = []
     for condition in conditions:
         item: WhereCondition = {}
-        if "column" in condition:
-            item["column"] = _resolve_column_key(condition["column"], columns)
+        if "column" not in condition:
+            raise ValueError("where condition requires a 'column'")
+        item["column"] = _resolve_column_key(condition["column"], columns)
         if "op" in condition:
-            item["op"] = condition["op"]
+            op = str(condition["op"])
+            if op not in _WHERE_OPS:
+                raise ValueError(f"Unsupported where operator {op!r}; expected one of {sorted(_WHERE_OPS)}")
+            item["op"] = op
         if "value" in condition:
             item["value"] = condition["value"]
         resolved.append(item)
@@ -225,7 +234,10 @@ def _resolve_aggregates(
     for aggregate in aggregates:
         item: AggregateSpec = {}
         if "op" in aggregate:
-            item["op"] = aggregate["op"]
+            op = str(aggregate["op"])
+            if op not in _AGGREGATE_OPS:
+                raise ValueError(f"Unsupported aggregate operator {op!r}; expected one of {sorted(_AGGREGATE_OPS)}")
+            item["op"] = op
         if "column" in aggregate:
             item["column"] = _resolve_column_key(aggregate["column"], columns)
         if "as" in aggregate:
@@ -244,7 +256,10 @@ def _resolve_order_specs(
         if "column" in order_spec:
             item["column"] = _resolve_column_key(order_spec["column"], columns)
         if "direction" in order_spec:
-            item["direction"] = order_spec["direction"]
+            direction = str(order_spec["direction"])
+            if direction not in _ORDER_DIRECTIONS:
+                raise ValueError(f"Unsupported sort direction {direction!r}; expected one of {sorted(_ORDER_DIRECTIONS)}")
+            item["direction"] = direction
         resolved.append(item)
     return resolved
 
@@ -257,7 +272,8 @@ def _resolve_column_key(name: str, columns: list[QueryColumn]) -> str:
     for column in columns:
         if value in {col_letter(column["col"]), f"Col{column['col']}"}:
             return column["key"]
-    return value
+    available = ", ".join(repr(column["key"]) for column in columns) or "none"
+    raise ValueError(f"Column {value!r} not found; available columns: {available}")
 
 
 def _select_columns(select: list[str], columns: list[QueryColumn]) -> list[QueryColumn]:
@@ -418,8 +434,12 @@ def _apply_order_by(
     return result
 
 
-def _order_key(row: dict[str, object], column: str) -> str:
-    return str(row.get(column, ""))
+def _order_key(row: dict[str, object], column: str) -> tuple[int, object]:
+    """Type-aware sort key: numbers sort numerically before strings."""
+    value = row.get(column, "")
+    if isinstance(value, (int, float)):
+        return (0, value)
+    return (1, str(value))
 
 
 def _render_query_result(rows: list[dict[str, object]], columns: list[QueryColumn] | None = None) -> str:

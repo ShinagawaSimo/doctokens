@@ -70,8 +70,8 @@ class WindowingTests(unittest.TestCase):
         self.assertNotIn("Row2", win)
         self.assertIn("Row3", win)
 
-    def test_large_sheet_not_fully_truncated(self) -> None:
-        """Large sheets now show a window instead of bare truncated marker."""
+    def test_large_sheet_window_with_truncated_marker(self) -> None:
+        """Large sheets show a head window plus a truncated marker."""
         rows_xml = ""
         for r in range(1, 600):  # 599 rows × 1 cell = 599 > _CELL_BUDGET=500
             rows_xml += f'<row r="{r}"><c r="A{r}" t="inlineStr"><is><t>R{r}</t></is></c></row>'
@@ -107,11 +107,11 @@ class WindowingTests(unittest.TestCase):
             },
         )
         html = parse_xlsx(data, density="structural")
-        # Shows data rows (not bare truncated)
+        # Shows data rows within the budget and marks the grid as truncated.
         self.assertIn("<tr row=1>", html)
-        # Stops at cell budget, last row shown is around row 500-502
+        self.assertIn("truncated", html)
+        # Stops at cell budget; the last row is not shown.
         self.assertNotIn("<tr row=599>", html)
-        self.assertIn("<tr row=1>", html)
 
 
 if __name__ == "__main__":

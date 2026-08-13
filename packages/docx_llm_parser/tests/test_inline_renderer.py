@@ -55,7 +55,7 @@ class InlineRendererTests(unittest.TestCase):
         """解析一段 OOXML 并渲染为段落内 XML。"""
         p = ET.fromstring(xml)
         runs, _hints = self.parser.paragraph_runs(p, "word/document.xml", "b-test", None)
-        return _inline_content(cast(Any, {"text": "", "runs": runs}), "L2")
+        return _inline_content(cast(Any, {"text": "", "runs": runs}), "semantic")
 
     def _render_with_objects(self, xml: str, object_lookup: dict[tuple[str, str], object] | None = None) -> str:
         """使用预解析对象索引渲染一段 OOXML。"""
@@ -69,7 +69,7 @@ class InlineRendererTests(unittest.TestCase):
         )
         p = ET.fromstring(xml)
         runs, _hints = parser.paragraph_runs(p, "word/document.xml", "b-test", None)
-        return _inline_content(cast(Any, {"text": "", "runs": runs}), "L2")
+        return _inline_content(cast(Any, {"text": "", "runs": runs}), "semantic")
 
     def test_omml_equation_renders_as_eq(self) -> None:
         """OMML 公式应进入最终 XML，而不是只进入 debug。"""

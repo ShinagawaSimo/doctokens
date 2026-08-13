@@ -195,17 +195,13 @@ def _external_link_targets(ref_text: str) -> list[str]:
     targets: list[str] = []
     for match in re.finditer(r"\[([^\]]+)\]", ref_text):
         target = match.group(1)
-        suffix = ref_text[match.end() :]
-        if _looks_like_external_reference(target, suffix):
+        if _looks_like_external_reference(target):
             targets.append(target)
     return targets
 
 
-def _looks_like_external_reference(target: str, suffix: str) -> bool:
-    lower = target.lower()
-    if lower.endswith(_EXTERNAL_WORKBOOK_EXTENSIONS):
-        return True
-    return target.isdigit() and "!" in suffix
+def _looks_like_external_reference(target: str) -> bool:
+    return target.lower().endswith(_EXTERNAL_WORKBOOK_EXTENSIONS)
 
 
 def _parse_shared_strings(pkg: PackageReader) -> tuple[list[str], dict[int, list[RichTextRun]]]:

@@ -296,10 +296,10 @@ class RendererBranchTests(unittest.TestCase):
         ]
         table = {"type": "table", "tableId": "t-long", "rows": rows, "columnCount": 1}
 
-        self.assertIn("<table id=t-long truncated>", "".join(render_table(cast(Any, table), "L2")))
+        self.assertIn("<table id=t-long truncated>", "".join(render_table(cast(Any, table), "semantic")))
         self.assertIn(
             "<td>R1",
-            "".join(render_table(cast(Any, {"tableId": "t-short", "rows": rows[:2], "columnCount": 1}), "L1")),
+            "".join(render_table(cast(Any, {"tableId": "t-short", "rows": rows[:2], "columnCount": 1}), "structural")),
         )
         with self.assertRaisesRegex(TypeError, "tableId"):
             table_id(cast(Any, {"tableId": 123}))

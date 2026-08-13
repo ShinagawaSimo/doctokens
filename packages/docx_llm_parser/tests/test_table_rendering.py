@@ -15,7 +15,7 @@ from docx_llm_parser.ooxml.numbering import NumberingMap, NumberingState
 from docx_llm_parser.ooxml.styles import StyleMap
 from docx_llm_parser.renderers.html5 import manifest as _manifest
 from docx_llm_parser.renderers.html5 import render_resource as _render_resource
-from docx_llm_parser.renderers.l0.helpers import table_text_only
+from docx_llm_parser.renderers.plain.helpers import table_text_only
 from docx_llm_parser.renderers.tables.render import table_id
 
 WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -71,7 +71,7 @@ class TableIdentityTests(unittest.TestCase):
             [("t1", 1), ("t1", 2)],
         )
 
-    def test_l0_truncation_uses_assigned_table_id(self) -> None:
+    def test_plain_truncation_uses_assigned_table_id(self) -> None:
         rows: list[dict[str, Any]] = [{"cells": [{"text": "x"}]} for _ in range(11)]
 
         rendered = table_text_only(cast(Any, {"type": "table", "tableId": "t7", "rows": rows, "columnCount": 1}))

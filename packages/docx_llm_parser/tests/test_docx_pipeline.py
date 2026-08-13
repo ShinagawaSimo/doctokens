@@ -14,7 +14,6 @@ from docx_llm_parser import (
     render_window,
     write_document,
 )
-from docx_llm_parser.concurrency import parse_many
 from docx_llm_parser.core.enums import RevisionMode
 from docx_llm_parser.core.models import ParseOptions
 from docx_llm_parser.parser import DocxParser
@@ -61,11 +60,24 @@ class DocxPipelineTests(unittest.TestCase):
             self.assertIn("<img id=img1", html)
             self.assertIn("<!-- supplemental -->", html)
 
-            l1 = parse_docx(docx_path, density=Density.STRUCTURAL)
-            l0 = parse_docx(docx_path, density=Density.PLAIN)
-            self.assertIn("<chart id=chart1 type=bar", l1)
-            self.assertIn("Footnote text", l0)
+            structural_html = parse_docx(docx_path, density=Density.STRUCTURAL)
+            plain_text = parse_docx(docx_path, density=Density.PLAIN)
+            self.assertIn("<chart id=chart1 type=bar", structural_html)
+            self.assertIn("Footnote text", plain_text)
             self.assertIn("Last page", render_window(docx_path, page=-1))
+
+            # structural: no headers/footers; notes and comments remain.
+            self.assertNotIn("Header text", structural_html)
+            self.assertNotIn("Footer text", structural_html)
+            self.assertIn("<footnote id=", structural_html)
+            self.assertIn("<comment id=", structural_html)
+
+            # Plain density: headers/footers excluded, comments retained.
+            self.assertNotIn("[Headers]", plain_text)
+            self.assertNotIn("[Footers]", plain_text)
+            self.assertNotIn("Header text", plain_text)
+            self.assertIn("[Comments]", plain_text)
+            self.assertIn("Comment text", plain_text)
 
             # Public API: resource extraction
             chart_html = get_resource(docx_path, "chart", "chart1")
@@ -83,19 +95,9 @@ class DocxPipelineTests(unittest.TestCase):
             html_path = write_document(docx_path, output_dir, density=Density.SEMANTIC)
             text_path = write_document(docx_path, output_dir, density=Density.PLAIN)
             self.assertEqual(html_path.name, "parsed.html")
-            self.assertEqual(text_path.name, "l0.txt")
+            self.assertEqual(text_path.name, "plain.txt")
             self.assertEqual(stale.read_text(encoding="utf-8"), "keep")
             self.assertEqual(list(output_dir.glob(".*.tmp")), [])
-
-            results = parse_many(
-                [docx_path, temp / "missing.docx"],
-                temp / "batch",
-                max_workers=1,
-                revision_mode="final",
-            )
-            self.assertTrue(results[0].ok)
-            self.assertFalse(results[1].ok)
-            self.assertIn("FileNotFoundError", results[1].error or "")
 
 
 if __name__ == "__main__":

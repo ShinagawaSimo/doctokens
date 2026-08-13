@@ -1,8 +1,7 @@
-"""Text processing logic shared by the renderers.
+"""Text processing logic shared across density renderers.
 
 Run merging, signature computation, and format filtering are pure data
-transformations that do not depend on specific output tag syntax.
-Both renderers share this module."""
+transformations that do not depend on specific output tag syntax."""
 
 from __future__ import annotations
 

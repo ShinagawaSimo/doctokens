@@ -134,12 +134,48 @@ class StructuralRendererTests(unittest.TestCase):
         self.assertIn("[Table Sales: Name, Amount]", plain)
         self.assertNotIn("<table id=table1", plain)
 
+        # Plain density keeps declaration info as text summaries, never HTML tags.
+        self.assertIn("[Filter A1:B2]", plain)
+        self.assertIn("[Image image1 at D4]", plain)
+        self.assertIn("[Chart Sales: Q1]", plain)
+        self.assertIn("[PivotTable Pivot]", plain)
+        self.assertNotIn("<filter", plain)
+        self.assertNotIn("<image", plain)
+        self.assertNotIn("<chart ", plain)
+        self.assertNotIn("<pivotTable", plain)
+
     def test_render_range_and_missing_sheet(self) -> None:
         wb = cast(Any, _workbook())
         html = render_range(wb, "Data", "A1:B2", density="structural")
         self.assertIn("<grid ref=A1:B2>", html)
         with self.assertRaises(ValueError):
             render_range(wb, "Missing", "A1:B2")
+
+    def test_empty_sheet_keeps_resource_declarations(self) -> None:
+        workbook = {
+            "sheets": [
+                {
+                    "name": "Empty",
+                    "rows": [],
+                    "images": [{"id": "image1", "ref": "A1"}],
+                    "tables": [
+                        {
+                            "id": "table1",
+                            "name": "T",
+                            "ref": "A1:B2",
+                            "columns": ["X", "Y"],
+                            "totalsRow": False,
+                        }
+                    ],
+                }
+            ],
+            "metadata": {"source": "memory"},
+            "fmt_index": FormatIndex(),
+        }
+        html = render_workbook(cast(Any, workbook), density="structural")
+        self.assertIn("<image id=image1 ref=A1/>", html)
+        self.assertIn("<table id=table1", html)
+        self.assertNotIn("<grid", html)
 
     def test_semantic_repeated_styles_render_as_range(self) -> None:
         fmt_index = FormatIndex()

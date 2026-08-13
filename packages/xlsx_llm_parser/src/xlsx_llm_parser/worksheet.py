@@ -15,7 +15,7 @@ from ._sheet_post import (
     apply_merge_cells,
     apply_spill_ranges,
 )
-from ._utils import parse_ref
+from ._utils import col_letter, parse_ref
 from .formats import FormatIndex
 from .models import (
     Cell,
@@ -171,14 +171,22 @@ def _parse_rows(
         return []
 
     rows: list[list[Cell]] = []
+    prev_row = 0
     for row_elem in sheet_data.findall(f"{{{NS_S}}}row"):
         row_attrs = _row_attrs(row_elem)
-        rows.append(
-            [
-                _parse_cell(cell_elem, row_attrs, shared_strings, rich_text_map, format_index)
-                for cell_elem in row_elem.findall(f"{{{NS_S}}}c")
-            ]
-        )
+        effective_row = row_attrs.number or prev_row + 1
+        prev_row = effective_row
+        row_cells: list[Cell] = []
+        prev_col = 0
+        for cell_elem in row_elem.findall(f"{{{NS_S}}}c"):
+            ref = cell_elem.get("r", "")
+            if not ref:
+                # Some writers omit r; inherit the previous cell's position.
+                ref = f"{col_letter(prev_col + 1)}{effective_row}"
+            cell = _parse_cell(cell_elem, row_attrs, shared_strings, rich_text_map, format_index, ref)
+            prev_col = cell["col"]
+            row_cells.append(cell)
+        rows.append(row_cells)
     return rows
 
 
@@ -198,8 +206,8 @@ def _parse_cell(
     shared_strings: list[str],
     rich_text_map: dict[int, list[RichTextRun]] | None,
     format_index: FormatIndex | None,
+    ref: str,
 ) -> Cell:
-    ref = cell_elem.get("r", "")
     col, row = parse_ref(ref)
     cell_type = cell_elem.get("t", "n")
     text, value_elem = _cell_text(cell_elem, cell_type, shared_strings)
@@ -281,6 +289,10 @@ def _formula_metadata(cell_elem: ET.Element) -> tuple[str | None, Cell]:
         formula_range = formula_elem.get("ref", "")
         if formula_range:
             metadata["formulaRange"] = formula_range
+        if formula_elem.get("aca") == "1":
+            # aca marks true dynamic-array formulas; classic CSE arrays share
+            # the t="array"/ref shape but do not spill.
+            metadata["dynamicArray"] = True
     elif formula_type == "dataTable":
         metadata["formulaType"] = "dataTable"
     return formula, metadata

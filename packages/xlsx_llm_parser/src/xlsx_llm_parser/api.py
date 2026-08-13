@@ -21,6 +21,13 @@ from .renderers.structural import (
     _render_sheet,
 )
 
+_VALID_DENSITIES = {"plain", "structural", "semantic"}
+
+
+def _validate_density(density: str) -> None:
+    if density not in _VALID_DENSITIES:
+        raise ValueError(f"Invalid density {density!r}; expected one of {sorted(_VALID_DENSITIES)}")
+
 
 def parse_xlsx(
     source: str | Path | bytes,
@@ -37,17 +44,30 @@ def parse_xlsx(
     *start_row* (1-based) begins rendering from the specified row for the
     first data sheet, enabling paginated window reads of large grids.
     """
+    _validate_density(density)
     wb = _parse_workbook(source)
     if stream:
         return _iter_rendered_workbook(wb, density, start_row)
     return "".join(_iter_rendered_workbook(wb, density, start_row))
 
 
+def iter_workbook(
+    source: str | Path | bytes,
+    *,
+    density: str = "structural",
+    start_row: int = 1,
+) -> Iterator[str]:
+    """Parse *source* and yield rendered workbook chunks for streaming output."""
+    _validate_density(density)
+    wb = _parse_workbook(source)
+    return _iter_rendered_workbook(wb, density, start_row)
+
+
 def _iter_rendered_workbook(wb: ParsedWorkbook, density: str, start_row: int) -> Iterator[str]:
     """Yield rendered chunks for a parsed workbook."""
     yield f"density={density}\n"
-    for sheet in wb["sheets"]:
-        yield from _render_sheet(sheet, density, wb, start_row=start_row)
+    for sheet_index, sheet in enumerate(wb["sheets"]):
+        yield from _render_sheet(sheet, density, wb, start_row=start_row, emit_globals=sheet_index == 0)
         if sheet.get("kind") != "chartsheet" and start_row != 1:
             start_row = 1
 
@@ -60,17 +80,16 @@ def write_document(
     start_row: int = 1,
 ) -> Path:
     """Parse *source* and write the rendered file to *output_dir* (atomic write)."""
-    from pathlib import Path as _Path
-
-    output_dir = _Path(output_dir)
+    _validate_density(density)
+    output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "parsed.html"
-    temp_path: _Path | None = None
+    temp_path: Path | None = None
     try:
         with NamedTemporaryFile(
             "w", encoding="utf-8", dir=output_dir, prefix=".parsed.html.", suffix=".tmp", delete=False
         ) as stream:
-            temp_path = _Path(stream.name)
+            temp_path = Path(stream.name)
             for chunk in _iter_rendered_workbook(_parse_workbook(source), density, start_row):
                 stream.write(chunk)
             stream.flush()
@@ -90,12 +109,16 @@ def render_range(
     *,
     density: str = "structural",
 ) -> str:
-    """Render cells within an A1-style range from *source*."""
+    """Render cells within an A1-style range from *source*.
+
+    Range reads are exact: the default-view cell budget never truncates them.
+    """
+    _validate_density(density)
     wb = _parse_workbook(source)
     sheet_info = _find_sheet(wb, sheet)
     start_col, start_row, end_col, end_row = _parse_range(range_spec)
     filtered = _filter_rows(sheet_info.get("rows", []), start_col, start_row, end_col, end_row)
-    return _render_grid(filtered, density, wb)
+    return _render_grid(filtered, density, wb, cell_budget=None)
 
 
 def find_cells(
@@ -117,6 +140,7 @@ def find_cells(
     pattern = re.compile(re.escape(query))  # exact match by default
     matches: list[str] = []
     sheets_to_search = sheets or [s["name"] for s in wb["sheets"]]
+    seen_names: set[str] = set()
 
     for sheet_name in sheets_to_search:
         if len(matches) >= limit:
@@ -127,7 +151,7 @@ def find_cells(
         if len(matches) < limit and kind in {None, "definedName"}:
             remaining = limit - len(matches)
             defined_names = wb["metadata"].get("defined_names", [])
-            matches.extend(_find_defined_name_matches(defined_names, sheet_name, pattern, remaining))
+            matches.extend(_find_defined_name_matches(defined_names, sheet_name, pattern, remaining, seen_names))
 
     parts = ["<matches>\n"]
     parts.append("\n".join(matches[:limit]))
@@ -174,18 +198,23 @@ def _find_defined_name_matches(
     sheet_name: str,
     pattern: re.Pattern[str],
     limit: int,
+    seen_names: set[str],
 ) -> list[str]:
     matches: list[str] = []
     for defined_name in defined_names:
         if len(matches) >= limit:
             break
+        name = defined_name["name"]
+        if name in seen_names:
+            continue
         scope = defined_name.get("scopeSheet")
         if scope and scope != sheet_name:
             continue
-        if pattern.search(defined_name["name"]) or pattern.search(defined_name.get("ref", "")):
-            name = escape(defined_name["name"])
+        if pattern.search(name) or pattern.search(defined_name.get("ref", "")):
+            seen_names.add(name)
+            escaped_name = escape(name)
             ref = escape(defined_name["ref"])
-            matches.append(f"<match field=definedName>{name} = {ref}")
+            matches.append(f"<match field=definedName>{escaped_name} = {ref}")
     return matches
 
 

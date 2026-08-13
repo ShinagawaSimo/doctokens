@@ -9,8 +9,7 @@ from types import MappingProxyType
 from xml.etree import ElementTree as ET
 
 from ..core.constants import attr, child_elements, first_child
-from ..core.locator import part_block_locator as locator
-from ..core.models import NumberingLabel, ParseWarning
+from ..core.models import NumberingLabel, ParseWarning, append_warning
 from ..core.package import PackageReader
 
 
@@ -123,12 +122,12 @@ class NumberingState:
         """
         level = self.numbering.level_for(num_id, numbering_level)
         if level is None:
-            self.warnings.append(
-                ParseWarning(
-                    code="NUMBERING_LEVEL_MISSING",
-                    message=(f"Missing numbering level for numId={num_id}, numbering_level={numbering_level}"),
-                    locator=locator(part, block_id),
-                )
+            append_warning(
+                self.warnings,
+                "NUMBERING_LEVEL_MISSING",
+                f"Missing numbering level for numId={num_id}, numbering_level={numbering_level}",
+                part=part,
+                block_id=block_id,
             )
             return None
 
@@ -198,6 +197,15 @@ class NumberingState:
             "japaneseCounting",
             "taiwaneseCounting",
         }:
+            if value >= 100_000_000:
+                # Beyond 万-level rendering; fall back to decimal instead of crashing.
+                append_warning(
+                    self.warnings,
+                    "NUMBERING_VALUE_OUT_OF_RANGE",
+                    f"Numbering value {value} exceeds the Chinese counting range; decimal fallback is used.",
+                    part="word/numbering.xml",
+                )
+                return str(value)
             return self._chinese_counting(value)
         if number_format == "bullet":
             return "•"
@@ -206,12 +214,11 @@ class NumberingState:
             # Uncovered formats do not block parsing; fall back to decimal and surface the
             # risk in debug output.
             self._warned_formats.add(number_format)
-            self.warnings.append(
-                ParseWarning(
-                    code="UNSUPPORTED_NUMBER_FORMAT",
-                    message=(f"Unsupported numbering format {number_format!r}; decimal fallback is used."),
-                    locator="word/numbering.xml",
-                )
+            append_warning(
+                self.warnings,
+                "UNSUPPORTED_NUMBER_FORMAT",
+                f"Unsupported numbering format {number_format!r}; decimal fallback is used.",
+                part="word/numbering.xml",
             )
         return str(value)
 
@@ -276,7 +283,7 @@ class NumberingState:
             tens, ones = divmod(value, 10)
             prefix = "" if tens == 1 else digits[tens]
             return prefix + "十" + (digits[ones] if ones else "")
-        units = [(1000, "千"), (100, "百"), (10, "十")]
+        units = [(10000, "万"), (1000, "千"), (100, "百"), (10, "十")]
         remaining = value
         parts: list[str] = []
         zero_pending = False

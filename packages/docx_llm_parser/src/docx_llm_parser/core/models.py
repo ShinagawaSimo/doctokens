@@ -17,8 +17,27 @@ from ooxml_llm_core.models import (
 )
 
 from .enums import RevisionMode
+from .locator import part_block_locator
 
 RunFormat = dict[str, bool | str | None]
+
+
+def append_warning(
+    warnings: list[ParseWarning],
+    code: str,
+    message: str,
+    *,
+    part: str | None = None,
+    block_id: str | None = None,
+) -> None:
+    """Append a parse warning with the standard part:block locator shape."""
+    warnings.append(
+        ParseWarning(
+            code=code,
+            message=message,
+            locator=part_block_locator(part, block_id),
+        )
+    )
 
 
 class LinkInfo(TypedDict, total=False):
@@ -184,13 +203,11 @@ class RunRequired(TypedDict):
 class Run(RunRequired, total=False):
     """Visible text run plus optional formatting, links and inline objects."""
 
-    preserveSpace: bool
     objects: list[InlineObject]
     styleId: str
     format: RunFormat
     link: LinkInfo
     revision: Literal["inserted", "deleted"]
-    kind: str
 
 
 RawHint = dict[str, object] | InlineObject
@@ -345,7 +362,6 @@ class ParseOptions:
     max_total_uncompressed_bytes: int = 500 * 1024 * 1024
     ocr: object | None = None  # OcrProvider | None, lazy import
     ocr_workers: int = 4
-    ocr_confidence_threshold: float = 0.0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "revision_mode", RevisionMode.parse(self.revision_mode))

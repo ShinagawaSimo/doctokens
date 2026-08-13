@@ -23,6 +23,7 @@ where = [
     "packages/docx_llm_parser/src",
     "packages/xlsx_llm_parser/src",
     "packages/ocr_llm_core/src",
+    "packages/pptx_llm_parser/src",
 ]
 
 [tool.setuptools.package-data]
@@ -30,6 +31,7 @@ docx_llm_parser = ["py.typed"]
 ooxml_llm_core = ["py.typed"]
 ocr_llm_core = ["py.typed"]
 xlsx_llm_parser = ["py.typed"]
+pptx_llm_parser = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = [
@@ -37,23 +39,22 @@ testpaths = [
     "packages/docx_llm_parser/tests",
     "packages/xlsx_llm_parser/tests",
     "packages/ocr_llm_core/tests",
+    "packages/pptx_llm_parser/tests",
 ]
 pythonpath = [
     "packages/ooxml_llm_core/src",
     "packages/docx_llm_parser/src",
     "packages/xlsx_llm_parser/src",
     "packages/ocr_llm_core/src",
+    "packages/pptx_llm_parser/src",
 ]
+# Coverage flags are passed by CI (see .github/workflows/ci.yml) so that
+# running a single package's tests locally is not gated by whole-repo
+# coverage thresholds.
 addopts = [
     "-ra",
     "--strict-config",
     "--strict-markers",
-    "--cov=ooxml_llm_core",
-    "--cov=docx_llm_parser",
-    "--cov=xlsx_llm_parser",
-    "--cov=ocr_llm_core",
-    "--cov-branch",
-    "--cov-fail-under=85",
 ]
 
 [tool.coverage.run]
@@ -63,6 +64,7 @@ source = [
     "packages/docx_llm_parser/src",
     "packages/xlsx_llm_parser/src",
     "packages/ocr_llm_core/src",
+    "packages/pptx_llm_parser/src",
 ]
 
 [tool.ruff]
@@ -81,6 +83,7 @@ files = [
     "packages/docx_llm_parser/src",
     "packages/xlsx_llm_parser/src",
     "packages/ocr_llm_core/src",
+    "packages/pptx_llm_parser/src",
 ]
 
 [[tool.mypy.overrides]]

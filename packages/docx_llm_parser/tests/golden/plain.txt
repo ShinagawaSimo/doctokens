@@ -17,12 +17,6 @@ Body
 
 Last page
 
-[Headers]
-[headers.header1: Header text]
-
-[Footers]
-[footers.footer1: Footer text]
-
 [Endnotes]
 [ed3: Endnote text]
 

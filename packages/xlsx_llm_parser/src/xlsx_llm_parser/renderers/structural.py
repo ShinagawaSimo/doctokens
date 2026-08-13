@@ -28,8 +28,8 @@ def render_workbook(wb: ParsedWorkbook, *, density: Density = "structural") -> s
 def iter_workbook(wb: ParsedWorkbook, *, density: Density = "structural") -> Iterator[str]:
     """Stream workbook rendering chunks — concatenation matches render_workbook."""
     yield f"density={density}\n"
-    for sheet in wb["sheets"]:
-        yield from _render_sheet(sheet, density, wb)
+    for sheet_index, sheet in enumerate(wb["sheets"]):
+        yield from _render_sheet(sheet, density, wb, emit_globals=sheet_index == 0)
 
 
 def render_range(
@@ -63,6 +63,7 @@ def _render_sheet(
     density: Density,
     wb: ParsedWorkbook | None = None,
     start_row: int = 1,
+    emit_globals: bool = True,
 ) -> Iterator[str]:
     name = sheet["name"]
     state = sheet.get("state", "visible")
@@ -80,19 +81,17 @@ def _render_sheet(
     yield f"<sheet {attrs}>\n"
 
     rows = sheet.get("rows", [])
-    if not rows:
-        return
 
     yield from _emit_hidden_cols(sheet, density)
     yield from _emit_sheet_protection(sheet, density)
-    yield from _emit_defined_names(wb, density, name)
+    yield from _emit_defined_names(wb, density, name, emit_globals=emit_globals)
     yield from _emit_autofilter(sheet, density)
     yield from _emit_data_validations(sheet, density)
     yield from _emit_conditional_formats(sheet, density)
     yield from _emit_external_links(wb, density)
-    yield from _emit_images(sheet)
+    yield from _emit_images(sheet, density)
     yield from _emit_charts(sheet, density)
-    yield from _emit_pivot_tables(sheet)
+    yield from _emit_pivot_tables(sheet, density)
     yield from _emit_tables(sheet, density)
 
     if density == "plain":
@@ -127,8 +126,18 @@ def _emit_sheet_protection(sheet: SheetInfo, density: Density) -> Iterator[str]:
         yield "<sheetProtection/>\n"
 
 
-def _emit_defined_names(wb: ParsedWorkbook | None, density: Density, sheet_name: str) -> Iterator[str]:
-    """User-defined names scoped to this sheet or global."""
+def _emit_defined_names(
+    wb: ParsedWorkbook | None,
+    density: Density,
+    sheet_name: str,
+    *,
+    emit_globals: bool = True,
+) -> Iterator[str]:
+    """User-defined names scoped to this sheet or global.
+
+    Global names are emitted once, with the first sheet's block, instead of
+    repeating the same declaration on every sheet.
+    """
     if density not in {"structural", "semantic"} or wb is None:
         return
     defined_names = wb["metadata"].get("defined_names", [])
@@ -137,6 +146,8 @@ def _emit_defined_names(wb: ParsedWorkbook | None, density: Density, sheet_name:
             continue
         scope = dn.get("scopeSheet")
         if scope and scope != sheet_name:
+            continue
+        if scope is None and not emit_globals:
             continue
         if dn["name"].startswith("_xlnm."):
             continue
@@ -150,11 +161,13 @@ def _emit_autofilter(sheet: SheetInfo, density: Density) -> Iterator[str]:
     filter_ref = sheet.get("filter_range")
     if not filter_ref:
         return
+    if density == "plain":
+        yield f"[Filter {filter_ref}]\n"
+        return
     yield f"<filter ref={filter_ref}>\n"
-    if density in {"structural", "semantic"}:
-        for fc in sheet.get("filter_cols", []):
-            vals = ",".join(escape(v, quote=True) for v in fc.get("values", []))
-            yield f'<condition col={fc["col"]} type={fc["type"]} values="{vals}"/>\n'
+    for fc in sheet.get("filter_cols", []):
+        vals = ",".join(escape(v, quote=True) for v in fc.get("values", []))
+        yield f'<condition col={fc["col"]} type={fc["type"]} values="{vals}"/>\n'
 
 
 def _emit_data_validations(sheet: SheetInfo, density: Density) -> Iterator[str]:
@@ -183,7 +196,11 @@ def _emit_external_links(wb: ParsedWorkbook | None, density: Density) -> Iterato
         yield f"<externalLink target={escape(link, quote=True)}/>\n"
 
 
-def _emit_images(sheet: SheetInfo) -> Iterator[str]:
+def _emit_images(sheet: SheetInfo, density: Density) -> Iterator[str]:
+    if density == "plain":
+        for img in sheet.get("images", []):
+            yield f"[Image {img['id']} at {img['ref']}]\n"
+        return
     for img in sheet.get("images", []):
         yield f"<image id={img['id']} ref={img['ref']}/>\n"
 
@@ -192,12 +209,11 @@ def _emit_charts(sheet: SheetInfo, density: Density) -> Iterator[str]:
     """Charts — structural shows summary attributes; semantic includes series names."""
     charts = sheet.get("charts", [])
     if density == "plain":
-        if charts:
-            yield f"<charts count={len(charts)}>\n"
-            for ch in charts:
-                names = _chart_series_names(ch)
-                if names:
-                    yield f'<chart names="{escape(",".join(names), quote=True)}"/>\n'
+        for ch in charts:
+            title_part = f" {ch.get('title')}" if ch.get("title") else ""
+            names_text = ", ".join(_chart_series_names(ch))
+            names_part = f": {names_text}" if names_text else ""
+            yield f"[Chart{title_part}{names_part}]\n"
         return
 
     for ch in charts:
@@ -228,7 +244,12 @@ def _chart_series_names(ch: object) -> list[str]:
     return names
 
 
-def _emit_pivot_tables(sheet: SheetInfo) -> Iterator[str]:
+def _emit_pivot_tables(sheet: SheetInfo, density: Density) -> Iterator[str]:
+    if density == "plain":
+        for pv in sheet.get("pivot_tables", []):
+            name_part = f" {pv['name']}" if pv.get("name") else ""
+            yield f"[PivotTable{name_part}]\n"
+        return
     for pv in sheet.get("pivot_tables", []):
         yield f"<pivotTable id={pv['id']} name={escape(pv['name'], quote=True)}/>\n"
 
@@ -299,7 +320,15 @@ def _render_grid(
     density: Density,
     wb: ParsedWorkbook | None = None,
     start_row: int = 1,
+    cell_budget: int | None = _CELL_BUDGET,
 ) -> str:
+    """Render the cell grid.
+
+    The default view is capped at *cell_budget* cells; when rows remain
+    beyond the cap, the grid carries a ``truncated`` marker so consumers
+    know to page via render_range.  *cell_budget=None* disables truncation
+    (exact reads).
+    """
     if not rows:
         return ""
 
@@ -308,25 +337,22 @@ def _render_grid(
         return ""  # start_row beyond all data rows
 
     min_col, min_row, max_col, max_row = bounds
-    ref = f"{col_letter(min_col)}{min_row}:{col_letter(max_col)}{max_row}"
-    tag = f"<grid ref={ref}"
+    visible_rows = [row_cells for row_cells in rows if row_cells and row_cells[0]["row"] >= start_row]
 
-    parts = [tag + ">\n"]
     suppressed_styles: set[str] = set()
     fmt_index = wb["fmt_index"] if wb is not None else None
+    style_parts: list[str] = []
     if density == "semantic" and isinstance(fmt_index, FormatIndex):
         style_ranges, suppressed_styles = _repeated_style_ranges(rows, fmt_index, start_row)
-        parts.extend(style_ranges)
+        style_parts.extend(style_ranges)
 
     comments: dict[tuple[int, int], tuple[str, str, str]] = {}  # (col,row) → (ref, author, text)
     cell_count = 0
-    for row_cells in rows:
-        if not row_cells:
-            continue
-        if row_cells[0]["row"] < start_row:
-            continue
+    truncated = False
+    body_parts: list[str] = []
+    for index, row_cells in enumerate(visible_rows):
         cell_count += len(row_cells)
-        parts.append(
+        body_parts.append(
             _render_row(
                 row_cells,
                 min_col,
@@ -336,9 +362,15 @@ def _render_grid(
                 suppressed_styles,
             )
         )
-        if cell_count >= _CELL_BUDGET:
+        if cell_budget is not None and cell_count >= cell_budget:
+            truncated = index + 1 < len(visible_rows)
             break
 
+    ref = f"{col_letter(min_col)}{min_row}:{col_letter(max_col)}{max_row}"
+    tag = f"<grid ref={ref}"
+    if truncated:
+        tag += " truncated"
+    parts = [tag + ">\n", *style_parts, *body_parts]
     parts.extend(_render_comments(comments))
 
     return "".join(parts)

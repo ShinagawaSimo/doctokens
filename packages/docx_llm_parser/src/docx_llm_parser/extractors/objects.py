@@ -15,6 +15,7 @@ from ..core.models import (
     SmartArt,
     SmartArtLink,
     SmartArtNode,
+    append_warning,
 )
 from ..core.package import PackageReader
 from ..core.relationships import RelationshipIndex
@@ -142,7 +143,7 @@ class EmbeddedObjectExtractor:
 
     def _warn(self, code: str, message: str, part: str | None = None) -> None:
         """Record an object-parsing warning."""
-        self.warnings.append(ParseWarning(code=code, message=message, locator=part))
+        append_warning(self.warnings, code, message, part=part)
 
 
 def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> Chart:

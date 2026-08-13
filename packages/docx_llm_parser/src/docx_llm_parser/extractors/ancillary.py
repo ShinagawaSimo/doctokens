@@ -24,6 +24,7 @@ from ..core.models import (
     ParseWarning,
     RawHint,
     Run,
+    append_warning,
 )
 from ..core.package import PackageReader
 from ..core.relationships import RelationshipIndex
@@ -163,12 +164,11 @@ class AncillaryParser:
             with self.package.open_entry(part_name) as stream:
                 return ET.parse(stream).getroot()
         except Exception as exc:
-            self.warnings.append(
-                ParseWarning(
-                    code="ANCILLARY_XML_PARSE_FAILED",
-                    message=f"Failed to parse {part_name}: {exc}",
-                    locator=part_name,
-                )
+            append_warning(
+                self.warnings,
+                "ANCILLARY_XML_PARSE_FAILED",
+                f"Failed to parse {part_name}: {exc}",
+                part=part_name,
             )
             return None
 

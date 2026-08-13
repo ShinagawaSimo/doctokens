@@ -183,6 +183,64 @@ class SharedFormulaTests(unittest.TestCase):
         self.assertIn('formula="Sheet2!A1+Sheet2!B1"', semantic)
         self.assertIn('formula="Sheet2!A1+Sheet2!B1"', structural)
 
+    def test_function_names_scientific_notation_and_strings_not_offset(self) -> None:
+        """Only real cell references are offset: LOG10 stays a function name,
+        1E5 stays a number, and text inside string literals is untouched."""
+        data = _make_xlsx(
+            {
+                "[Content_Types].xml": (
+                    f'<Types xmlns="{NS_CT}">'
+                    '<Default Extension="xml" ContentType="application/xml"/>'
+                    '<Default Extension="rels" ContentType='
+                    '"application/vnd.openxmlformats-package.relationships+xml"/>'
+                    '<Override PartName="/xl/workbook.xml" '
+                    'ContentType="application/vnd.openxmlformats-officedocument.'
+                    'spreadsheetml.sheet.main+xml"/>'
+                    "</Types>"
+                ),
+                "_rels/.rels": (
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    f'<Relationship Id="r1" Type="{NS_O}/officeDocument" Target="xl/workbook.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/workbook.xml": (
+                    f'<workbook xmlns="{NS_S}" '
+                    'xmlns:r="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    "<sheets>"
+                    '<sheet name="Data" sheetId="1" r:id="rSheet1"/>'
+                    "</sheets>"
+                    "</workbook>"
+                ),
+                "xl/_rels/workbook.xml.rels": (
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    f'<Relationship Id="rSheet1" Type="{NS_O}/worksheet" '
+                    'Target="worksheets/sheet1.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/worksheets/sheet1.xml": (
+                    f'<worksheet xmlns="{NS_S}"><sheetData>'
+                    '<row r="2">'
+                    '<c r="B2"><f t="shared" ref="B2:B3" si="0">LOG10(A1)</f><v>1</v></c>'
+                    '<c r="C2"><f t="shared" ref="C2:C3" si="1">1E5*A1</f><v>2</v></c>'
+                    '<c r="D2"><f t="shared" ref="D2:D3" si="2">"see A1"&amp;A1</f><v>3</v></c>'
+                    "</row>"
+                    '<row r="3">'
+                    '<c r="B3"><f t="shared" si="0"/><v>4</v></c>'
+                    '<c r="C3"><f t="shared" si="1"/><v>5</v></c>'
+                    '<c r="D3"><f t="shared" si="2"/><v>6</v></c>'
+                    "</row>"
+                    "</sheetData></worksheet>"
+                ),
+            },
+        )
+        semantic = parse_xlsx(data, density="semantic")
+        # Function name intact, only A1 offsets to A2.
+        self.assertIn('formula="LOG10(A2)"', semantic)
+        # Scientific notation intact.
+        self.assertIn('formula="1E5*A2"', semantic)
+        # String literal text intact; only the real reference offsets.
+        self.assertIn('formula="&quot;see A1&quot;&amp;A2"', semantic)
+
 
 class ArrayFormulaTests(unittest.TestCase):
     """Array and data table formula type marking."""
@@ -225,6 +283,7 @@ class ArrayFormulaTests(unittest.TestCase):
                     '<c r="A1">'
                     '<f t="array" ref="A1:C3">TRANSPOSE(D1:F3)</f><v>1</v>'
                     "</c>"
+                    '<c r="B1"><v>2</v></c><c r="C1"><v>3</v></c>'
                     "</row>"
                     "</sheetData></worksheet>"
                 ),
@@ -236,6 +295,10 @@ class ArrayFormulaTests(unittest.TestCase):
         self.assertIn("formulaRange=A1:C3", semantic)
         self.assertIn("formulaType=array", structural)
         self.assertIn("formulaRange=A1:C3", structural)
+        # Classic CSE arrays do not spill: no spillRange/spillFrom markers.
+        self.assertNotIn("spillRange", semantic)
+        self.assertNotIn("spillFrom", semantic)
+        self.assertNotIn("spillRange", structural)
 
     def test_dynamic_array_spill(self) -> None:
         """Dynamic array: anchor cell marks spillRange, cached recipients get spillFrom."""
@@ -275,7 +338,7 @@ class ArrayFormulaTests(unittest.TestCase):
                     # Anchor: B1 contains the dynamic array formula SORT
                     '<row r="1">'
                     '<c r="B1">'
-                    '<f t="array" ref="B1:B3">_xlfn.SORT(A1:A3)</f><v>Alice</v>'
+                    '<f t="array" ref="B1:B3" aca="1">_xlfn.SORT(A1:A3)</f><v>Alice</v>'
                     "</c>"
                     "</row>"
                     # Spill recipients: B2, B3 have cached values but no formula

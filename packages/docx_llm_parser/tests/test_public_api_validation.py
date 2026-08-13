@@ -8,7 +8,6 @@ from tempfile import TemporaryDirectory
 
 from _fixtures import write_rich_docx
 from docx_llm_parser import Density, ResourceType, get_resource, parse_docx
-from docx_llm_parser.concurrency import parse_many
 from docx_llm_parser.core.enums import RevisionMode
 from docx_llm_parser.core.models import ParseOptions
 
@@ -44,12 +43,6 @@ class PublicApiValidationTests(unittest.TestCase):
     def test_parse_options_reject_non_positive_limits(self) -> None:
         with self.assertRaisesRegex(ValueError, "must be greater than zero"):
             ParseOptions(max_zip_entries=0)
-
-    def test_parse_many_validates_before_starting_workers(self) -> None:
-        with self.assertRaisesRegex(ValueError, "max_workers"):
-            parse_many([], "out", max_workers=0)
-        with self.assertRaisesRegex(ValueError, "revision_mode"):
-            parse_many([], "out", revision_mode="typo")
 
     def test_get_resource_rejects_plural_type(self) -> None:
 

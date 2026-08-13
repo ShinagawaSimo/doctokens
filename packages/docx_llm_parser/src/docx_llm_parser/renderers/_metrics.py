@@ -1,7 +1,7 @@
-"""Metrics recording logic shared by the renderers.
+"""Metrics recording logic for the HTML5 renderers.
 
-Both renderers (XML/HTML5) need to record per-stage timing and output size;
-this module provides a unified implementation to avoid duplication."""
+Per-stage timing and output size are recorded here to avoid duplication
+across rendering paths."""
 
 from __future__ import annotations
 

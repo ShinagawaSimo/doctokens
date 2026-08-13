@@ -72,6 +72,24 @@ class NumberingStateTests(unittest.TestCase):
         self.assertEqual(label["text"], "2.1.\t")
         self.assertEqual(warnings, [])
 
+    def test_chinese_counting_large_values(self) -> None:
+        self.assertEqual(NumberingState._chinese_counting(1010), "一千零一十")
+        self.assertEqual(NumberingState._chinese_counting(10000), "一万")
+        self.assertEqual(NumberingState._chinese_counting(10050), "一万零五十")
+
+    def test_numbering_value_beyond_chinese_range_falls_back(self) -> None:
+        warnings: list[ParseWarning] = []
+        numbering = NumberingMap(
+            {"abstract": {0: NumberingLevel(0, level_text="%1.", number_format="chineseCounting", start=100_000_000)}},
+            {"9": NumberingInstance("9", "abstract")},
+            warnings,
+        )
+        state = NumberingState(numbering, warnings)
+        label = state.advance("9", 0)
+        assert label is not None
+        self.assertEqual(label["text"], "100000000.\t")
+        self.assertEqual([warning.code for warning in warnings], ["NUMBERING_VALUE_OUT_OF_RANGE"])
+
 
 class ReadOnlyIndexContractTests(unittest.TestCase):
     def test_relationship_style_and_numbering_indexes_are_read_only(self) -> None:

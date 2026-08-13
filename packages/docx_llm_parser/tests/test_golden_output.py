@@ -26,7 +26,7 @@ class GoldenOutputTests(unittest.TestCase):
 
     def test_structural_output_matches_golden(self) -> None:
         html = _render_density(Density.STRUCTURAL)
-        golden_path = GOLDEN_DIR / "l1.html"
+        golden_path = GOLDEN_DIR / "structural.html"
         if os.environ.get("UPDATE_GOLDEN"):
             _write_golden(golden_path, html)
         expected = _read_golden(golden_path)
@@ -34,7 +34,7 @@ class GoldenOutputTests(unittest.TestCase):
 
     def test_plain_output_matches_golden(self) -> None:
         text = _render_density(Density.PLAIN)
-        golden_path = GOLDEN_DIR / "l0.txt"
+        golden_path = GOLDEN_DIR / "plain.txt"
         if os.environ.get("UPDATE_GOLDEN"):
             _write_golden(golden_path, text)
         expected = _read_golden(golden_path)

@@ -12,7 +12,6 @@ from ..core.constants import (
     first_child,
     local_name,
 )
-from ..core.locator import part_block_locator as locator
 from ..core.models import (
     AssetLookup,
     Block,
@@ -25,6 +24,7 @@ from ..core.models import (
     TableCell,
     TableRow,
     TextBlock,
+    append_warning,
 )
 from ..core.package import PackageReader
 from ..core.relationships import RelationshipIndex
@@ -119,6 +119,26 @@ class DocumentBodyParser:
                     self._collect_section_refs(elem)
                     self._pending_page_breaks += 1
                     elem.clear()
+                elif direct_body_child and lname == "sdt":
+                    # Content controls wrap content (e.g. whole documents from
+                    # template tools); parse their w:sdtContent children.
+                    self._parse_sdt(elem, blocks)
+                    elem.clear()
+                elif direct_body_child and lname not in {
+                    "bookmarkStart",
+                    "bookmarkEnd",
+                    "proofErr",
+                    "permStart",
+                    "permEnd",
+                }:
+                    # Content-bearing wrappers we do not support must not be
+                    # dropped silently.
+                    self._warn(
+                        "UNSUPPORTED_BODY_CHILD",
+                        f"Unsupported body-level element: {lname}",
+                        part="word/document.xml",
+                    )
+                    elem.clear()
 
                 if lname == "body":
                     body_depth = None
@@ -126,6 +146,22 @@ class DocumentBodyParser:
         for parsed_block in blocks:
             self._add_body_event(parsed_block)
         return blocks
+
+    def _parse_sdt(self, sdt: ET.Element, blocks: list[Block]) -> None:
+        """Parse paragraphs/tables wrapped in a content control (w:sdt)."""
+        content = first_child(sdt, "w", "sdtContent")
+        if content is None:
+            return
+        for child in content:
+            child_tag = child.tag
+            if child_tag == _TAG_W_PARAGRAPH:
+                block = self.parse_paragraph(child, "word/document.xml")
+                if block is not None:
+                    blocks.append(block)
+            elif child_tag == _TAG_W_TABLE:
+                blocks.extend(self.parse_table(child, "word/document.xml"))
+            elif local_name(child_tag) == "sdt":
+                self._parse_sdt(child, blocks)
 
     def parse_paragraph(self, paragraph: ET.Element, part: str) -> TextBlock | None:
         """Parse a paragraph; emit a heading only when the style outline level is explicit."""
@@ -135,11 +171,17 @@ class DocumentBodyParser:
         page_start = self._flush_pending_page_breaks()
 
         style_id = self._paragraph_style_id(paragraph)
+        paragraph_properties = first_child(paragraph, "w", "pPr")
+        section_break = first_child(paragraph_properties, "w", "sectPr")
+        if section_break is not None:
+            # A sectPr in pPr ends the section after this paragraph; Word
+            # renders the next content on a new page.
+            self._collect_section_refs(section_break)
         runs, raw_hints = self.inline.paragraph_runs(paragraph, part, block_id, style_id)
         numbering = self._paragraph_numbering(paragraph, style_id, part, block_id)
         if numbering is not None:
             # Auto-numbering is visible Word text; insert it into the text stream as a synthetic run.
-            runs.insert(0, {"text": numbering["text"], "kind": "numberingLabel"})
+            runs.insert(0, {"text": numbering["text"]})
             raw_hints.append({"type": "numbering", **numbering})
 
         # Collect text and detect inline objects in a single pass to avoid double iteration on the hot path.
@@ -156,6 +198,9 @@ class DocumentBodyParser:
             # lrpb/manual page breaks inside a paragraph have no visual effect in Word
             # rendering, so drop them without advancing the page number.
             self._pending_page_breaks = 0
+            if section_break is not None:
+                # Even an empty paragraph's sectPr still starts a new page in Word.
+                self._pending_page_breaks = 1
             return None
 
         # lrpb/manual page breaks inside the paragraph advance this paragraph's starting page number.
@@ -193,6 +238,10 @@ class DocumentBodyParser:
             block["runs"] = runs
         if self.options.include_raw_hints and raw_hints:
             block["rawHints"] = raw_hints
+        if section_break is not None:
+            # The section break follows this paragraph; the next block starts
+            # on a new page.
+            self._pending_page_breaks += 1
         return block
 
     def parse_table(self, table: ET.Element, part: str) -> list[TableBlock]:
@@ -208,6 +257,7 @@ class DocumentBodyParser:
 
         sub_tables: list[TableBlock] = []
         segment_rows: list[TableRow] = []
+        merge_state: dict[int, TableCell] = {}
         widest_column_count = 0
         # Record the page number before processing this row, to tell whether the row triggered a page break.
         page_before_row = self._page_hint
@@ -219,6 +269,7 @@ class DocumentBodyParser:
             # Did _page_hint change after processing this row? Multiple lrpb in one row count as a single page break.
             if self._page_hint != page_before_row:
                 if segment_rows:
+                    self._apply_vertical_merges(segment_rows, merge_state)
                     sub_tables.append(
                         self._make_table_block(
                             part,
@@ -240,7 +291,7 @@ class DocumentBodyParser:
 
         # Commit the final batch of rows.
         if segment_rows:
-            self._apply_vertical_merges(segment_rows)
+            self._apply_vertical_merges(segment_rows, merge_state)
             sub_tables.append(
                 self._make_table_block(
                     part,
@@ -327,9 +378,14 @@ class DocumentBodyParser:
                 blocks.extend(self.parse_table(child, part))
         return blocks
 
-    def _apply_vertical_merges(self, rows: list[TableRow]) -> None:
-        """Add rowSpan to merge origins based on vMerge."""
-        active: dict[int, TableCell] = {}
+    def _apply_vertical_merges(self, rows: list[TableRow], active: dict[int, TableCell] | None = None) -> None:
+        """Add rowSpan to merge origins based on vMerge.
+
+        *active* carries merge origins across page-separated table segments,
+        so a restart in one segment keeps accumulating rowSpan in the next.
+        """
+        if active is None:
+            active = {}
         for row in rows:
             for cell in row["cells"]:
                 columns = range(cell["colIndex"], cell["colIndex"] + cell["colSpan"])
@@ -495,10 +551,4 @@ class DocumentBodyParser:
         block_id: str | None = None,
     ) -> None:
         """Append a parse warning."""
-        self.warnings.append(
-            ParseWarning(
-                code=code,
-                message=message,
-                locator=locator(part, block_id),
-            )
-        )
+        append_warning(self.warnings, code, message, part=part, block_id=block_id)

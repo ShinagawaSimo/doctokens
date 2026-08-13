@@ -52,7 +52,7 @@ XLSX 默认密度为 structural。输出首行标记密度（如 `density=struct
 
 ### 大表格截断
 
-超出预算（500 格 / 50 行 / 30 列）时不输出行数据，仅标记 `truncated`，由模型通过 `render_range` 按需读取：
+超出预算（500 格）时停止输出剩余行，`<grid>` 标记 `truncated`，由模型通过 `render_range` 按需读取：
 
 ```
 <grid ref=A1:Z1000 truncated>
@@ -233,7 +233,7 @@ definedName 中检测到的 `[Budget.xlsx]` 外部引用输出为 `<externalLink
 <pivotTable id=pivot1/>
 ```
 
-图片字节延迟读取，图表详情通过 `get_resource()` 按需获取。
+图片字节延迟读取，图表详情通过 `get_resource()` 按需获取。图表标签恒带 `truncated`——其语义是"这是摘要视图"，完整数据点通过 `get_resource(source, "chart", id)` 获取（与 DOCX 的 `<chart ... truncated>` 约定一致）。
 
 ## 专项工具
 

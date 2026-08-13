@@ -75,14 +75,15 @@ def apply_merge_cells(root: ET.Element, cell_map: dict[tuple[int, int], Cell]) -
 def apply_spill_ranges(rows: list[list[Cell]], cell_map: dict[tuple[int, int], Cell]) -> None:
     """Detect dynamic-array spill ranges and mark source/recipient relationships.
 
-    An array formula with a ``ref`` range larger than its own cell is a spill
-    source.  Cells inside that range that carry no independent formula are
+    Only true dynamic-array formulas (``<f aca="1">``) are spill sources.
+    Classic CSE array formulas share the ``t="array"``/``ref`` shape but do
+    not spill.  Cells inside the range that carry no independent formula are
     marked as spill recipients pointing back to the source via ``spillFrom``.
     """
     for row_cells in rows:
         for cell in row_cells:
             formula_range = cell.get("formulaRange")
-            if not formula_range:
+            if not formula_range or not cell.get("dynamicArray"):
                 continue
             if ":" not in formula_range:
                 continue
@@ -232,7 +233,10 @@ def parse_tables(
         ref = root.get("ref", "")
         table_id = f"table-{start_index + len(tables)}"
         columns: list[str] = []
-        totals_row = root.get("totalsRowCount", "0") == "1"
+        try:
+            totals_row = int(root.get("totalsRowCount", "0")) >= 1
+        except ValueError:
+            totals_row = False
         table_cols = root.find(f"{{{NS_S}}}tableColumns")
         if table_cols is not None:
             for table_column in table_cols.findall(f"{{{NS_S}}}tableColumn"):

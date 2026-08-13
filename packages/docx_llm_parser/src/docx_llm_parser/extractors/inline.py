@@ -31,7 +31,6 @@ from ..core.constants import (
     first_child,
     local_name,
 )
-from ..core.locator import part_block_locator as locator
 from ..core.models import (
     AssetLookup,
     InlineObject,
@@ -41,6 +40,7 @@ from ..core.models import (
     ParseWarning,
     RawHint,
     Run,
+    append_warning,
 )
 from ..core.relationships import RelationshipIndex
 from ..ooxml.formatting import merge_run_formats, parse_run_format, visible_run_format
@@ -310,8 +310,6 @@ class InlineParser:
         """Dispatch one run child into text, inline objects or warnings."""
         child_tag = child.tag
         if child_tag == _TAG_W_TEXT:
-            if attr(child, "xml", "space") == "preserve":
-                parsed_run["preserveSpace"] = True
             text_parts.append(child.text or "")
         elif child_tag == _TAG_W_TAB:
             text_parts.append("\t")
@@ -384,8 +382,16 @@ class InlineParser:
         anchor = attr(node, "w", "anchor")
         info: LinkInfo = {}
         if rel_id:
-            rel = self.relationships.require(part, rel_id)
-            info["href"] = rel.resolved_target or rel.target
+            rel = self.relationships.get(part, rel_id)
+            if rel is None:
+                # A dangling r:id must not abort the whole parse; keep the display text.
+                self._warn(
+                    "HYPERLINK_TARGET_MISSING",
+                    f"Hyperlink r:id={rel_id!r} has no matching relationship; keeping display text only.",
+                    part=part,
+                )
+            else:
+                info["href"] = rel.resolved_target or rel.target
         if anchor:
             info["anchor"] = anchor
         return info
@@ -403,10 +409,4 @@ class InlineParser:
         block_id: str | None = None,
     ) -> None:
         """Append a parse warning."""
-        self.warnings.append(
-            ParseWarning(
-                code=code,
-                message=message,
-                locator=locator(part, block_id),
-            )
-        )
+        append_warning(self.warnings, code, message, part=part, block_id=block_id)

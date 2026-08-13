@@ -74,6 +74,41 @@ _DATE_TOKENS_RE = re.compile(
 # Percentage marker.
 _PCT_RE = re.compile(r"%")
 
+# Elapsed-time bracket sections that legitimately indicate a date/time format.
+_ELAPSED_TIME_SECTIONS = {"[h]", "[m]", "[s]"}
+
+
+def _date_scan_text(fmt_code: str) -> str:
+    """Blank quoted literals and non-elapsed bracket sections from a format code.
+
+    Date detection must ignore literal text like ``0 "pcs"`` or ``[DBNum1]``;
+    only real date/time tokens (and the elapsed-time brackets ``[h]``/``[m]``/
+    ``[s]``) should influence the date verdict.
+    """
+    out: list[str] = []
+    i = 0
+    n = len(fmt_code)
+    while i < n:
+        ch = fmt_code[i]
+        if ch == '"':
+            end = fmt_code.find('"', i + 1)
+            if end == -1:
+                end = n - 1
+            out.append(" " * (end - i + 1))
+            i = end + 1
+        elif ch == "[":
+            end = fmt_code.find("]", i)
+            if end == -1:
+                end = n - 1
+            section = fmt_code[i : end + 1]
+            out.append(section if section in _ELAPSED_TIME_SECTIONS else " " * len(section))
+            i = end + 1
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
+
+
 # ── Public API ──
 
 
@@ -186,7 +221,7 @@ class FormatIndex:
 
     def _resolve(self, num_fmt_id: int, fmt_code: str) -> tuple[bool, bool]:
         if num_fmt_id not in self._fmt_cache:
-            is_date = num_fmt_id in _BUILTIN_DATE_IDS or bool(_DATE_TOKENS_RE.search(fmt_code))
+            is_date = num_fmt_id in _BUILTIN_DATE_IDS or bool(_DATE_TOKENS_RE.search(_date_scan_text(fmt_code)))
             is_pct = num_fmt_id in _BUILTIN_PCT_IDS or bool(_PCT_RE.search(fmt_code))
             self._fmt_cache[num_fmt_id] = (is_date, is_pct)
         return self._fmt_cache[num_fmt_id]

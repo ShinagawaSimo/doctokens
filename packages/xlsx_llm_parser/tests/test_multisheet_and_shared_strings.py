@@ -347,5 +347,42 @@ class SharedStringsTests(unittest.TestCase):
         self.assertIn("2024-01-15", html)
 
 
+class MissingReferenceTests(unittest.TestCase):
+    """Cells without an r attribute inherit the previous cell's position."""
+
+    def test_cell_without_ref_inherits_position(self) -> None:
+        data = _make_xlsx(
+            {
+                "[Content_Types].xml": (
+                    f'<Types xmlns="{NS_CT}">'
+                    '<Default Extension="xml" ContentType="application/xml"/>'
+                    '<Default Extension="rels" ContentType='
+                    '"application/vnd.openxmlformats-package.relationships+xml"/>'
+                    '<Override PartName="/xl/workbook.xml" '
+                    'ContentType="application/vnd.openxmlformats-officedocument.'
+                    'spreadsheetml.sheet.main+xml"/>'
+                    "</Types>"
+                ),
+                "_rels/.rels": (
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    f'<Relationship Id="r1" Type="{NS_O}/officeDocument" Target="xl/workbook.xml"/>'
+                    "</Relationships>"
+                ),
+                "xl/workbook.xml": _wb_xml([("Data", 1)]),
+                "xl/_rels/workbook.xml.rels": _wb_rels(1),
+                "xl/worksheets/sheet1.xml": _sheet_xml(
+                    [
+                        '<row r="1">'
+                        '<c r="A1" t="inlineStr"><is><t>first</t></is></c>'
+                        '<c t="inlineStr"><is><t>second</t></is></c>'
+                        "</row>"
+                    ]
+                ),
+            },
+        )
+        html = parse_xlsx(data)
+        self.assertIn("<tr row=1><td>first<td>second", html)
+
+
 if __name__ == "__main__":
     unittest.main()

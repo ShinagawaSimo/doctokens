@@ -18,13 +18,17 @@ _CELL_REF_RE = re.compile(r"(?P<col_abs>\$)?(?P<col>[A-Z]{1,3})(?P<row_abs>\$)?(
 
 # Full single-cell or range reference captured greedily inside a formula.
 # Matches optional sheet prefix, then two cell refs optionally separated by ":".
+# The lookbehind rejects identifiers (so "1E5" does not match "E5" as a cell)
+# and the lookahead rejects function names (so "LOG10(" is left untouched —
+# "[0-9]*\(" also blocks backtracking into "LOG1" of "LOG10(").
 _A1_REF_RE = re.compile(
-    r"(?<![A-Za-z])"
+    r"(?<![A-Za-z0-9])"
     r"(?:(?P<sheet>[A-Za-z0-9_ ]+)!)?"
     r"(?P<start_col_abs>\$)?(?P<start_col>[A-Z]{1,3})(?P<start_row_abs>\$)?(?P<start_row>[0-9]+)"
     r"(?::"
     r"(?P<end_col_abs>\$)?(?P<end_col>[A-Z]{1,3})(?P<end_row_abs>\$)?(?P<end_row>[0-9]+)"
     r")?"
+    r"(?![0-9]*\()"
 )
 
 
@@ -85,10 +89,42 @@ def _col_row(ref: str) -> tuple[int, int]:
     return _col_from_str(m.group("col")), int(m.group("row"))
 
 
+def _quoted_spans(formula: str) -> list[tuple[int, int]]:
+    """Return (start, end) spans of double-quoted string literals."""
+    spans: list[tuple[int, int]] = []
+    i = 0
+    n = len(formula)
+    while i < n:
+        if formula[i] != '"':
+            i += 1
+            continue
+        start = i
+        i += 1
+        while i < n:
+            if formula[i] == '"':
+                if i + 1 < n and formula[i + 1] == '"':
+                    i += 2  # escaped quote
+                    continue
+                i += 1
+                break
+            i += 1
+        spans.append((start, i))
+    return spans
+
+
 def _offset_formula(formula: str, dc: int, dr: int) -> str:
-    """Apply row/column offset to every A1-style reference in *formula*."""
+    """Apply row/column offset to every A1-style reference in *formula*.
+
+    References inside string literals are left untouched; they are text,
+    not cell references.
+    """
     if dc == 0 and dr == 0:
         return formula
+
+    quoted = _quoted_spans(formula)
+
+    def in_literal(position: int) -> bool:
+        return any(start <= position < end for start, end in quoted)
 
     refs = [
         _Ref(
@@ -97,6 +133,7 @@ def _offset_formula(formula: str, dc: int, dr: int) -> str:
             raw=match.group(0),
         )
         for match in _A1_REF_RE.finditer(formula)
+        if not in_literal(match.start())
     ]
 
     if not refs:

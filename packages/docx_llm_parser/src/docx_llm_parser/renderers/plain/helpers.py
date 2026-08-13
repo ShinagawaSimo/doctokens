@@ -25,16 +25,16 @@ def block_text_only(
 
     text = inline_text_only(block, ocr_results)
 
-    for footnote_id in collect_footnote_refs(block):
+    for footnote_id in collect_refs(block, "footnoteRef"):
         footnote_text = footnote_map.get(footnote_id, "")
         if footnote_text:
             text += f" [fn{footnote_id}: {footnote_text}]"
 
-    for endnote_id in collect_endnote_refs(block):
+    for endnote_id in collect_refs(block, "endnoteRef"):
         if endnote_id not in endnote_order:
             endnote_order.append(endnote_id)
 
-    for comment_id in collect_comment_refs(block):
+    for comment_id in collect_refs(block, "commentRef"):
         if comment_id not in comment_order:
             comment_order.append(comment_id)
 
@@ -60,22 +60,22 @@ def inline_text_only(
             parts.append(text)
 
         if "objects" in run:
-            parts.extend(l0_object_placeholder(inline_object, ocr_results) for inline_object in run["objects"])
+            parts.extend(plain_object_placeholder(inline_object, ocr_results) for inline_object in run["objects"])
     return "".join(parts)
 
 
-def l0_object_placeholder(
+def plain_object_placeholder(
     inline_object: InlineObject,
     ocr_results: dict[str, str] | None = None,
 ) -> str:
     """Return the plain-text representation of one inline object."""
     object_type = inline_object["type"]
     if object_type in ("image", "drawing"):
-        return l0_image_placeholder(inline_object, ocr_results)
+        return plain_image_placeholder(inline_object, ocr_results)
     if object_type == "chart":
-        return l0_chart_placeholder(inline_object)
+        return plain_chart_placeholder(inline_object)
     if object_type == "smartart":
-        return l0_smartart_placeholder(inline_object)
+        return plain_smartart_placeholder(inline_object)
     if object_type == "footnoteRef":
         return f"[fn{inline_object.get('id') or ''}]"
     if object_type == "endnoteRef":
@@ -93,7 +93,7 @@ def l0_object_placeholder(
     return ""
 
 
-def l0_image_placeholder(
+def plain_image_placeholder(
     inline_object: InlineObject,
     ocr_results: dict[str, str] | None = None,
 ) -> str:
@@ -115,7 +115,7 @@ def l0_image_placeholder(
     return f"[Image {'; '.join(parts)}]"
 
 
-def l0_chart_placeholder(inline_object: InlineObject) -> str:
+def plain_chart_placeholder(inline_object: InlineObject) -> str:
     """Render a compact plain-text chart summary."""
     chart_type = _string_field(inline_object.get("chartType"), "?")
     title = _string_field(inline_object.get("title"))
@@ -127,7 +127,7 @@ def l0_chart_placeholder(inline_object: InlineObject) -> str:
     return f"[Chart{title_part} ({chart_type}, {len(series)} series{names_part})]"
 
 
-def l0_smartart_placeholder(inline_object: InlineObject) -> str:
+def plain_smartart_placeholder(inline_object: InlineObject) -> str:
     """Render a compact plain-text SmartArt summary."""
     smartart_type = _string_field(inline_object.get("layoutType"))
     nodes = inline_object.get("nodes") or []
@@ -137,8 +137,8 @@ def l0_smartart_placeholder(inline_object: InlineObject) -> str:
     return f"[SmartArt {type_part}: {node_text} ({node_count} nodes)]"
 
 
-def collect_footnote_refs(block: InlineContainer) -> list[str]:
-    """Collect footnote reference IDs from inline object runs."""
+def collect_refs(block: InlineContainer, ref_type: str) -> list[str]:
+    """Collect inline reference IDs of one type (footnoteRef/endnoteRef/commentRef)."""
     reference_ids: list[str] = []
     if "runs" not in block:
         return reference_ids
@@ -147,37 +147,7 @@ def collect_footnote_refs(block: InlineContainer) -> list[str]:
             continue
         for inline_object in run["objects"]:
             ref_id = inline_object.get("id")
-            if inline_object["type"] == "footnoteRef" and ref_id is not None:
-                reference_ids.append(ref_id)
-    return reference_ids
-
-
-def collect_endnote_refs(block: InlineContainer) -> list[str]:
-    """Collect endnote reference IDs from inline object runs."""
-    reference_ids: list[str] = []
-    if "runs" not in block:
-        return reference_ids
-    for run in block["runs"]:
-        if "objects" not in run:
-            continue
-        for inline_object in run["objects"]:
-            ref_id = inline_object.get("id")
-            if inline_object["type"] == "endnoteRef" and ref_id is not None:
-                reference_ids.append(ref_id)
-    return reference_ids
-
-
-def collect_comment_refs(block: InlineContainer) -> list[str]:
-    """Collect comment reference IDs from inline object runs."""
-    reference_ids: list[str] = []
-    if "runs" not in block:
-        return reference_ids
-    for run in block["runs"]:
-        if "objects" not in run:
-            continue
-        for inline_object in run["objects"]:
-            ref_id = inline_object.get("id")
-            if inline_object["type"] == "commentRef" and ref_id is not None:
+            if inline_object["type"] == ref_type and ref_id is not None:
                 reference_ids.append(ref_id)
     return reference_ids
 

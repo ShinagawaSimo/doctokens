@@ -12,7 +12,7 @@ from time import perf_counter
 from ..core.enums import Density
 from ..core.models import DocumentManifest, ParsedDocument
 from ._metrics import record_render_metrics, write_metrics_debug
-from ._render import iter_l0, iter_l1, iter_l2
+from ._render import iter_plain, iter_semantic, iter_structural
 from .resources import render_resource, table_groups
 
 __all__ = [
@@ -34,8 +34,8 @@ def write_outputs(
     resolved_density = Density.parse(density)
     output_dir.mkdir(parents=True, exist_ok=True)
     density_files = {
-        Density.PLAIN: "l0.txt",
-        Density.STRUCTURAL: "l1.html",
+        Density.PLAIN: "plain.txt",
+        Density.STRUCTURAL: "structural.html",
         Density.SEMANTIC: "parsed.html",
     }
     fname = density_files[resolved_density]
@@ -78,11 +78,11 @@ def iter_html5(parsed: ParsedDocument, density: Density | str = Density.SEMANTIC
     """Yield markup chunks for streaming output."""
     resolved_density = Density.parse(density)
     if resolved_density is Density.PLAIN:
-        yield from iter_l0(parsed)
+        yield from iter_plain(parsed)
     elif resolved_density is Density.STRUCTURAL:
-        yield from iter_l1(parsed)
+        yield from iter_structural(parsed)
     else:
-        yield from iter_l2(parsed)
+        yield from iter_semantic(parsed)
 
 
 def window(
@@ -108,9 +108,16 @@ def window(
         start_page = min(page, total_pages)
 
     end_page = min(start_page + span - 1, total_pages)
-    start_block = page_index.get(start_page, (0,))[0] if start_page in page_index else 0
-    end_block = page_index.get(end_page, (len(parsed.blocks) - 1,))
-    end_idx = end_block[1] if len(end_block) > 1 else end_block[0]
+    if page != -1 and start_page not in page_index:
+        # Hole pages (multiple consecutive breaks) contain no blocks; return
+        # an empty window instead of silently falling back to the whole document.
+        empty_parsed = dataclasses.replace(parsed, blocks=[], headers=[], footers=[], comments=[])
+        return "".join(iter_html5(empty_parsed, resolved_density))
+
+    start_block = page_index[start_page][0]
+    # When the span extends over hole pages, stop at the last block of the
+    # start page instead of leaking later pages into the window.
+    end_idx = page_index[end_page][1] if end_page in page_index else page_index[start_page][1]
 
     window_blocks = parsed.blocks[start_block : end_idx + 1]
     window_parsed = dataclasses.replace(

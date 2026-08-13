@@ -138,20 +138,54 @@ class QueryEngineTests(unittest.TestCase):
         self.assertIn("<td>20.0", result)
         self.assertIn("<td>2", result)
 
-    def test_empty_and_invalid_sources(self) -> None:
-        self.assertEqual(
-            query_data(
-                cast(Any, _workbook()),
-                table_id="sales",
-                where=[{"column": "Rep", "op": "unsupported", "value": "Alice"}],
-            ),
-            "<table>\n",
-        )
+    def test_invalid_sources_raise(self) -> None:
         wb = cast(Any, _workbook())
         with self.assertRaises(ValueError):
             query_data(wb, table_id="missing")
         with self.assertRaises(ValueError):
             query_data(wb)
+
+    def test_unsupported_where_operator_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            query_data(
+                cast(Any, _workbook()),
+                table_id="sales",
+                where=[{"column": "Rep", "op": "unsupported", "value": "Alice"}],
+            )
+
+    def test_unknown_column_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            query_data(
+                cast(Any, _workbook()),
+                table_id="sales",
+                where=[{"column": "Nope", "op": "eq", "value": "Alice"}],
+            )
+
+    def test_numeric_order_by_sorts_by_value(self) -> None:
+        workbook = {
+            "sheets": [
+                {
+                    "name": "Data",
+                    "rows": [
+                        [{"ref": "A1", "row": 1, "col": 1, "text": "Amount"}],
+                        [{"ref": "A2", "row": 2, "col": 1, "text": "100"}],
+                        [{"ref": "A3", "row": 3, "col": 1, "text": "9"}],
+                        [{"ref": "A4", "row": 4, "col": 1, "text": "10"}],
+                    ],
+                    "tables": [],
+                }
+            ],
+            "metadata": {"source": "memory"},
+            "fmt_index": object(),
+        }
+        result = query_data(
+            cast(Any, workbook),
+            sheet="Data",
+            range_spec="A1:A4",
+            header_row=1,
+            order_by=[{"column": "Amount"}],
+        )
+        self.assertIn("<td>9<tr><td>10<tr><td>100", result)
 
 
 if __name__ == "__main__":

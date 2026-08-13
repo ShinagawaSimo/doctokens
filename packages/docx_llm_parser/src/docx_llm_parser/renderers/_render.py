@@ -8,12 +8,12 @@ from html import escape
 from ..core.models import AncillaryItem, ParsedDocument
 from ._blocks import render_block
 from .inline import inline_content
-from .l0 import block_text_only, inline_text_only
+from .plain import block_text_only, inline_text_only
 
 # ── semantic rendering ──
 
 
-def iter_l2(parsed: ParsedDocument) -> Iterator[str]:
+def iter_semantic(parsed: ParsedDocument) -> Iterator[str]:
     """semantic — full semantic HTML5. Each paragraph gets its own <p> tag."""
     yield "density=semantic\n"
     ocr_results = getattr(parsed, "ocr_results", None) or {}
@@ -29,7 +29,7 @@ def iter_l2(parsed: ParsedDocument) -> Iterator[str]:
 # ── structural rendering ──
 
 
-def iter_l1(parsed: ParsedDocument) -> Iterator[str]:
+def iter_structural(parsed: ParsedDocument) -> Iterator[str]:
     """structural — block-level structure + semantic objects, with inline formats stripped."""
     yield "density=structural\n"
     ocr_results = getattr(parsed, "ocr_results", None) or {}
@@ -45,7 +45,7 @@ def iter_l1(parsed: ParsedDocument) -> Iterator[str]:
 # ── plain rendering ──
 
 
-def iter_l0(parsed: ParsedDocument) -> Iterator[str]:
+def iter_plain(parsed: ParsedDocument) -> Iterator[str]:
     """plain — pure text stream. Footnotes are appended to paragraph ends, endnotes to the document end."""
     yield "density=plain\n"
     ocr_results = getattr(parsed, "ocr_results", None) or {}
@@ -78,14 +78,9 @@ def iter_l0(parsed: ParsedDocument) -> Iterator[str]:
 
     yield "\n\n".join(parts)
 
-    for section_name, items in (("Headers", parsed.headers), ("Footers", parsed.footers)):
-        if not items:
-            continue
-        yield f"\n\n[{section_name}]"
-        for item in items:
-            item_text = inline_text_only(item, ocr_results)
-            if item_text:
-                yield f"\n[{item['loc']}: {item_text}]"
+    # Headers/footers repeat per section and are structural chrome: plain
+    # density keeps them out. Comments are retained below — review context
+    # matters to LLM consumers even at the cheapest density.
 
     if endnote_order:
         yield "\n\n[Endnotes]"
@@ -109,14 +104,22 @@ def iter_l0(parsed: ParsedDocument) -> Iterator[str]:
 
 
 def supplemental_to_html5(parsed: ParsedDocument, density: str) -> str:
-    """structural/semantic: output supplemental text beyond the main body."""
+    """Supplemental content beyond the main body.
+
+    Headers/footers are page chrome and appear only in semantic output;
+    footnotes, endnotes, and comments are content and appear in both
+    structural and semantic output.
+    """
     groups: list[tuple[str, str, list[AncillaryItem]]] = [
-        ("headers", "header", parsed.headers),
-        ("footers", "footer", parsed.footers),
         ("footnotes", "footnote", parsed.footnotes),
         ("endnotes", "endnote", parsed.endnotes),
         ("comments", "comment", parsed.comments),
     ]
+    if density == "semantic":
+        groups[0:0] = [
+            ("headers", "header", parsed.headers),
+            ("footers", "footer", parsed.footers),
+        ]
 
     if not any(items for _group_name, _tag, items in groups):
         return ""

@@ -160,9 +160,8 @@ class ChartTests(unittest.TestCase):
         plain = parse_xlsx(data, density="plain")
         structural = parse_xlsx(data, density="structural")
 
-        self.assertIn("<charts count=1>", plain)
-        self.assertIn('<chart names="Sales"/>', plain)
-        self.assertNotIn("<chart id=", plain)
+        self.assertIn("[Chart: Sales]", plain)
+        self.assertNotIn("<chart ", plain)
         self.assertNotIn("series=", plain)
         self.assertNotIn("truncated", plain)
         self.assertIn("<chart id=chart1", structural)

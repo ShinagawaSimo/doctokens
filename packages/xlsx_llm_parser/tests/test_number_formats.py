@@ -182,6 +182,28 @@ class DateDecodingTests(unittest.TestCase):
         html = parse_xlsx(data)
         self.assertIn("2023-01-01", html)
 
+    def test_quoted_literal_not_detected_as_date(self) -> None:
+        """Quoted literal segments ('0 "pcs"') must not trigger date detection."""
+        data = self._make_date_xlsx(
+            cell_xfs=['<xf numFmtId="164" xfId="0"/>'],
+            sheet_rows=['<row r="1"><c r="A1" s="0"><v>44927</v></c></row>'],
+            custom_fmts=['<numFmt numFmtId="164" formatCode=\'0 "pcs"\'/>'],
+        )
+        html = parse_xlsx(data)
+        self.assertIn("44927", html)
+        self.assertNotIn("2023-01-01", html)
+
+    def test_bracket_section_not_detected_as_date(self) -> None:
+        """Non-elapsed bracket sections ('[DBNum1]') must not trigger date detection."""
+        data = self._make_date_xlsx(
+            cell_xfs=['<xf numFmtId="165" xfId="0"/>'],
+            sheet_rows=['<row r="1"><c r="A1" s="0"><v>44927</v></c></row>'],
+            custom_fmts=['<numFmt numFmtId="165" formatCode="[DBNum1]0"/>'],
+        )
+        html = parse_xlsx(data)
+        self.assertIn("44927", html)
+        self.assertNotIn("2023-01-01", html)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -17,10 +17,6 @@ class ParseOptionsOcrTest(unittest.TestCase):
         opts = ParseOptions()
         self.assertEqual(opts.ocr_workers, 4)
 
-    def test_default_confidence_threshold(self) -> None:
-        opts = ParseOptions()
-        self.assertEqual(opts.ocr_confidence_threshold, 0.0)
-
     def test_can_set_ocr_provider(self) -> None:
         from ocr_llm_core import OcrProvider
 
@@ -29,10 +25,9 @@ class ParseOptionsOcrTest(unittest.TestCase):
                 return "test"
 
         p = FakeProvider()
-        opts = ParseOptions(ocr=p, ocr_workers=2, ocr_confidence_threshold=0.5)
+        opts = ParseOptions(ocr=p, ocr_workers=2)
         self.assertIs(opts.ocr, p)
         self.assertEqual(opts.ocr_workers, 2)
-        self.assertEqual(opts.ocr_confidence_threshold, 0.5)
 
 
 class RenderOcrTextTest(unittest.TestCase):

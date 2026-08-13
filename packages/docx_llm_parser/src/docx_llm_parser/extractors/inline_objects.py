@@ -121,8 +121,6 @@ def _append_image_or_placeholder(
     image: InlineObject = {"type": "image"}
     _copy_drawing_common(image, common)
     image["assetId"] = asset["id"]
-    if "file" in asset:
-        image["file"] = asset["file"]
     if "href" in asset:
         image["href"] = asset["href"]
     objects.append(image)

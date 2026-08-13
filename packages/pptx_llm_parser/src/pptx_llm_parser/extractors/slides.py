@@ -12,10 +12,15 @@ from ..core.models import (
     ChartLookup,
     LayoutContext,
     LayoutLookup,
+    Run,
+    RunFormat,
     ShapeBlock,
     SmartArtLookup,
 )
+from ..ooxml.colors import is_default_text_color, resolve_color_element
 from ..ooxml.inheritance import LayoutMasterResolver, shape_geometry
+
+HyperlinkLookup = dict[tuple[str, str], str]
 
 
 class SlideParser:
@@ -30,6 +35,8 @@ class SlideParser:
         layout_lookup: LayoutLookup,
         resolver: LayoutMasterResolver,
         slide_size: tuple[int, int] | None,
+        theme: dict[str, str],
+        hyperlink_lookup: HyperlinkLookup,
     ) -> None:
         self._warnings = warnings
         self._asset_lookup = asset_lookup
@@ -38,6 +45,8 @@ class SlideParser:
         self._layout_lookup = layout_lookup
         self._resolver = resolver
         self._slide_size = slide_size
+        self._theme = theme
+        self._hyperlink_lookup = hyperlink_lookup
 
     def parse_slide(self, root: ET.Element, part: str) -> tuple[bool, list[ShapeBlock]]:
         """Return (hidden, shapes) for one p:sld root."""
@@ -66,10 +75,14 @@ class SlideParser:
             return []
         context = self._resolver.resolve(part, root)
         shapes: list[ShapeBlock] = []
+        z_index = 0
         for child in sp_tree:
             name = local_name(child.tag)
+            if name in {"nvGrpSpPr", "grpSpPr"}:
+                continue
+            z_index += 1
             if name == "sp":
-                shape = self._text_shape(child, part, len(shapes) + 1)
+                shape = self._text_shape(child, part, len(shapes) + 1, context)
             elif name == "pic":
                 shape = self._picture_shape(child, part, len(shapes) + 1)
             elif name == "media":
@@ -88,6 +101,7 @@ class SlideParser:
                 )
                 continue
             if shape is not None:
+                shape["z"] = z_index
                 self._attach_inheritance(shape, child, context)
                 shapes.append(shape)
         # Geometric reading order: top→bottom, left→right; stable sort keeps
@@ -125,16 +139,28 @@ class SlideParser:
             return (2**31, 0)
         return (y, x)
 
-    def _text_shape(self, sp: ET.Element, part: str, ordinal: int) -> ShapeBlock | None:
-        text = self._tx_body_text(first_child(sp, "p", "txBody"), part)
+    def _text_shape(self, sp: ET.Element, part: str, ordinal: int, context: LayoutContext) -> ShapeBlock | None:
+        tx_body = first_child(sp, "p", "txBody")
+        text = tx_body_text(tx_body, part, self._warnings)
         if text is None:
             return None
-        return {
+        shape: ShapeBlock = {
             "id": f"s{ordinal}",
             "type": "text",
             "name": self._shape_name(sp) or "",
             "text": text,
         }
+        runs = shape_runs(
+            tx_body,
+            part,
+            self._warnings,
+            self._theme,
+            context["color_map"],
+            self._hyperlink_lookup,
+        )
+        if runs and any(set(run) != {"text"} for run in runs):
+            shape["runs"] = runs
+        return shape
 
     def _picture_shape(self, pic: ET.Element, part: str, ordinal: int) -> ShapeBlock | None:
         blip = self._find_descendant(pic, "blip")
@@ -336,7 +362,7 @@ class SlideParser:
                 if local_name(cell.tag) != "tc":
                     continue
                 tx_body = first_child(cell, "a", "txBody")
-                row.append(self._tx_body_text(tx_body, part) or "")
+                row.append(tx_body_text(tx_body, part, self._warnings) or "")
             rows.append(row)
         return {
             "id": f"s{ordinal}",
@@ -344,46 +370,6 @@ class SlideParser:
             "name": self._shape_name(frame) or "",
             "rows": rows,
         }
-
-    def _tx_body_text(self, tx_body: ET.Element | None, part: str) -> str | None:
-        if tx_body is None:
-            return None
-        paragraphs: list[str] = []
-        for child in tx_body:
-            # bodyPr/lstStyle are formatting infrastructure: skipped silently.
-            if local_name(child.tag) == "p":
-                text = self._paragraph_text(child, part)
-                if text:
-                    paragraphs.append(text)
-        if not paragraphs:
-            return None
-        return "\n".join(paragraphs)
-
-    def _paragraph_text(self, p: ET.Element, part: str) -> str:
-        parts: list[str] = []
-        for child in p:
-            name = local_name(child.tag)
-            if name == "r":
-                t = first_child(child, "a", "t")
-                if t is not None and t.text:
-                    parts.append(t.text)
-            elif name == "br":
-                parts.append("\n")
-            elif name == "tab":
-                parts.append("\t")
-            elif name == "fld":
-                parts.append(self._paragraph_text(child, part))
-            elif name in {"pPr", "endParaRPr"}:
-                continue
-            else:
-                self._warnings.append(
-                    ParseWarning(
-                        code="UNSUPPORTED_PARAGRAPH_CHILD",
-                        message=f"Unsupported paragraph child: {name}",
-                        locator=part,
-                    )
-                )
-        return "".join(parts)
 
     @staticmethod
     def _shape_name(shape: ET.Element) -> str | None:
@@ -404,3 +390,140 @@ class SlideParser:
             if local_name(descendant.tag) == local:
                 return descendant
         return None
+
+
+def tx_body_text(tx_body: ET.Element | None, part: str, warnings: list[ParseWarning]) -> str | None:
+    """Join a txBody's paragraphs into one text block (paragraphs by \\n)."""
+    if tx_body is None:
+        return None
+    paragraphs: list[str] = []
+    for child in tx_body:
+        # bodyPr/lstStyle are formatting infrastructure: skipped silently.
+        if local_name(child.tag) == "p":
+            text = paragraph_text(child, part, warnings)
+            if text:
+                paragraphs.append(text)
+    if not paragraphs:
+        return None
+    return "\n".join(paragraphs)
+
+
+def paragraph_text(p: ET.Element, part: str, warnings: list[ParseWarning]) -> str:
+    """Flatten a paragraph's runs/breaks/tabs/fields into plain text."""
+    return "".join(run["text"] for run in paragraph_runs(p, part, warnings, {}, {}, {}))
+
+
+def shape_runs(
+    tx_body: ET.Element | None,
+    part: str,
+    warnings: list[ParseWarning],
+    theme: dict[str, str],
+    color_map: dict[str, str],
+    links: HyperlinkLookup,
+) -> list[Run]:
+    """Run-level IR for a txBody: paragraphs joined by synthetic newline runs."""
+    if tx_body is None:
+        return []
+    runs: list[Run] = []
+    for child in tx_body:
+        if local_name(child.tag) != "p":
+            continue
+        paragraph = paragraph_runs(child, part, warnings, theme, color_map, links)
+        if paragraph:
+            if runs:
+                runs.append({"text": "\n"})
+            runs.extend(paragraph)
+    return runs
+
+
+def paragraph_runs(
+    p: ET.Element,
+    part: str,
+    warnings: list[ParseWarning],
+    theme: dict[str, str],
+    color_map: dict[str, str],
+    links: HyperlinkLookup,
+) -> list[Run]:
+    """Per-run extraction with rPr formats, hyperlinks, breaks, tabs, fields."""
+    runs: list[Run] = []
+    pending = ""
+    for child in p:
+        name = local_name(child.tag)
+        if name == "r":
+            if pending:
+                runs.append({"text": pending})
+                pending = ""
+            text = _run_text(child)
+            run: Run = {}
+            if text:
+                run["text"] = text
+            run_format = _run_format(child, theme, color_map)
+            if run_format:
+                run["format"] = run_format
+            link = _run_link(child, links, part)
+            if link:
+                run["link"] = link
+            if run:
+                runs.append(run)
+        elif name == "br":
+            pending += "\n"
+        elif name == "tab":
+            pending += "\t"
+        elif name == "fld":
+            if pending:
+                runs.append({"text": pending})
+                pending = ""
+            runs.extend(paragraph_runs(child, part, warnings, theme, color_map, links))
+        elif name in {"pPr", "endParaRPr"}:
+            continue
+        else:
+            warnings.append(
+                ParseWarning(
+                    code="UNSUPPORTED_PARAGRAPH_CHILD",
+                    message=f"Unsupported paragraph child: {name}",
+                    locator=part,
+                )
+            )
+    if pending:
+        runs.append({"text": pending})
+    return runs
+
+
+def _run_text(r: ET.Element) -> str:
+    t = first_child(r, "a", "t")
+    return t.text if t is not None and t.text else ""
+
+
+def _run_format(r: ET.Element, theme: dict[str, str], color_map: dict[str, str]) -> RunFormat:
+    r_pr = first_child(r, "a", "rPr")
+    if r_pr is None:
+        return {}
+    fmt: RunFormat = {}
+    if first_child(r_pr, "a", "b") is not None:
+        fmt["bold"] = True
+    if first_child(r_pr, "a", "i") is not None:
+        fmt["italic"] = True
+    underline = first_child(r_pr, "a", "u")
+    if underline is not None and underline.get("val", "") not in {"none", "0"}:
+        fmt["underline"] = True
+    solid_fill = first_child(r_pr, "a", "solidFill")
+    if solid_fill is not None:
+        for color_element in solid_fill:
+            color = resolve_color_element(color_element, theme, color_map=color_map)
+            if color and not is_default_text_color(color):
+                fmt["color"] = color
+                break
+    return fmt
+
+
+def _run_link(r: ET.Element, links: HyperlinkLookup, part: str) -> str | None:
+    r_pr = first_child(r, "a", "rPr")
+    if r_pr is None:
+        return None
+    hlink = first_child(r_pr, "a", "hlinkClick")
+    if hlink is None:
+        return None
+    rid = attr(hlink, "r", "id")
+    if rid is not None:
+        return links.get((part, rid))
+    return hlink.get("action")

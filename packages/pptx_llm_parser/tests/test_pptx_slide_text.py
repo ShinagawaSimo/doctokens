@@ -33,7 +33,7 @@ class SlideTextParsingTests(unittest.TestCase):
         shapes = text_shape_xml([[("t", "Hello"), ("t", " World")]])
         self.assertEqual(
             self._parse(shapes),
-            [{"id": "s1", "type": "text", "name": "TextBox 1", "text": "Hello World"}],
+            [{"id": "s1", "type": "text", "name": "TextBox 1", "text": "Hello World", "z": 1}],
         )
 
     def test_soft_break_and_tab(self) -> None:

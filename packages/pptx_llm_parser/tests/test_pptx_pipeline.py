@@ -58,10 +58,17 @@ class PlainPipelineTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "density"):
             parse_pptx(_two_slide_deck(), density="typo")  # type: ignore[arg-type]
 
-    def test_unimplemented_densities_raise(self) -> None:
-        for density in (Density.SEMANTIC, Density.STRUCTURAL):
-            with self.assertRaisesRegex(NotImplementedError, "not implemented"):
-                parse_pptx(_two_slide_deck(), density=density)
+    def test_structural_density_renders_slides(self) -> None:
+        text = parse_pptx(_two_slide_deck(), density=Density.STRUCTURAL)
+        self.assertTrue(text.startswith("density=structural\n"))
+        self.assertIn("<slide n=1>", text)
+        self.assertIn("<slide n=2 hidden>", text)
+
+    def test_semantic_density_renders_slides(self) -> None:
+        text = parse_pptx(_two_slide_deck(), density=Density.SEMANTIC)
+        self.assertTrue(text.startswith("density=semantic\n"))
+        self.assertIn("<slide n=1>", text)
+        self.assertIn("<slide n=2 hidden>", text)
 
 
 if __name__ == "__main__":

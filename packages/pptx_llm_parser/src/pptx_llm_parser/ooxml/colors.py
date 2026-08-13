@@ -184,6 +184,19 @@ _PRESET_COLORS: dict[str, str] = {
 _HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 
+def is_default_text_color(value: str) -> bool:
+    """Filter out colors close to default black to reduce output noise."""
+    lowered = value.lower()
+    if lowered in {"black", "#000000"}:
+        return True
+    if not re.fullmatch(r"#[0-9A-Fa-f]{6}", value):
+        return False
+    red = int(value[1:3], 16)
+    green = int(value[3:5], 16)
+    blue = int(value[5:7], 16)
+    return max(red, green, blue) <= 48 and max(red, green, blue) - min(red, green, blue) <= 16
+
+
 def resolve_color_element(
     element: ET.Element,
     theme: dict[str, str],

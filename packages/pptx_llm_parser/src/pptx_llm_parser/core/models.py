@@ -34,6 +34,23 @@ class ParseOptions:
                 raise ValueError(f"{name} must be greater than zero")
 
 
+class RunFormat(TypedDict, total=False):
+    """Visual formats on a text run."""
+
+    bold: bool
+    italic: bool
+    underline: bool
+    color: str
+
+
+class Run(TypedDict, total=False):
+    """One text run inside a text shape."""
+
+    text: str
+    format: RunFormat
+    link: str
+
+
 class ShapeBlock(TypedDict, total=False):
     """One shape on a slide, in XML (z-order) sequence."""
 
@@ -59,6 +76,8 @@ class ShapeBlock(TypedDict, total=False):
     y: int
     w: int
     h: int
+    z: int
+    runs: list[Run]
 
 
 class ImageAsset(TypedDict, total=False):
@@ -139,6 +158,17 @@ class SlideBlock(TypedDict):
     sldId: str
     hidden: bool
     shapes: list[ShapeBlock]
+    notes: str | None
+
+
+class CommentItem(TypedDict, total=False):
+    """A modern threaded comment with author and thread linkage."""
+
+    id: str
+    text: str
+    author: str
+    date: str
+    parentId: str
 
 
 @dataclass
@@ -151,4 +181,5 @@ class ParsedPresentation:
     charts: list[ChartRecord] = field(default_factory=list)
     smartarts: list[SmartArtRecord] = field(default_factory=list)
     theme: dict[str, str] = field(default_factory=dict)
+    comments: list[CommentItem] = field(default_factory=list)
     warnings: list[ParseWarning] = field(default_factory=list)

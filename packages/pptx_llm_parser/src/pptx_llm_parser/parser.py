@@ -19,6 +19,7 @@ from .core.models import (
     SmartArtLookup,
 )
 from .core.package import PackageReader
+from .extractors.ancillary import CommentsParser, NotesParser
 from .extractors.assets import AssetExtractor
 from .extractors.objects import EmbeddedObjectExtractor
 from .extractors.slides import SlideParser
@@ -26,6 +27,7 @@ from .ooxml.inheritance import LayoutMasterResolver
 from .ooxml.theme import ThemeParser
 
 PRESENTATION_PART = "ppt/presentation.xml"
+HYPERLINK_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
 
 
 class PptxParser:
@@ -41,7 +43,14 @@ class PptxParser:
             charts, chart_lookup = objects.extract_charts()
             smartarts, smartart_lookup, layout_lookup = objects.extract_smartarts()
             theme = ThemeParser(pkg, relationships, warnings).parse()
+            hyperlink_lookup = {
+                (record.source_part, record.id): record.resolved_target
+                for record in relationships.by_type(HYPERLINK_REL_TYPE)
+                if record.resolved_target is not None
+            }
             resolver = LayoutMasterResolver(pkg, relationships, warnings)
+            notes_parser = NotesParser(pkg, relationships, warnings)
+            comments = CommentsParser(pkg, relationships, warnings).parse()
             presentation_root = self._read_xml(pkg, PRESENTATION_PART)
             slide_size = self._parse_slide_size(presentation_root, warnings)
             slides = self._parse_slide_refs(
@@ -55,6 +64,9 @@ class PptxParser:
                 layout_lookup,
                 resolver,
                 slide_size,
+                notes_parser,
+                theme,
+                hyperlink_lookup,
             )
         return ParsedPresentation(
             slides=slides,
@@ -63,6 +75,7 @@ class PptxParser:
             charts=charts,
             smartarts=smartarts,
             theme=theme,
+            comments=comments,
             warnings=warnings,
         )
 
@@ -94,6 +107,9 @@ class PptxParser:
         layout_lookup: LayoutLookup,
         resolver: LayoutMasterResolver,
         slide_size: tuple[int, int] | None,
+        notes_parser: NotesParser,
+        theme: dict[str, str],
+        hyperlink_lookup: dict[tuple[str, str], str],
     ) -> list[SlideBlock]:
         sld_id_lst = first_child(presentation_root, "p", "sldIdLst")
         if sld_id_lst is None:
@@ -149,6 +165,8 @@ class PptxParser:
                 layout_lookup,
                 resolver,
                 slide_size,
+                theme,
+                hyperlink_lookup,
             ).parse_slide(root, part)
             n = len(slides) + 1
             slides.append(
@@ -160,6 +178,7 @@ class PptxParser:
                     sldId=sld_id_el.get("id", ""),
                     hidden=hidden,
                     shapes=shapes,
+                    notes=notes_parser.notes_for(part),
                 )
             )
         return slides

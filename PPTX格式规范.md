@@ -1,156 +1,253 @@
-# PPTX 输出格式规范
+# PPTX 解析输出格式说明
 
-> 本文档定义 `pptx_llm_parser` 的输出契约，是解析器行为与测试 golden 的权威依据。
-> 设计意图与决策理由见 `docs/design-notes.md` §13 与 `docs/PPTX开发大纲.md`（docs/ 目录被 .gitignore 排除）。
+本文档面向下游开发者和 LLM tool description 编写者，解释 `pptx-llm-parser` 输出的语义 HTML5 标记格式。
 
 ## 总体设计
 
-三种密度（与 DOCX/XLSX 同一枚举）：
+解析器将 `.pptx` 文件转化为三种密度的输出：
 
-| 密度 | 文件名 | 内容 |
-|---|---|---|
-| `semantic`（默认） | `parsed.html` | 完整结构 + 坐标/占位符/内联格式（主题色解析后） |
-| `structural` | `structural.html` | 块级结构 + 语义对象（链接/批注/表格/对象引用），无坐标无视觉格式 |
-| `plain` | `plain.txt` | 纯文本流，`=== Slide N ===` 分隔幻灯片 |
+| 密度 | 枚举值 | 文件 | 内容 |
+|---|---|---|---|
+| 语义级 | `SEMANTIC` (`"semantic"`) | `parsed.html` | 完整 HTML5 标记，含形状坐标、占位符类型、内联格式和对象引用 |
+| 结构级 | `STRUCTURAL` (`"structural"`) | `structural.html` | 块级结构 + 语义对象，去除坐标与粗体/斜体/颜色等视觉格式 |
+| 纯文本 | `PLAIN` (`"plain"`) | `plain.txt` | 纯文本流，幻灯片间以 `=== Slide N ===` 分隔；备注拼接在本页幻灯片之后，批注拼接在文末 |
 
-输出首行恒为密度标记：`density=semantic` / `density=structural` / `density=plain`。
+输出第一行标记密度：
 
-```python
-from pptx_llm_parser import parse_pptx, write_document, Density
-
-html = parse_pptx("deck.pptx")                                  # semantic（默认）
-html = parse_pptx("deck.pptx", density=Density.STRUCTURAL)
-path = write_document("deck.pptx", "out", density=Density.PLAIN)
 ```
+density=semantic
+density=structural
+density=plain
+```
+
+下文以 semantic 为准介绍完整格式。structural 和 plain 分别是 semantic 的逐级精简。
 
 ## 隐式闭合规则
 
-块级元素省略闭合标签（每块独占一行），内联元素保留闭合标签：
+块级元素省略闭合标签。当一个块级元素结束时，由下一个块级元素或文档结束隐式表示。
 
-- 隐式闭合：`<slide>`、`<title>`、`<p>`、`<tr>`、`<td>`、`<img>`、`<table>`、`<chart>`、`<smartart>`、`<media>`、`<notes>`、`<comment>`
-- 显式闭合：`<b>`、`<i>`、`<u>`、`<color>`、`<a>`
+**隐式闭合的块级元素**：`<slide>`、`<title>`、`<p>`、`<tr>`、`<td>`、`<img>`、`<table>`、`<chart>`、`<smartart>`、`<media>`、`<notes>`、`<comment>`
 
-## 阅读顺序（几何排序）
+**显式闭合的内联元素**：`<a>`、`<b>`、`<i>`、`<u>`、`<color>`
 
-三种密度的默认块序为**几何排序**：top→bottom 为主、left→right 为次（比较 `(y, x)` 的稳定排序，同坐标平局保持 XML 文档顺序即 z-order）。无坐标的形状（自身无 `a:xfrm` 且无布局继承几何）排在末尾、保持相对 XML 序。
+```
+示例：
+<slide n=1>                           ← 无闭合标签
+<title>季度汇报                       ← 无闭合标签
+<p>正文内容                           ← 无闭合标签
+<b>粗体</b>                          ← 内联元素需要显式闭合
+```
 
-几何排序是 declared 坐标数据上的确定性规则，不是推断。z-order 以 `z=N` 属性在 semantic 输出（N 为形状在 `p:spTree` 文档顺序中的 1 基序号），供重叠关系裁决。
+## 阅读顺序
 
-坐标以**千分比**输出（`x/y/w/h` = EMU 相对 `p:sldSz` ×1000 的四舍五入整数）；`sldSz` 缺失时降级为无坐标。
+幻灯片内的形状按几何位置**从上到下、从左到右**输出（先比较纵向、再比较横向）。没有坐标的形状排在末尾。该顺序是确定性的：同一份文件每次解析顺序一致。
+
+原始文档顺序（z-order，即形状的叠放次序）以 `z=N` 属性在 semantic 密度输出，供重叠元素的层级关系判断。
+
+坐标 `x/y/w/h` 是相对幻灯片宽高的**千分比**（0–1000 的整数）。
 
 ## 块级元素清单
 
-### `<slide n=N [hidden]>`
+### 幻灯片 `<slide>`
 
-每张幻灯片一个；`n` 为 sldIdLst 中的 1 基序号；隐藏幻灯片（`p:sld show="0"`）加 `hidden`。semantic 与 structural 输出，plain 用 `=== Slide N ===` 文本分隔（隐藏标记仅 structural/semantic）。
+```
+<slide n=1>
+<title>…</title>
+…
+<slide n=2 hidden>
+```
 
-### `<title>` 与 `<p>`
+- `n`：幻灯片序号（从 1 开始，按演示顺序）
+- `hidden`：隐藏幻灯片标记
+- plain 密度以 `=== Slide N ===` 文本行分隔幻灯片（不含 hidden 标记）
 
-文本形状。占位符类型（`p:ph@type`，自身声明优先、否则按 idx 从布局继承）为 `title`/`ctrTitle` 时输出 `<title>`，其余输出 `<p>`。
+### 标题 `<title>` 与段落 `<p>`
 
-属性（semantic）：`id=sN`（形状序号）、`ph=类型`、`x/y/w/h`（千分比，有坐标时）、`z=N`、`name="..."`（cNvPr 名称，含空格时加引号）。
-属性（structural）：仅 `ph`。
+文本形状按占位符类型输出为 `<title>`（类型为 `title`、`ctrTitle`）或 `<p>`（其余情况）。
 
-### `<img id=imgN [alt="..."]>`
+```
+<title id=s1 ph=title x=0 y=100 w=100 h=50 z=1 name="标题 1">季度汇报
+<p id=s2 ph=body x=0 y=500 w=200 h=100 z=2 name="内容占位符 2">第一行
+第二行
+```
 
-图片形状。`id` 为资产 id（`imgN`，包级确定性计数，与 OCR 开关无关）；`alt` 来自 `cNvPr@descr`。外部图片（`TargetMode=External`）只记录 URL、绝不下载。semantic 附加 `x/y/w/h/z/name`。
+- `id`：形状序号（幻灯片内，仅 semantic）
+- `ph`：占位符类型（`title`、`body`、`subTitle`、`ctrTitle` 等）。仅当形状声明了占位符角色时输出
+- `x/y/w/h`：千分比坐标（仅 semantic）
+- `z`：z-order 序号（仅 semantic）
+- `name`：形状名称（仅 semantic，含空格时加引号）
+- 形状内多个段落以单个 `\n` 连接；structural 仅保留 `ph` 属性，plain 为纯文本
 
-### `<table id=sN rows=R cols=C [truncated]>`
+### 图片 `<img>`
 
-表格（graphicFrame → a:tbl）。行：`<tr>` 独占一行；单元格：`<td>文本</td>`（显式闭合、tab 不参与）。structural/semantic 超 30 行截断并加 `truncated`（截断行数与完整行数列于 `rows=`）；plain 超 10 行截断并输出 `[Table truncated: R rows, C cols]`。
+```
+<img id=img1 alt="图表截图">
+<img id=img1 alt="图表截图" x=0 y=800 w=100 h=100 z=3 name="图片 3">
+```
 
-### `<chart id=chartN type=T series=S points=P truncated>`
+- `id`：图片资源 id（`get_resource` 按此 id 获取图片内容）
+- `alt`：替代文本（仅非空时输出）
+- semantic 附加坐标与 z/name 属性；plain 以 `[Image: 描述]` 或 `[Image]` 占位
 
-图表（graphicFrame → chart part，经共享 chart_ml 解析）。`truncated` 恒存在：正文是摘要视图，完整 series 数据经 `get_resource("chart", id)` 获取。
+### 表格 `<table>`
 
-### `<smartart id=smartartN type=布局 nodes=N links=M truncated>节点文本…`
+```
+<table id=s4 rows=2 cols=2>
+<tr><td>A</td><td>B</td>
+<tr><td>C</td><td>D</td>
+```
 
-SmartArt（diagram 数据模型）。节点文本以空格连接附在标签之后（modelId 已重映射为 1 基序数）。`type` 来自 diagramLayout 的 `dgm:cat@type` URI 尾段。
+- `id`：形状序号（幻灯片内）
+- `rows` / `cols`：总行数 / 总列数（截断时仍显示完整行数）
+- 大表格（>30 行）标记 `truncated`，仅输出前 30 行；plain 以 `\t` 分隔单元格、>10 行截断并附加 `[Table truncated: R rows, C cols]`
+- 完整表格（含行切片、列筛选、聚合）经 `get_resource(source, "table", "table1")` 获取；表格资源 id 为包级 `tableN`
 
-### `<media id=mediaN kind=video|audio>`
+### 图表 `<chart>`
 
-视频/音频（p14:media）。`kind` 来自 `p:videoFile`/`p:audioFile` 检测；plain 输出 `[Video]`/`[Audio]`/`[Media]`。
+```
+<chart id=chart1 type=bar series=2 points=4 truncated>
+```
 
-### `<notes>文本</notes>`
+- `id`：图表资源 id（`get_resource` 按此 id 获取完整数据点）
+- `type`：图表类型（bar/line/pie/scatter/bubble/area/radar/surface 等）
+- `series`：系列数
+- `points`：总数据点数
+- 所有图表均标记 `truncated`，完整系列数据（类目、数值、范围）通过 `get_resource` 获取
+- plain 以 `[Chart: bar, 2 series]` 占位
 
-演讲者备注，紧跟所属幻灯片内容之后（幻灯片 = 自包含原子块）。plain 为幻灯片文本后的 `[Notes: 文本]`。无备注不输出。
+### SmartArt `<smartart>`
 
-## 内联元素清单（仅 semantic 包裹格式）
+```
+<smartart id=smartart1 type=process nodes=3 links=2 truncated>开始 判断 结束
+```
 
-| 元素 | 来源 | 示例 |
-|---|---|---|
-| `<b>` / `<i>` / `<u>` | `a:rPr` 的 b/i/u | `<b>粗体</b>` |
-| `<color value=#RRGGBB>` | `a:rPr/a:solidFill` 解析后 | `<color value=#FF0000>红</color>` |
-| `<a href=URL>` | `a:hlinkClick`（rPr 级） | `<a href=https://example.test>链接</a>` |
+- `id`：SmartArt 资源 id（`get_resource` 按此 id 获取完整节点和连接）
+- `type`：布局类型（process/cycle/hierarchy 等）
+- `nodes`：节点数
+- `links`：边数
+- 全部节点文本（空格分隔）附在标签之后
+- 总是标记 `truncated`，完整结构（含节点 id 和连接关系）通过 `get_resource` 获取
+- plain 以 `[SmartArt: process, 3 nodes]` 占位
 
-嵌套顺序（外→内）：`a` > `b` > `i` > `u` > `color`。
+### 媒体 `<media>`
 
-**主题色管线**：`schemeClr` 经 clrMap 四级映射（slide clrMapOvr > slide clrMap > layout clrMap > master clrMap > 规范默认 tx1→dk1/tx2→dk2/bg1→lt1/bg2→lt2）→ theme1.xml clrScheme 12 槽（缺失回退 Office 默认主题）→ `lumMod`/`lumOff` HSL 亮度变换 → `tint`/`shade` 线性混合。**近黑过滤**：解析结果接近默认黑（max(R,G,B)≤48 且色偏≤16）时不输出 color——默认文字色不产生噪声。
+```
+<media id=media1 kind=video>
+```
 
-run 级 IR 只在形状含格式/链接时进入输出（全纯文本形状仅输出扁平 `text`）。
+- `id`：媒体资源 id（`get_resource` 按此 id 获取媒体内容）
+- `kind`：`video` / `audio`
+- plain 以 `[Video]` / `[Audio]` / `[Media]` 占位
+
+### 备注 `<notes>`
+
+```
+<notes>本页演讲提示
+```
+
+演讲者备注紧跟所属幻灯片内容之后输出（幻灯片保持自包含）。plain 为该页文本之后的 `[Notes: 内容]`。无备注的幻灯片不输出。
+
+## 内联元素清单
+
+### 文本格式
+
+```
+<b>粗体</b>
+<i>斜体</i>
+<u>下划线</u>
+```
+
+### 颜色 `<color>`
+
+```
+<color value=#FF0000>红色文字</color>
+```
+
+`value` 为 CSS 颜色值（`#RRGGBB`）。主题色（如"强调文字颜色 1"）输出解析后的实际色值；接近默认黑色的颜色不输出（避免噪声）。
+
+### 超链接 `<a>`
+
+```
+<a href=https://example.com>链接文字</a>
+```
+
+`href` 为外部链接 URL。外部资源只记录、不下载。
 
 ## 补充内容区域 `<!-- supplemental -->`
 
-structural/semantic 在全部幻灯片之后输出批注区；plain 以文本区块 `[Comments]` 输出：
+全部幻灯片结束后输出批注完整内容（structural 与 semantic）：
 
 ```
 <!-- supplemental -->
-<comment id=cmtN [author=…] [date=…] [parent=IDX]>文本
+<comment id=cmt1 author=Alice date=2026-08-13T10:00:00>评论内容
+<comment id=cmt2 author=Bob date=2026-08-13T11:00:00 parent=1>回复内容
 ```
 
-现代（p15）线程批注：`parentId` 保留线程关系输出为 `parent=IDX`（IDX 为被回复批注的原始 idx）；作者名经 commentAuthors.xml 解析。PPTX 批注是包级注释（无幻灯片锚点），故不输出行内引用标记。legacy 批注仅检测 + 警告。
+- `id`：批注标识符（cmtN）
+- `author`、`date`：作者和日期（仅存在时输出）
+- `parent`：被回复批注的原始编号（线程回复）
+- plain 以 `[Comments]` 文本区输出，每条为 `[cmtN: 内容]`
 
 ## 密度差异对照
 
-| 元素 | plain | structural | semantic |
+| 元素 | semantic | structural | plain |
 |---|---|---|---|
-| slide 边界 | `=== Slide N ===` | `<slide n=N [hidden]>` | 同左 |
-| 标题 | 纯文本 | `<title>` | `<title>` + 全属性 |
-| 文本形状 | 纯文本 | `<p [ph]>` | `<p>` + id/ph/坐标/z/name |
-| 内联格式 | 剥离 | 剥离 | `<b>/<i>/<u>/<color>` + `<a>` |
-| 图片 | `[Image: alt]` / `[Image]` | `<img id alt>` | 同左 + 坐标/z/name |
-| 表格 | tab 分隔（10 行截断） | `<table>`（30 行截断） | 同左 + 坐标/z/name |
-| 图表 | `[Chart: type, N series]` / `[Chart]` | `<chart … truncated>` | 同左 + 坐标/z/name |
-| SmartArt | `[SmartArt: layout, N nodes]` / `[SmartArt]` | `<smartart …>节点文本` | 同左 + 坐标/z/name |
-| 媒体 | `[Video]`/`[Audio]`/`[Media]` | `<media id kind>` | 同左 + 坐标/z/name |
-| 备注 | `[Notes: 文本]` | `<notes>` | 同左 |
-| 批注 | `[Comments]` + `[cmtN: 文本]` | `<comment …>` 区 | 同左 |
-| 隐藏标记 | 无 | `hidden` | `hidden` |
-| 继承来源 | 无 | 无 | 无（仅 debug JSON） |
-
-## 特殊约定
-
-- **占位符是声明角色**：`p:ph@type` 是权威声明但不保证文本语义；slide 形状无 ph 时按 idx 从布局继承。
-- **模板文字不混入正文**：layout/master 的 txBody 文本永不读取（仅用于几何/类型/颜色继承）。
-- **无文本形状**：plain/structural 完全丢弃；semantic 中同样不输出（M4 阶段）——装饰折叠（`ParseOptions.collapse_repeated_shapes`）为 backlog。
-- **背景**：`p:bg` 为 backlog 项（设计契约见 docs/PPTX开发大纲.md §5.10，OCR 提升路径随 OCR 里程碑落地）。
-- **组合形状/动画/切换/自定义放映/节**：v1 不解析，检测到未知形状类型输出警告并继续。
-- **资产惰性**：图片/媒体二进制在解析期绝不读取，按需经 `get_resource`（M5）获取。
-- **失败软降级**：悬空关系/缺失 part/畸形值 → `ParseWarning`（含 code 与 locator）并继续解析，绝不中断。
+| 幻灯片 | `<slide n=N [hidden]>` | 同 semantic | `=== Slide N ===` 文本行 |
+| 标题 | `<title>` + 全属性 | `<title>` | 纯文本 |
+| 段落/文本形状 | `<p>` + id/ph/坐标/z/name | `<p ph=...>` | 纯文本 |
+| 粗体/斜体/下划线/颜色 | `<b>` `<i>` `<u>` `<color value=>` | 全部去除 | 无 |
+| 超链接 | `<a href=...>` | `<a href=...>` | 纯文本 |
+| 图片 | `<img id alt>` + 坐标 | `<img id alt>` | `[Image: 描述]` / `[Image]` |
+| 表格 | 完整 HTML 表格 + 30 行截断 | 同 semantic | `\t` 分隔纯文本，>10 行截断 |
+| 图表 | `<chart>` + 属性 + `truncated` | 同 semantic | `[Chart: ...]` 纯文本摘要 |
+| SmartArt | `<smartart>` + 属性 + 节点文本 + `truncated` | 同 semantic | `[SmartArt: ...]` 纯文本摘要 |
+| 媒体 | `<media id kind>` + 坐标 | `<media id kind>` | `[Video]` / `[Audio]` / `[Media]` |
+| 备注 | `<notes>` | `<notes>` | `[Notes: 内容]` |
+| 批注 | supplemental 区 | supplemental 区 | `[Comments]` 文本区 `[cmtN: 内容]` |
+| 坐标（x/y/w/h/z/name） | 全部输出 | 不输出 | 不输出 |
+| 隐藏标记 | `hidden` | `hidden` | 无 |
 
 ## 公共 API
 
 ```python
-parse_pptx(source, *, density=SEMANTIC, stream=False, options=None) -> str | Iterator[str]
-iter_slides(source, *, density=SEMANTIC, start_slide=1, options=None) -> Iterator[str]
-render_window(source, *, slide, span=1, density=SEMANTIC, options=None) -> str
-get_resource(source, resource_type, resource_id, *, rows=None, columns=None,
-             aggregate=None, aggregate_column=None, options=None) -> str | None
-write_document(source, output_dir, *, density=SEMANTIC, options=None) -> Path
+from pptx_llm_parser import parse_pptx, iter_slides, render_window, get_resource, write_document, Density
+
+html = parse_pptx("deck.pptx")                                     # semantic（默认）
+html = parse_pptx("deck.pptx", density=Density.STRUCTURAL)
+path = write_document("deck.pptx", "out", density=Density.PLAIN)
 ```
 
-- `iter_slides`：每幻灯片一个 chunk（首个 chunk 含 `density=` 头行），批注为尾部独立 chunk；`start_slide` 1 基。`parse_pptx(stream=True)` 等价于 `iter_slides`。
-- `render_window`：`slide` 1 基，`slide=-1` 选最后一页，`span` 越界截断在末尾；越界窗口渲染为仅含密度头的空文档。
-- `get_resource`：
-  - `image` / `media` → 内嵌二进制的 base64（解析期惰性，此处才读 ZIP）；external 资产与未知 id 返回 None
-  - `chart` → 全量 series 记录（name/categories/values/min/max）
-  - `smartart` → 节点/链接全量记录
-  - `table` → 完整表格（不受 30 行截断），`rows="a-b"` 行切片（1 基含两端）、`columns=[i...]` 列筛选、`aggregate=sum|count|avg|min|max` 配合 `aggregate_column` 输出 `<aggregate op=… column=… value=…>`（数值单元格按文本强转，非数值跳过）
-  - 复数类型（`images` 等）抛 ValueError；`resource_type` 接受 `ResourceType` 枚举或字符串
-- 表格资源 id 为包级 `tableN`（解析器按出现顺序分配，与幻灯片无关；渲染输出中的 `id=sN` 是幻灯片内序号，两者不可混用）。
+| 函数 | 语义 |
+|---|---|
+| `parse_pptx(source, *, density, stream, options)` | 解析为指定密度的完整输出；`stream=True` 时返回逐幻灯片的分块迭代器（同 `iter_slides`） |
+| `iter_slides(source, *, density, start_slide, options)` | 每张幻灯片一个分块；首个分块含密度标记行；批注为尾部独立分块 |
+| `render_window(source, *, slide, span, density, options)` | 渲染指定幻灯片窗口；`slide` 从 1 开始，`slide=-1` 表示最后一页，`span` 越界时截断 |
+| `get_resource(source, resource_type, resource_id, *, rows, columns, aggregate, aggregate_column, options)` | 按需提取单个资源（见下表） |
+| `write_document(source, output_dir, *, density, options)` | 渲染并写入 `parsed.html` / `structural.html` / `plain.txt` |
 
-## 未实现（backlog）
+## 资源提取 API
 
-- `ParseOptions.ocr` —— 图片 OCR（`<ocr-text>` 兄弟元素契约，同 DOCX §12 架构）
-- 背景 `p:bg`（契约见 docs/PPTX开发大纲.md §5.10，OCR 提升路径随之落地）
-- 组合形状 grpSp 递归与组坐标换算；装饰折叠 `collapse_repeated_shapes`
+正文中被截断的资源（`<table truncated>`、`<chart ... truncated>`、`<smartart ... truncated>`）可通过 `get_resource` 按需获取完整数据：
+
+| 调用 | 返回 |
+|---|---|
+| `get_resource(source, "image", "img1")` | 图片内容（base64） |
+| `get_resource(source, "media", "media1")` | 媒体内容（base64） |
+| `get_resource(source, "chart", "chart1")` | 完整图表数据（每个系列的类目、数值、最小/最大值） |
+| `get_resource(source, "smartart", "smartart1")` | 完整节点列表和连接关系 |
+| `get_resource(source, "table", "table1")` | 完整表格（不受截断限制） |
+| `get_resource(source, "table", "table1", rows="2-5")` | 指定行范围（1-based，含起止行） |
+| `get_resource(source, "table", "table1", columns=[0, 2])` | 仅指定列（0-based 序号） |
+| `get_resource(source, "table", "table1", aggregate="sum", aggregate_column=1)` | 聚合值，支持 sum/count/avg/min/max |
+
+`rows` 和 `columns` 可组合使用。`aggregate` 基于表格文本中的数值计算，不做公式重算。`resource_type` 接受字符串或 `ResourceType` 枚举；复数形式（如 `"images"`）报错，请使用单数。
+
+## 特殊约定
+
+- 所有方括号标记（如 `[Image]`、`[Chart: ...]`、`[Notes: ...]`、`[cmtN: ...]`）是 plain 专用的纯文本占位符，不出现在 structural/semantic 中
+- 属性值含空格或特殊字符时使用双引号包裹并进行 HTML 转义
+- 资源 id（`imgN`、`mediaN`、`chartN`、`smartartN`、`tableN`）在同篇文档多次解析中保持一致
+- 幻灯片模板中的占位提示文字（如"单击此处添加标题"）不会出现在输出中
+- 主题色输出解析后的实际色值；接近默认黑色的颜色不输出
+- `truncated` 标记的语义：正文是摘要视图，完整数据通过 `get_resource` 按需获取
+- 外部链接的资源（图片、媒体）只记录、不下载，也不在输出中展开内容

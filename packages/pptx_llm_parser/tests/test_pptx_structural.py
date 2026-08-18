@@ -29,7 +29,7 @@ class StructuralRenderingTests(unittest.TestCase):
             "<p>Secret\n"
             "<!-- supplemental -->\n"
             "<comment id=cmt1 author=Alice date=2026-08-13T10:00:00>Nice slide\n"
-            "<comment id=cmt2 author=Bob date=2026-08-13T11:00:00 parent=1>Agreed\n",
+            "<comment id=cmt2 author=Bob date=2026-08-13T11:00:00 parent=cmt1>Agreed\n",
         )
 
 

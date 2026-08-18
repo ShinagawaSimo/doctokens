@@ -30,7 +30,7 @@ class SemanticRenderingTests(unittest.TestCase):
             '<p id=s1 z=1 name="Secret 2"><b><color value=#FF0000>Secret</color></b>\n'
             "<!-- supplemental -->\n"
             "<comment id=cmt1 author=Alice date=2026-08-13T10:00:00>Nice slide\n"
-            "<comment id=cmt2 author=Bob date=2026-08-13T11:00:00 parent=1>Agreed\n",
+            "<comment id=cmt2 author=Bob date=2026-08-13T11:00:00 parent=cmt1>Agreed\n",
         )
 
 

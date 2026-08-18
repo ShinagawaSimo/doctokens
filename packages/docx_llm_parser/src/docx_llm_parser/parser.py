@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from ._version import __version__
 from .core.debug import DebugWriter
@@ -18,6 +17,7 @@ from .core.models import (
     ContentTypes,
     ImageAsset,
     ObjectLookup,
+    OcrStoredResult,
     ParsedDocument,
     ParseOptions,
     ParseWarning,
@@ -33,6 +33,8 @@ from .extractors.body import DocumentBodyParser
 from .extractors.objects import EmbeddedObjectExtractor
 from .ooxml.numbering import NumberingMap, NumberingParser, NumberingState
 from .ooxml.styles import StyleMap, StylesParser
+
+_MAX_OCR_BATCH_BYTES = 64 * 1024 * 1024
 
 
 @dataclass
@@ -52,7 +54,7 @@ class _ParseResult:
     blocks: list[Block]
     body_parser: DocumentBodyParser
     ancillary: AncillaryResult
-    ocr_results: dict[str, str]
+    ocr_results: dict[str, OcrStoredResult]
     style_rows: list[dict[str, object]]
 
 
@@ -76,8 +78,8 @@ class DocxParser:
             assets, asset_lookup = self._index_resources(package, relationships, content_types, warnings, metrics)
             object_lookup, charts, smartarts = self._index_objects(package, relationships, warnings, metrics)
 
-            # OCR pipeline
-            ocr_results = self._run_ocr(package, assets, opts)
+            with metrics.stage("ocr"):
+                ocr_results = self._run_ocr(package, assets, opts)
 
             body_parser, blocks = self._parse_body(
                 package,
@@ -239,49 +241,63 @@ class DocxParser:
     # OCR pipeline
 
     @staticmethod
-    def _run_ocr(package: PackageReader, assets: list[ImageAsset], opts: ParseOptions) -> dict[str, str]:
-        """Run OCR on embedded images, deduplicating by content hash."""
+    def _run_ocr(package: PackageReader, assets: list[ImageAsset], opts: ParseOptions) -> dict[str, OcrStoredResult]:
+        """Run fail-soft OCR in bounded batches, reusing shared media parts."""
         provider = getattr(opts, "ocr", None)
         if provider is None:
             return {}
 
-        # Collect unique images by content hash.
-        asset_hashes: dict[str, str] = {}  # assetId -> sha256 hex
-        unique_image_bytes: dict[str, bytes] = {}  # sha256 -> image bytes
+        asset_ids_by_path: dict[str, list[str]] = {}
         for asset in assets:
             if asset["type"] != "image" or asset.get("source") != "embedded":
                 continue
             zip_path = asset.get("zipPath")
             if not zip_path:
                 continue
-            image_bytes = package.open_entry(zip_path).read()
-            image_hash = hashlib.sha256(image_bytes).hexdigest()
-            asset_hashes[asset["id"]] = image_hash
-            if image_hash not in unique_image_bytes:
-                unique_image_bytes[image_hash] = image_bytes
+            asset_ids_by_path.setdefault(zip_path, []).append(asset["id"])
 
-        if not unique_image_bytes:
-            return {}
+        from ocr_llm_core import OcrResult, run_ocr_batch
 
-        # Submit OCR jobs in parallel.
-        ocr_text_by_hash: dict[str, str] = {}  # sha256 -> OCR text
-        max_workers = getattr(opts, "ocr_workers", 4)
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {
-                pool.submit(provider.extract, image_bytes): image_hash for image_hash, image_bytes in unique_image_bytes.items()
-            }
-            for future in as_completed(futures):
-                image_hash = futures[future]
-                try:
-                    ocr_text_by_hash[image_hash] = future.result()
-                except Exception:
-                    ocr_text_by_hash[image_hash] = ""
+        results: dict[str, OcrStoredResult] = {}
+        pending: dict[str, bytes] = {}
+        aliases: dict[str, list[str]] = {}
+        pending_bytes = 0
+        item_limit = max(1, opts.ocr_workers * 2)
 
-        # Map back to asset IDs.
-        result: dict[str, str] = {}
-        for asset_id, image_hash in asset_hashes.items():
-            result[asset_id] = ocr_text_by_hash.get(image_hash, "")
-        return result
+        def flush() -> None:
+            nonlocal pending_bytes
+            batch_results = run_ocr_batch(
+                pending,
+                provider,
+                max_workers=opts.ocr_workers,
+                timeout=opts.ocr_timeout,
+            )
+            for primary_id, result in batch_results.items():
+                record = result.to_record()
+                for asset_id in aliases[primary_id]:
+                    results[asset_id] = cast(OcrStoredResult, dict(record))
+            pending.clear()
+            aliases.clear()
+            pending_bytes = 0
+
+        for zip_path, asset_ids in asset_ids_by_path.items():
+            try:
+                with package.open_entry(zip_path) as stream:
+                    image_bytes = stream.read()
+            except Exception as exc:
+                record = OcrResult.error("image_read_error", str(exc)).to_record()
+                for asset_id in asset_ids:
+                    results[asset_id] = cast(OcrStoredResult, dict(record))
+                continue
+            if pending and (len(pending) >= item_limit or pending_bytes + len(image_bytes) > _MAX_OCR_BATCH_BYTES):
+                flush()
+            primary_id = asset_ids[0]
+            pending[primary_id] = image_bytes
+            aliases[primary_id] = asset_ids
+            pending_bytes += len(image_bytes)
+        if pending:
+            flush()
+        return results
 
     # Document assembly
 

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
-from ...core.models import Block, InlineContainer, InlineObject, TableBlock
+from typing import cast
+
+from ...core.models import Block, InlineContainer, InlineObject, OcrStoredResult, TableBlock
 from .. import _constants
+from .._ocr import ocr_text
 from .._text_utils import merge_text_runs
 
 
@@ -17,11 +20,11 @@ def block_text_only(
     footnote_map: dict[str, str],
     endnote_order: list[str],
     comment_order: list[str],
-    ocr_results: dict[str, str] | None = None,
+    ocr_results: dict[str, OcrStoredResult] | None = None,
 ) -> str:
     """Render a parsed block as plain text."""
     if block["type"] == "table":
-        return table_text_only(block)
+        return table_text_only(block, ocr_results)
 
     text = inline_text_only(block, ocr_results)
 
@@ -43,7 +46,7 @@ def block_text_only(
 
 def inline_text_only(
     block: InlineContainer,
-    ocr_results: dict[str, str] | None = None,
+    ocr_results: dict[str, OcrStoredResult] | None = None,
 ) -> str:
     """Extract plain text from a block-like object that carries inline runs."""
     if "runs" not in block:
@@ -66,7 +69,7 @@ def inline_text_only(
 
 def plain_object_placeholder(
     inline_object: InlineObject,
-    ocr_results: dict[str, str] | None = None,
+    ocr_results: dict[str, OcrStoredResult] | None = None,
 ) -> str:
     """Return the plain-text representation of one inline object."""
     object_type = inline_object["type"]
@@ -95,7 +98,7 @@ def plain_object_placeholder(
 
 def plain_image_placeholder(
     inline_object: InlineObject,
-    ocr_results: dict[str, str] | None = None,
+    ocr_results: dict[str, OcrStoredResult] | None = None,
 ) -> str:
     """Render a compact plain-text image summary."""
     label = (
@@ -104,12 +107,12 @@ def plain_image_placeholder(
         or _string_field(inline_object.get("name"))
     )
     asset_id = _string_field(inline_object.get("assetId"))
-    ocr_text = _string_field((ocr_results or {}).get(asset_id, "")) if asset_id else ""
+    recognized_text = ocr_text((ocr_results or {}).get(asset_id)) if asset_id else ""
     parts: list[str] = []
     if label:
         parts.append(label)
-    if ocr_text:
-        parts.append(f"OCR: {_plain_excerpt(ocr_text)}")
+    if recognized_text:
+        parts.append(f"OCR: {_plain_excerpt(recognized_text)}")
     if not parts:
         return "[Image]"
     return f"[Image {'; '.join(parts)}]"
@@ -152,18 +155,39 @@ def collect_refs(block: InlineContainer, ref_type: str) -> list[str]:
     return reference_ids
 
 
-def table_text_only(block: TableBlock) -> str:
+def table_text_only(block: TableBlock, ocr_results: dict[str, OcrStoredResult] | None = None) -> str:
     """Render a table as tab-separated plain text, truncating very large tables."""
     rows = block["rows"]
     if len(rows) > _constants._TABLE_TRUNCATE_PLAIN:
         first_row = rows[0]
-        header_line = "\t".join(cell["text"] for cell in first_row["cells"])
+        header_line = "\t".join(_plain_cell_text(cell, ocr_results) for cell in first_row["cells"])
         total_rows = len(rows)
         column_count = block["columnCount"]
         return f"{header_line}\n[Table truncated: {total_rows} rows, {column_count} cols]"
 
-    row_texts = ["\t".join(cell["text"] for cell in row["cells"]) for row in rows]
+    row_texts = ["\t".join(_plain_cell_text(cell, ocr_results) for cell in row["cells"]) for row in rows]
     return "\n".join(row_texts)
+
+
+def _plain_cell_text(cell: object, ocr_results: dict[str, OcrStoredResult] | None) -> str:
+    if not isinstance(cell, dict):
+        return ""
+    fallback = _string_field(cell.get("text"))
+    if not ocr_results:
+        return fallback
+    blocks = cell.get("blocks")
+    if not isinstance(blocks, list) or not blocks:
+        return fallback
+    parts: list[str] = []
+    for child in blocks:
+        if not isinstance(child, dict):
+            continue
+        if child.get("type") == "table":
+            parts.append(table_text_only(cast(TableBlock, child), ocr_results))
+        else:
+            parts.append(inline_text_only(cast(InlineContainer, child), ocr_results))
+    rendered = "\n".join(part for part in parts if part)
+    return rendered or fallback
 
 
 def _plain_excerpt(text: str, limit: int = 120) -> str:

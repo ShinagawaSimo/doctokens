@@ -5,30 +5,39 @@ from __future__ import annotations
 from collections.abc import Iterator
 from html import escape
 
-from ...core.models import TableBlock, TableCell, TableRow
+from ...core.models import OcrStoredResult, TableBlock, TableCell, TableRow
 from .. import _constants
 from ..inline import inline_content
 
 
-def render_table(block: TableBlock, density: str) -> Iterator[str]:
+def render_table(
+    block: TableBlock,
+    density: str,
+    ocr_results: dict[str, OcrStoredResult] | None = None,
+) -> Iterator[str]:
     """Output an HTML5 table (for structural/semantic). Cells within a row have no newlines; only rows are newline-separated."""
     rows = block.get("rows", [])
 
     if len(rows) > _constants._TABLE_TRUNCATE_STRUCTURAL_SEMANTIC:
-        yield from render_truncated_table(block, rows, density)
+        yield from render_truncated_table(block, rows, density, ocr_results)
         return
 
     yield f"<table id={table_id(block)}>\n"
     for row in rows:
-        yield render_table_row(row, density) + "\n"
+        yield render_table_row(row, density, ocr_results) + "\n"
 
 
-def render_truncated_table(block: TableBlock, rows: list[TableRow], density: str) -> Iterator[str]:
+def render_truncated_table(
+    block: TableBlock,
+    rows: list[TableRow],
+    density: str,
+    ocr_results: dict[str, OcrStoredResult] | None = None,
+) -> Iterator[str]:
     """Output a truncated table (for structural/semantic): header row + first row."""
     yield f"<table id={table_id(block)} truncated>\n"
-    yield render_table_row(rows[0], density) + "\n"
+    yield render_table_row(rows[0], density, ocr_results) + "\n"
     if len(rows) > 1:
-        yield render_table_row(rows[1], density) + "\n"
+        yield render_table_row(rows[1], density, ocr_results) + "\n"
 
 
 def table_id(block: TableBlock) -> str:
@@ -39,7 +48,11 @@ def table_id(block: TableBlock) -> str:
     return value
 
 
-def render_table_row(row: TableRow, density: str) -> str:
+def render_table_row(
+    row: TableRow,
+    density: str,
+    ocr_results: dict[str, OcrStoredResult] | None = None,
+) -> str:
     """Render one table row. structural keeps merge structure and nested tables."""
     row_tag = "<tr h>" if row.get("isHeader") else "<tr>"
     parts = [row_tag]
@@ -59,13 +72,17 @@ def render_table_row(row: TableRow, density: str) -> str:
         else:
             tag = cell_tag
 
-        cell_text = cell_content(cell, density)
+        cell_text = cell_content(cell, density, ocr_results)
         parts.append(f"<{tag}>{cell_text}")
 
     return "".join(parts)
 
 
-def cell_content(cell: TableCell, density: str) -> str:
+def cell_content(
+    cell: TableCell,
+    density: str,
+    ocr_results: dict[str, OcrStoredResult] | None = None,
+) -> str:
     """Output the cell text."""
     blocks = cell.get("blocks", [])
     if not blocks:
@@ -74,13 +91,13 @@ def cell_content(cell: TableCell, density: str) -> str:
     for block in blocks:
         if block["type"] == "table":
             if density in {"structural", "semantic"}:
-                parts.append(nested_table(block))
+                parts.append(nested_table(block, ocr_results))
         else:
-            parts.append(inline_content(block, density))
+            parts.append(inline_content(block, density, ocr_results))
     return "\n".join(part for part in parts if part)
 
 
-def nested_table(block: TableBlock) -> str:
+def nested_table(block: TableBlock, ocr_results: dict[str, OcrStoredResult] | None = None) -> str:
     """Render a nested table as lightweight HTML5."""
     rows = block["rows"]
     attrs = f"rows={len(rows)} cols={block['columnCount']}"
@@ -101,5 +118,5 @@ def nested_table(block: TableBlock) -> str:
             if cell.get("vMerge"):
                 attrs_parts.append(f"vmerge={cell['vMerge']}")
             attrs = " ".join(attrs_parts)
-            parts.append(f"<{attrs}>{cell_content(cell, 'semantic')}")
+            parts.append(f"<{attrs}>{cell_content(cell, 'semantic', ocr_results)}")
     return "".join(parts)

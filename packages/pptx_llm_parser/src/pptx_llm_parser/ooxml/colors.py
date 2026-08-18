@@ -8,8 +8,11 @@ tint/shade child transforms.
 
 from __future__ import annotations
 
+import math
 import re
 from xml.etree import ElementTree as ET
+
+from ooxml_llm_core.models import ParseWarning
 
 from ..core.constants import local_name
 
@@ -202,6 +205,8 @@ def resolve_color_element(
     theme: dict[str, str],
     *,
     color_map: dict[str, str] | None = None,
+    warnings: list[ParseWarning] | None = None,
+    locator: str | None = None,
 ) -> str | None:
     """Resolve a DrawingML color element to #RRGGBB, or None when unknown."""
     mapping = color_map if color_map is not None else DEFAULT_COLOR_MAP
@@ -218,29 +223,36 @@ def resolve_color_element(
     elif name == "prstClr":
         base = _PRESET_COLORS.get(element.get("val", ""))
     elif name == "hslClr":
-        base = _resolve_hsl_color(element)
+        base = _resolve_hsl_color(element, warnings=warnings, locator=locator)
     elif name == "scrgbClr":
-        base = _resolve_scrgb_color(element)
+        base = _resolve_scrgb_color(element, warnings=warnings, locator=locator)
     else:
         return None
     if base is None:
         return None
-    return _apply_transforms(element, base)
+    return _apply_transforms(element, base, warnings=warnings, locator=locator)
 
 
-def _apply_transforms(element: ET.Element, base: str) -> str:
+def _apply_transforms(
+    element: ET.Element,
+    base: str,
+    *,
+    warnings: list[ParseWarning] | None,
+    locator: str | None,
+) -> str:
     """Apply tint/shade/lumMod child transforms in document order."""
     rgb = base
     for child in element:
         child_name = local_name(child.tag)
         value = child.get("val")
-        if child_name == "tint" and value is not None:
-            rgb = _apply_linear_mix(rgb, float(value) / 100000.0, toward_white=True)
-        elif child_name == "shade" and value is not None:
-            rgb = _apply_linear_mix(rgb, float(value) / 100000.0, toward_white=False)
-        elif child_name == "lumMod" and value is not None:
-            lum_mod = float(value) / 100000.0
-            lum_off = _read_child_val(element, "lumOff") / 100000.0
+        parsed = _parse_number(value, child_name, warnings, locator)
+        if child_name == "tint" and parsed is not None:
+            rgb = _apply_linear_mix(rgb, parsed / 100000.0, toward_white=True)
+        elif child_name == "shade" and parsed is not None:
+            rgb = _apply_linear_mix(rgb, parsed / 100000.0, toward_white=False)
+        elif child_name == "lumMod" and parsed is not None:
+            lum_mod = parsed / 100000.0
+            lum_off = _read_child_val(element, "lumOff", warnings, locator) / 100000.0
             rgb = _apply_luminance(rgb, lum_mod, lum_off)
         elif child_name == "alpha":
             # Alpha affects transparency, not the color value; ignored.
@@ -248,13 +260,43 @@ def _apply_transforms(element: ET.Element, base: str) -> str:
     return rgb
 
 
-def _read_child_val(element: ET.Element, local: str) -> float:
+def _read_child_val(
+    element: ET.Element,
+    local: str,
+    warnings: list[ParseWarning] | None,
+    locator: str | None,
+) -> float:
     for child in element:
         if local_name(child.tag) == local:
             value = child.get("val")
             if value is not None:
-                return float(value)
+                return _parse_number(value, local, warnings, locator) or 0.0
     return 0.0
+
+
+def _parse_number(
+    value: str | None,
+    field: str,
+    warnings: list[ParseWarning] | None,
+    locator: str | None,
+) -> float | None:
+    if value is None:
+        return None
+    try:
+        parsed = float(value)
+        if not math.isfinite(parsed):
+            raise ValueError("non-finite value")
+        return parsed
+    except (TypeError, ValueError):
+        if warnings is not None:
+            warnings.append(
+                ParseWarning(
+                    code="COLOR_VALUE_INVALID",
+                    message=f"Invalid DrawingML color value for {field}: {value!r}",
+                    locator=locator,
+                )
+            )
+        return None
 
 
 def _apply_luminance(rgb_hex: str, lum_mod: float, lum_off: float) -> str:
@@ -273,29 +315,41 @@ def _apply_linear_mix(rgb_hex: str, factor: float, *, toward_white: bool) -> str
     return "#" + "".join(f"{max(0, min(255, c)):02X}" for c in channels)
 
 
-def _resolve_hsl_color(element: ET.Element) -> str | None:
+def _resolve_hsl_color(
+    element: ET.Element,
+    *,
+    warnings: list[ParseWarning] | None,
+    locator: str | None,
+) -> str | None:
     hue = element.get("hue")
     sat = element.get("sat")
     lum = element.get("lum")
     if hue is None or sat is None or lum is None:
         return None
-    h = (float(hue) / 60000.0) % 360.0
-    s = float(sat) / 100000.0
-    light = float(lum) / 100000.0
+    parsed = tuple(_parse_number(value, field, warnings, locator) for value, field in ((hue, "hue"), (sat, "sat"), (lum, "lum")))
+    if any(value is None for value in parsed):
+        return None
+    h = (parsed[0] / 60000.0) % 360.0  # type: ignore[operator]
+    s = parsed[1] / 100000.0  # type: ignore[operator]
+    light = parsed[2] / 100000.0  # type: ignore[operator]
     return _hsl_to_hex(h, light, s)
 
 
-def _resolve_scrgb_color(element: ET.Element) -> str | None:
+def _resolve_scrgb_color(
+    element: ET.Element,
+    *,
+    warnings: list[ParseWarning] | None,
+    locator: str | None,
+) -> str | None:
     r = element.get("r")
     g = element.get("g")
     b = element.get("b")
     if r is None or g is None or b is None:
         return None
-    channels = (
-        round(float(r) / 100000.0 * 255),
-        round(float(g) / 100000.0 * 255),
-        round(float(b) / 100000.0 * 255),
-    )
+    parsed = tuple(_parse_number(value, field, warnings, locator) for value, field in ((r, "r"), (g, "g"), (b, "b")))
+    if any(value is None for value in parsed):
+        return None
+    channels = tuple(round(value / 100000.0 * 255) for value in parsed if value is not None)
     return "#" + "".join(f"{max(0, min(255, c)):02X}" for c in channels)
 
 

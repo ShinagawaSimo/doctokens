@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import base64
+import re
 from html import escape
 
 from ..core.enums import ResourceType
 from ..core.models import ParsedPresentation
 from ..core.package import PackageReader
+from .markup import AttributeBuilder
 
 _AGGREGATE_OPS = {"sum", "count", "avg", "min", "max"}
 
@@ -57,30 +59,29 @@ def _render_chart(parsed: ParsedPresentation, resource_id: str) -> str | None:
     chart = next((c for c in parsed.charts if c.get("id") == resource_id), None)
     if chart is None:
         return None
-    parts = [f"<chart id={resource_id}"]
+    attrs = AttributeBuilder().add("id", resource_id)
     chart_type = chart.get("chart_type")
     if chart_type:
-        parts.append(f" type={chart_type}")
+        attrs.add("type", chart_type)
     title = chart.get("title")
     if title:
-        parts.append(f" title={escape(title)}")
+        attrs.add("title", title)
     series = chart.get("series", [])
     point_count = chart.get("point_count")
-    parts.append(f" series={len(series)} points={point_count if point_count is not None else 0}>")
-    lines = ["".join(parts)]
+    attrs.add("series", len(series)).add("points", point_count if point_count is not None else 0)
+    lines = [f"<chart{attrs.render()}>"]
     for index, item in enumerate(series, start=1):
-        line = [f"<series id={index}"]
+        series_attrs = AttributeBuilder().add("id", index)
         name = item.get("name")
         if name:
-            line.append(f" name={escape(name)}")
-        line.append(f" categories={','.join(escape(c) for c in item.get('categories', []))}")
-        line.append(f" values={','.join(item.get('values', []))}")
+            series_attrs.add("name", name)
+        series_attrs.add("categories", ",".join(item.get("categories", [])))
+        series_attrs.add("values", ",".join(item.get("values", [])))
         if item.get("min") is not None:
-            line.append(f" min={item['min']:g}")
+            series_attrs.add("min", f"{item['min']:g}")
         if item.get("max") is not None:
-            line.append(f" max={item['max']:g}")
-        line.append(">")
-        lines.append("".join(line))
+            series_attrs.add("max", f"{item['max']:g}")
+        lines.append(f"<series{series_attrs.render()}>")
     return "\n".join(lines)
 
 
@@ -89,6 +90,7 @@ def _render_smartart(parsed: ParsedPresentation, resource_id: str) -> str | None
     if record is None:
         return None
     layout: str | None = None
+    layout = record.get("layoutType")
     for slide in parsed.slides:
         for shape in slide["shapes"]:
             if shape["type"] == "smartart" and shape.get("smartartId") == resource_id:
@@ -96,15 +98,12 @@ def _render_smartart(parsed: ParsedPresentation, resource_id: str) -> str | None
                 break
         if layout:
             break
-    parts = [f"<smartart id={resource_id}"]
-    if layout:
-        parts.append(f" type={layout}")
     nodes = record.get("nodes", [])
     links = record.get("links", [])
-    parts.append(f" nodes={len(nodes)} links={len(links)}>")
-    lines = ["".join(parts)]
-    lines.extend(f"<node id={node['id']}>{escape(node['text'])}" for node in nodes)
-    lines.extend(f"<link from={link['from']} to={link['to']}>" for link in links)
+    attrs = AttributeBuilder().add("id", resource_id).add("type", layout).add("nodes", len(nodes)).add("links", len(links))
+    lines = [f"<smartart{attrs.render()}>"]
+    lines.extend(f"<node{AttributeBuilder().add('id', node['id']).render()}>{escape(node['text'])}" for node in nodes)
+    lines.extend(f"<link{AttributeBuilder().add('from', link['from']).add('to', link['to']).render()}>" for link in links)
     return "\n".join(lines)
 
 
@@ -118,6 +117,16 @@ def _render_table(
 ) -> str | None:
     if aggregate is not None and aggregate not in _AGGREGATE_OPS:
         raise ValueError(f"aggregate must be one of: {', '.join(sorted(_AGGREGATE_OPS))}")
+    if aggregate is not None and aggregate_column is None:
+        raise ValueError("aggregate_column is required when aggregate is set")
+    if aggregate is None and aggregate_column is not None:
+        raise ValueError("aggregate is required when aggregate_column is set")
+    if aggregate_column is not None and (
+        isinstance(aggregate_column, bool) or not isinstance(aggregate_column, int) or aggregate_column < 0
+    ):
+        raise ValueError("aggregate_column must be a non-negative integer")
+    if columns is not None and any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in columns):
+        raise ValueError("columns must contain non-negative integers")
     shape = None
     for slide in parsed.slides:
         for candidate in slide["shapes"]:
@@ -131,30 +140,36 @@ def _render_table(
     table_rows = shape.get("rows", [])
     start, end = _parse_rows_spec(rows, len(table_rows))
     selected = table_rows[start:end]
+    aggregate_rows = selected
     if columns is not None:
         selected = [[row[i] for i in columns if i < len(row)] for row in selected]
     cols = max((len(row) for row in selected), default=0)
-    lines = [f"<table id={resource_id} rows={len(selected)} cols={cols}>"]
+    attrs = AttributeBuilder().add("id", resource_id).add("rows", len(selected)).add("cols", cols)
+    lines = [f"<table{attrs.render()}>"]
     for row in selected:
         cells = "".join(f"<td>{escape(cell)}</td>" for cell in row)
         lines.append(f"<tr>{cells}")
     if aggregate is not None and aggregate_column is not None:
-        values = _numeric_cells(selected, aggregate_column)
-        lines.append(f"<aggregate op={aggregate} column={aggregate_column} value={_aggregate(aggregate, values):g}>")
+        values = _numeric_cells(aggregate_rows, aggregate_column)
+        attrs = (
+            AttributeBuilder()
+            .add("op", aggregate)
+            .add("column", aggregate_column)
+            .add("value", f"{_aggregate(aggregate, values):g}")
+        )
+        lines.append(f"<aggregate{attrs.render()}>")
     return "\n".join(lines)
 
 
 def _parse_rows_spec(spec: str | None, row_count: int) -> tuple[int, int]:
     if spec is None:
         return 0, row_count
-    if "-" in spec:
-        first, _, last = spec.partition("-")
-        start = int(first) - 1
-        end = int(last)
-    else:
-        start = int(spec) - 1
-        end = start + 1
-    if start < 0 or end < start or start > row_count:
+    match = re.fullmatch(r"([1-9]\d*)(?:-([1-9]\d*))?", spec)
+    if match is None:
+        raise ValueError(f"Invalid rows spec: {spec!r}")
+    start = int(match.group(1)) - 1
+    end = int(match.group(2) or match.group(1))
+    if start >= row_count or end <= start or end > row_count:
         raise ValueError(f"Invalid rows spec: {spec!r}")
     return start, end
 

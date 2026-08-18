@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Literal, TypedDict
@@ -343,6 +344,18 @@ class DocumentManifest(TypedDict):
     comments: int
 
 
+class OcrResultRecord(TypedDict, total=False):
+    """Stored OCR outcome; status is success, empty, or error."""
+
+    status: Literal["success", "empty", "error"]
+    text: str
+    error_code: str
+    error_message: str
+
+
+OcrStoredResult = str | OcrResultRecord
+
+
 ResourceSummary = dict[str, object]
 ResourceDetail = dict[str, object]
 
@@ -362,6 +375,7 @@ class ParseOptions:
     max_total_uncompressed_bytes: int = 500 * 1024 * 1024
     ocr: object | None = None  # OcrProvider | None, lazy import
     ocr_workers: int = 4
+    ocr_timeout: float = 120.0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "revision_mode", RevisionMode.parse(self.revision_mode))
@@ -373,6 +387,19 @@ class ParseOptions:
         for name, value in limits.items():
             if value <= 0:
                 raise ValueError(f"{name} must be greater than zero")
+        if isinstance(self.ocr_workers, bool) or not isinstance(self.ocr_workers, int) or self.ocr_workers <= 0:
+            raise ValueError("ocr_workers must be greater than zero")
+        if (
+            isinstance(self.ocr_timeout, bool)
+            or not isinstance(self.ocr_timeout, (int, float))
+            or not math.isfinite(self.ocr_timeout)
+            or self.ocr_timeout <= 0
+        ):
+            raise ValueError("ocr_timeout must be greater than zero")
+        if self.ocr is not None and not any(
+            callable(getattr(self.ocr, method, None)) for method in ("extract", "extract_result")
+        ):
+            raise TypeError("ocr must provide an extract(image_bytes) or extract_result(image_bytes) method")
 
 
 @dataclass(slots=True)
@@ -413,7 +440,7 @@ class ParsedDocument:
     endnotes: list[AncillaryItem] = field(default_factory=list)
     comments: list[AncillaryItem] = field(default_factory=list)
     numbering: dict[str, object] = field(default_factory=dict)
-    ocr_results: dict[str, str] = field(default_factory=dict)
+    ocr_results: dict[str, OcrStoredResult] = field(default_factory=dict)
     metrics: MetricsSnapshot = field(default_factory=lambda: MetricsSnapshot(stagesMs={}, counters={}))
 
     def to_dict(self) -> dict[str, object]:
@@ -436,6 +463,7 @@ class ParsedDocument:
             "endnotes": self.endnotes,
             "comments": self.comments,
             "numbering": self.numbering,
+            "ocrResults": self.ocr_results,
             "metrics": self.metrics,
         }
 
@@ -462,6 +490,8 @@ __all__ = [
     "MetricsSnapshot",
     "NumberingLabel",
     "ObjectLookup",
+    "OcrResultRecord",
+    "OcrStoredResult",
     "ParagraphBlock",
     "ParseOptions",
     "ParseWarning",

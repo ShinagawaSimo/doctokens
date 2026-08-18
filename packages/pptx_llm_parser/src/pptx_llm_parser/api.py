@@ -9,9 +9,14 @@ import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 
+from ooxml_llm_core.models import ParseWarning
+from ooxml_llm_core.relationships import RelationshipIndex
+
 from .core.enums import Density, ResourceType
-from .core.models import ParseOptions
+from .core.models import ParsedPresentation, ParseOptions, SlideBlock
 from .core.package import PackageReader
+from .extractors.assets import AssetExtractor
+from .extractors.objects import EmbeddedObjectExtractor
 from .parser import PptxParser
 from .renderers._render import (
     _html_comments_block,
@@ -42,7 +47,8 @@ def parse_pptx(
     resolved = Density.parse(density)
     if stream:
         return iter_slides(source, density=resolved, options=options)
-    parsed = PptxParser().parse(source, options or ParseOptions())
+    opts = options or ParseOptions()
+    parsed = PptxParser().parse(source, opts if resolved is Density.SEMANTIC else _without_ocr(opts))
     if resolved == Density.PLAIN:
         return "".join(iter_plain(parsed))
     if resolved == Density.STRUCTURAL:
@@ -59,36 +65,45 @@ def iter_slides(
 ) -> Iterator[str]:
     """Stream rendered output: one chunk per slide, comments as a tail chunk."""
     resolved = Density.parse(density)
-    parsed = PptxParser().parse(source, options or ParseOptions())
-    slides = parsed.slides[start_slide - 1 :]
-    if resolved == Density.PLAIN:
-        first = True
-        for slide in slides:
+    opts = options or ParseOptions()
+    if isinstance(start_slide, bool) or not isinstance(start_slide, int) or start_slide < 1:
+        raise ValueError("start_slide must be greater than zero")
+    parser = PptxParser()
+    first_slide = True
+    last_parsed: ParsedPresentation | None = None
+    parse_options = opts if resolved is Density.SEMANTIC else _without_ocr(opts)
+    for slide, parsed in parser.iter_slides(source, parse_options, start_slide=start_slide):
+        last_parsed = parsed
+        if resolved is Density.PLAIN:
             parts: list[str] = []
-            if first:
+            if first_slide:
                 parts.append("density=plain\n")
-                first = False
+                first_slide = False
             else:
                 parts.append("\n")
             parts.append(f"=== Slide {slide['n']} ===\n")
             parts.append(_plain_slide_body(slide))
             yield "".join(parts)
-        comments = _plain_comments_block(parsed)
-        if comments:
-            yield comments
-        return
-    smartart_nodes = {smartart["id"]: smartart for smartart in parsed.smartarts}
-    semantic = resolved == Density.SEMANTIC
-    first = True
-    for slide in slides:
-        block = _html_slide_block(slide, smartart_nodes, semantic=semantic)
-        if first:
+            continue
+        smartart_nodes = {smartart["id"]: smartart for smartart in parsed.smartarts}
+        block = _html_slide_block(
+            slide,
+            smartart_nodes,
+            semantic=resolved is Density.SEMANTIC,
+            ocr_results=parsed.ocr_results if resolved is Density.SEMANTIC else None,
+        )
+        if first_slide:
             yield f"density={resolved.value}\n{block}"
-            first = False
+            first_slide = False
         else:
             yield block
+    if last_parsed is None:
+        return
+    parsed = last_parsed
     comments = _html_comments_block(parsed)
-    if comments:
+    if resolved is Density.PLAIN:
+        comments = _plain_comments_block(parsed)
+    if comments and parsed.comments:
         yield comments
 
 
@@ -102,10 +117,17 @@ def render_window(
 ) -> str:
     """Render a window of slides. slide is 1-based; slide=-1 selects the last slide."""
     resolved = Density.parse(density)
-    parsed = PptxParser().parse(source, options or ParseOptions())
+    if isinstance(slide, bool) or not isinstance(slide, int) or slide == 0 or slide < -1:
+        raise ValueError("slide must be -1 or a positive integer")
+    if isinstance(span, bool) or not isinstance(span, int) or span <= 0:
+        raise ValueError("span must be a positive integer")
+    opts = options or ParseOptions()
+    parsed = PptxParser().parse(source, _without_ocr(opts))
     start = len(parsed.slides) + slide if slide < 0 else slide - 1
     start = max(0, min(start, len(parsed.slides)))
     filtered = dataclasses.replace(parsed, slides=parsed.slides[start : start + span])
+    if resolved is Density.SEMANTIC:
+        _apply_selected_ocr(source, filtered, filtered.slides, opts)
     if not filtered.slides:
         filtered.comments = []  # empty selection renders as an empty document
     if resolved == Density.PLAIN:
@@ -130,25 +152,58 @@ def get_resource(
     resolved = ResourceType.parse(resource_type)
     if resolved.is_plural:
         raise ValueError("resource_type must be singular, e.g. 'image' not 'images'")
-    parsed = PptxParser().parse(source, options or ParseOptions())
-    pkg: PackageReader | None = None
-    if resolved in (ResourceType.IMAGE, ResourceType.MEDIA):
-        pkg = PackageReader(source, options or ParseOptions())
-        pkg.__enter__()
-    try:
-        return render_resource(
-            parsed,
-            pkg,
-            resolved,
-            resource_id,
-            rows=rows,
-            columns=columns,
-            aggregate=aggregate,
-            aggregate_column=aggregate_column,
-        )
-    finally:
-        if pkg is not None:
-            pkg.__exit__(None, None, None)
+    opts = options or ParseOptions()
+    if resolved in (ResourceType.IMAGE, ResourceType.MEDIA, ResourceType.CHART, ResourceType.SMARTART):
+        warnings: list[ParseWarning] = []
+        with PackageReader(source, _without_ocr(opts)) as pkg:
+            pkg.validate()
+            relationships = RelationshipIndex.from_records(pkg.read_all_relationships())
+            if resolved in (ResourceType.IMAGE, ResourceType.MEDIA):
+                assets, _ = AssetExtractor(pkg, relationships, warnings).extract()
+                parsed = ParsedPresentation(assets=assets, warnings=warnings)
+            else:
+                objects = EmbeddedObjectExtractor(pkg, relationships, warnings)
+                if resolved is ResourceType.CHART:
+                    chart = objects.chart_by_id(resource_id)
+                    parsed = ParsedPresentation(charts=[chart] if chart is not None else [], warnings=warnings)
+                else:
+                    smartart = objects.smartart_by_id(resource_id)
+                    parsed = ParsedPresentation(smartarts=[smartart] if smartart is not None else [], warnings=warnings)
+            return render_resource(
+                parsed,
+                pkg,
+                resolved,
+                resource_id,
+            )
+    if resolved is ResourceType.TABLE:
+        iterator = PptxParser().iter_slides(source, _without_ocr(opts))
+        try:
+            for _slide, parsed in iterator:
+                if any(shape["type"] == "table" and shape.get("tableId") == resource_id for shape in parsed.slides[0]["shapes"]):
+                    return render_resource(
+                        parsed,
+                        None,
+                        resolved,
+                        resource_id,
+                        rows=rows,
+                        columns=columns,
+                        aggregate=aggregate,
+                        aggregate_column=aggregate_column,
+                    )
+            return None
+        finally:
+            iterator.close()
+    parsed = PptxParser().parse(source, _without_ocr(opts))
+    return render_resource(
+        parsed,
+        None,
+        resolved,
+        resource_id,
+        rows=rows,
+        columns=columns,
+        aggregate=aggregate,
+        aggregate_column=aggregate_column,
+    )
 
 
 def write_document(
@@ -177,3 +232,24 @@ def write_document(
             os.unlink(temp_name)
         raise
     return target
+
+
+def _without_ocr(options: ParseOptions) -> ParseOptions:
+    return dataclasses.replace(options, ocr=None) if options.ocr is not None else options
+
+
+def _apply_selected_ocr(
+    source: str | Path | bytes,
+    parsed: ParsedPresentation,
+    slides: list[SlideBlock],
+    options: ParseOptions,
+) -> None:
+    if options.ocr is None:
+        return
+    with PackageReader(source, options) as pkg:
+        parsed.ocr_results = PptxParser._run_ocr(
+            pkg,
+            parsed.assets,
+            slides,
+            options,
+        )

@@ -80,6 +80,11 @@ def record_content_metrics(parsed: ParsedDocument, metrics: MetricsRecorder) -> 
     metrics.set_counter("assetCount", len(parsed.assets))
     metrics.set_counter("chartCount", len(parsed.charts))
     metrics.set_counter("smartartCount", len(parsed.smartarts))
+    metrics.set_counter("ocrResultCount", len(parsed.ocr_results))
+    metrics.set_counter(
+        "ocrErrorCount",
+        sum(1 for value in parsed.ocr_results.values() if isinstance(value, dict) and value.get("status") == "error"),
+    )
     metrics.set_counter("headerCount", len(parsed.headers))
     metrics.set_counter("footerCount", len(parsed.footers))
     metrics.set_counter("footnoteCount", len(parsed.footnotes))
@@ -89,7 +94,7 @@ def record_content_metrics(parsed: ParsedDocument, metrics: MetricsRecorder) -> 
 
 
 def _debug_manifest(parsed: ParsedDocument) -> dict[str, object]:
-    return {
+    manifest: dict[str, object] = {
         "assets": parsed.assets,
         "embedded": {
             "charts": parsed.charts,
@@ -118,6 +123,12 @@ def _debug_manifest(parsed: ParsedDocument) -> dict[str, object]:
             "packageInfo": parsed.package_info,
         },
     }
+    if parsed.ocr_results:
+        manifest["ocrResults"] = parsed.ocr_results
+        summary = manifest["summary"]
+        if isinstance(summary, dict):
+            summary["ocrResultCount"] = len(parsed.ocr_results)
+    return manifest
 
 
 def _compute_block_stats(blocks: list[Block]) -> dict[str, int]:

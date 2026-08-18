@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterator
 from pathlib import Path
 
 from .core.enums import Density, ResourceType
 from .core.models import ParseOptions
+from .core.package import PackageReader
 from .parser import DocxParser
 from .renderers.html5 import iter_html5 as _iter_html5
 from .renderers.html5 import render_resource as _render_resource
@@ -80,7 +82,13 @@ def get_resource(
     resolved_type = ResourceType.parse(resource_type)
     if resolved_type.is_plural:
         raise ValueError("resource_type must be singular when getting one resource")
-    parsed = DocxParser().parse(source, options)
+    opts = options or ParseOptions()
+    parsed = DocxParser().parse(source, dataclasses.replace(opts, ocr=None) if opts.ocr is not None else opts)
+    if resolved_type is ResourceType.IMAGE and opts.ocr is not None:
+        asset = next((item for item in parsed.assets if item["id"] == resource_id), None)
+        if asset is not None:
+            with PackageReader(source, opts) as package:
+                parsed.ocr_results = DocxParser._run_ocr(package, [asset], opts)
     items = _render_resource(
         parsed,
         resolved_type,

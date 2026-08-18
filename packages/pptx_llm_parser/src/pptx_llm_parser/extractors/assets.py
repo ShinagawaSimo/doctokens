@@ -31,6 +31,7 @@ class AssetExtractor:
         self._pkg = pkg
         self._relationships = relationships
         self._warnings = warnings
+        self._content_types = pkg.read_content_types()
 
     def extract(self) -> tuple[list[ImageAsset], AssetLookup]:
         assets: list[ImageAsset] = []
@@ -70,10 +71,9 @@ class AssetExtractor:
         return assets, lookup
 
     def _content_type_for_part(self, zip_path: str) -> str:
-        content_types = self._pkg.read_content_types()
-        if zip_path in content_types["overrides"]:
-            return content_types["overrides"][zip_path]
+        if zip_path in self._content_types["overrides"]:
+            return self._content_types["overrides"][zip_path]
         ext = zip_path.rsplit(".", 1)[-1].lower() if "." in zip_path else ""
-        if ext and ext in content_types["defaults"]:
-            return content_types["defaults"][ext]
+        if ext and ext in self._content_types["defaults"]:
+            return self._content_types["defaults"][ext]
         return mimetypes.guess_type(zip_path)[0] or "application/octet-stream"

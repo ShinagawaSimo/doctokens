@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass
 from typing import cast
 from xml.etree import ElementTree as ET
 
@@ -26,6 +28,66 @@ DIAGRAM_DATA_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/r
 DIAGRAM_LAYOUT_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout"
 
 
+@dataclass(frozen=True)
+class _ObjectSpec:
+    source_part: str
+    relationship_id: str
+    object_id: str
+    part: str
+
+
+class _LazyChartLookup(Mapping[tuple[str, str], ChartRecord]):
+    def __init__(self, owner: EmbeddedObjectExtractor, specs: dict[tuple[str, str], _ObjectSpec]) -> None:
+        self._owner = owner
+        self._specs = specs
+        self._loaded: dict[tuple[str, str], ChartRecord] = {}
+
+    def __getitem__(self, key: tuple[str, str]) -> ChartRecord:
+        if key not in self._specs:
+            raise KeyError(key)
+        if key not in self._loaded:
+            record = self._owner._load_chart(self._specs[key])
+            if record is None:
+                raise KeyError(key)
+            self._loaded[key] = record
+        return self._loaded[key]
+
+    def __iter__(self) -> Iterator[tuple[str, str]]:
+        return iter(self._specs)
+
+    def __len__(self) -> int:
+        return len(self._specs)
+
+    def loaded_values(self) -> list[ChartRecord]:
+        return list(self._loaded.values())
+
+
+class _LazySmartArtLookup(Mapping[tuple[str, str], SmartArtRecord]):
+    def __init__(self, owner: EmbeddedObjectExtractor, specs: dict[tuple[str, str], _ObjectSpec]) -> None:
+        self._owner = owner
+        self._specs = specs
+        self._loaded: dict[tuple[str, str], SmartArtRecord] = {}
+
+    def __getitem__(self, key: tuple[str, str]) -> SmartArtRecord:
+        if key not in self._specs:
+            raise KeyError(key)
+        if key not in self._loaded:
+            record = self._owner._load_smartart(self._specs[key])
+            if record is None:
+                raise KeyError(key)
+            self._loaded[key] = record
+        return self._loaded[key]
+
+    def __iter__(self) -> Iterator[tuple[str, str]]:
+        return iter(self._specs)
+
+    def __len__(self) -> int:
+        return len(self._specs)
+
+    def loaded_values(self) -> list[SmartArtRecord]:
+        return list(self._loaded.values())
+
+
 class EmbeddedObjectExtractor:
     """Parse embedded chart and diagram parts into lightweight records."""
 
@@ -38,10 +100,120 @@ class EmbeddedObjectExtractor:
         self._pkg = pkg
         self._relationships = relationships
         self._warnings = warnings
+        self._chart_lookup: _LazyChartLookup | None = None
+        self._smartart_lookup: _LazySmartArtLookup | None = None
+
+    def lazy_charts(self) -> ChartLookup:
+        specs: dict[tuple[str, str], _ObjectSpec] = {}
+        for index, record in enumerate(self._relationships.by_type(CHART_REL_TYPE), start=1):
+            if record.resolved_target is not None:
+                specs[(record.source_part, record.id)] = _ObjectSpec(
+                    record.source_part, record.id, f"chart{index}", record.resolved_target
+                )
+        self._chart_lookup = _LazyChartLookup(self, specs)
+        return self._chart_lookup
+
+    def lazy_smartarts(self) -> tuple[SmartArtLookup, LayoutLookup]:
+        specs: dict[tuple[str, str], _ObjectSpec] = {}
+        for index, record in enumerate(self._relationships.by_type(DIAGRAM_DATA_REL_TYPE), start=1):
+            if record.resolved_target is not None:
+                specs[(record.source_part, record.id)] = _ObjectSpec(
+                    record.source_part, record.id, f"smartart{index}", record.resolved_target
+                )
+        data_lookup = _LazySmartArtLookup(self, specs)
+        self._smartart_lookup = data_lookup
+        layout_lookup = self._layout_lookup()
+        return data_lookup, layout_lookup
+
+    @property
+    def loaded_charts(self) -> list[ChartRecord]:
+        return self._chart_lookup.loaded_values() if self._chart_lookup is not None else []
+
+    @property
+    def loaded_smartarts(self) -> list[SmartArtRecord]:
+        return self._smartart_lookup.loaded_values() if self._smartart_lookup is not None else []
+
+    def chart_by_id(self, resource_id: str) -> ChartRecord | None:
+        for index, record in enumerate(self._relationships.by_type(CHART_REL_TYPE), start=1):
+            if f"chart{index}" != resource_id or record.resolved_target is None:
+                continue
+            return self._load_chart(_ObjectSpec(record.source_part, record.id, resource_id, record.resolved_target))
+        return None
+
+    def smartart_by_id(self, resource_id: str) -> SmartArtRecord | None:
+        for index, record in enumerate(self._relationships.by_type(DIAGRAM_DATA_REL_TYPE), start=1):
+            if f"smartart{index}" != resource_id or record.resolved_target is None:
+                continue
+            return self._load_smartart(_ObjectSpec(record.source_part, record.id, resource_id, record.resolved_target))
+        return None
+
+    def _load_chart(self, spec: _ObjectSpec) -> ChartRecord | None:
+        if not self._pkg.exists(spec.part):
+            self._warnings.append(
+                ParseWarning(code="CHART_PART_MISSING", message=f"Chart part missing: {spec.part}", locator=spec.source_part)
+            )
+            return None
+        try:
+            info = parse_chart_xml(self._read_xml(spec.part))
+            return cast(ChartRecord, {**info, "id": spec.object_id, "part": spec.part})
+        except (ET.ParseError, ValueError, TypeError) as exc:
+            self._warnings.append(
+                ParseWarning(code="CHART_PARSE_ERROR", message=f"Unable to parse chart: {exc}", locator=spec.part)
+            )
+            return None
+
+    def _load_smartart(self, spec: _ObjectSpec) -> SmartArtRecord | None:
+        if not self._pkg.exists(spec.part):
+            self._warnings.append(
+                ParseWarning(
+                    code="SMARTART_PART_MISSING",
+                    message=f"Diagram data part missing: {spec.part}",
+                    locator=spec.source_part,
+                )
+            )
+            return None
+        try:
+            nodes, links = self._parse_diagram_data(self._read_xml(spec.part), spec.part)
+            result: SmartArtRecord = {
+                "id": spec.object_id,
+                "part": spec.part,
+                "nodes": nodes,
+                "links": links,
+                "nodeCount": len(nodes),
+                "linkCount": len(links),
+            }
+            for record in self._relationships.by_source(spec.source_part):
+                if record.type != DIAGRAM_LAYOUT_REL_TYPE or record.resolved_target is None:
+                    continue
+                if not self._pkg.exists(record.resolved_target):
+                    continue
+                category = self._parse_layout_category(self._read_xml(record.resolved_target))
+                if category:
+                    result["layoutType"] = category
+                    break
+            return result
+        except (ET.ParseError, ValueError, TypeError) as exc:
+            self._warnings.append(
+                ParseWarning(code="SMARTART_PARSE_ERROR", message=f"Unable to parse diagram: {exc}", locator=spec.part)
+            )
+            return None
+
+    def _layout_lookup(self) -> LayoutLookup:
+        result: LayoutLookup = {}
+        for record in self._relationships.by_type(DIAGRAM_LAYOUT_REL_TYPE):
+            if record.resolved_target is None or not self._pkg.exists(record.resolved_target):
+                continue
+            try:
+                category = self._parse_layout_category(self._read_xml(record.resolved_target))
+            except ET.ParseError:
+                category = None
+            if category:
+                result[(record.source_part, record.id)] = category
+        return result
 
     def extract_charts(self) -> tuple[list[ChartRecord], ChartLookup]:
         charts: list[ChartRecord] = []
-        lookup: ChartLookup = {}
+        lookup: dict[tuple[str, str], ChartRecord] = {}
         index = 0
         for record in self._relationships.by_type(CHART_REL_TYPE):
             index += 1
@@ -67,7 +239,7 @@ class EmbeddedObjectExtractor:
 
     def extract_smartarts(self) -> tuple[list[SmartArtRecord], SmartArtLookup, LayoutLookup]:
         smartarts: list[SmartArtRecord] = []
-        data_lookup: SmartArtLookup = {}
+        data_lookup: dict[tuple[str, str], SmartArtRecord] = {}
         index = 0
         for record in self._relationships.by_type(DIAGRAM_DATA_REL_TYPE):
             index += 1

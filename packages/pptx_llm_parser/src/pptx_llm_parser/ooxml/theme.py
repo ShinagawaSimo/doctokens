@@ -61,19 +61,32 @@ class ThemeParser:
 
     def parse(self) -> dict[str, str]:
         part: str | None = None
-        for record in self._relationships.by_type(THEME_REL_TYPE):
-            if record.source_part == PRESENTATION_PART:
-                part = record.resolved_target
+        locator = PRESENTATION_PART
+        theme_records = list(self._relationships.by_type(THEME_REL_TYPE))
+        # Some producers attach the theme only to a slide master. Prefer the
+        # presentation-level relationship, then choose the first master theme
+        # in deterministic relationship order.
+        preferred = [record for record in theme_records if record.source_part == PRESENTATION_PART]
+        preferred.extend(
+            record for record in theme_records if record.source_part.startswith("ppt/slideMasters/") and record not in preferred
+        )
+        if preferred:
+            part = preferred[0].resolved_target
+            locator = preferred[0].source_part
         if part is None or not self._pkg.exists(part):
             self._warnings.append(
                 ParseWarning(
                     code="THEME_PART_MISSING",
                     message=f"Theme part missing: {part}",
-                    locator=PRESENTATION_PART,
+                    locator=locator,
                 )
             )
             return dict(_DEFAULT_THEME)
-        root = self._read_xml(part)
+        try:
+            root = self._read_xml(part)
+        except ET.ParseError as exc:
+            self._warnings.append(ParseWarning(code="THEME_XML_INVALID", message=f"Invalid theme XML: {exc}", locator=part))
+            return dict(_DEFAULT_THEME)
         scheme = self._find_descendant(root, "clrScheme")
         if scheme is None:
             self._warnings.append(

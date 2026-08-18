@@ -16,6 +16,17 @@ class ParseOptionsOcrTest(unittest.TestCase):
     def test_default_ocr_workers(self) -> None:
         opts = ParseOptions()
         self.assertEqual(opts.ocr_workers, 4)
+        self.assertEqual(opts.ocr_timeout, 120.0)
+
+    def test_ocr_settings_are_validated(self) -> None:
+        with self.assertRaisesRegex(ValueError, "ocr_workers"):
+            ParseOptions(ocr_workers=0)
+        with self.assertRaisesRegex(ValueError, "ocr_timeout"):
+            ParseOptions(ocr_timeout=0)
+        with self.assertRaisesRegex(ValueError, "ocr_timeout"):
+            ParseOptions(ocr_timeout=True)
+        with self.assertRaisesRegex(TypeError, "ocr must provide"):
+            ParseOptions(ocr=object())
 
     def test_can_set_ocr_provider(self) -> None:
         from ocr_llm_core import OcrProvider
@@ -77,6 +88,34 @@ class RenderOcrTextTest(unittest.TestCase):
         pos_img = html.index("<img id=img1>")
         pos_ocr = html.index("<ocr-text id=img1>")
         self.assertGreater(pos_ocr, pos_img)
+
+    def test_structured_ocr_results_escape_text_and_preserve_empty(self) -> None:
+        from docx_llm_parser.core.enums import Density
+        from docx_llm_parser.core.models import ContentTypes, ImageAsset, ParsedDocument
+        from docx_llm_parser.renderers.html5 import to_html5
+
+        assets: list[ImageAsset] = [
+            {"id": "img1", "type": "image", "source": "embedded", "zipPath": "media/1.png"},
+            {"id": "img2", "type": "image", "source": "embedded", "zipPath": "media/2.png"},
+        ]
+        parsed = ParsedDocument(
+            metadata={},
+            package_info={},
+            blocks=[],
+            relationships=[],
+            styles=[],
+            warnings=[],
+            assets=assets,
+            content_types=ContentTypes(defaults={}, overrides={}),
+            ocr_results={
+                "img1": {"status": "success", "text": "A < B"},
+                "img2": {"status": "empty", "text": ""},
+            },
+        )
+        html = to_html5(parsed, Density.SEMANTIC)
+        self.assertIn("<ocr-text id=img1>A &lt; B", html)
+        self.assertIn("<ocr-text id=img2 empty>", html)
+        self.assertNotIn("A < B", html)
 
     def test_ocr_disabled_no_ocr_text_output(self) -> None:
         """Without ocr_results, no <ocr-text> elements appear."""
@@ -144,8 +183,136 @@ class RenderOcrTextTest(unittest.TestCase):
         self.assertIn("img id=img7", html)
         self.assertIn("ocr-text id=img7>Diagram text", html)
 
+    def test_nested_table_image_receives_ocr_in_semantic_and_plain_output(self) -> None:
+        from docx_llm_parser.core.enums import Density
+        from docx_llm_parser.core.models import ContentTypes, ImageAsset, ParsedDocument
+        from docx_llm_parser.renderers.html5 import to_html5
+
+        image_paragraph = {
+            "id": "p1",
+            "type": "paragraph",
+            "part": "word/document.xml",
+            "order": 0,
+            "page": 1,
+            "styleId": None,
+            "text": "",
+            "runs": [{"text": "", "objects": [{"type": "image", "assetId": "img-table"}]}],
+        }
+        inner_table = {
+            "id": "inner",
+            "type": "table",
+            "tableId": "table-inner",
+            "columnCount": 1,
+            "rows": [
+                {
+                    "isHeader": False,
+                    "cells": [
+                        {
+                            "text": "",
+                            "colSpan": 1,
+                            "rowSpan": 1,
+                            "blocks": [image_paragraph],
+                        }
+                    ],
+                }
+            ],
+        }
+        outer_table = {
+            "id": "outer",
+            "type": "table",
+            "tableId": "table-outer",
+            "columnCount": 1,
+            "rows": [
+                {
+                    "isHeader": False,
+                    "cells": [{"text": "", "colSpan": 1, "rowSpan": 1, "blocks": [inner_table]}],
+                }
+            ],
+        }
+        assets: list[ImageAsset] = [{"id": "img-table", "type": "image", "source": "embedded", "zipPath": "media/table.png"}]
+        parsed = ParsedDocument(
+            metadata={},
+            package_info={},
+            blocks=cast(Any, [outer_table]),
+            relationships=[],
+            styles=[],
+            warnings=[],
+            assets=assets,
+            content_types=ContentTypes(defaults={}, overrides={}),
+            ocr_results={"img-table": {"status": "success", "text": "Cell OCR"}},
+        )
+        semantic = to_html5(parsed, Density.SEMANTIC)
+        plain = to_html5(parsed, Density.PLAIN)
+        self.assertIn("<ocr-text id=img-table>Cell OCR", semantic)
+        self.assertIn("OCR: Cell OCR", plain)
+
+    def test_supplemental_image_receives_ocr(self) -> None:
+        from docx_llm_parser.core.enums import Density
+        from docx_llm_parser.core.models import ContentTypes, ParsedDocument
+        from docx_llm_parser.renderers.html5 import to_html5
+
+        header = {
+            "id": "header1",
+            "loc": "header",
+            "text": "",
+            "runs": [{"text": "", "objects": [{"type": "image", "assetId": "img-header"}]}],
+        }
+        parsed = ParsedDocument(
+            metadata={},
+            package_info={},
+            blocks=[],
+            relationships=[],
+            styles=[],
+            warnings=[],
+            assets=[],
+            content_types=ContentTypes(defaults={}, overrides={}),
+            headers=cast(Any, [header]),
+            ocr_results={"img-header": {"status": "success", "text": "Header OCR"}},
+        )
+        semantic = to_html5(parsed, Density.SEMANTIC)
+        self.assertIn("<ocr-text id=img-header>Header OCR", semantic)
+
 
 class EndToEndOcrTest(unittest.TestCase):
+    def test_media_part_is_read_once_and_read_errors_are_isolated(self) -> None:
+        from io import BytesIO
+
+        from docx_llm_parser.core.models import ImageAsset, ParseOptions
+        from docx_llm_parser.parser import DocxParser
+        from ocr_llm_core import OcrProvider
+
+        class Provider(OcrProvider):
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def extract(self, image_bytes: bytes) -> str:
+                self.calls += 1
+                return "read once"
+
+        class Package:
+            def __init__(self) -> None:
+                self.calls: dict[str, int] = {}
+
+            def open_entry(self, path: str) -> BytesIO:
+                self.calls[path] = self.calls.get(path, 0) + 1
+                if path == "word/media/broken.png":
+                    raise OSError("bad CRC")
+                return BytesIO(b"shared image")
+
+        assets: list[ImageAsset] = [
+            {"id": "img1", "type": "image", "source": "embedded", "zipPath": "word/media/shared.png"},
+            {"id": "img2", "type": "image", "source": "embedded", "zipPath": "word/media/shared.png"},
+            {"id": "img3", "type": "image", "source": "embedded", "zipPath": "word/media/broken.png"},
+        ]
+        provider = Provider()
+        package = Package()
+        results = DocxParser._run_ocr(cast(Any, package), assets, ParseOptions(ocr=provider))
+        self.assertEqual(package.calls["word/media/shared.png"], 1)
+        self.assertEqual(provider.calls, 1)
+        self.assertEqual(results["img1"]["text"], "read once")
+        self.assertEqual(results["img2"]["text"], "read once")
+        self.assertEqual(results["img3"]["error_code"], "image_read_error")
+
     def test_full_ocr_pipeline_with_mock_provider(self) -> None:
         """Simulate a complete parse->OCR->render cycle."""
         from pathlib import Path
@@ -168,6 +335,52 @@ class EndToEndOcrTest(unittest.TestCase):
             self.assertIn("density=semantic", html)
             self.assertIsInstance(html, str)
             self.assertTrue(len(html) > 0)
+
+    def test_pipeline_preserves_provider_error_details_in_internal_model(self) -> None:
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        from _fixtures import write_rich_docx
+        from docx_llm_parser.parser import DocxParser
+        from ocr_llm_core import OcrProvider, OcrResult
+
+        class FailingProvider(OcrProvider):
+            def extract(self, image_bytes: bytes) -> str:
+                return ""
+
+            def extract_result(self, image_bytes: bytes, *, timeout: float | None = None) -> OcrResult:
+                return OcrResult.error("engine_error", "private diagnostic")
+
+        with TemporaryDirectory() as temp_dir:
+            docx_path = Path(temp_dir) / "test.docx"
+            write_rich_docx(docx_path)
+            parsed = DocxParser().parse(docx_path, ParseOptions(ocr=FailingProvider()))
+        for value in parsed.ocr_results.values():
+            self.assertEqual(value["status"], "error")
+            self.assertEqual(value["error_message"], "private diagnostic")
+
+    def test_non_image_resource_query_does_not_trigger_ocr(self) -> None:
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        from _fixtures import write_rich_docx
+        from docx_llm_parser import get_resource
+        from ocr_llm_core import OcrProvider
+
+        class CountingProvider(OcrProvider):
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def extract(self, image_bytes: bytes) -> str:
+                self.calls += 1
+                return "text"
+
+        provider = CountingProvider()
+        with TemporaryDirectory() as temp_dir:
+            docx_path = Path(temp_dir) / "test.docx"
+            write_rich_docx(docx_path)
+            get_resource(docx_path, "chart", "chart1", options=ParseOptions(ocr=provider))
+        self.assertEqual(provider.calls, 0)
 
 
 if __name__ == "__main__":

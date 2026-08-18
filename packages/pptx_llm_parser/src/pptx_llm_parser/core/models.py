@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+import math
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 from ooxml_llm_core.chart_ml import ChartSeriesInfo
-from ooxml_llm_core.models import ParseWarning
+from ooxml_llm_core.models import MetricsSnapshot, ParseWarning
 
 DEFAULT_MAX_ZIP_ENTRIES = 10_000
 DEFAULT_MAX_ENTRY_UNCOMPRESSED_BYTES = 50 * 1024 * 1024
 DEFAULT_MAX_TOTAL_UNCOMPRESSED_BYTES = 500 * 1024 * 1024
+
+
+def _empty_metrics() -> MetricsSnapshot:
+    return {}
 
 
 @dataclass(frozen=True)
@@ -23,6 +29,9 @@ class ParseOptions:
     max_zip_entries: int = DEFAULT_MAX_ZIP_ENTRIES
     max_entry_uncompressed_bytes: int = DEFAULT_MAX_ENTRY_UNCOMPRESSED_BYTES
     max_total_uncompressed_bytes: int = DEFAULT_MAX_TOTAL_UNCOMPRESSED_BYTES
+    ocr: object | None = None
+    ocr_workers: int = 4
+    ocr_timeout: float = 120.0
 
     def __post_init__(self) -> None:
         for name in (
@@ -30,8 +39,22 @@ class ParseOptions:
             "max_entry_uncompressed_bytes",
             "max_total_uncompressed_bytes",
         ):
-            if getattr(self, name) <= 0:
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
                 raise ValueError(f"{name} must be greater than zero")
+        if isinstance(self.ocr_workers, bool) or not isinstance(self.ocr_workers, int) or self.ocr_workers <= 0:
+            raise ValueError("ocr_workers must be greater than zero")
+        if (
+            isinstance(self.ocr_timeout, bool)
+            or not isinstance(self.ocr_timeout, (int, float))
+            or not math.isfinite(self.ocr_timeout)
+            or self.ocr_timeout <= 0
+        ):
+            raise ValueError("ocr_timeout must be greater than zero")
+        if self.ocr is not None and not any(
+            callable(getattr(self.ocr, method, None)) for method in ("extract", "extract_result")
+        ):
+            raise TypeError("ocr must provide an extract(image_bytes) or extract_result(image_bytes) method")
 
 
 class RunFormat(TypedDict, total=False):
@@ -49,6 +72,37 @@ class Run(TypedDict, total=False):
     text: str
     format: RunFormat
     link: str
+    equation: str
+
+
+class Paragraph(TypedDict, total=False):
+    """One DrawingML paragraph, including list metadata."""
+
+    runs: list[Run]
+    text: str
+    level: int
+    bullet: str
+    numberType: str
+    startAt: int
+
+
+class ParagraphStyle(TypedDict, total=False):
+    """Resolved paragraph defaults inherited from master/layout/list style."""
+
+    runFormat: RunFormat
+    bullet: str
+    numberType: str
+    startAt: int
+
+
+class TableCell(TypedDict, total=False):
+    """A table cell with the OOXML merge declarations preserved."""
+
+    text: str
+    colSpan: int
+    rowSpan: int
+    hMerge: bool
+    vMerge: bool
 
 
 class ShapeBlock(TypedDict, total=False):
@@ -63,6 +117,9 @@ class ShapeBlock(TypedDict, total=False):
     href: str
     kind: str
     rows: list[list[str]]
+    tableCells: list[list[TableCell]]
+    columnWidths: list[int]
+    paragraphs: list[Paragraph]
     tableId: str
     chartId: str
     chartType: str
@@ -96,6 +153,18 @@ class ImageAsset(TypedDict, total=False):
 AssetLookup = dict[tuple[str, str], ImageAsset]
 
 
+class OcrResultRecord(TypedDict, total=False):
+    """Stored OCR outcome; provider diagnostics stay out of rendered output."""
+
+    status: Literal["success", "empty", "error"]
+    text: str
+    error_code: str
+    error_message: str
+
+
+OcrStoredResult = str | OcrResultRecord
+
+
 class SmartArtNode(TypedDict):
     id: int
     text: str
@@ -125,10 +194,11 @@ class SmartArtRecord(TypedDict, total=False):
     links: list[SmartArtLink]
     nodeCount: int
     linkCount: int
+    layoutType: str
 
 
-ChartLookup = dict[tuple[str, str], ChartRecord]
-SmartArtLookup = dict[tuple[str, str], SmartArtRecord]
+ChartLookup = Mapping[tuple[str, str], ChartRecord]
+SmartArtLookup = Mapping[tuple[str, str], SmartArtRecord]
 LayoutLookup = dict[tuple[str, str], str]
 
 
@@ -147,6 +217,17 @@ class LayoutContext(TypedDict):
 
     placeholders: dict[str, PlaceholderInfo]
     color_map: dict[str, str]
+    text_styles: dict[str, dict[int, ParagraphStyle]]
+
+
+class SlideBackground(TypedDict, total=False):
+    color: str
+    assetId: str
+
+
+class CommentRef(TypedDict, total=False):
+    id: str
+    shapeId: str
 
 
 class SlideBlock(TypedDict):
@@ -160,6 +241,8 @@ class SlideBlock(TypedDict):
     hidden: bool
     shapes: list[ShapeBlock]
     notes: str | None
+    background: SlideBackground | None
+    commentRefs: list[CommentRef]
 
 
 class CommentItem(TypedDict, total=False):
@@ -170,6 +253,11 @@ class CommentItem(TypedDict, total=False):
     author: str
     date: str
     parentId: str
+    parentCommentId: str
+    slideId: str
+    shapeId: str
+    x: int
+    y: int
 
 
 @dataclass
@@ -184,3 +272,5 @@ class ParsedPresentation:
     theme: dict[str, str] = field(default_factory=dict)
     comments: list[CommentItem] = field(default_factory=list)
     warnings: list[ParseWarning] = field(default_factory=list)
+    ocr_results: dict[str, OcrStoredResult] = field(default_factory=dict)
+    metrics: MetricsSnapshot = field(default_factory=_empty_metrics)

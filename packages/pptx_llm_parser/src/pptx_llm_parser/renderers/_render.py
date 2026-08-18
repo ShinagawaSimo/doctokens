@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from html import escape
 
-from ..core.models import CommentItem, ParsedPresentation, ShapeBlock, SlideBlock, SmartArtRecord
+from ..core.models import CommentItem, OcrStoredResult, ParsedPresentation, ShapeBlock, SlideBlock, SmartArtRecord
+from ._ocr import render_ocr_result
+from .markup import AttributeBuilder
 
 _MEDIA_PLACEHOLDERS = {
     "video": "[Video]",
@@ -67,6 +69,8 @@ def _plain_shape_text(shape: ShapeBlock) -> str:
         if layout and node_count is not None:
             return f"[SmartArt: {layout}, {node_count} nodes]"
         return "[SmartArt]"
+    if shape["type"] == "shape":
+        return ""
     raise AssertionError(f"Unknown shape type: {shape['type']}")
 
 
@@ -90,13 +94,34 @@ def iter_structural(parsed: ParsedPresentation) -> Iterator[str]:
         yield comments
 
 
-def _html_slide_block(slide: SlideBlock, smartart_nodes: dict[str, SmartArtRecord], *, semantic: bool) -> str:
+def _html_slide_block(
+    slide: SlideBlock,
+    smartart_nodes: dict[str, SmartArtRecord],
+    *,
+    semantic: bool,
+    ocr_results: Mapping[str, OcrStoredResult] | None = None,
+) -> str:
     line_fn = _semantic_shape_line if semantic else _structural_shape_line
     lines = [_slide_open(slide).rstrip("\n")]
+    for reference in slide.get("commentRefs", []):
+        attrs = AttributeBuilder().add("id", reference["id"]).add("shape", reference.get("shapeId"))
+        lines.append(f"<commentref{attrs.render()}>")
+    background = slide.get("background")
+    if semantic and background is not None:
+        asset_id = background.get("assetId")
+        if asset_id:
+            rendered_ocr = render_ocr_result(asset_id, (ocr_results or {}).get(asset_id))
+            if rendered_ocr is not None:
+                lines.append(rendered_ocr)
     for shape in slide["shapes"]:
         line = line_fn(shape, smartart_nodes)
         if line:
             lines.append(line)
+            if semantic and shape["type"] == "picture":
+                asset_id = shape.get("assetId") or shape["id"]
+                rendered_ocr = render_ocr_result(asset_id, (ocr_results or {}).get(asset_id))
+                if rendered_ocr is not None:
+                    lines.append(rendered_ocr)
     if slide["notes"]:
         lines.append(f"<notes>{escape(slide['notes'])}")
     return "\n".join(lines) + "\n"
@@ -111,8 +136,12 @@ def _html_comments_block(parsed: ParsedPresentation) -> str:
 
 
 def _slide_open(slide: SlideBlock) -> str:
-    hidden = " hidden" if slide["hidden"] else ""
-    return f"<slide n={slide['n']}{hidden}>\n"
+    attrs = AttributeBuilder().add("n", slide["n"]).flag("hidden", slide["hidden"])
+    background = slide.get("background")
+    if background:
+        attrs.add("bg", background.get("color"))
+        attrs.add("bgImage", background.get("assetId"))
+    return f"<slide{attrs.render()}>\n"
 
 
 def _structural_shape_line(shape: ShapeBlock, smartart_nodes: dict[str, SmartArtRecord]) -> str | None:
@@ -121,48 +150,47 @@ def _structural_shape_line(shape: ShapeBlock, smartart_nodes: dict[str, SmartArt
         ph_type = shape.get("placeholderType", "")
         if ph_type in _TITLE_PH_TYPES:
             return f"<title>{_structural_inline(shape)}"
-        ph = f" ph={ph_type}" if ph_type else ""
-        return f"<p{ph}>{_structural_inline(shape)}"
+        attrs = AttributeBuilder().add("ph", ph_type or None)
+        return f"<p{attrs.render()}>{_structural_inline(shape)}"
     if stype == "picture":
         asset_id = shape.get("assetId") or shape["id"]
         alt = shape.get("alt")
-        alt_attr = f' alt="{escape(alt, quote=True)}"' if alt else ""
-        return f"<img id={asset_id}{alt_attr}>"
+        attrs = AttributeBuilder().add("id", asset_id).add("alt", alt)
+        return f"<img{attrs.render()}>"
     if stype == "table":
         return _structural_table(shape)
     if stype == "chart":
-        parts = [f"<chart id={shape.get('chartId') or shape['id']}"]
-        chart_type = shape.get("chartType")
-        if chart_type:
-            parts.append(f" type={chart_type}")
-        series_count = shape.get("seriesCount")
-        if series_count is not None:
-            parts.append(f" series={series_count}")
-        point_count = shape.get("pointCount")
-        if point_count is not None:
-            parts.append(f" points={point_count}")
-        parts.append(" truncated>")
-        return "".join(parts)
+        attrs = (
+            AttributeBuilder()
+            .add("id", shape.get("chartId") or shape["id"])
+            .add("type", shape.get("chartType"))
+            .add("series", shape.get("seriesCount"))
+            .add("points", shape.get("pointCount"))
+            .flag("truncated")
+        )
+        return f"<chart{attrs.render()}>"
     if stype == "smartart":
         smartart_id = shape.get("smartartId") or shape["id"]
-        parts = [f"<smartart id={smartart_id}"]
-        layout = shape.get("layoutType")
-        if layout:
-            parts.append(f" type={layout}")
-        node_count = shape.get("nodeCount")
-        if node_count is not None:
-            parts.append(f" nodes={node_count}")
-        link_count = shape.get("linkCount")
-        if link_count is not None:
-            parts.append(f" links={link_count}")
-        parts.append(" truncated>")
+        attrs = (
+            AttributeBuilder()
+            .add("id", smartart_id)
+            .add("type", shape.get("layoutType"))
+            .add("nodes", shape.get("nodeCount"))
+            .add("links", shape.get("linkCount"))
+            .flag("truncated")
+        )
+        parts = [f"<smartart{attrs.render()}>"]
         record = smartart_nodes.get(smartart_id)
         if record is not None:
             parts.append(" ".join(node["text"] for node in record["nodes"]))
         return "".join(parts)
     if stype == "media":
         asset_id = shape.get("assetId") or shape["id"]
-        return f"<media id={asset_id} kind={shape.get('kind', 'media')}>"
+        attrs = AttributeBuilder().add("id", asset_id).add("kind", shape.get("kind", "media"))
+        return f"<media{attrs.render()}>"
+    if stype == "shape":
+        attrs = AttributeBuilder().add("id", shape["id"]).add("kind", shape.get("kind"))
+        return f"<shape{attrs.render()}>"
     raise AssertionError(f"Unknown shape type: {shape['type']}")
 
 
@@ -171,10 +199,10 @@ def _structural_inline(shape: ShapeBlock) -> str:
     if runs:
         parts: list[str] = []
         for run in runs:
-            text = escape(run["text"])
+            text = _run_text(run)
             link = run.get("link")
             if link:
-                parts.append(f"<a href={escape(link)}>{text}</a>")
+                parts.append(f"<a{AttributeBuilder().add('href', link).render()}>{text}</a>")
             else:
                 parts.append(text)
         return "".join(parts)
@@ -185,9 +213,10 @@ def _structural_table(shape: ShapeBlock) -> str:
     rows = shape.get("rows", [])
     cols = max((len(row) for row in rows), default=0)
     truncated = " truncated" if len(rows) > _STRUCTURAL_TABLE_ROW_LIMIT else ""
-    lines = [f"<table id={shape['id']} rows={len(rows)} cols={cols}{truncated}>"]
-    for row in rows[:_STRUCTURAL_TABLE_ROW_LIMIT]:
-        cells = "".join(f"<td>{escape(cell)}</td>" for cell in row)
+    attrs = AttributeBuilder().add("id", shape["id"]).add("rows", len(rows)).add("cols", cols).flag("truncated", bool(truncated))
+    lines = [f"<table{attrs.render()}>"]
+    for row_index, _row in enumerate(rows[:_STRUCTURAL_TABLE_ROW_LIMIT]):
+        cells = _table_row_markup(shape, row_index=row_index)
         lines.append(f"<tr>{cells}")
     return "\n".join(lines)
 
@@ -197,7 +226,7 @@ def iter_semantic(parsed: ParsedPresentation) -> Iterator[str]:
     yield "density=semantic\n"
     smartart_nodes = {smartart["id"]: smartart for smartart in parsed.smartarts}
     for slide in parsed.slides:
-        yield _html_slide_block(slide, smartart_nodes, semantic=True)
+        yield _html_slide_block(slide, smartart_nodes, semantic=True, ocr_results=parsed.ocr_results)
     comments = _html_comments_block(parsed)
     if comments:
         yield comments
@@ -211,71 +240,65 @@ def _semantic_shape_line(shape: ShapeBlock, smartart_nodes: dict[str, SmartArtRe
     if stype == "picture":
         asset_id = shape.get("assetId") or shape["id"]
         alt = shape.get("alt")
-        alt_attr = f' alt="{escape(alt, quote=True)}"' if alt else ""
-        attrs = _shape_attrs(shape, include_id=False, include_ph=False)
-        return f"<img id={asset_id}{alt_attr}{attrs}>"
+        picture_shape_attrs = _shape_attrs(shape, include_id=False, include_ph=False)
+        head = AttributeBuilder().add("id", asset_id).add("alt", alt).render()
+        return f"<img{head}{picture_shape_attrs}>"
     if stype == "table":
         return _semantic_table(shape)
     if stype == "chart":
-        parts = [f"<chart id={shape.get('chartId') or shape['id']}"]
-        chart_type = shape.get("chartType")
-        if chart_type:
-            parts.append(f" type={chart_type}")
-        series_count = shape.get("seriesCount")
-        if series_count is not None:
-            parts.append(f" series={series_count}")
-        point_count = shape.get("pointCount")
-        if point_count is not None:
-            parts.append(f" points={point_count}")
-        parts.append(" truncated")
-        parts.append(_shape_attrs(shape, include_id=False, include_ph=False))
-        parts.append(">")
-        return "".join(parts)
+        chart_attrs = (
+            AttributeBuilder()
+            .add("id", shape.get("chartId") or shape["id"])
+            .add("type", shape.get("chartType"))
+            .add("series", shape.get("seriesCount"))
+            .add("points", shape.get("pointCount"))
+            .flag("truncated")
+        )
+        return f"<chart{chart_attrs.render()}{_shape_attrs(shape, include_id=False, include_ph=False)}>"
     if stype == "smartart":
         smartart_id = shape.get("smartartId") or shape["id"]
-        parts = [f"<smartart id={smartart_id}"]
-        layout = shape.get("layoutType")
-        if layout:
-            parts.append(f" type={layout}")
-        node_count = shape.get("nodeCount")
-        if node_count is not None:
-            parts.append(f" nodes={node_count}")
-        link_count = shape.get("linkCount")
-        if link_count is not None:
-            parts.append(f" links={link_count}")
-        parts.append(" truncated")
-        parts.append(_shape_attrs(shape, include_id=False, include_ph=False))
-        parts.append(">")
+        smartart_attrs = (
+            AttributeBuilder()
+            .add("id", smartart_id)
+            .add("type", shape.get("layoutType"))
+            .add("nodes", shape.get("nodeCount"))
+            .add("links", shape.get("linkCount"))
+            .flag("truncated")
+        )
+        parts = [f"<smartart{smartart_attrs.render()}{_shape_attrs(shape, include_id=False, include_ph=False)}>"]
         record = smartart_nodes.get(smartart_id)
         if record is not None:
             parts.append(" ".join(node["text"] for node in record["nodes"]))
         return "".join(parts)
     if stype == "media":
         asset_id = shape.get("assetId") or shape["id"]
-        attrs = _shape_attrs(shape, include_id=False, include_ph=False)
-        return f"<media id={asset_id} kind={shape.get('kind', 'media')}{attrs}>"
+        media_shape_attrs = _shape_attrs(shape, include_id=False, include_ph=False)
+        media_head = AttributeBuilder().add("id", asset_id).add("kind", shape.get("kind", "media"))
+        return f"<media{media_head.render()}{media_shape_attrs}>"
+    if stype == "shape":
+        return f"<shape{AttributeBuilder().add('kind', shape.get('kind')).render()}{_shape_attrs(shape)}>"
     raise AssertionError(f"Unknown shape type: {shape['type']}")
 
 
 def _shape_attrs(shape: ShapeBlock, *, include_id: bool = True, include_ph: bool = True) -> str:
-    attrs = ""
+    attrs = AttributeBuilder()
     if include_id:
-        attrs += f" id={shape['id']}"
+        attrs.add("id", shape["id"])
     if include_ph:
         ph_type = shape.get("placeholderType", "")
         if ph_type:
-            attrs += f" ph={ph_type}"
+            attrs.add("ph", ph_type)
     for key in ("x", "y", "w", "h"):
         value = shape.get(key)
         if value is not None:
-            attrs += f" {key}={value}"
+            attrs.add(key, value)
     z = shape.get("z")
     if z is not None:
-        attrs += f" z={z}"
+        attrs.add("z", z)
     name = shape.get("name")
     if name:
-        attrs += f' name="{escape(name, quote=True)}"'
-    return attrs
+        attrs.add("name", name)
+    return attrs.render()
 
 
 def _semantic_inline(shape: ShapeBlock) -> str:
@@ -283,7 +306,7 @@ def _semantic_inline(shape: ShapeBlock) -> str:
     if runs:
         parts: list[str] = []
         for run in runs:
-            text = escape(run["text"])
+            text = _run_text(run)
             fmt = run.get("format") or {}
             color = fmt.get("color")
             if color:
@@ -296,7 +319,7 @@ def _semantic_inline(shape: ShapeBlock) -> str:
                 text = f"<b>{text}</b>"
             link = run.get("link")
             if link:
-                text = f"<a href={escape(link)}>{text}</a>"
+                text = f"<a{AttributeBuilder().add('href', link).render()}>{text}</a>"
             parts.append(text)
         return "".join(parts)
     return escape(shape["text"])
@@ -307,23 +330,43 @@ def _semantic_table(shape: ShapeBlock) -> str:
     cols = max((len(row) for row in rows), default=0)
     truncated = " truncated" if len(rows) > _STRUCTURAL_TABLE_ROW_LIMIT else ""
     attrs = _shape_attrs(shape, include_id=False, include_ph=False)
-    lines = [f"<table id={shape['id']} rows={len(rows)} cols={cols}{truncated}{attrs}>"]
-    for row in rows[:_STRUCTURAL_TABLE_ROW_LIMIT]:
-        cells = "".join(f"<td>{escape(cell)}</td>" for cell in row)
+    head = AttributeBuilder().add("id", shape["id"]).add("rows", len(rows)).add("cols", cols).flag("truncated", bool(truncated))
+    lines = [f"<table{head.render()}{attrs}>"]
+    for row_index, _row in enumerate(rows[:_STRUCTURAL_TABLE_ROW_LIMIT]):
+        cells = _table_row_markup(shape, row_index=row_index)
         lines.append(f"<tr>{cells}")
     return "\n".join(lines)
 
 
 def _structural_comment_line(comment: CommentItem) -> str:
-    parts = [f"<comment id={comment['id']}"]
-    author = comment.get("author")
-    if author:
-        parts.append(f" author={escape(author)}")
-    date = comment.get("date")
-    if date:
-        parts.append(f" date={date}")
-    parent_id = comment.get("parentId")
-    if parent_id:
-        parts.append(f" parent={parent_id}")
-    parts.append(">")
-    return "".join(parts) + escape(comment["text"])
+    attrs = (
+        AttributeBuilder()
+        .add("id", comment["id"])
+        .add("author", comment.get("author") or None)
+        .add("date", comment.get("date"))
+        .add("parent", comment.get("parentCommentId") or comment.get("parentId"))
+        .add("slide", comment.get("slideId"))
+        .add("shape", comment.get("shapeId"))
+    )
+    return f"<comment{attrs.render()}>{escape(comment['text'])}"
+
+
+def _run_text(run: Mapping[str, object]) -> str:
+    text = escape(str(run.get("text", "")))
+    equation = run.get("equation")
+    return f"<equation>{escape(str(equation))}</equation>" if equation else text
+
+
+def _table_row_markup(shape: ShapeBlock, *, row_index: int) -> str:
+    rows = shape.get("rows", [])
+    cells = shape.get("tableCells")
+    if cells is None or row_index >= len(cells):
+        row = rows[row_index] if row_index < len(rows) else []
+        return "".join(f"<td>{escape(cell)}</td>" for cell in row)
+    rendered: list[str] = []
+    for cell in cells[row_index]:
+        if cell.get("hMerge") or cell.get("vMerge"):
+            continue
+        attrs = AttributeBuilder().add("colspan", cell.get("colSpan")).add("rowspan", cell.get("rowSpan"))
+        rendered.append(f"<td{attrs.render()}>{escape(cell.get('text', ''))}</td>")
+    return "".join(rendered)

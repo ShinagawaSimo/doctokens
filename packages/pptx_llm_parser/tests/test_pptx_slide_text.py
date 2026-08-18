@@ -44,20 +44,22 @@ class SlideTextParsingTests(unittest.TestCase):
         shapes = text_shape_xml([[("t", "First")], [("t", "Second")]])
         self.assertEqual(self._parse(shapes)[0]["text"], "First\nSecond")
 
-    def test_empty_and_textless_shapes_skipped(self) -> None:
+    def test_empty_and_textless_shapes_are_skipped(self) -> None:
         shapes = text_shape_xml([]) + text_shape_xml([[("t", "Only")]], name="Body")
-        self.assertEqual(len(self._parse(shapes)), 1)
-        self.assertEqual(self._parse(shapes)[0]["text"], "Only")
+        parsed = self._parse(shapes)
+        self.assertEqual(len(parsed), 1)
+        self.assertEqual(parsed[0]["text"], "Only")
 
     def test_shape_order_follows_xml(self) -> None:
         shapes = text_shape_xml([[("t", "One")]], name="A") + text_shape_xml([[("t", "Two")]], name="B")
         self.assertEqual([shape["text"] for shape in self._parse(shapes)], ["One", "Two"])
 
-    def test_shape_without_txbody_skipped(self) -> None:
+    def test_shape_without_txbody_is_skipped(self) -> None:
         bare = '<p:sp><p:nvSpPr><p:cNvPr id="3" name="Decor"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/></p:sp>'
         shapes = bare + text_shape_xml([[("t", "Keep")]])
-        self.assertEqual(len(self._parse(shapes)), 1)
-        self.assertEqual(self._parse(shapes)[0]["text"], "Keep")
+        parsed = self._parse(shapes)
+        self.assertEqual(len(parsed), 1)
+        self.assertEqual(parsed[0]["text"], "Keep")
 
 
 if __name__ == "__main__":

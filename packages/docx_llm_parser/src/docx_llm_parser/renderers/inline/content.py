@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from html import escape
 
-from ...core.models import InlineContainer, InlineObject, RunFormat
+from ...core.models import InlineContainer, InlineObject, OcrStoredResult, RunFormat
+from .._ocr import render_ocr_result
 from .._text_utils import filter_format, merge_text_runs
 from ..objects import chart_to_html5, smartart_to_html5
 
 
-def inline_content(block: InlineContainer, density: str, ocr_results: dict[str, str] | None = None) -> str:
+def inline_content(block: InlineContainer, density: str, ocr_results: dict[str, OcrStoredResult] | None = None) -> str:
     """Combine run text, links, images, footnote references, etc. into inline HTML5."""
     if "runs" not in block:
         return escape(block["text"])
@@ -73,7 +74,7 @@ def apply_inline_format(text: str, fmt: RunFormat, density: str) -> str:
     return text
 
 
-def inline_object(obj: InlineObject, density: str, ocr_results: dict[str, str] | None = None) -> str:
+def inline_object(obj: InlineObject, density: str, ocr_results: dict[str, OcrStoredResult] | None = None) -> str:
     """Render non-plain-text object references inside a paragraph."""
     obj_type = obj["type"]
 
@@ -113,7 +114,7 @@ def inline_object(obj: InlineObject, density: str, ocr_results: dict[str, str] |
     return f"<unsupported type={escape(obj_type, quote=True)}/>"
 
 
-def image_object(obj: InlineObject, density: str, ocr_results: dict[str, str] | None = None) -> str:
+def image_object(obj: InlineObject, density: str, ocr_results: dict[str, OcrStoredResult] | None = None) -> str:
     """Render an embedded image reference with optional OCR text."""
     asset_id = obj.get("assetId", "")
     if density == "structural":
@@ -124,12 +125,10 @@ def image_object(obj: InlineObject, density: str, ocr_results: dict[str, str] | 
             attrs += f" alt={escape(obj['alt'], quote=True)}"
         img_tag = f"<img {attrs}>"
 
-    ocr_text = (ocr_results or {}).get(asset_id)
-    if ocr_text is None:
+    rendered_ocr = render_ocr_result(asset_id, (ocr_results or {}).get(asset_id))
+    if rendered_ocr is None:
         return img_tag
-    if ocr_text == "":
-        return f"{img_tag}\n<ocr-text id={asset_id} error>"
-    return f"{img_tag}\n<ocr-text id={asset_id}>{ocr_text}"
+    return f"{img_tag}\n{rendered_ocr}"
 
 
 def drawing_object(obj: InlineObject, density: str) -> str:

@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections.abc import Iterator
 from html import escape
 
-from ..core.models import AncillaryItem, ParsedDocument
+from ..core.models import AncillaryItem, OcrStoredResult, ParsedDocument
 from ._blocks import render_block
+from ._ocr import render_ocr_result
 from .inline import inline_content
 from .plain import block_text_only, inline_text_only
 
@@ -138,12 +139,12 @@ def supplemental_to_html5(parsed: ParsedDocument, density: str) -> str:
             date = item.get("date")
             if date is not None:
                 attrs += f" date={escape(date, quote=True)}"
-            content = inline_content(item, density, None)
+            content = inline_content(item, density, parsed.ocr_results)
             lines.append(f"<{tag} {attrs}>{content}")
     return "\n".join(lines)
 
 
-def _emit_body(parsed: ParsedDocument, density: str, ocr_results: dict[str, str]) -> Iterator[str]:
+def _emit_body(parsed: ParsedDocument, density: str, ocr_results: dict[str, OcrStoredResult]) -> Iterator[str]:
     current_page = 0
     for block in parsed.blocks:
         block_page = block.get("page", 1)
@@ -159,7 +160,7 @@ def _emit_body(parsed: ParsedDocument, density: str, ocr_results: dict[str, str]
 
 def _emit_assets(
     parsed: ParsedDocument,
-    ocr_results: dict[str, str],
+    ocr_results: dict[str, OcrStoredResult],
     *,
     include_href: bool,
 ) -> Iterator[str]:
@@ -169,10 +170,8 @@ def _emit_assets(
             attrs += f" href={escape(asset['href'], quote=True)}"
         yield f"<img {attrs}>\n"
         asset_id = asset["id"]
-        ocr_text = ocr_results.get(asset_id)
-        if ocr_text is None:
+        rendered_ocr = render_ocr_result(asset_id, ocr_results.get(asset_id))
+        if rendered_ocr is None:
             yield "\n"
-        elif ocr_text == "":
-            yield f"<ocr-text id={asset_id} error>\n"
         else:
-            yield f"<ocr-text id={asset_id}>{ocr_text}\n"
+            yield f"{rendered_ocr}\n"

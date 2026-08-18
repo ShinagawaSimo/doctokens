@@ -35,7 +35,12 @@ _OVERRIDES = (
 )
 
 
-def _comments_deck(*, with_comments: bool = True, with_authors: bool = True) -> bytes:
+def _comments_deck(
+    *,
+    with_comments: bool = True,
+    with_authors: bool = True,
+    comments_content: str | None = None,
+) -> bytes:
     entries: dict[str, str | bytes] = {
         "[Content_Types].xml": content_types_xml(1, extra_defaults=_OVERRIDES),
         "_rels/.rels": root_rels_xml(),
@@ -44,7 +49,7 @@ def _comments_deck(*, with_comments: bool = True, with_authors: bool = True) -> 
         "ppt/slides/slide1.xml": slide_xml_shapes(text_shape_xml([[("t", "Slide")]])),
     }
     if with_comments:
-        entries["ppt/comments/comment1.xml"] = comments_xml()
+        entries["ppt/comments/comment1.xml"] = comments_content or comments_xml()
     if with_authors:
         entries["ppt/commentAuthors.xml"] = comment_authors_xml()
     return make_pptx(entries)
@@ -63,6 +68,13 @@ class CommentsTests(unittest.TestCase):
         self.assertEqual(second["id"], "cmt2")
         self.assertEqual(second["author"], "Bob")
         self.assertEqual(second["parentId"], "1")
+        self.assertEqual(second["parentCommentId"], "cmt1")
+
+    def test_parent_id_maps_by_raw_comment_idx(self) -> None:
+        content = comments_xml().replace('idx="1"', 'idx="7"').replace('parentId="1"', 'parentId="7"')
+        parsed = PptxParser().parse(_comments_deck(comments_content=content), ParseOptions())
+        self.assertEqual(parsed.comments[1]["parentId"], "7")
+        self.assertEqual(parsed.comments[1]["parentCommentId"], "cmt1")
 
     def test_missing_comments_part_yields_warning_and_no_comments(self) -> None:
         parsed = PptxParser().parse(_comments_deck(with_comments=False), ParseOptions())

@@ -4,15 +4,25 @@ from __future__ import annotations
 
 import base64
 import json
+import math
+import re
+import threading
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
-from typing import cast
+from typing import Any, Literal, cast
 
-from ._provider import OcrProvider
+from ._provider import OcrProvider, OcrResult
 
 _TOKEN_URL = "https://aip.baidubce.com/oauth/2.0/token"
 _SUBMIT_URL = "https://aip.baidubce.com/rest/2.0/brain/online/v2/paddle-vl-parser/task"
 _QUERY_URL = "https://aip.baidubce.com/rest/2.0/brain/online/v2/paddle-vl-parser/task/query"
+_MAX_JSON_BYTES = 1 * 1024 * 1024
+_MAX_MARKDOWN_BYTES = 20 * 1024 * 1024
+_ALLOWED_RESULT_SUFFIXES = ("bcebos.com", "baidubce.com")
+_MAX_IMAGE_BYTES = 10 * 1024 * 1024
+_MAX_IMAGE_EDGE = 8192
 
 
 def _parse_json_object(raw: bytes) -> dict[str, object]:
@@ -28,12 +38,46 @@ def _object_mapping(value: object) -> dict[str, object]:
     return cast(dict[str, object], value)
 
 
-class PaddleVLProvider(OcrProvider):
-    """OCR via Baidu PaddleOCR-VL document parsing API.
+class _RateLimiter:
+    def __init__(self, requests_per_second: float) -> None:
+        if requests_per_second <= 0:
+            raise ValueError("requests_per_second must be greater than zero")
+        self._interval = 1.0 / requests_per_second
+        self._next = 0.0
+        self._lock = threading.Lock()
 
-    Encodes *image_bytes* as base64, submits an async parsing task,
-    polls for completion, and returns the resulting markdown.
-    """
+    def acquire(self, deadline: float | None) -> None:
+        with self._lock:
+            now = time.monotonic()
+            delay = max(0.0, self._next - now)
+            if deadline is not None and now + delay >= deadline:
+                raise TimeoutError("OCR request rate-limit wait exceeded timeout")
+            if delay:
+                time.sleep(delay)
+            self._next = time.monotonic() + self._interval
+
+
+class _ValidatedRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: object,
+        code: int,
+        msg: str,
+        headers: object,
+        newurl: str,
+    ) -> urllib.request.Request | None:
+        _validate_result_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)  # type: ignore[arg-type]
+
+
+class PaddleVLProvider(OcrProvider):
+    """OCR via Baidu PaddleOCR-VL document parsing API."""
+
+    # The public API allows two submit requests per second.  Keeping this
+    # bound on the provider also protects callers that use the shared batcher.
+    max_concurrency = 2
+    supports_timeout = True
 
     def __init__(
         self,
@@ -41,100 +85,339 @@ class PaddleVLProvider(OcrProvider):
         secret_key: str,
         *,
         language: str = "cht",
-        poll_interval: float = 1.0,
+        poll_interval: float = 5.0,
         timeout: float = 120.0,
-        error_on_empty: bool = True,
+        error_on_empty: bool = False,
+        max_input_bytes: int = _MAX_IMAGE_BYTES,
     ) -> None:
+        if not isinstance(api_key, str) or not api_key.strip() or not isinstance(secret_key, str) or not secret_key.strip():
+            raise ValueError("api_key and secret_key must not be empty")
+        if (
+            isinstance(poll_interval, bool)
+            or not isinstance(poll_interval, (int, float))
+            or not math.isfinite(poll_interval)
+            or poll_interval <= 0
+        ):
+            raise ValueError("poll_interval must be greater than zero")
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("timeout must be greater than zero")
+        if not isinstance(error_on_empty, bool):
+            raise TypeError("error_on_empty must be a boolean")
+        if isinstance(max_input_bytes, bool) or not isinstance(max_input_bytes, int) or max_input_bytes <= 0:
+            raise ValueError("max_input_bytes must be greater than zero")
+        if max_input_bytes > _MAX_IMAGE_BYTES:
+            raise ValueError("max_input_bytes cannot exceed the PaddleOCR-VL 10 MiB image limit")
         self.api_key = api_key
         self.secret_key = secret_key
+        # Kept for source compatibility. The current PaddleOCR-VL endpoint
+        # determines language automatically and does not accept this field.
         self.language = language
         self.poll_interval = poll_interval
         self.timeout = timeout
         self.error_on_empty = error_on_empty
-
-    # -- public API --
+        self.max_input_bytes = max_input_bytes
+        self._token: str | None = None
+        self._token_deadline = 0.0
+        self._token_lock = threading.Lock()
+        self._submit_limiter = _RateLimiter(2.0)
+        self._query_limiter = _RateLimiter(5.0)
 
     def extract(self, image_bytes: bytes) -> str:
+        return self.extract_result(image_bytes).text
+
+    def extract_result(self, image_bytes: bytes, *, timeout: float | None = None) -> OcrResult:
+        if not isinstance(image_bytes, bytes) or not image_bytes:
+            return OcrResult.error("invalid_image", "image_bytes must be non-empty bytes")
+        if len(image_bytes) > self.max_input_bytes:
+            return OcrResult.error("input_too_large", "image exceeds max_input_bytes")
+        file_suffix = _image_suffix(image_bytes)
+        if file_suffix is None:
+            return OcrResult.error("unsupported_image", "PaddleOCR-VL requires PNG, JPEG, BMP, or TIFF image bytes")
+        dimensions = _image_dimensions(image_bytes, file_suffix)
+        if dimensions is not None:
+            width, height = dimensions
+            if width <= 0 or height <= 0:
+                return OcrResult.error("invalid_image", "image has invalid dimensions")
+            if max(width, height) > _MAX_IMAGE_EDGE:
+                return OcrResult.error("image_too_large", "image exceeds the PaddleOCR-VL 8192-pixel edge limit")
+        budget = self.timeout if timeout is None else timeout
+        if isinstance(budget, bool) or not isinstance(budget, (int, float)) or not math.isfinite(budget) or budget <= 0:
+            return OcrResult.error("timeout", "OCR timeout must be greater than zero")
+        deadline = time.monotonic() + budget
         try:
-            token = self._get_access_token()
-            task_id = self._submit(token, image_bytes)
-            status, _error_message = self._poll(token, task_id)
+            token = self._get_access_token(deadline)
+            task_id = self._submit(token, image_bytes, deadline, file_suffix=file_suffix)
+            status, error_message, result = self._poll(token, task_id, deadline)
             if status != "success":
-                return ""
-            text = self._download_markdown(token, task_id)
+                code = "timeout" if status == "timeout" else "api_error"
+                return OcrResult.error(code, error_message or "PaddleOCR task failed")
+            markdown_url = result.get("markdown_url")
+            text = self._download_markdown(token, task_id, deadline, markdown_url)
             if not text and self.error_on_empty:
-                return ""
-            return text
-        except Exception:
-            return ""
+                return OcrResult.error("empty_result", "PaddleOCR returned no text")
+            return OcrResult.from_text(text)
+        except TimeoutError as exc:
+            return OcrResult.error("timeout", str(exc) or "OCR timed out")
+        except urllib.error.URLError as exc:
+            return OcrResult.error("network_error", _error_message(exc))
+        except Exception as exc:
+            return OcrResult.error("adapter_error", _error_message(exc))
 
-    # -- internal helpers --
+    def _get_access_token(self, deadline: float | None = None) -> str:
+        now = time.monotonic()
+        if self._token is not None and now + 60 < self._token_deadline:
+            return self._token
+        with self._token_lock:
+            now = time.monotonic()
+            if self._token is not None and now + 60 < self._token_deadline:
+                return self._token
+            data = urllib.parse.urlencode(
+                {
+                    "grant_type": "client_credentials",
+                    "client_id": self.api_key,
+                    "client_secret": self.secret_key,
+                }
+            ).encode()
+            req = urllib.request.Request(_TOKEN_URL, data=data, method="POST")
+            req.add_header("Content-Type", "application/x-www-form-urlencoded")
+            with urllib.request.urlopen(req, timeout=_request_timeout(deadline, 30.0)) as resp:
+                body = _parse_json_object(_read_limited(resp, _MAX_JSON_BYTES))
+            token = body.get("access_token")
+            if not isinstance(token, str) or not token:
+                raise RuntimeError("Token response did not include access_token")
+            expires_in = body.get("expires_in", 3600)
+            try:
+                candidate = float(expires_in) if isinstance(expires_in, (int, float, str)) else 3600.0
+                lifetime = max(0.0, candidate) if math.isfinite(candidate) else 3600.0
+            except (TypeError, ValueError):
+                lifetime = 3600.0
+            self._token = token
+            self._token_deadline = time.monotonic() + lifetime
+            return token
 
-    def _get_access_token(self) -> str:
-        data = (f"grant_type=client_credentials&client_id={self.api_key}&client_secret={self.secret_key}").encode()
-        req = urllib.request.Request(_TOKEN_URL, data=data, method="POST")
+    def _submit(
+        self,
+        token: str,
+        image_bytes: bytes,
+        deadline: float | None = None,
+        *,
+        file_suffix: str | None = None,
+    ) -> str:
+        self._submit_limiter.acquire(deadline)
+        suffix = file_suffix or _image_suffix(image_bytes)
+        if suffix is None:
+            raise ValueError("Unsupported image format")
+        b64 = base64.b64encode(image_bytes).decode("ascii")
+        payload = urllib.parse.urlencode({"file_data": b64, "file_name": f"image.{suffix}"}).encode()
+        req = urllib.request.Request(_with_token(_SUBMIT_URL, token), data=payload, method="POST")
         req.add_header("Content-Type", "application/x-www-form-urlencoded")
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            body = _parse_json_object(resp.read())
-        token = body.get("access_token")
-        if not isinstance(token, str):
-            raise RuntimeError("Token response did not include access_token")
-        return token
-
-    def _submit(self, token: str, image_bytes: bytes) -> str:
-        b64 = base64.b64encode(image_bytes).decode()
-        payload = json.dumps(
-            {
-                "file": b64,
-                "fileType": 1,
-                "language": self.language,
-            }
-        ).encode()
-        url = f"{_SUBMIT_URL}?access_token={token}"
-        req = urllib.request.Request(url, data=payload, method="POST")
-        req.add_header("Content-Type", "application/json")
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            body = _parse_json_object(resp.read())
+        with urllib.request.urlopen(req, timeout=_request_timeout(deadline, 60.0)) as resp:
+            body = _parse_json_object(_read_limited(resp, _MAX_JSON_BYTES))
         if body.get("error_code", 0) != 0:
             raise RuntimeError(f"Submit failed: {body.get('error_msg', 'unknown')}")
-        result = _object_mapping(body.get("result"))
-        task_id = result.get("task_id")
-        if not isinstance(task_id, str):
+        task_id = _object_mapping(body.get("result")).get("task_id")
+        if not isinstance(task_id, str) or not task_id:
             raise RuntimeError("Submit response did not include task_id")
         return task_id
 
-    def _poll(self, token: str, task_id: str) -> tuple[str, str | None]:
-        payload = json.dumps({"task_id": task_id}).encode()
-        url = f"{_QUERY_URL}?access_token={token}"
-        deadline = time.monotonic() + self.timeout
-        while time.monotonic() < deadline:
-            req = urllib.request.Request(url, data=payload, method="POST")
-            req.add_header("Content-Type", "application/json")
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                body = _parse_json_object(resp.read())
+    def _poll(
+        self,
+        token: str,
+        task_id: str,
+        deadline: float | None = None,
+    ) -> tuple[str, str | None, dict[str, object]]:
+        own_deadline = time.monotonic() + self.timeout if deadline is None else deadline
+        while time.monotonic() < own_deadline:
+            body = self._query(token, task_id, own_deadline)
             if body.get("error_code", 0) != 0:
                 error_msg = body.get("error_msg")
-                return ("failed", error_msg if isinstance(error_msg, str) else "unknown")
+                return ("failed", error_msg if isinstance(error_msg, str) else "unknown", {})
             result = _object_mapping(body.get("result"))
-            status_value = result.get("status", "failed")
-            status = status_value if isinstance(status_value, str) else "failed"
+            status_value = result.get("status")
+            if not isinstance(status_value, str):
+                return ("failed", "PaddleOCR query response did not include a valid status", result)
+            status = status_value.lower()
             if status in ("success", "failed"):
                 task_error = result.get("task_error")
-                return (status, task_error if isinstance(task_error, str) else None)
-            time.sleep(self.poll_interval)
-        return ("processing", None)
+                return (status, task_error if isinstance(task_error, str) else None, result)
+            if status not in ("pending", "processing"):
+                return ("failed", f"PaddleOCR returned unknown task status: {status}", result)
+            remaining = own_deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            time.sleep(min(self.poll_interval, remaining))
+        return ("timeout", "PaddleOCR task timed out", {})
 
-    def _download_markdown(self, token: str, task_id: str) -> str:
-        payload = json.dumps({"task_id": task_id}).encode()
-        url = f"{_QUERY_URL}?access_token={token}"
-        req = urllib.request.Request(url, data=payload, method="POST")
-        req.add_header("Content-Type", "application/json")
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            body = _parse_json_object(resp.read())
-        result = _object_mapping(body.get("result"))
-        markdown_url = result.get("markdown_url")
+    def _query(self, token: str, task_id: str, deadline: float | None) -> dict[str, object]:
+        self._query_limiter.acquire(deadline)
+        payload = urllib.parse.urlencode({"task_id": task_id}).encode()
+        req = urllib.request.Request(_with_token(_QUERY_URL, token), data=payload, method="POST")
+        req.add_header("Content-Type", "application/x-www-form-urlencoded")
+        with urllib.request.urlopen(req, timeout=_request_timeout(deadline, 30.0)) as resp:
+            return _parse_json_object(_read_limited(resp, _MAX_JSON_BYTES))
+
+    def _download_markdown(
+        self,
+        token: str,
+        task_id: str,
+        deadline: float | None = None,
+        markdown_url: object = None,
+    ) -> str:
+        if not isinstance(markdown_url, str) or not markdown_url:
+            result = _object_mapping(self._query(token, task_id, deadline).get("result"))
+            markdown_url = result.get("markdown_url")
         if not isinstance(markdown_url, str) or not markdown_url:
             return ""
-        with urllib.request.urlopen(markdown_url, timeout=30) as resp:
-            data = cast(bytes, resp.read())
+        _validate_result_url(markdown_url)
+        opener = urllib.request.build_opener(_ValidatedRedirectHandler())
+        with opener.open(markdown_url, timeout=_request_timeout(deadline, 30.0)) as resp:
+            final_url = resp.geturl() if hasattr(resp, "geturl") else markdown_url
+            if isinstance(final_url, str):
+                _validate_result_url(final_url)
+            data = _read_limited(resp, _MAX_MARKDOWN_BYTES)
         return data.decode("utf-8")
+
+
+def _with_token(url: str, token: str) -> str:
+    return f"{url}?{urllib.parse.urlencode({'access_token': token})}"
+
+
+def _image_suffix(image_bytes: bytes) -> str | None:
+    if image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if image_bytes.startswith(b"\xff\xd8\xff"):
+        return "jpg"
+    if image_bytes.startswith(b"BM"):
+        return "bmp"
+    if image_bytes.startswith((b"II*\x00", b"MM\x00*")):
+        return "tiff"
+    return None
+
+
+def _image_dimensions(image_bytes: bytes, suffix: str) -> tuple[int, int] | None:
+    """Read dimensions from common image headers without adding a cloud-adapter dependency."""
+    if suffix == "png":
+        if len(image_bytes) >= 24 and image_bytes[12:16] == b"IHDR":
+            return (int.from_bytes(image_bytes[16:20], "big"), int.from_bytes(image_bytes[20:24], "big"))
+        return None
+    if suffix == "jpg":
+        return _jpeg_dimensions(image_bytes)
+    if suffix == "bmp":
+        if len(image_bytes) < 26:
+            return None
+        dib_size = int.from_bytes(image_bytes[14:18], "little")
+        if dib_size == 12:
+            return (int.from_bytes(image_bytes[18:20], "little"), int.from_bytes(image_bytes[20:22], "little"))
+        width = int.from_bytes(image_bytes[18:22], "little", signed=True)
+        height = int.from_bytes(image_bytes[22:26], "little", signed=True)
+        return (abs(width), abs(height))
+    if suffix == "tiff":
+        return _tiff_dimensions(image_bytes)
+    return None
+
+
+def _jpeg_dimensions(image_bytes: bytes) -> tuple[int, int] | None:
+    position = 2
+    start_of_frame = {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
+    while position < len(image_bytes):
+        if image_bytes[position] != 0xFF:
+            position += 1
+            continue
+        while position < len(image_bytes) and image_bytes[position] == 0xFF:
+            position += 1
+        if position >= len(image_bytes):
+            return None
+        marker = image_bytes[position]
+        position += 1
+        if marker in {0x00, 0x01, *range(0xD0, 0xD9)}:
+            continue
+        if marker in {0xD9, 0xDA} or position + 2 > len(image_bytes):
+            return None
+        segment_length = int.from_bytes(image_bytes[position : position + 2], "big")
+        if segment_length < 2 or position + segment_length > len(image_bytes):
+            return None
+        if marker in start_of_frame and segment_length >= 7:
+            height = int.from_bytes(image_bytes[position + 3 : position + 5], "big")
+            width = int.from_bytes(image_bytes[position + 5 : position + 7], "big")
+            return (width, height)
+        position += segment_length
+    return None
+
+
+def _tiff_dimensions(image_bytes: bytes) -> tuple[int, int] | None:
+    if len(image_bytes) < 8:
+        return None
+    byte_order: Literal["little", "big"] = "little" if image_bytes.startswith(b"II*\x00") else "big"
+    ifd_offset = int.from_bytes(image_bytes[4:8], byte_order)
+    if ifd_offset + 2 > len(image_bytes):
+        return None
+    entry_count = int.from_bytes(image_bytes[ifd_offset : ifd_offset + 2], byte_order)
+    if entry_count > 4096:
+        return None
+    dimensions: dict[int, int] = {}
+    for index in range(entry_count):
+        start = ifd_offset + 2 + index * 12
+        if start + 12 > len(image_bytes):
+            return None
+        tag = int.from_bytes(image_bytes[start : start + 2], byte_order)
+        if tag not in (256, 257):
+            continue
+        field_type = int.from_bytes(image_bytes[start + 2 : start + 4], byte_order)
+        count = int.from_bytes(image_bytes[start + 4 : start + 8], byte_order)
+        if count < 1:
+            continue
+        if field_type == 3 and count == 1:
+            value = int.from_bytes(image_bytes[start + 8 : start + 10], byte_order)
+        elif field_type == 4 and count == 1:
+            value = int.from_bytes(image_bytes[start + 8 : start + 12], byte_order)
+        else:
+            continue
+        dimensions[tag] = value
+    if 256 in dimensions and 257 in dimensions:
+        return (dimensions[256], dimensions[257])
+    return None
+
+
+def _request_timeout(deadline: float | None, maximum: float) -> float:
+    if deadline is None:
+        return maximum
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("OCR request deadline exceeded")
+    return min(maximum, remaining)
+
+
+def _read_limited(response: Any, limit: int) -> bytes:
+    data = response.read(limit + 1)
+    if not isinstance(data, bytes):
+        raise RuntimeError("Unexpected non-byte response body")
+    content_length = getattr(response, "headers", {}).get("Content-Length")
+    if isinstance(content_length, str):
+        try:
+            if int(content_length) > limit:
+                raise RuntimeError("OCR response exceeds configured size limit")
+        except ValueError:
+            pass
+    if len(data) > limit:
+        raise RuntimeError("OCR response exceeds configured size limit")
+    return data
+
+
+def _validate_result_url(url: str) -> None:
+    parsed = urllib.parse.urlparse(url)
+    host = (parsed.hostname or "").lower().rstrip(".")
+    if (
+        parsed.scheme != "https"
+        or not host
+        or not any(host == suffix or host.endswith("." + suffix) for suffix in _ALLOWED_RESULT_SUFFIXES)
+    ):
+        raise RuntimeError("PaddleOCR returned a disallowed markdown URL")
+
+
+def _error_message(error: BaseException) -> str:
+    message = str(error).strip() or error.__class__.__name__
+    message = re.sub(r"(?i)(access_token|client_secret)=([^&\s]+)", r"\1=<redacted>", message)
+    return message[:300]
+
+
+__all__ = ["PaddleVLProvider"]

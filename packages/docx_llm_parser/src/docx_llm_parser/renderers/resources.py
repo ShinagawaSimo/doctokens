@@ -8,6 +8,7 @@ from collections.abc import Callable
 
 from ..core.enums import ResourceType
 from ..core.models import ParsedDocument, ResourceDetail, TableBlock, TableRow
+from ._ocr import render_ocr_result
 from .objects import render_chart_resource, render_smartart_resource
 
 
@@ -90,9 +91,9 @@ def _render_images(parsed: ParsedDocument, resource_id: str | None) -> list[str]
             zip_path = asset.get("zipPath")
             if zip_path and archive is not None:
                 parts.append(base64.b64encode(archive.read(zip_path)).decode())
-            ocr_text = ocr_results.get(asset["id"])
-            if ocr_text is not None:
-                parts.append(f"\n<ocr-text id={asset['id']}>{ocr_text}")
+            rendered_ocr = render_ocr_result(asset["id"], ocr_results.get(asset["id"]))
+            if rendered_ocr is not None:
+                parts.append(f"\n{rendered_ocr}")
             resources.append("".join(parts))
     finally:
         if archive is not None:

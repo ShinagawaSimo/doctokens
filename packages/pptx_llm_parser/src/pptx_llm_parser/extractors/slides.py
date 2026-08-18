@@ -30,6 +30,50 @@ from ..ooxml.inheritance import LayoutMasterResolver, shape_geometry
 HyperlinkLookup = dict[tuple[str, str], str]
 
 
+@dataclass(slots=True)
+class TextBodyResult:
+    """Single-pass text result for one DrawingML ``a:txBody`` subtree."""
+
+    text: str | None
+    runs: list[Run]
+    paragraphs: list[Paragraph]
+
+
+class DrawingTextParser:
+    """Build text, run and paragraph IR in one pass over a text body."""
+
+    def __init__(
+        self,
+        warnings: list[ParseWarning],
+        hyperlink_lookup: HyperlinkLookup,
+    ) -> None:
+        self._warnings = warnings
+        self._hyperlink_lookup = hyperlink_lookup
+
+    def parse(
+        self,
+        tx_body: ET.Element | None,
+        *,
+        part: str,
+        theme: dict[str, str],
+        color_map: dict[str, str],
+        inherited_styles: dict[int, ParagraphStyle] | None = None,
+    ) -> TextBodyResult:
+        paragraphs: list[Paragraph] = []
+        runs = shape_runs(
+            tx_body,
+            part,
+            self._warnings,
+            theme,
+            color_map,
+            self._hyperlink_lookup,
+            inherited_styles,
+            paragraphs,
+        )
+        text = "".join(run.get("text", "") for run in runs)
+        return TextBodyResult(text or None, runs, paragraphs)
+
+
 @dataclass(frozen=True)
 class _GroupTransform:
     """Affine map from a group's local EMU coordinates to slide coordinates."""
@@ -82,6 +126,7 @@ class SlideParser:
         self._slide_size = slide_size
         self._theme = theme
         self._hyperlink_lookup = hyperlink_lookup
+        self._text_parser = DrawingTextParser(warnings, hyperlink_lookup)
         self._table_index = 0
 
     def parse_slide(self, root: ET.Element, part: str) -> tuple[bool, list[ShapeBlock], SlideBackground | None]:
@@ -177,7 +222,7 @@ class SlideParser:
             if name in {"srgbClr", "schemeClr", "sysClr", "prstClr", "hslClr", "scrgbClr"}:
                 color = resolve_color_element(
                     descendant,
-                    self._theme,
+                    context["theme"],
                     color_map=context["color_map"],
                     warnings=self._warnings,
                     locator=part,
@@ -242,23 +287,18 @@ class SlideParser:
 
     def _text_shape(self, sp: ET.Element, part: str, ordinal: int, context: LayoutContext) -> ShapeBlock | None:
         tx_body = first_child(sp, "p", "txBody")
-        text = tx_body_text(tx_body, part, self._warnings)
-        if text is None:
-            return None
-        styles = self._shape_text_styles(sp, context, part)
-        paragraphs: list[Paragraph] = []
-        runs = shape_runs(
+        text_result = self._text_parser.parse(
             tx_body,
-            part,
-            self._warnings,
-            self._theme,
-            context["color_map"],
-            self._hyperlink_lookup,
-            styles,
-            paragraphs,
+            part=part,
+            theme=context["theme"],
+            color_map=context["color_map"],
+            inherited_styles=self._shape_text_styles(sp, context, part),
         )
-        if runs:
-            text = "".join(run.get("text", "") for run in runs)
+        if text_result.text is None:
+            return None
+        text = text_result.text
+        runs = text_result.runs
+        paragraphs = text_result.paragraphs
         shape: ShapeBlock = {
             "id": f"s{ordinal}",
             "type": "text",
@@ -324,7 +364,7 @@ class SlideParser:
                         **style.get("runFormat", {}),
                         **_format_properties(
                             def_r_pr,
-                            self._theme,
+                            context["theme"],
                             context["color_map"],
                             self._warnings,
                             part,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
+from dataclasses import dataclass, field
 from typing import NamedTuple
 from xml.etree import ElementTree as ET
 
@@ -14,6 +15,7 @@ from ._sheet_post import (
     apply_hyperlinks,
     apply_merge_cells,
     apply_spill_ranges,
+    apply_spill_sources,
 )
 from ._utils import col_letter, parse_ref
 from .formats import FormatIndex
@@ -24,7 +26,7 @@ from .models import (
     FilterColumn,
     RichTextRun,
 )
-from .share_formulas import expand_shared_formulas
+from .share_formulas import expand_shared_formula_groups
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 
@@ -56,6 +58,116 @@ class RowAttrs(NamedTuple):
     collapsed: bool
 
 
+@dataclass(slots=True)
+class SheetWorkingSet:
+    """Row-level IR and indexes accumulated while worksheet XML is streamed."""
+
+    rows: list[list[Cell]] = field(default_factory=list)
+    cells_by_coord: dict[tuple[int, int], Cell] = field(default_factory=dict)
+    shared_formula_groups: dict[str, list[Cell]] = field(default_factory=dict)
+    spill_sources: list[Cell] = field(default_factory=list)
+
+    def add_row(self, cells: list[Cell]) -> None:
+        self.rows.append(cells)
+
+    def add_cell(self, cell: Cell) -> None:
+        self.cells_by_coord[(cell["col"], cell["row"])] = cell
+        si = cell.get("si")
+        if si is not None:
+            self.shared_formula_groups.setdefault(si, []).append(cell)
+        if cell.get("formulaRange") and cell.get("dynamicArray"):
+            self.spill_sources.append(cell)
+
+    def finalize(
+        self,
+        root: ET.Element,
+        package: PackageReader,
+        sheet_relationships: list[RelationshipRecord],
+    ) -> SheetParseResult:
+        expand_shared_formula_groups(self.shared_formula_groups)
+        apply_merge_cells(root, self.cells_by_coord)
+        apply_spill_sources(self.spill_sources, self.cells_by_coord)
+        apply_hyperlinks(root, self.cells_by_coord, sheet_relationships)
+        apply_comments(self.cells_by_coord, package, sheet_relationships)
+        result = SheetParseResult(
+            self.rows,
+            _parse_hidden_cols(root),
+            root.find(f"{{{NS_S}}}sheetProtection") is not None,
+            *_parse_auto_filter(root),
+            _parse_data_validations(root),
+            _parse_conditional_formats(root),
+        )
+        self.cells_by_coord.clear()
+        self.shared_formula_groups.clear()
+        self.spill_sources.clear()
+        return result
+
+
+class WorksheetScanner:
+    """Stream worksheet rows while retaining the existing complete Cell IR."""
+
+    def __init__(
+        self,
+        package: PackageReader,
+        sheet_part: str,
+        shared_strings: list[str],
+        rich_text_map: dict[int, list[RichTextRun]] | None,
+        format_index: FormatIndex | None,
+        sheet_relationships: list[RelationshipRecord],
+    ) -> None:
+        self.package = package
+        self.sheet_part = sheet_part
+        self.shared_strings = shared_strings
+        self.rich_text_map = rich_text_map
+        self.format_index = format_index
+        self.sheet_relationships = sheet_relationships
+
+    def parse(self) -> SheetParseResult:
+        if not self.package.exists(self.sheet_part):
+            return SheetParseResult([], [], False, "", [], [], [])
+
+        working = SheetWorkingSet()
+        root: ET.Element | None = None
+        current_attrs: RowAttrs | None = None
+        current_cells: list[Cell] | None = None
+        previous_col = 0
+        previous_row = 0
+        with self.package.open_entry(self.sheet_part) as stream:
+            for event, element in ET.iterparse(stream, events=("start", "end")):
+                if event == "start":
+                    if root is None:
+                        root = element
+                    if element.tag == f"{{{NS_S}}}row":
+                        raw_attrs = _row_attrs(element)
+                        effective_row = raw_attrs.number or previous_row + 1
+                        previous_row = effective_row
+                        current_attrs = RowAttrs(effective_row, raw_attrs.hidden, raw_attrs.outline_level, raw_attrs.collapsed)
+                        current_cells = []
+                        previous_col = 0
+                    continue
+                if element.tag == f"{{{NS_S}}}c" and current_attrs is not None and current_cells is not None:
+                    ref = element.get("r", "") or f"{col_letter(previous_col + 1)}{current_attrs.number}"
+                    cell = _parse_cell(
+                        element,
+                        current_attrs,
+                        self.shared_strings,
+                        self.rich_text_map,
+                        self.format_index,
+                        ref,
+                    )
+                    previous_col = cell["col"]
+                    current_cells.append(cell)
+                    working.add_cell(cell)
+                elif element.tag == f"{{{NS_S}}}row" and current_cells is not None:
+                    working.add_row(current_cells)
+                    element.clear()
+                    current_attrs = None
+                    current_cells = None
+        if root is None:
+            return SheetParseResult([], [], False, "", [], [], [])
+        return working.finalize(root, self.package, self.sheet_relationships)
+
+
 def parse_sheet(
     package: PackageReader,
     sheet_part: str,
@@ -65,34 +177,14 @@ def parse_sheet(
     sheet_relationships: list[RelationshipRecord] | None = None,
 ) -> SheetParseResult:
     """Parse a worksheet XML part into typed cell rows and sheet-level metadata."""
-    if not package.exists(sheet_part):
-        return SheetParseResult([], [], False, "", [], [], [])
-
-    with package.open_entry(sheet_part) as stream:
-        root = ET.parse(stream).getroot()
-
-    sheet_protection = root.find(f"{{{NS_S}}}sheetProtection") is not None
-    filter_range, filter_cols = _parse_auto_filter(root)
-    data_validations = _parse_data_validations(root)
-    conditional_formats = _parse_conditional_formats(root)
-    hidden_cols = _parse_hidden_cols(root)
-    rows = _parse_rows(root, shared_strings, rich_text_map, format_index)
-
-    # Expand shared formulas in-place before post-processing.
-    flat_cells = [cell for row_cells in rows for cell in row_cells]
-    expand_shared_formulas(flat_cells)
-
-    _post_process_rows(root, rows, package, sheet_relationships or [])
-
-    return SheetParseResult(
-        rows,
-        hidden_cols,
-        sheet_protection,
-        filter_range,
-        filter_cols,
-        data_validations,
-        conditional_formats,
-    )
+    return WorksheetScanner(
+        package,
+        sheet_part,
+        shared_strings,
+        rich_text_map,
+        format_index,
+        sheet_relationships or [],
+    ).parse()
 
 
 def _parse_auto_filter(root: ET.Element) -> tuple[str, list[FilterColumn]]:

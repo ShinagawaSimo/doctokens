@@ -102,24 +102,40 @@ class EmbeddedObjectExtractor:
         self._warnings = warnings
         self._chart_lookup: _LazyChartLookup | None = None
         self._smartart_lookup: _LazySmartArtLookup | None = None
+        self._chart_specs: dict[tuple[str, str], _ObjectSpec] | None = None
+        self._chart_specs_by_id: dict[str, _ObjectSpec] | None = None
+        self._smartart_specs: dict[tuple[str, str], _ObjectSpec] | None = None
+        self._smartart_specs_by_id: dict[str, _ObjectSpec] | None = None
+        self._layout_lookup_cache: LayoutLookup | None = None
+        self._layout_categories_by_source: dict[str, str] = {}
 
     def lazy_charts(self) -> ChartLookup:
+        if self._chart_lookup is not None:
+            return self._chart_lookup
         specs: dict[tuple[str, str], _ObjectSpec] = {}
+        by_id: dict[str, _ObjectSpec] = {}
         for index, record in enumerate(self._relationships.by_type(CHART_REL_TYPE), start=1):
             if record.resolved_target is not None:
-                specs[(record.source_part, record.id)] = _ObjectSpec(
-                    record.source_part, record.id, f"chart{index}", record.resolved_target
-                )
+                spec = _ObjectSpec(record.source_part, record.id, f"chart{index}", record.resolved_target)
+                specs[(record.source_part, record.id)] = spec
+                by_id[spec.object_id] = spec
+        self._chart_specs = specs
+        self._chart_specs_by_id = by_id
         self._chart_lookup = _LazyChartLookup(self, specs)
         return self._chart_lookup
 
     def lazy_smartarts(self) -> tuple[SmartArtLookup, LayoutLookup]:
+        if self._smartart_lookup is not None:
+            return self._smartart_lookup, self._layout_lookup()
         specs: dict[tuple[str, str], _ObjectSpec] = {}
+        by_id: dict[str, _ObjectSpec] = {}
         for index, record in enumerate(self._relationships.by_type(DIAGRAM_DATA_REL_TYPE), start=1):
             if record.resolved_target is not None:
-                specs[(record.source_part, record.id)] = _ObjectSpec(
-                    record.source_part, record.id, f"smartart{index}", record.resolved_target
-                )
+                spec = _ObjectSpec(record.source_part, record.id, f"smartart{index}", record.resolved_target)
+                specs[(record.source_part, record.id)] = spec
+                by_id[spec.object_id] = spec
+        self._smartart_specs = specs
+        self._smartart_specs_by_id = by_id
         data_lookup = _LazySmartArtLookup(self, specs)
         self._smartart_lookup = data_lookup
         layout_lookup = self._layout_lookup()
@@ -134,18 +150,18 @@ class EmbeddedObjectExtractor:
         return self._smartart_lookup.loaded_values() if self._smartart_lookup is not None else []
 
     def chart_by_id(self, resource_id: str) -> ChartRecord | None:
-        for index, record in enumerate(self._relationships.by_type(CHART_REL_TYPE), start=1):
-            if f"chart{index}" != resource_id or record.resolved_target is None:
-                continue
-            return self._load_chart(_ObjectSpec(record.source_part, record.id, resource_id, record.resolved_target))
-        return None
+        lookup = self.lazy_charts()
+        spec = (self._chart_specs_by_id or {}).get(resource_id)
+        if spec is None:
+            return None
+        return lookup.get((spec.source_part, spec.relationship_id))
 
     def smartart_by_id(self, resource_id: str) -> SmartArtRecord | None:
-        for index, record in enumerate(self._relationships.by_type(DIAGRAM_DATA_REL_TYPE), start=1):
-            if f"smartart{index}" != resource_id or record.resolved_target is None:
-                continue
-            return self._load_smartart(_ObjectSpec(record.source_part, record.id, resource_id, record.resolved_target))
-        return None
+        lookup = self.lazy_smartarts()[0]
+        spec = (self._smartart_specs_by_id or {}).get(resource_id)
+        if spec is None:
+            return None
+        return lookup.get((spec.source_part, spec.relationship_id))
 
     def _load_chart(self, spec: _ObjectSpec) -> ChartRecord | None:
         if not self._pkg.exists(spec.part):
@@ -182,15 +198,9 @@ class EmbeddedObjectExtractor:
                 "nodeCount": len(nodes),
                 "linkCount": len(links),
             }
-            for record in self._relationships.by_source(spec.source_part):
-                if record.type != DIAGRAM_LAYOUT_REL_TYPE or record.resolved_target is None:
-                    continue
-                if not self._pkg.exists(record.resolved_target):
-                    continue
-                category = self._parse_layout_category(self._read_xml(record.resolved_target))
-                if category:
-                    result["layoutType"] = category
-                    break
+            category = self._layout_categories_by_source.get(spec.source_part)
+            if category:
+                result["layoutType"] = category
             return result
         except (ET.ParseError, ValueError, TypeError) as exc:
             self._warnings.append(
@@ -199,6 +209,8 @@ class EmbeddedObjectExtractor:
             return None
 
     def _layout_lookup(self) -> LayoutLookup:
+        if self._layout_lookup_cache is not None:
+            return self._layout_lookup_cache
         result: LayoutLookup = {}
         for record in self._relationships.by_type(DIAGRAM_LAYOUT_REL_TYPE):
             if record.resolved_target is None or not self._pkg.exists(record.resolved_target):
@@ -209,6 +221,8 @@ class EmbeddedObjectExtractor:
                 category = None
             if category:
                 result[(record.source_part, record.id)] = category
+                self._layout_categories_by_source.setdefault(record.source_part, category)
+        self._layout_lookup_cache = result
         return result
 
     def extract_charts(self) -> tuple[list[ChartRecord], ChartLookup]:

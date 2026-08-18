@@ -58,6 +58,7 @@ class ThemeParser:
         self._pkg = pkg
         self._relationships = relationships
         self._warnings = warnings
+        self._cache: dict[str, dict[str, str]] = {}
 
     def parse(self) -> dict[str, str]:
         part: str | None = None
@@ -73,7 +74,30 @@ class ThemeParser:
         if preferred:
             part = preferred[0].resolved_target
             locator = preferred[0].source_part
-        if part is None or not self._pkg.exists(part):
+        if part is None:
+            self._warnings.append(
+                ParseWarning(
+                    code="THEME_PART_MISSING",
+                    message="Theme relationship missing",
+                    locator=locator,
+                )
+            )
+            return dict(_DEFAULT_THEME)
+        return self._parse_part(part, locator)
+
+    def parse_for_source(self, source_part: str) -> dict[str, str]:
+        """Resolve the theme related to a slide master, with deck fallback."""
+        records = self._relationships.by_type(THEME_REL_TYPE, source_part=source_part)
+        for record in records:
+            if record.resolved_target is not None:
+                return self._parse_part(record.resolved_target, source_part)
+        return self.parse()
+
+    def _parse_part(self, part: str, locator: str) -> dict[str, str]:
+        cached = self._cache.get(part)
+        if cached is not None:
+            return dict(cached)
+        if not self._pkg.exists(part):
             self._warnings.append(
                 ParseWarning(
                     code="THEME_PART_MISSING",
@@ -81,12 +105,16 @@ class ThemeParser:
                     locator=locator,
                 )
             )
-            return dict(_DEFAULT_THEME)
+            fallback = dict(_DEFAULT_THEME)
+            self._cache[part] = fallback
+            return dict(fallback)
         try:
             root = self._read_xml(part)
         except ET.ParseError as exc:
             self._warnings.append(ParseWarning(code="THEME_XML_INVALID", message=f"Invalid theme XML: {exc}", locator=part))
-            return dict(_DEFAULT_THEME)
+            fallback = dict(_DEFAULT_THEME)
+            self._cache[part] = fallback
+            return dict(fallback)
         scheme = self._find_descendant(root, "clrScheme")
         if scheme is None:
             self._warnings.append(
@@ -96,7 +124,9 @@ class ThemeParser:
                     locator=part,
                 )
             )
-            return dict(_DEFAULT_THEME)
+            fallback = dict(_DEFAULT_THEME)
+            self._cache[part] = fallback
+            return dict(fallback)
         colors: dict[str, str] = {}
         for slot in _THEME_SLOTS:
             colors[slot] = _DEFAULT_THEME.get(slot, "#000000")
@@ -106,7 +136,8 @@ class ThemeParser:
                 value = self._slot_value(child)
                 if value:
                     colors[slot] = value
-        return colors
+        self._cache[part] = colors
+        return dict(colors)
 
     @staticmethod
     def _slot_value(slot_element: ET.Element) -> str | None:

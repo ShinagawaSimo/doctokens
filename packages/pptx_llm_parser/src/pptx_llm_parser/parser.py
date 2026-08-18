@@ -61,6 +61,159 @@ class _ParseContext:
     slide_size: tuple[int, int] | None
 
 
+@dataclass(frozen=True, slots=True)
+class _SlideRef:
+    """Validated presentation relationship for one slide entry."""
+
+    relationship_id: str
+    slide_id: str
+    part: str
+
+
+@dataclass(slots=True)
+class _SlideParseResult:
+    """Intermediate slide product shared by full and streaming parses."""
+
+    slide: SlideBlock
+
+
+class _SlideSequence:
+    """Validate the presentation slide list once and parse it in document order."""
+
+    def __init__(self, pkg: PackageReader, context: _ParseContext, warnings: list[ParseWarning]) -> None:
+        self._pkg = pkg
+        self._context = context
+        self._warnings = warnings
+        self._refs = tuple(self._collect_refs())
+        self._parser = SlideParser(
+            warnings,
+            context.asset_lookup,
+            context.chart_lookup,
+            context.smartart_lookup,
+            context.layout_lookup,
+            context.resolver,
+            context.slide_size,
+            context.theme,
+            context.hyperlinks,
+        )
+
+    @property
+    def refs(self) -> tuple[_SlideRef, ...]:
+        return self._refs
+
+    def _collect_refs(self) -> list[_SlideRef]:
+        sld_id_lst = first_child(self._context.presentation_root, "p", "sldIdLst")
+        if sld_id_lst is None:
+            self._warnings.append(
+                ParseWarning(
+                    code="PRESENTATION_MISSING_SLDIDLST",
+                    message="Missing p:sldIdLst",
+                    locator=PRESENTATION_PART,
+                )
+            )
+            return []
+        refs: list[_SlideRef] = []
+        for sld_id_el in sld_id_lst:
+            if local_name(sld_id_el.tag) != "sldId":
+                continue
+            rid = attr(sld_id_el, "r", "id")
+            if rid is None:
+                self._warnings.append(
+                    ParseWarning(
+                        code="SLIDE_MISSING_RID",
+                        message="p:sldId missing r:id",
+                        locator=PRESENTATION_PART,
+                    )
+                )
+                continue
+            relationship = self._context.relationships.get(PRESENTATION_PART, rid)
+            if relationship is None or relationship.resolved_target is None:
+                self._warnings.append(
+                    ParseWarning(
+                        code="SLIDE_REL_UNRESOLVED",
+                        message=f"Unresolved slide relationship {rid}",
+                        locator=PRESENTATION_PART,
+                    )
+                )
+                continue
+            part = relationship.resolved_target
+            if not self._pkg.exists(part):
+                self._warnings.append(
+                    ParseWarning(
+                        code="SLIDE_PART_MISSING",
+                        message=f"Slide part missing: {part}",
+                        locator=PRESENTATION_PART,
+                    )
+                )
+                continue
+            refs.append(_SlideRef(rid, sld_id_el.get("id", ""), part))
+        return refs
+
+    def iter_results(self, *, start_slide: int = 1) -> Generator[_SlideParseResult, None, None]:
+        slide_number = 0
+        for ref in self._refs:
+            try:
+                root = self._read_xml(ref.part)
+            except ET.ParseError as exc:
+                self._warnings.append(
+                    ParseWarning(code="SLIDE_XML_INVALID", message=f"Invalid slide XML: {exc}", locator=ref.part)
+                )
+                continue
+            hidden, shapes, background = self._parser.parse_slide(root, ref.part)
+            slide_number += 1
+            slide = SlideBlock(
+                id=f"slide{slide_number}",
+                type="slide",
+                n=slide_number,
+                part=ref.part,
+                sldId=ref.slide_id,
+                hidden=hidden,
+                shapes=shapes,
+                notes=self._context.notes.notes_for(ref.part),
+                background=background,
+                commentRefs=[],
+            )
+            if slide_number >= start_slide:
+                yield _SlideParseResult(slide)
+
+    def _read_xml(self, part: str) -> ET.Element:
+        with self._pkg.open_entry(part) as stream:
+            return ET.parse(stream).getroot()
+
+
+class _CommentAttachmentPlan:
+    """Group raw comments by validated slide locator before slide parsing."""
+
+    def __init__(self, comments: list[CommentItem], refs: tuple[_SlideRef, ...]) -> None:
+        self.by_slide_part: dict[str, list[CommentItem]] = {}
+        self.unresolved: list[CommentItem] = []
+        by_locator: dict[str, str] = {}
+        for index, ref in enumerate(refs, start=1):
+            by_locator[ref.part] = ref.part
+            by_locator[ref.relationship_id] = ref.part
+            if ref.slide_id:
+                by_locator[ref.slide_id] = ref.part
+            by_locator[f"slide{index}"] = ref.part
+        for comment in comments:
+            locator = comment.get("slideId")
+            part = by_locator.get(locator) if isinstance(locator, str) else None
+            if part is None:
+                self.unresolved.append(comment)
+            else:
+                self.by_slide_part.setdefault(part, []).append(comment)
+
+    def attach(self, slide: SlideBlock, slide_size: tuple[int, int] | None) -> None:
+        comments = self.by_slide_part.pop(slide["part"], [])
+        if comments:
+            PptxParser._attach_comments(comments, [slide], slide_size, infer_single=False)
+
+    def attach_all(self, slides: list[SlideBlock], slide_size: tuple[int, int] | None) -> None:
+        for slide in slides:
+            self.attach(slide, slide_size)
+        if self.unresolved and len(slides) == 1:
+            PptxParser._attach_comments(self.unresolved, slides, slide_size, infer_single=True)
+
+
 class PptxParser:
     """Parse a PPTX file into a ParsedPresentation."""
 
@@ -70,24 +223,11 @@ class PptxParser:
         with PackageReader(source, options) as pkg:
             pkg.validate()
             context = self._build_context(pkg, warnings)
-            slides = self._parse_slide_refs(
-                pkg,
-                context.relationships,
-                context.presentation_root,
-                warnings,
-                context.asset_lookup,
-                context.chart_lookup,
-                context.smartart_lookup,
-                context.layout_lookup,
-                context.resolver,
-                context.slide_size,
-                context.notes,
-                context.theme,
-                context.hyperlinks,
-            )
+            sequence = _SlideSequence(pkg, context, warnings)
+            slides = [result.slide for result in sequence.iter_results()]
             charts = context.objects.loaded_charts
             smartarts = context.objects.loaded_smartarts
-            self._attach_comments(context.comments, slides, context.slide_size)
+            _CommentAttachmentPlan(context.comments, sequence.refs).attach_all(slides, context.slide_size)
             ocr_results = self._run_ocr(pkg, context.assets, slides, options)
         parsed = ParsedPresentation(
             slides=slides,
@@ -124,80 +264,10 @@ class PptxParser:
         with PackageReader(source, options) as pkg:
             pkg.validate()
             context = self._build_context(pkg, warnings)
-            sld_id_lst = first_child(context.presentation_root, "p", "sldIdLst")
-            if sld_id_lst is None:
-                warnings.append(
-                    ParseWarning(
-                        code="PRESENTATION_MISSING_SLDIDLST",
-                        message="Missing p:sldIdLst",
-                        locator=PRESENTATION_PART,
-                    )
-                )
-                return
-            slide_parser = SlideParser(
-                warnings,
-                context.asset_lookup,
-                context.chart_lookup,
-                context.smartart_lookup,
-                context.layout_lookup,
-                context.resolver,
-                context.slide_size,
-                context.theme,
-                context.hyperlinks,
-            )
-            n = 0
-            for sld_id_el in (element for element in sld_id_lst if local_name(element.tag) == "sldId"):
-                rid = attr(sld_id_el, "r", "id")
-                if rid is None:
-                    warnings.append(
-                        ParseWarning(
-                            code="SLIDE_MISSING_RID",
-                            message="p:sldId missing r:id",
-                            locator=PRESENTATION_PART,
-                        )
-                    )
-                    continue
-                relationship = context.relationships.get(PRESENTATION_PART, rid)
-                if relationship is None or relationship.resolved_target is None:
-                    warnings.append(
-                        ParseWarning(
-                            code="SLIDE_REL_UNRESOLVED",
-                            message=f"Unresolved slide relationship {rid}",
-                            locator=PRESENTATION_PART,
-                        )
-                    )
-                    continue
-                part = relationship.resolved_target
-                if not pkg.exists(part):
-                    warnings.append(
-                        ParseWarning(
-                            code="SLIDE_PART_MISSING",
-                            message=f"Slide part missing: {part}",
-                            locator=PRESENTATION_PART,
-                        )
-                    )
-                    continue
-                n += 1
-                try:
-                    slide_root = self._read_xml(pkg, part)
-                except ET.ParseError as exc:
-                    warnings.append(ParseWarning(code="SLIDE_XML_INVALID", message=f"Invalid slide XML: {exc}", locator=part))
-                    continue
-                hidden, shapes, background = slide_parser.parse_slide(slide_root, part)
-                slide = SlideBlock(
-                    id=f"slide{n}",
-                    type="slide",
-                    n=n,
-                    part=part,
-                    sldId=sld_id_el.get("id", ""),
-                    hidden=hidden,
-                    shapes=shapes,
-                    notes=context.notes.notes_for(part),
-                    background=background,
-                    commentRefs=[],
-                )
-                if n < start_slide:
-                    continue
+            sequence = _SlideSequence(pkg, context, warnings)
+            comment_plan = _CommentAttachmentPlan(context.comments, sequence.refs)
+            for result in sequence.iter_results(start_slide=start_slide):
+                slide = result.slide
                 parsed = ParsedPresentation(
                     slides=[slide],
                     slide_size=context.slide_size,
@@ -210,7 +280,7 @@ class PptxParser:
                 )
                 if options.ocr is not None:
                     parsed.ocr_results = self._run_ocr(pkg, context.assets, [slide], options)
-                self._attach_comments(context.comments, [slide], context.slide_size, infer_single=False)
+                comment_plan.attach(slide, context.slide_size)
                 yield slide, parsed
 
     def _build_context(self, pkg: PackageReader, warnings: list[ParseWarning]) -> _ParseContext:
@@ -219,7 +289,8 @@ class PptxParser:
         objects = EmbeddedObjectExtractor(pkg, relationships, warnings)
         chart_lookup = objects.lazy_charts()
         smartart_lookup, layout_lookup = objects.lazy_smartarts()
-        theme = ThemeParser(pkg, relationships, warnings).parse()
+        theme_parser = ThemeParser(pkg, relationships, warnings)
+        theme = theme_parser.parse()
         hyperlinks = {
             (record.source_part, record.id): record.resolved_target
             for record in relationships.by_type(HYPERLINK_REL_TYPE)
@@ -236,7 +307,7 @@ class PptxParser:
             layout_lookup=layout_lookup,
             theme=theme,
             hyperlinks=hyperlinks,
-            resolver=LayoutMasterResolver(pkg, relationships, warnings, theme),
+            resolver=LayoutMasterResolver(pkg, relationships, warnings, theme, theme_parser=theme_parser),
             notes=NotesParser(pkg, relationships, warnings),
             comments=CommentsParser(pkg, relationships, warnings).parse(),
             presentation_root=presentation_root,
@@ -252,14 +323,19 @@ class PptxParser:
         infer_single: bool = True,
     ) -> None:
         """Resolve comment slide/shape references without discarding raw IDs."""
+        slide_by_locator = {
+            locator: slide
+            for slide in slides
+            for locator in (slide["id"], slide["part"], slide["sldId"])
+            if locator
+        }
         for comment in comments:
             locator = comment.get("slideId")
-            candidates = [slide for slide in slides if locator in {slide["id"], slide["part"], slide["sldId"]}]
-            if not candidates and infer_single and len(slides) == 1:
-                candidates = slides
-            if not candidates:
+            slide = slide_by_locator.get(locator) if isinstance(locator, str) else None
+            if slide is None and infer_single and len(slides) == 1:
+                slide = slides[0]
+            if slide is None:
                 continue
-            slide = candidates[0]
             comment["slideId"] = slide["id"]
             reference: CommentRef = {"id": comment["id"]}
             x = comment.get("x")
@@ -376,98 +452,3 @@ class PptxParser:
         except ValueError:
             warnings.append(ParseWarning(code="SLDSZ_INVALID", message="Invalid p:sldSz dimensions", locator=PRESENTATION_PART))
             return None
-
-    def _parse_slide_refs(
-        self,
-        pkg: PackageReader,
-        relationships: RelationshipIndex,
-        presentation_root: ET.Element,
-        warnings: list[ParseWarning],
-        asset_lookup: AssetLookup,
-        chart_lookup: ChartLookup,
-        smartart_lookup: SmartArtLookup,
-        layout_lookup: LayoutLookup,
-        resolver: LayoutMasterResolver,
-        slide_size: tuple[int, int] | None,
-        notes_parser: NotesParser,
-        theme: dict[str, str],
-        hyperlink_lookup: dict[tuple[str, str], str],
-    ) -> list[SlideBlock]:
-        sld_id_lst = first_child(presentation_root, "p", "sldIdLst")
-        if sld_id_lst is None:
-            warnings.append(
-                ParseWarning(
-                    code="PRESENTATION_MISSING_SLDIDLST",
-                    message="Missing p:sldIdLst",
-                    locator=PRESENTATION_PART,
-                )
-            )
-            return []
-
-        slides: list[SlideBlock] = []
-        slide_parser = SlideParser(
-            warnings,
-            asset_lookup,
-            chart_lookup,
-            smartart_lookup,
-            layout_lookup,
-            resolver,
-            slide_size,
-            theme,
-            hyperlink_lookup,
-        )
-        for sld_id_el in list(sld_id_lst):
-            if local_name(sld_id_el.tag) != "sldId":
-                continue
-            rid = attr(sld_id_el, "r", "id")
-            if rid is None:
-                warnings.append(
-                    ParseWarning(
-                        code="SLIDE_MISSING_RID",
-                        message="p:sldId missing r:id",
-                        locator=PRESENTATION_PART,
-                    )
-                )
-                continue
-            relationship = relationships.get(PRESENTATION_PART, rid)
-            if relationship is None or relationship.resolved_target is None:
-                warnings.append(
-                    ParseWarning(
-                        code="SLIDE_REL_UNRESOLVED",
-                        message=f"Unresolved slide relationship {rid}",
-                        locator=PRESENTATION_PART,
-                    )
-                )
-                continue
-            part = relationship.resolved_target
-            if not pkg.exists(part):
-                warnings.append(
-                    ParseWarning(
-                        code="SLIDE_PART_MISSING",
-                        message=f"Slide part missing: {part}",
-                        locator=PRESENTATION_PART,
-                    )
-                )
-                continue
-            try:
-                root = self._read_xml(pkg, part)
-            except ET.ParseError as exc:
-                warnings.append(ParseWarning(code="SLIDE_XML_INVALID", message=f"Invalid slide XML: {exc}", locator=part))
-                continue
-            hidden, shapes, background = slide_parser.parse_slide(root, part)
-            n = len(slides) + 1
-            slides.append(
-                SlideBlock(
-                    id=f"slide{n}",
-                    type="slide",
-                    n=n,
-                    part=part,
-                    sldId=sld_id_el.get("id", ""),
-                    hidden=hidden,
-                    shapes=shapes,
-                    notes=notes_parser.notes_for(part),
-                    background=background,
-                    commentRefs=[],
-                )
-            )
-        return slides

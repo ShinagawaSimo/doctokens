@@ -7,6 +7,7 @@ text is never read — template prompt text stays out of slide content.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import cast
 from xml.etree import ElementTree as ET
 
@@ -17,6 +18,7 @@ from ..core.constants import first_child, local_name
 from ..core.models import LayoutContext, ParagraphStyle, PlaceholderInfo, RunFormat
 from ..core.package import PackageReader
 from .colors import DEFAULT_COLOR_MAP, is_default_text_color, resolve_color_element
+from .theme import ThemeParser
 
 SLIDE_LAYOUT_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout"
 SLIDE_MASTER_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster"
@@ -72,8 +74,19 @@ def shape_geometry(shape: ET.Element, warnings: list[ParseWarning]) -> tuple[int
         return None
 
 
+@dataclass(frozen=True, slots=True)
+class _TemplateModel:
+    """Parsed layout/master products shared by every slide using that part."""
+
+    part: str
+    theme: dict[str, str]
+    placeholders: dict[str, PlaceholderInfo]
+    color_map: dict[str, str]
+    text_styles: dict[str, dict[int, ParagraphStyle]]
+
+
 class LayoutMasterResolver:
-    """Resolve per-slide layout context, cached per slide part."""
+    """Resolve per-slide layout context with slide and template-level caches."""
 
     def __init__(
         self,
@@ -81,12 +94,17 @@ class LayoutMasterResolver:
         relationships: RelationshipIndex,
         warnings: list[ParseWarning],
         theme: dict[str, str] | None = None,
+        theme_parser: ThemeParser | None = None,
     ) -> None:
         self._pkg = pkg
         self._relationships = relationships
         self._warnings = warnings
         self._theme = theme or {}
+        self._theme_parser = theme_parser
         self._cache: dict[str, LayoutContext] = {}
+        self._layout_cache: dict[str, _TemplateModel] = {}
+        self._master_cache: dict[str, _TemplateModel] = {}
+        self._target_cache: dict[tuple[str, str], str | None] = {}
 
     def resolve(self, slide_part: str, slide_root: ET.Element) -> LayoutContext:
         base = self._cache.get(slide_part)
@@ -97,6 +115,7 @@ class LayoutMasterResolver:
         # A slide-level override must not leak into another invocation of the
         # same resolver (or into a slide that happens to reuse the cache key).
         return {
+            "theme": base["theme"],
             "placeholders": base["placeholders"],
             "color_map": {**base["color_map"], **slide_map},
             "text_styles": base["text_styles"],
@@ -112,29 +131,40 @@ class LayoutMasterResolver:
                     locator=slide_part,
                 )
             )
-            return {"placeholders": {}, "color_map": dict(DEFAULT_COLOR_MAP), "text_styles": {}}
+            return self._empty_context()
+        return self._layout_model(layout_part)
 
+    def _empty_context(self) -> LayoutContext:
+        return {
+            "theme": dict(self._theme),
+            "placeholders": {},
+            "color_map": dict(DEFAULT_COLOR_MAP),
+            "text_styles": {},
+        }
+
+    def _layout_model(self, layout_part: str) -> LayoutContext:
+        cached = self._layout_cache.get(layout_part)
+        if cached is not None:
+            return {
+                "theme": cached.theme,
+                "placeholders": cached.placeholders,
+                "color_map": cached.color_map,
+                "text_styles": cached.text_styles,
+            }
         try:
             layout_root = self._read_xml(layout_part)
         except ET.ParseError as exc:
             self._warnings.append(
                 ParseWarning(code="LAYOUT_XML_INVALID", message=f"Invalid slide layout XML: {exc}", locator=layout_part)
             )
-            return {"placeholders": {}, "color_map": dict(DEFAULT_COLOR_MAP), "text_styles": {}}
+            empty = _TemplateModel(layout_part, dict(self._theme), {}, dict(DEFAULT_COLOR_MAP), {})
+            self._layout_cache[layout_part] = empty
+            return {"theme": empty.theme, "placeholders": {}, "color_map": empty.color_map, "text_styles": {}}
+
         master_part = self._target_for(layout_part, SLIDE_MASTER_REL_TYPE)
-        master_by_type: dict[str, tuple[int, int, int, int]] = {}
-        master_styles: dict[str, dict[int, ParagraphStyle]] = {}
+        master_model: _TemplateModel | None = None
         if master_part is not None and self._pkg.exists(master_part):
-            try:
-                master_root = self._read_xml(master_part)
-                master_by_type = self._master_geometries(master_root)
-                master_map = self._clr_map_from(master_root, override=False)
-                master_styles = self._text_styles(master_root, {**DEFAULT_COLOR_MAP, **master_map})
-            except ET.ParseError as exc:
-                self._warnings.append(
-                    ParseWarning(code="MASTER_XML_INVALID", message=f"Invalid slide master XML: {exc}", locator=master_part)
-                )
-                master_map = {}
+            master_model = self._master_model(master_part)
         else:
             self._warnings.append(
                 ParseWarning(
@@ -143,7 +173,11 @@ class LayoutMasterResolver:
                     locator=layout_part,
                 )
             )
-            master_map = {}
+        master_model = master_model or _TemplateModel("", dict(self._theme), {}, {}, {})
+        master_by_type = {
+            key.removeprefix("type:"): (info["x"], info["y"], info["w"], info["h"])
+            for key, info in master_model.placeholders.items()
+            if key.startswith("type:") and all(info.get(name) is not None for name in ("x", "y", "w", "h"))        }
 
         placeholders: dict[str, PlaceholderInfo] = {}
         for shape in self._layout_shapes(layout_root):
@@ -167,18 +201,67 @@ class LayoutMasterResolver:
             placeholders[idx] = info
             placeholders.setdefault(f"type:{ph_type}", info)
 
-        color_map = {**DEFAULT_COLOR_MAP, **master_map, **self._clr_map_from(layout_root, override=False)}
-        layout_styles = self._text_styles(layout_root, color_map)
+        color_map = {**DEFAULT_COLOR_MAP, **master_model.color_map, **self._clr_map_from(layout_root, override=False)}
+        layout_styles = self._text_styles(layout_root, color_map, theme=master_model.theme)
+        model = _TemplateModel(
+            layout_part,
+            master_model.theme,
+            placeholders,
+            color_map,
+            self._merge_text_styles(master_model.text_styles, layout_styles),
+        )
+        self._layout_cache[layout_part] = model
         return {
-            "placeholders": placeholders,
-            "color_map": color_map,
-            "text_styles": self._merge_text_styles(master_styles, layout_styles),
+            "theme": model.theme,
+            "placeholders": model.placeholders,
+            "color_map": model.color_map,
+            "text_styles": model.text_styles,
         }
+
+    def _master_model(self, master_part: str) -> _TemplateModel:
+        cached = self._master_cache.get(master_part)
+        if cached is not None:
+            return cached
+        try:
+            master_root = self._read_xml(master_part)
+        except ET.ParseError as exc:
+            self._warnings.append(
+                ParseWarning(code="MASTER_XML_INVALID", message=f"Invalid slide master XML: {exc}", locator=master_part)
+            )
+            model = _TemplateModel(master_part, dict(self._theme), {}, dict(DEFAULT_COLOR_MAP), {})
+            self._master_cache[master_part] = model
+            return model
+        theme = self._theme_parser.parse_for_source(master_part) if self._theme_parser is not None else dict(self._theme)
+        master_map = self._clr_map_from(master_root, override=False)
+        color_map = {**DEFAULT_COLOR_MAP, **master_map}
+        placeholders: dict[str, PlaceholderInfo] = {}
+        for shape in self._layout_shapes(master_root):
+            ph = self._find_descendant(shape, "ph")
+            if ph is None:
+                continue
+            ph_type = ph.get("type", "obj")
+            geometry = shape_geometry(shape, self._warnings)
+            info: PlaceholderInfo = {"type": ph_type} if ph_type else {}
+            if geometry is not None:
+                info["x"], info["y"], info["w"], info["h"] = geometry
+            if ph_type:
+                placeholders[f"type:{ph_type}"] = info
+        model = _TemplateModel(
+            master_part,
+            theme,
+            placeholders,
+            color_map,
+            self._text_styles(master_root, color_map, theme=theme),
+        )
+        self._master_cache[master_part] = model
+        return model
 
     def _text_styles(
         self,
         root: ET.Element,
         color_map: dict[str, str],
+        *,
+        theme: dict[str, str] | None = None,
     ) -> dict[str, dict[int, ParagraphStyle]]:
         result: dict[str, dict[int, ParagraphStyle]] = {}
         tx_styles = self._find_descendant(root, "txStyles")
@@ -187,14 +270,14 @@ class LayoutMasterResolver:
             for child in tx_styles:
                 role = role_names.get(local_name(child.tag))
                 if role:
-                    result[role] = self._styles_from_container(child, color_map)
+                    result[role] = self._styles_from_container(child, color_map, theme=theme)
         for shape in self._layout_shapes(root):
             ph = self._find_descendant(shape, "ph")
             tx_body = first_child(shape, "p", "txBody")
             lst_style = first_child(tx_body, "a", "lstStyle") if tx_body is not None else None
             if ph is None or lst_style is None:
                 continue
-            styles = self._styles_from_container(lst_style, color_map)
+            styles = self._styles_from_container(lst_style, color_map, theme=theme)
             if not styles:
                 continue
             result[f"idx:{ph.get('idx', '0')}"] = styles
@@ -205,6 +288,8 @@ class LayoutMasterResolver:
         self,
         container: ET.Element,
         color_map: dict[str, str],
+        *,
+        theme: dict[str, str] | None = None,
     ) -> dict[int, ParagraphStyle]:
         result: dict[int, ParagraphStyle] = {}
         for child in container:
@@ -231,14 +316,20 @@ class LayoutMasterResolver:
                     style["startAt"] = 1
             def_r_pr = first_child(child, "a", "defRPr")
             if def_r_pr is not None:
-                run_format = self._run_defaults(def_r_pr, color_map)
+                run_format = self._run_defaults(def_r_pr, color_map, theme=theme)
                 if run_format:
                     style["runFormat"] = run_format
             if style:
                 result[level] = style
         return result
 
-    def _run_defaults(self, r_pr: ET.Element, color_map: dict[str, str]) -> RunFormat:
+    def _run_defaults(
+        self,
+        r_pr: ET.Element,
+        color_map: dict[str, str],
+        *,
+        theme: dict[str, str] | None = None,
+    ) -> RunFormat:
         result: RunFormat = {}
         for attribute, key in (("b", "bold"), ("i", "italic")):
             value = r_pr.get(attribute)
@@ -252,7 +343,7 @@ class LayoutMasterResolver:
             for color_element in solid_fill:
                 color = resolve_color_element(
                     color_element,
-                    self._theme,
+                    theme or self._theme,
                     color_map=color_map,
                     warnings=self._warnings,
                 )
@@ -315,9 +406,14 @@ class LayoutMasterResolver:
         return _read_color_map_attrs(node)
 
     def _target_for(self, source_part: str, rel_type: str) -> str | None:
+        cache_key = (source_part, rel_type)
+        if cache_key in self._target_cache:
+            return self._target_cache[cache_key]
         for record in self._relationships.by_source(source_part):
             if record.type == rel_type:
+                self._target_cache[cache_key] = record.resolved_target
                 return record.resolved_target
+        self._target_cache[cache_key] = None
         return None
 
     def _read_xml(self, part: str) -> ET.Element:

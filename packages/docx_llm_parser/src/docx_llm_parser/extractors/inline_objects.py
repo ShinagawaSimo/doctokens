@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from xml.etree import ElementTree as ET
 
 from ..core.constants import attr, child_elements, first_child, local_name, qualified_name
@@ -14,6 +15,68 @@ from ..core.models import (
     SmartArt,
 )
 from ..ooxml.omml_latex import omath_to_latex
+
+
+@dataclass(slots=True)
+class DrawingScanResult:
+    """All reusable facts collected from one ``w:drawing`` subtree."""
+
+    common: DrawingCommon
+    chart_rel_ids: list[str] = field(default_factory=list)
+    smartart_rel_ids: list[str] = field(default_factory=list)
+    image_rel_id: str | None = None
+    textbox_nodes: list[ET.Element] = field(default_factory=list)
+
+    @classmethod
+    def scan(cls, drawing: ET.Element) -> DrawingScanResult:
+        candidates: list[tuple[str, DrawingCommon]] = []
+        result = cls({"placement": "drawing"})
+
+        def walk(node: ET.Element, active: DrawingCommon | None) -> None:
+            local = local_name(node.tag)
+            if local in {"inline", "anchor"} and node.tag.startswith("{"):
+                active = {"placement": local}
+                candidates.append((local, active))
+            if local == "chart":
+                rel_id = attr(node, "r", "id")
+                if rel_id:
+                    result.chart_rel_ids.append(rel_id)
+            elif local == "relIds":
+                rel_id = attr(node, "r", "dm")
+                if rel_id:
+                    result.smartart_rel_ids.append(rel_id)
+            elif local == "blip" and result.image_rel_id is None:
+                result.image_rel_id = attr(node, "r", "embed")
+            elif local == "txbxContent":
+                result.textbox_nodes.append(node)
+            if active is not None:
+                if local == "docPr":
+                    name = node.get("name")
+                    descr = node.get("descr")
+                    title = node.get("title")
+                    if name:
+                        active["name"] = name
+                    if descr:
+                        active["alt"] = descr
+                    if title:
+                        active["title"] = title
+                elif local == "extent" and "cx" not in active:
+                    cx = node.get("cx")
+                    cy = node.get("cy")
+                    if cx is not None:
+                        active["cx"] = cx
+                    if cy is not None:
+                        active["cy"] = cy
+            for child in node:
+                walk(child, active)
+
+        walk(drawing, None)
+        chosen = next((facts for kind, facts in candidates if kind == "inline"), None)
+        if chosen is None and candidates:
+            chosen = candidates[0][1]
+        if chosen is not None:
+            result.common = chosen
+        return result
 
 
 def equation_object(node: ET.Element) -> InlineObject:
@@ -29,26 +92,18 @@ def drawing_objects(
     object_lookup: ObjectLookup,
 ) -> list[InlineObject]:
     """Extract image references, text boxes, charts, SmartArt, and placeholders."""
-    placement, container = _drawing_container(drawing)
-    common = _drawing_common_attrs(container, placement)
+    scan = DrawingScanResult.scan(drawing)
+    common = scan.common
     objects: list[InlineObject] = []
 
-    for chart in drawing.iter(qualified_name("c", "chart")):
-        rel_id = attr(chart, "r", "id")
-        if rel_id:
-            objects.append(_referenced_object(object_lookup, part, rel_id, "chart", common))
+    objects.extend(_referenced_object(object_lookup, part, rel_id, "chart", common) for rel_id in scan.chart_rel_ids)
+    objects.extend(_referenced_object(object_lookup, part, rel_id, "smartart", common) for rel_id in scan.smartart_rel_ids)
 
-    for rel_ids in drawing.iter(qualified_name("dgm", "relIds")):
-        rel_id = attr(rel_ids, "r", "dm")
-        if rel_id:
-            objects.append(_referenced_object(object_lookup, part, rel_id, "smartart", common))
-
-    blip = drawing.find(".//" + qualified_name("a", "blip"))
-    rel_id = attr(blip, "r", "embed") if blip is not None else None
+    rel_id = scan.image_rel_id
     if rel_id:
         _append_image_or_placeholder(objects, asset_lookup, part, rel_id, common)
 
-    objects.extend(_textbox_objects(drawing, common))
+    objects.extend(_textbox_objects_from_nodes(scan.textbox_nodes, common))
     if objects:
         return objects
 
@@ -127,8 +182,12 @@ def _append_image_or_placeholder(
 
 
 def _textbox_objects(node: ET.Element, common: DrawingCommon) -> list[InlineObject]:
+    return _textbox_objects_from_nodes(_textbox_content_nodes(node), common)
+
+
+def _textbox_objects_from_nodes(nodes: list[ET.Element], common: DrawingCommon) -> list[InlineObject]:
     objects: list[InlineObject] = []
-    for txbx in _textbox_content_nodes(node):
+    for txbx in nodes:
         text = _container_plain_text(txbx)
         if text.strip():
             textbox: InlineObject = {"type": "textbox", "text": text}

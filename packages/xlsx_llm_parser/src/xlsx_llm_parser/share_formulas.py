@@ -51,12 +51,16 @@ def expand_shared_formulas(
     After the call every cell in a shared group has its own expanded
     ``formula`` field.
     """
-    # Group cells by si index
     groups: dict[str, list[Cell]] = {}
     for c in cells:
         si = c.get("si")
         if si is not None:
             groups.setdefault(si, []).append(c)
+    expand_shared_formula_groups(groups)
+
+
+def expand_shared_formula_groups(groups: dict[str, list[Cell]]) -> None:
+    """Expand already-collected shared-formula groups in-place."""
 
     for group in groups.values():
         master = next((c for c in group if c.get("shared_ref")), None)

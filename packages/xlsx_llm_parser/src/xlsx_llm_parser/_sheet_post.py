@@ -80,34 +80,37 @@ def apply_spill_ranges(rows: list[list[Cell]], cell_map: dict[tuple[int, int], C
     not spill.  Cells inside the range that carry no independent formula are
     marked as spill recipients pointing back to the source via ``spillFrom``.
     """
-    for row_cells in rows:
-        for cell in row_cells:
-            formula_range = cell.get("formulaRange")
-            if not formula_range or not cell.get("dynamicArray"):
-                continue
-            if ":" not in formula_range:
-                continue
-            start_ref, end_ref = formula_range.split(":", 1)
-            start_col, start_row = parse_ref(start_ref)
-            end_col, end_row = parse_ref(end_ref)
+    sources = [cell for row_cells in rows for cell in row_cells if cell.get("formulaRange") and cell.get("dynamicArray")]
+    apply_spill_sources(sources, cell_map)
 
-            # Skip if the range covers only the cell itself
-            spills_only_to_source = (
-                start_col == cell["col"] and start_row == cell["row"] and end_col == cell["col"] and end_row == cell["row"]
-            )
-            if spills_only_to_source:
-                continue
 
-            cell["spillRange"] = formula_range
+def apply_spill_sources(sources: list[Cell], cell_map: dict[tuple[int, int], Cell]) -> None:
+    """Apply spill relationships for a pre-collected source list."""
+    for cell in sources:
+        formula_range = cell.get("formulaRange")
+        if not formula_range or ":" not in formula_range:
+            continue
+        start_ref, end_ref = formula_range.split(":", 1)
+        start_col, start_row = parse_ref(start_ref)
+        end_col, end_row = parse_ref(end_ref)
 
-            # Mark spill recipients: cells inside the range without their own formula
-            for row in range(start_row, end_row + 1):
-                for col in range(start_col, end_col + 1):
-                    if col == cell["col"] and row == cell["row"]:
-                        continue
-                    recipient = cell_map.get((col, row))
-                    if recipient is not None and "formula" not in recipient and "si" not in recipient:
-                        recipient["spillFrom"] = cell["ref"]
+        # Skip if the range covers only the cell itself
+        spills_only_to_source = (
+            start_col == cell["col"] and start_row == cell["row"] and end_col == cell["col"] and end_row == cell["row"]
+        )
+        if spills_only_to_source:
+            continue
+
+        cell["spillRange"] = formula_range
+
+        # Mark spill recipients: cells inside the range without their own formula
+        for row in range(start_row, end_row + 1):
+            for col in range(start_col, end_col + 1):
+                if col == cell["col"] and row == cell["row"]:
+                    continue
+                recipient = cell_map.get((col, row))
+                if recipient is not None and "formula" not in recipient and "si" not in recipient:
+                    recipient["spillFrom"] = cell["ref"]
 
 
 # ── Hyperlinks ──

@@ -215,6 +215,7 @@ class PlaceholderInfo(TypedDict, total=False):
 class LayoutContext(TypedDict):
     """Per-slide inheritance resolution products."""
 
+    theme: dict[str, str]
     placeholders: dict[str, PlaceholderInfo]
     color_map: dict[str, str]
     text_styles: dict[str, dict[int, ParagraphStyle]]

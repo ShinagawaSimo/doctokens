@@ -6,10 +6,11 @@ import io
 import unittest
 import zipfile
 
-from docx_llm_parser import render_window
+from docx_llm_parser import Density, parse_docx, render_window
 from docx_llm_parser.core.enums import RevisionMode
 from docx_llm_parser.core.models import ParseOptions
 from docx_llm_parser.parser import DocxParser
+from docx_llm_parser.renderers.html5 import to_html5
 
 NS_W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -69,6 +70,57 @@ class BodyStructureTests(unittest.TestCase):
         self.assertEqual(parsed.blocks[0]["text"], "Wrapped text")
         self.assertEqual(parsed.blocks[1]["type"], "table")
         self.assertEqual(parsed.blocks[1]["rows"][0]["cells"][0]["text"], "Cell")
+
+    def test_content_control_semantics_and_density(self) -> None:
+        """Form controls retain fill/select semantics without duplicating their content."""
+        data = _make_docx(
+            '<w:sdt><w:sdtPr><w:alias w:val="Status"/><w:tag w:val="status"/>'
+            '<w:id w:val="7"/><w:lock w:val="sdtLocked"/>'
+            '<w:placeholder><w:docPart w:val="StatusPlaceholder"/></w:placeholder>'
+            '<w:dataBinding w:xpath="/root/status"/>'
+            '<w:dropDownList><w:listItem w:displayText="Open" w:value="open"/>'
+            '<w:listItem w:displayText="Closed" w:value="closed"/></w:dropDownList>'
+            '</w:sdtPr><w:sdtContent><w:p><w:r><w:t>Open</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+            '<w:p><w:sdt><w:sdtPr><w:date><w:dateFormat w:val="yyyy-MM-dd"/></w:date></w:sdtPr>'
+            '<w:sdtContent><w:r><w:t>2026-08-19</w:t></w:r></w:sdtContent></w:sdt>'
+            '<w:r><w:t> / </w:t></w:r>'
+            '<w:sdt><w:sdtPr><w:checkbox checked="1"/></w:sdtPr>'
+            '<w:sdtContent><w:r><w:t>Yes</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+            '<w:sdt><w:sdtPr><w:comboBox/></w:sdtPr><w:sdtContent><w:p/></w:sdtContent></w:sdt>'
+        )
+        parsed = DocxParser().parse(data, ParseOptions())
+        self.assertFalse(any(w.code == "UNSUPPORTED_PARAGRAPH_CHILD" for w in parsed.warnings))
+
+        first_control = parsed.blocks[0]["contentControls"][0]
+        self.assertEqual(first_control["controlType"], "dropDownList")
+        self.assertEqual(first_control["alias"], "Status")
+        self.assertEqual(first_control["binding"]["xpath"], "/root/status")
+        self.assertEqual([item["display"] for item in first_control["options"]], ["Open", "Closed"])
+        self.assertEqual(parsed.blocks[2]["text"], "")
+        self.assertEqual(parsed.blocks[2]["contentControls"][0]["controlType"], "comboBox")
+
+        semantic = to_html5(parsed, Density.SEMANTIC)
+        self.assertIn(
+            "<control type=dropDownList label=Status tag=status lock=sdtLocked "
+            "placeholder=StatusPlaceholder binding=/root/status choices=Open=open|Closed=closed>Open</control>",
+            semantic,
+        )
+        self.assertIn('<control type=date dateFormat=yyyy-MM-dd>2026-08-19</control>', semantic)
+        self.assertIn('<control type=checkbox checked>Yes</control>', semantic)
+        self.assertIn('<control type=comboBox></control>', semantic)
+
+        structural = to_html5(parsed, Density.STRUCTURAL)
+        self.assertIn(
+            "<control type=dropDownList label=Status locked choices=Open=open|Closed=closed>Open</control>",
+            structural,
+        )
+        self.assertNotIn('binding=/root/status', structural)
+
+        plain = to_html5(parsed, Density.PLAIN)
+        self.assertIn("[Control dropDownList Status choices=Open=open|Closed=closed locked: Open]", plain)
+        self.assertIn('[Control date format=yyyy-MM-dd: 2026-08-19]', plain)
+        self.assertIn('[Control checkbox checked: Yes]', plain)
+        self.assertIn('[Control comboBox: ]', plain)
 
     def test_unknown_body_child_warns(self) -> None:
         """Content-bearing wrappers we do not support are surfaced as warnings."""
@@ -168,6 +220,39 @@ class BodyStructureTests(unittest.TestCase):
         final_text = final.blocks[0]["text"]
         self.assertIn("inserted", final_text)
         self.assertNotIn("deleted", final_text)
+
+    def test_review_navigation_citation_and_threaded_comment_metadata(self) -> None:
+        """Only LLM-relevant review/thread/navigation semantics survive the OOXML wrappers."""
+        comments = f"""<w:comments xmlns:w="{NS_W}" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">
+          <w:comment w:id="0" w:author="Alice"><w:p w14:paraId="AA"><w:r><w:t>Root</w:t></w:r></w:p></w:comment>
+          <w:comment w:id="1" w:author="Bob"><w:p w14:paraId="BB"><w:r><w:t>Reply</w:t></w:r></w:p></w:comment>
+        </w:comments>"""
+        comments_extended = """<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">
+          <w15:commentEx w15:paraId="AA"/>
+          <w15:commentEx w15:paraId="BB" w15:paraIdParent="AA" w15:done="1"/>
+        </w15:commentsEx>"""
+        data = _make_docx(
+            '<w:p><w:commentRangeStart w:id="0"/><w:r><w:t>Marked</w:t><w:commentReference w:id="0"/></w:r></w:p>'
+            '<w:p><w:hyperlink w:anchor="target"><w:r><w:t>Jump</w:t></w:r></w:hyperlink></w:p>'
+            '<w:p><w:bookmarkStart w:id="9" w:name="target"/>'
+            '<w:fldSimple w:instr="CITATION Smith2024"><w:r><w:t>(Smith, 2024)</w:t></w:r></w:fldSimple></w:p>'
+            '<w:p><w:ins w:author="Editor" w:date="2026-08-01T00:00:00Z"><w:r><w:t>Added</w:t></w:r></w:ins>'
+            '<w:moveFrom w:author="Editor"><w:r><w:delText>Moved</w:delText></w:r></w:moveFrom></w:p>',
+            extra_entries={"word/comments.xml": comments, "word/commentsExtended.xml": comments_extended},
+        )
+        parsed = DocxParser().parse(data, ParseOptions(revision_mode=RevisionMode.REVIEW))
+        self.assertEqual(parsed.comments[0]["anchor"], "b1")
+        self.assertEqual(parsed.comments[1]["parentId"], "0")
+        self.assertTrue(parsed.comments[1]["resolved"])
+        self.assertEqual(parsed.blocks[2]["anchors"], ["target"])
+        self.assertEqual(parsed.blocks[2]["runs"][0]["field"], {"kind": "citation", "key": "Smith2024"})
+        self.assertEqual(parsed.blocks[3]["runs"][0]["revisionAuthor"], "Editor")
+
+        rendered = parse_docx(data, density=Density.SEMANTIC, options=ParseOptions(revision_mode=RevisionMode.REVIEW))
+        self.assertIn("<p anchor=target><cite key=Smith2024>(Smith, 2024)</cite>", rendered)
+        self.assertIn('<ins author=Editor date=2026-08-01T00:00:00Z>Added</ins>', rendered)
+        self.assertIn("<comment id=1", rendered)
+        self.assertIn("parent=0 resolved", rendered)
 
 
 if __name__ == "__main__":

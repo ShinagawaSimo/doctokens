@@ -285,10 +285,13 @@ def _render_chart_resource(chart: DrawingChart) -> str:
     from html import escape
 
     attrs = f"id={chart['id']} ref={chart['ref']} type={chart.get('type', '?')}"
+    if chart.get("plotTypes"):
+        attrs += f" plots={escape(','.join(chart['plotTypes']), quote=True)}"
     attrs += f" series={chart.get('series_count', 0)}"
     if chart.get("title"):
         attrs += f" title={escape(chart['title'], quote=True)}"
     parts = [f"<chart {attrs}>"]
+    is_combination = chart.get("type") == "combination"
 
     for series in chart.get("series", []):
         series_attrs = f"index={series.get('index', 0)}"
@@ -298,6 +301,12 @@ def _render_chart_resource(chart: DrawingChart) -> str:
             series_attrs += f" min={series['min']}"
         if "max" in series:
             series_attrs += f" max={series['max']}"
+        if is_combination and series.get("chartType"):
+            series_attrs += f" type={series['chartType']}"
+        if series.get("bubbleSizes"):
+            series_attrs += f" bubbleSizes={escape(','.join(series['bubbleSizes']), quote=True)}"
+        if series.get("hidden"):
+            series_attrs += " hidden"
         parts.append(f"\n<series {series_attrs}>")
         for point in series.get("points", []):
             point_attrs = ""
@@ -307,6 +316,12 @@ def _render_chart_resource(chart: DrawingChart) -> str:
                 point_attrs += f" category={escape(category, quote=True)}"
             if value:
                 point_attrs += f" value={escape(value, quote=True)}"
+            if point.get("x"):
+                point_attrs += f" x={escape(point['x'], quote=True)}"
+            if point.get("y"):
+                point_attrs += f" y={escape(point['y'], quote=True)}"
+            if point.get("bubbleSize"):
+                point_attrs += f" bubbleSize={escape(point['bubbleSize'], quote=True)}"
             parts.append(f"\n<point{point_attrs}/>")
 
     return "".join(parts)

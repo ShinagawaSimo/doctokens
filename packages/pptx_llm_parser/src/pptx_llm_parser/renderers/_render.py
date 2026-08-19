@@ -25,7 +25,9 @@ def iter_plain(parsed: ParsedPresentation) -> Iterator[str]:
     for slide in parsed.slides:
         if slide["n"] > 1:
             yield "\n"
-        yield f"=== Slide {slide['n']} ===\n"
+        section = slide.get("section")
+        label = f" (Section: {section})" if section else ""
+        yield f"=== Slide {slide['n']}{label} ===\n"
         yield _plain_slide_body(slide)
     comments = _plain_comments_block(parsed)
     if comments:
@@ -33,7 +35,7 @@ def iter_plain(parsed: ParsedPresentation) -> Iterator[str]:
 
 
 def _plain_slide_body(slide: SlideBlock) -> str:
-    parts = [_plain_shape_text(shape) for shape in slide["shapes"]]
+    parts = [text for shape in slide["shapes"] if (text := _plain_shape_text(shape))]
     if slide["notes"]:
         parts.append(f"[Notes: {slide['notes']}]")
     return "\n\n".join(parts)
@@ -70,6 +72,13 @@ def _plain_shape_text(shape: ShapeBlock) -> str:
             return f"[SmartArt: {layout}, {node_count} nodes]"
         return "[SmartArt]"
     if shape["type"] == "shape":
+        description = shape.get("alt") or shape.get("title")
+        if description:
+            return f"[Shape: {description}]"
+        if shape.get("link"):
+            return "[Linked shape]"
+        if shape.get("kind") == "connector":
+            return "[Connector]"
         return ""
     raise AssertionError(f"Unknown shape type: {shape['type']}")
 
@@ -136,7 +145,7 @@ def _html_comments_block(parsed: ParsedPresentation) -> str:
 
 
 def _slide_open(slide: SlideBlock) -> str:
-    attrs = AttributeBuilder().add("n", slide["n"]).flag("hidden", slide["hidden"])
+    attrs = AttributeBuilder().add("n", slide["n"]).add("section", slide.get("section")).flag("hidden", slide["hidden"])
     background = slide.get("background")
     if background:
         attrs.add("bg", background.get("color"))
@@ -149,13 +158,14 @@ def _structural_shape_line(shape: ShapeBlock, smartart_nodes: dict[str, SmartArt
     if stype == "text":
         ph_type = shape.get("placeholderType", "")
         if ph_type in _TITLE_PH_TYPES:
-            return f"<title>{_structural_inline(shape)}"
-        attrs = AttributeBuilder().add("ph", ph_type or None)
+            attrs = AttributeBuilder().add("link", shape.get("link"))
+            return f"<title{attrs.render()}>{_structural_inline(shape)}"
+        attrs = AttributeBuilder().add("ph", ph_type or None).add("link", shape.get("link"))
         return f"<p{attrs.render()}>{_structural_inline(shape)}"
     if stype == "picture":
         asset_id = shape.get("assetId") or shape["id"]
         alt = shape.get("alt")
-        attrs = AttributeBuilder().add("id", asset_id).add("alt", alt)
+        attrs = AttributeBuilder().add("id", asset_id).add("alt", alt).add("link", shape.get("link"))
         return f"<img{attrs.render()}>"
     if stype == "table":
         return _structural_table(shape)
@@ -166,6 +176,7 @@ def _structural_shape_line(shape: ShapeBlock, smartart_nodes: dict[str, SmartArt
             .add("type", shape.get("chartType"))
             .add("series", shape.get("seriesCount"))
             .add("points", shape.get("pointCount"))
+            .add("link", shape.get("link"))
             .flag("truncated")
         )
         return f"<chart{attrs.render()}>"
@@ -177,6 +188,7 @@ def _structural_shape_line(shape: ShapeBlock, smartart_nodes: dict[str, SmartArt
             .add("type", shape.get("layoutType"))
             .add("nodes", shape.get("nodeCount"))
             .add("links", shape.get("linkCount"))
+            .add("link", shape.get("link"))
             .flag("truncated")
         )
         parts = [f"<smartart{attrs.render()}>"]
@@ -186,10 +198,19 @@ def _structural_shape_line(shape: ShapeBlock, smartart_nodes: dict[str, SmartArt
         return "".join(parts)
     if stype == "media":
         asset_id = shape.get("assetId") or shape["id"]
-        attrs = AttributeBuilder().add("id", asset_id).add("kind", shape.get("kind", "media"))
+        attrs = AttributeBuilder().add("id", asset_id).add("kind", shape.get("kind", "media")).add("link", shape.get("link"))
         return f"<media{attrs.render()}>"
     if stype == "shape":
-        attrs = AttributeBuilder().add("id", shape["id"]).add("kind", shape.get("kind"))
+        attrs = (
+            AttributeBuilder()
+            .add("id", shape["id"])
+            .add("kind", shape.get("kind"))
+            .add("alt", shape.get("alt"))
+            .add("title", shape.get("title"))
+            .add("from", shape.get("fromShape"))
+            .add("to", shape.get("toShape"))
+            .add("link", shape.get("link"))
+        )
         return f"<shape{attrs.render()}>"
     raise AssertionError(f"Unknown shape type: {shape['type']}")
 
@@ -213,7 +234,14 @@ def _structural_table(shape: ShapeBlock) -> str:
     rows = shape.get("rows", [])
     cols = max((len(row) for row in rows), default=0)
     truncated = " truncated" if len(rows) > _STRUCTURAL_TABLE_ROW_LIMIT else ""
-    attrs = AttributeBuilder().add("id", shape["id"]).add("rows", len(rows)).add("cols", cols).flag("truncated", bool(truncated))
+    attrs = (
+        AttributeBuilder()
+        .add("id", shape["id"])
+        .add("rows", len(rows))
+        .add("cols", cols)
+        .add("link", shape.get("link"))
+        .flag("truncated", bool(truncated))
+    )
     lines = [f"<table{attrs.render()}>"]
     for row_index, _row in enumerate(rows[:_STRUCTURAL_TABLE_ROW_LIMIT]):
         cells = _table_row_markup(shape, row_index=row_index)
@@ -276,7 +304,16 @@ def _semantic_shape_line(shape: ShapeBlock, smartart_nodes: dict[str, SmartArtRe
         media_head = AttributeBuilder().add("id", asset_id).add("kind", shape.get("kind", "media"))
         return f"<media{media_head.render()}{media_shape_attrs}>"
     if stype == "shape":
-        return f"<shape{AttributeBuilder().add('kind', shape.get('kind')).render()}{_shape_attrs(shape)}>"
+        shape_head = (
+            AttributeBuilder()
+            .add("kind", shape.get("kind"))
+            .add("geometry", shape.get("geometryType"))
+            .add("alt", shape.get("alt"))
+            .add("title", shape.get("title"))
+            .add("from", shape.get("fromShape"))
+            .add("to", shape.get("toShape"))
+        )
+        return f"<shape{shape_head.render()}{_shape_attrs(shape)}>"
     raise AssertionError(f"Unknown shape type: {shape['type']}")
 
 
@@ -298,6 +335,7 @@ def _shape_attrs(shape: ShapeBlock, *, include_id: bool = True, include_ph: bool
     name = shape.get("name")
     if name:
         attrs.add("name", name)
+    attrs.add("link", shape.get("link"))
     return attrs.render()
 
 

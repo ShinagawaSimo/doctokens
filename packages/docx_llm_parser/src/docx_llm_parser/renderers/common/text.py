@@ -5,12 +5,14 @@ transformations that do not depend on specific output tag syntax."""
 
 from __future__ import annotations
 
-from ..core.models import Run, RunFormat
+from ...core.models import Run, RunFormat
 
 RunSignature = tuple[
     object,
     tuple[tuple[str, str], ...],
     tuple[tuple[str, bool | str | None], ...],
+    tuple[tuple[str, object], ...],
+    tuple[tuple[str, object], ...],
 ]
 
 
@@ -42,8 +44,16 @@ def merge_text_runs(runs: list[Run]) -> list[Run]:
         pending = {"text": text}
         if "revision" in run:
             pending["revision"] = run["revision"]
+        if "revisionAuthor" in run:
+            pending["revisionAuthor"] = run["revisionAuthor"]
+        if "revisionDate" in run:
+            pending["revisionDate"] = run["revisionDate"]
         if "link" in run:
             pending["link"] = run["link"]
+        if "field" in run:
+            pending["field"] = run["field"]
+        if "contentControls" in run:
+            pending["contentControls"] = run["contentControls"]
         if "format" in run:
             pending["format"] = run["format"]
         pending_key = signature
@@ -64,7 +74,17 @@ def run_output_signature(run: Run) -> RunSignature:
             link_items.append(("anchor", run["link"]["anchor"]))
         link = tuple(sorted(link_items))
     fmt = tuple(sorted((run.get("format") or {}).items()))
-    return (run.get("revision"), link, fmt)
+    field = tuple(sorted((run.get("field") or {}).items()))
+    controls = tuple(
+        (
+            control.get("controlType", ""),
+            control.get("id", ""),
+            control.get("tag", ""),
+            control.get("alias", ""),
+        )
+        for control in run.get("contentControls", [])
+    )
+    return (run.get("revision"), link, fmt, field, (("contentControls", controls),) if controls else ())
 
 
 def filter_format(run: Run) -> RunFormat:

@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import unittest
+import zipfile
 from io import BytesIO
 from typing import Any, cast
 from xml.etree import ElementTree as ET
 
-from docx_llm_parser.core.models import ContentTypes, ParseWarning, RelationshipRecord
+from docx_llm_parser.core.models import ContentTypes, ParseOptions, ParseWarning, RelationshipRecord
+from docx_llm_parser.core.package import PackageReader
 from docx_llm_parser.core.relationships import RelationshipIndex
 from docx_llm_parser.extractors.assets import IMAGE_REL_TYPE, AssetExtractor
+from docx_llm_parser.extractors.objects import EmbeddedObjectExtractor
 from docx_llm_parser.ooxml.formatting import (
     is_default_text_color,
     merge_run_formats,
@@ -303,6 +306,45 @@ class RendererBranchTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(TypeError, "tableId"):
             table_id(cast(Any, {"tableId": 123}))
+
+
+class ChartExObjectExtractorTests(unittest.TestCase):
+    def test_chart_ex_relationship_populates_docx_object_lookup(self) -> None:
+        chart_ex_rel = "http://schemas.microsoft.com/office/2014/relationships/chartEx"
+        chart_ex_uri = "http://schemas.microsoft.com/office/drawing/2014/chartex"
+        package_bytes = BytesIO()
+        with zipfile.ZipFile(package_bytes, "w") as archive:
+            archive.writestr(
+                "[Content_Types].xml",
+                '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>',
+            )
+            archive.writestr(
+                "word/document.xml",
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>',
+            )
+            archive.writestr(
+                "word/_rels/document.xml.rels",
+                f'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                f'<Relationship Id="rChartEx" Type="{chart_ex_rel}" Target="charts/chartEx1.xml"/>'
+                "</Relationships>",
+            )
+            archive.writestr(
+                "word/charts/chartEx1.xml",
+                f'<cx:chartSpace xmlns:cx="{chart_ex_uri}"><cx:chartData><cx:data id="1">'
+                '<cx:strDim type="cat"><cx:lvl ptCount="1"><cx:pt idx="0">East</cx:pt></cx:lvl></cx:strDim>'
+                '<cx:numDim type="val"><cx:lvl ptCount="1"><cx:pt idx="0">9</cx:pt></cx:lvl></cx:numDim>'
+                "</cx:data></cx:chartData><cx:chart><cx:plotArea><cx:plotAreaRegion>"
+                '<cx:series layoutId="sunburst"><cx:dataId val="1"/></cx:series>'
+                "</cx:plotAreaRegion></cx:plotArea></cx:chart></cx:chartSpace>",
+            )
+
+        with PackageReader(package_bytes.getvalue(), ParseOptions()) as package:
+            relationships = RelationshipIndex.from_records(package.read_all_relationships())
+            lookup, charts, _smartarts = EmbeddedObjectExtractor(package, relationships, []).extract()
+
+        self.assertEqual(charts[0]["chartType"], "sunburst")
+        self.assertEqual(charts[0]["series"][0]["values"], ["9"])
+        self.assertEqual(lookup[("word/document.xml", "rChartEx")]["id"], "chart1")
 
 
 class FakePackage:

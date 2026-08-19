@@ -51,7 +51,7 @@ def _workbook() -> dict[str, object]:
                 "filter_range": "A1:B2",
                 "filter_cols": [{"col": 0, "type": "values", "values": ["Alice"]}],
                 "data_validations": [{"ranges": "B2:B4", "type": "whole"}],
-                "conditional_formats": [{"ranges": "B2:B4", "ruleType": "cellIs", "formula": "B2>0"}],
+                "conditional_formats": [{"ranges": "B2:B4", "ruleType": "cellIs", "formulas": ["B2>0"]}],
                 "images": [{"id": "image1", "ref": "D4"}],
                 "charts": [
                     {
@@ -112,7 +112,7 @@ class StructuralRendererTests(unittest.TestCase):
             self.assertIn('<definedName name=VisibleName refersTo="Data!$A$1">', html)
             self.assertIn('<condition col=0 type=values values="Alice"/>', html)
             self.assertIn("<dataValidation ref=B2:B4 type=whole/>", html)
-            self.assertIn('<rule type=cellIs formula="B2&gt;0"/>', html)
+            self.assertIn('<rule type=cellIs priority=0 formula="B2&gt;0"/>', html)
             self.assertIn("<externalLink target=other.xlsx/>", html)
             self.assertIn("<image id=image1 ref=D4/>", html)
             self.assertIn("names=Q1", html)

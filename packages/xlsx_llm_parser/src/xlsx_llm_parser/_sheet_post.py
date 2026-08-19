@@ -7,11 +7,14 @@ redundant iteration and I/O.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from xml.etree import ElementTree as ET
 
-from ooxml_llm_core.chart_ml import parse_chart_xml
+from ooxml_llm_core.annotations import AnnotationMention, valid_parent_links
+from ooxml_llm_core.chart_ml import CHART_RELATIONSHIP_TYPES, parse_chart_xml
 from ooxml_llm_core.models import RelationshipRecord
 from ooxml_llm_core.package import PackageReader
+from ooxml_llm_core.xml import local_name
 
 from ._utils import col_letter, parse_ref
 from .models import (
@@ -22,12 +25,14 @@ from .models import (
     DrawingImage,
     PivotTableInfo,
     TableInfo,
+    ThreadedComment,
 )
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 
 _REL_COMMENTS = f"{NS_R}/comments"
+_REL_THREADED_COMMENTS = "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment"
 _REL_TABLE = f"{NS_R}/table"
 _REL_DRAWING = f"{NS_R}/drawing"
 
@@ -120,6 +125,7 @@ def apply_hyperlinks(
     root: ET.Element,
     cell_map: dict[tuple[int, int], Cell],
     sheet_rels: list[RelationshipRecord],
+    rows: list[list[Cell]] | None = None,
 ) -> None:
     """Resolve <hyperlinks> via relationships and attach to cells."""
     hyperlinks = root.find(f"{{{NS_S}}}hyperlinks")
@@ -139,7 +145,7 @@ def apply_hyperlinks(
         relationship_id = hyperlink.get(f"{{{NS_R}}}id", "")
 
         col, row = parse_ref(ref)
-        cell = cell_map.get((col, row))
+        cell = _ensure_cell(cell_map, rows, ref, col, row)
         if cell is None:
             continue
 
@@ -161,55 +167,202 @@ def apply_comments(
     cell_map: dict[tuple[int, int], Cell],
     pkg: PackageReader,
     sheet_rels: list[RelationshipRecord],
+    rows: list[list[Cell]] | None = None,
+    threaded_comment_people: Mapping[str, str] | None = None,
 ) -> None:
-    """Parse legacy comments (xl/commentsN.xml) and attach to cells."""
+    """Parse legacy and threaded comments, keeping each collaboration thread on its cell."""
     # Find comments part via pre-read sheet relationships
     comments_part: str | None = None
     for rel in sheet_rels:
         if rel.type == _REL_COMMENTS and rel.resolved_target:
             comments_part = rel.resolved_target
             break
-    if comments_part is None or not pkg.exists(comments_part):
-        return
+    if comments_part is not None and pkg.exists(comments_part):
+        try:
+            with pkg.open_entry(comments_part) as stream:
+                root = ET.parse(stream).getroot()
+        except ET.ParseError:
+            root = None
+        if root is not None:
+            _apply_legacy_comments(root, cell_map, rows)
 
-    with pkg.open_entry(comments_part) as stream:
-        root = ET.parse(stream).getroot()
+    _apply_threaded_comments(cell_map, pkg, sheet_rels, rows, threaded_comment_people or {})
 
-    # Authors list
+
+def _apply_legacy_comments(root: ET.Element, cell_map: dict[tuple[int, int], Cell], rows: list[list[Cell]] | None) -> None:
+    """Attach legacy note-style comments while leaving threaded comments independent."""
     authors: list[str] = []
     authors_elem = root.find(f"{{{NS_S}}}authors")
     if authors_elem is not None:
         authors.extend(a.text or "" for a in authors_elem.findall(f"{{{NS_S}}}author"))
-
     comment_list = root.find(f"{{{NS_S}}}commentList")
     if comment_list is None:
         return
     for comment in comment_list.findall(f"{{{NS_S}}}comment"):
         ref = comment.get("ref", "")
-        author_id_str = comment.get("authorId", "0")
-        col, row = parse_ref(ref)
-        cell = cell_map.get((col, row))
+        try:
+            col, row = parse_ref(ref)
+        except ValueError:
+            continue
+        cell = _ensure_cell(cell_map, rows, ref, col, row)
         if cell is None:
             continue
+        author_id_str = comment.get("authorId", "0")
         try:
             author_id = int(author_id_str)
             cell["commentAuthor"] = authors[author_id] if author_id < len(authors) else ""
         except (ValueError, IndexError):
             cell["commentAuthor"] = ""
         text_elem = comment.find(f"{{{NS_S}}}text")
-        if text_elem is not None:
-            if text_elem.text:
-                cell["comment"] = text_elem.text
-            else:
-                # Rich-text body: concatenate <r><t> runs
-                parts: list[str] = []
-                for run_element in text_elem.findall(f"{{{NS_S}}}r"):
-                    text_run = run_element.find(f"{{{NS_S}}}t")
-                    if text_run is not None and text_run.text:
-                        parts.append(text_run.text)
-                cell["comment"] = "".join(parts)
-        else:
+        if text_elem is None:
             cell["comment"] = ""
+        else:
+            cell["comment"] = "".join(text_elem.itertext())
+
+
+def parse_threaded_comment_people(pkg: PackageReader) -> dict[str, str]:
+    """Read the workbook-wide people catalog once for modern comment authors and mentions."""
+    part = "xl/persons/person.xml"
+    if not pkg.exists(part):
+        return {}
+    try:
+        with pkg.open_entry(part) as stream:
+            root = ET.parse(stream).getroot()
+    except ET.ParseError:
+        return {}
+    people: dict[str, str] = {}
+    for element in root.iter():
+        if local_name(element.tag) != "person":
+            continue
+        person_id = element.get("id")
+        display_name = element.get("displayName")
+        if person_id and display_name:
+            people[person_id] = display_name
+    return people
+
+
+def _apply_threaded_comments(
+    cell_map: dict[tuple[int, int], Cell],
+    pkg: PackageReader,
+    sheet_rels: list[RelationshipRecord],
+    rows: list[list[Cell]] | None,
+    people: Mapping[str, str],
+) -> None:
+    """Attach one modern comment conversation to its target cell without a package-wide scan."""
+    part = next(
+        (
+            rel.resolved_target
+            for rel in sheet_rels
+            if rel.type == _REL_THREADED_COMMENTS and rel.resolved_target and pkg.exists(rel.resolved_target)
+        ),
+        None,
+    )
+    if part is None:
+        return
+    try:
+        with pkg.open_entry(part) as stream:
+            root = ET.parse(stream).getroot()
+    except ET.ParseError:
+        return
+
+    pending: list[tuple[ThreadedComment, str, str | None]] = []
+    raw_to_display: dict[str, str] = {}
+    per_cell_index: dict[str, int] = {}
+    for element in root:
+        if local_name(element.tag) != "threadedComment":
+            continue
+        ref = element.get("ref", "")
+        try:
+            col, row = parse_ref(ref)
+        except ValueError:
+            continue
+        cell = _ensure_cell(cell_map, rows, ref, col, row)
+        if cell is None:
+            continue
+        ordinal = per_cell_index.get(ref, 0) + 1
+        per_cell_index[ref] = ordinal
+        item: ThreadedComment = {"id": f"thread-{ref}-{ordinal}", "text": _threaded_comment_text(element)}
+        author = people.get(element.get("personId", ""), "")
+        if author:
+            item["author"] = author
+        date = element.get("dT")
+        if date:
+            item["date"] = date
+        if _as_bool(element.get("done")):
+            item["resolved"] = True
+        mentions = _threaded_mentions(element, people)
+        if mentions:
+            item["mentions"] = mentions
+        raw_id = element.get("id") or item["id"]
+        raw_to_display[raw_id] = item["id"]
+        pending.append((item, raw_id, element.get("parentId")))
+        cell.setdefault("threadedComments", []).append(item)
+
+    links, _dangling = valid_parent_links((raw_id, parent_id) for _item, raw_id, parent_id in pending)
+    for item, raw_id, _parent_id in pending:
+        parent_raw_id = links.get(raw_id)
+        if parent_raw_id:
+            item["parentId"] = raw_to_display[parent_raw_id]
+
+
+def _threaded_comment_text(element: ET.Element) -> str:
+    text_node = next((child for child in element if local_name(child.tag) == "text"), None)
+    return "".join(text_node.itertext()) if text_node is not None else ""
+
+
+def _threaded_mentions(element: ET.Element, people: Mapping[str, str]) -> list[AnnotationMention]:
+    mentions: list[AnnotationMention] = []
+    for descendant in element.iter():
+        if local_name(descendant.tag) != "mention":
+            continue
+        person = people.get(descendant.get("personId", ""), "")
+        if not person:
+            continue
+        mention: AnnotationMention = {"person": person}
+        start = _safe_int(descendant.get("startIndex"))
+        length = _safe_int(descendant.get("length"))
+        if start is not None:
+            mention["start"] = start
+        if length is not None:
+            mention["length"] = length
+        mentions.append(mention)
+    return mentions
+
+
+def _ensure_cell(
+    cell_map: dict[tuple[int, int], Cell],
+    rows: list[list[Cell]] | None,
+    ref: str,
+    col: int,
+    row: int,
+) -> Cell | None:
+    """Materialize an otherwise empty annotated/navigable cell so its semantics remain visible."""
+    existing = cell_map.get((col, row))
+    if existing is not None:
+        return existing
+    if rows is None:
+        return None
+    cell: Cell = {"ref": ref, "col": col, "row": row, "text": ""}
+    cell_map[(col, row)] = cell
+    target_row = next((row_cells for row_cells in rows if row_cells and row_cells[0]["row"] == row), None)
+    if target_row is None:
+        rows.append([cell])
+        rows.sort(key=lambda row_cells: row_cells[0]["row"] if row_cells else 0)
+    else:
+        target_row.append(cell)
+        target_row.sort(key=lambda item: item["col"])
+    return cell
+
+
+def _as_bool(value: str | None) -> bool:
+    return value is not None and value.lower() not in {"0", "false", "off", "none"}
+
+
+def _safe_int(value: str | None) -> int | None:
+    try:
+        return int(value) if value is not None else None
+    except ValueError:
+        return None
 
 
 # ── Tables ──
@@ -280,17 +433,16 @@ def parse_drawings(
         return images, charts
 
     # Drawing relationships for image/chart media
-    drawing_rels: dict[str, str] = {}
+    drawing_rels: dict[str, RelationshipRecord] = {}
     for rel in pkg.read_relationships_for_part(drawing_part):
-        drawing_rels[rel.id] = rel.resolved_target or ""
+        drawing_rels[rel.id] = rel
 
     with pkg.open_entry(drawing_part) as stream:
         root = ET.parse(stream).getroot()
 
-    for anchor in root.iter(f"{{{NS_XDR}}}twoCellAnchor"):
-        _parse_drawing_anchor(anchor, drawing_rels, images, charts, image_start, chart_start)
-    for anchor in root.iter(f"{{{NS_XDR}}}oneCellAnchor"):
-        _parse_drawing_anchor(anchor, drawing_rels, images, charts, image_start, chart_start)
+    for anchor_name in ("twoCellAnchor", "oneCellAnchor", "absoluteAnchor"):
+        for anchor in root.iter(f"{{{NS_XDR}}}{anchor_name}"):
+            _parse_drawing_anchor(anchor, drawing_rels, images, charts, image_start, chart_start)
 
     # Parse chart parts for richer metadata
     for chart in charts:
@@ -303,13 +455,15 @@ def parse_drawings(
             chart["series_count"] = chart_data.get("series_count", 0)
             if chart_data.get("series"):
                 chart["series"] = chart_data["series"]
+            if "plotTypes" in chart_data:
+                chart["plotTypes"] = chart_data["plotTypes"]
 
     return images, charts
 
 
 def _parse_drawing_anchor(
     anchor: ET.Element,
-    drawing_rels: dict[str, str],
+    drawing_rels: dict[str, RelationshipRecord],
     images: list[DrawingImage],
     charts: list[DrawingChart],
     image_start: int,
@@ -318,24 +472,30 @@ def _parse_drawing_anchor(
     """Parse one drawing anchor for image/chart refs and position."""
     from_elem = anchor.find(f"{{{NS_XDR}}}from")
     if from_elem is None:
-        return
-    col = int(from_elem.findtext(f"{{{NS_XDR}}}col", "0"))
-    row = int(from_elem.findtext(f"{{{NS_XDR}}}row", "0"))
-    ref = f"{col_letter(col + 1)}{row + 1}"
+        ref = ""
+    else:
+        col = int(from_elem.findtext(f"{{{NS_XDR}}}col", "0"))
+        row = int(from_elem.findtext(f"{{{NS_XDR}}}row", "0"))
+        ref = f"{col_letter(col + 1)}{row + 1}"
 
     # Picture (image)
     for blip in anchor.iter(f"{{{NS_A}}}blip"):
         embed_id = blip.get(f"{{{NS_R}}}embed", "")
         target = drawing_rels.get(embed_id)
-        if target:
+        if target is not None and target.resolved_target:
             img_id = f"image{image_start + len(images)}"
             images.append({"id": img_id, "ref": ref, "alt": ""})
             break  # one image per anchor
 
     # Chart reference (namespace: drawingml/2006/chart, NOT spreadsheetDrawing)
-    for chart_element in anchor.iter(f"{{{NS_C}}}chart"):
+    for chart_element in anchor.iter():
+        if _local_name(chart_element.tag) != "chart":
+            continue
         chart_relationship_id = chart_element.get(f"{{{NS_R}}}id", "")
-        chart_part = drawing_rels.get(chart_relationship_id, "")
+        chart_rel = drawing_rels.get(chart_relationship_id)
+        if chart_rel is None or chart_rel.type not in CHART_RELATIONSHIP_TYPES:
+            continue
+        chart_part = chart_rel.resolved_target or ""
         chart_id = f"chart{chart_start + len(charts)}"
         charts.append(
             {
@@ -363,7 +523,13 @@ def _parse_chart_part(pkg: PackageReader, chart_part: str) -> DrawingChart:
 
     series_list: list[DrawingChartSeries] = []
     for source_series in chart_info.get("series", []):
-        point_count = max(len(source_series.get("categories", [])), len(source_series.get("values", [])))
+        point_count = max(
+            len(source_series.get("categories", [])),
+            len(source_series.get("values", [])),
+            len(source_series.get("x_values", [])),
+            len(source_series.get("y_values", [])),
+            len(source_series.get("bubble_sizes", [])),
+        )
         series_item: DrawingChartSeries = {
             "index": source_series["index"],
             "pointCount": point_count,
@@ -374,28 +540,57 @@ def _parse_chart_part(pkg: PackageReader, chart_part: str) -> DrawingChart:
             series_item["min"] = source_series["min"]
         if "max" in source_series:
             series_item["max"] = source_series["max"]
+        if "plot_index" in source_series:
+            series_item["plotIndex"] = source_series["plot_index"]
+        if "chart_type" in source_series:
+            series_item["chartType"] = source_series["chart_type"]
+        if source_series.get("x_values"):
+            series_item["xValues"] = source_series["x_values"]
+        if source_series.get("y_values"):
+            series_item["yValues"] = source_series["y_values"]
+        if source_series.get("bubble_sizes"):
+            series_item["bubbleSizes"] = source_series["bubble_sizes"]
+        if source_series.get("hidden"):
+            series_item["hidden"] = True
         # Full data points
         categories = source_series.get("categories", [])
         values = source_series.get("values", [])
+        x_values = source_series.get("x_values", [])
+        y_values = source_series.get("y_values", [])
+        bubble_sizes = source_series.get("bubble_sizes", [])
         points: list[ChartPoint] = []
-        for index in range(max(len(categories), len(values))):
+        for index in range(point_count):
             point: ChartPoint = {}
             if index < len(categories):
                 point["category"] = categories[index]
             if index < len(values):
                 point["value"] = values[index]
+            if index < len(x_values):
+                point["x"] = x_values[index]
+            if index < len(y_values):
+                point["y"] = y_values[index]
+            if index < len(bubble_sizes):
+                point["bubbleSize"] = bubble_sizes[index]
             if point:
                 points.append(point)
         if points:
             series_item["points"] = points
         series_list.append(series_item)
 
-    return {
+    result: DrawingChart = {
         "type": chart_info.get("chart_type", ""),
         "title": chart_info.get("title", ""),
         "series_count": chart_info.get("series_count", 0),
         "series": series_list,
     }
+    plot_types = [plot.get("chart_type", "unknown") for plot in chart_info.get("plots", [])]
+    if chart_info.get("chart_type") == "combination" and plot_types:
+        result["plotTypes"] = plot_types
+    return result
+
+
+def _local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
 
 
 # ── Pivot tables ──

@@ -241,6 +241,8 @@ def _object_from_lookup(parsed: Chart | SmartArt) -> InlineObject:
         obj["series"] = parsed["series"]
         if "title" in parsed:
             obj["title"] = parsed["title"]
+        if "plots" in parsed:
+            obj["plots"] = parsed["plots"]
     else:
         obj["nodeCount"] = parsed["nodeCount"]
         obj["linkCount"] = parsed["linkCount"]

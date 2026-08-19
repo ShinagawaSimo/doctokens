@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from xml.etree import ElementTree as ET
+
+from ooxml_llm_core.xml import local_attr
 
 from ..core.constants import (
     _TAG_W_PARAGRAPH,
@@ -13,12 +16,14 @@ from ..core.constants import (
     attr,
     child_elements,
     first_child,
+    local_name,
 )
 from ..core.models import (
     AncillaryContent,
     AncillaryItem,
     AncillaryResult,
     AssetLookup,
+    ContentControl,
     ObjectLookup,
     ParseOptions,
     ParseWarning,
@@ -28,6 +33,7 @@ from ..core.models import (
 )
 from ..core.package import PackageReader
 from ..core.relationships import RelationshipIndex
+from ..ooxml.content_controls import parse_content_control
 from ..ooxml.styles import StyleMap
 from .inline import InlineParser
 
@@ -44,6 +50,7 @@ class AncillaryParser:
         relationships: RelationshipIndex,
         asset_lookup: AssetLookup,
         object_lookup: ObjectLookup,
+        comment_anchors: Mapping[str, str] | None = None,
     ) -> None:
         self.package = package
         self.options = options
@@ -57,6 +64,7 @@ class AncillaryParser:
             object_lookup=object_lookup,
         )
         self._block_index = 0
+        self._comment_anchors = dict(comment_anchors or {})
 
     def parse(self) -> AncillaryResult:
         """Return five categories of ancillary content."""
@@ -114,12 +122,13 @@ class AncillaryParser:
         if root is None:
             return []
         rows: list[AncillaryItem] = []
+        comment_by_paragraph_id: dict[str, str] = {}
         for comment in child_elements(root, "w", "comment"):
             comment_id = attr(comment, "w", "id")
             if not comment_id:
                 continue
             content = self._container_content(comment, part_name)
-            self._try_emit_item(
+            row = self._try_emit_item(
                 comment_id,
                 f"comments.{comment_id}",
                 content,
@@ -127,6 +136,14 @@ class AncillaryParser:
                 author=attr(comment, "w", "author") or "",
                 date=attr(comment, "w", "date") or "",
             )
+            if row is not None:
+                anchor = self._comment_anchors.get(comment_id)
+                if anchor:
+                    row["anchor"] = anchor
+                paragraph_id = self._last_paragraph_id(comment)
+                if paragraph_id:
+                    comment_by_paragraph_id[paragraph_id] = comment_id
+        self._apply_comment_thread_metadata(rows, comment_by_paragraph_id)
         return rows
 
     # ── shared helpers ────────────────────────────────────────────
@@ -140,10 +157,10 @@ class AncillaryParser:
         *,
         author: str = "",
         date: str = "",
-    ) -> None:
+    ) -> AncillaryItem | None:
         """Build and append an AncillaryItem if the content is non-empty."""
         if not (content["text"].strip() or self._has_objects(content["runs"])):
-            return
+            return None
         row: AncillaryItem = {
             "id": item_id,
             "loc": loc,
@@ -157,6 +174,57 @@ class AncillaryParser:
         if self.options.include_raw_hints and content["rawHints"]:
             row["rawHints"] = content["rawHints"]
         rows.append(row)
+        return row
+
+    @staticmethod
+    def _last_paragraph_id(comment: ET.Element) -> str | None:
+        """Locate the paragraph identity used by Word's modern comment-thread part."""
+        paragraph_id: str | None = None
+        for element in comment.iter():
+            if local_name(element.tag) == "p":
+                candidate = local_attr(element, "paraId")
+                if candidate:
+                    paragraph_id = candidate
+        return paragraph_id
+
+    def _apply_comment_thread_metadata(
+        self,
+        rows: list[AncillaryItem],
+        comment_by_paragraph_id: Mapping[str, str],
+    ) -> None:
+        """Merge Word 2012+ reply and resolved-state metadata into classic comments."""
+        part_name = "word/commentsExtended.xml"
+        if not rows or not self.package.exists(part_name):
+            return
+        root = self._parse_xml_part(part_name)
+        if root is None:
+            return
+        by_id = {item["id"]: item for item in rows if item["id"] is not None}
+        for element in root.iter():
+            if local_name(element.tag) != "commentEx":
+                continue
+            paragraph_id = local_attr(element, "paraId")
+            comment_id = comment_by_paragraph_id.get(paragraph_id or "")
+            if comment_id is None:
+                continue
+            item = by_id.get(comment_id)
+            if item is None:
+                continue
+            parent_paragraph_id = local_attr(element, "paraIdParent")
+            if parent_paragraph_id:
+                parent_id = comment_by_paragraph_id.get(parent_paragraph_id)
+                if parent_id:
+                    item["parentId"] = parent_id
+                else:
+                    append_warning(
+                        self.warnings,
+                        "COMMENT_PARENT_UNRESOLVED",
+                        "Comment reply points to a parent that is absent from comments.xml.",
+                        part=part_name,
+                        block_id=comment_id,
+                    )
+            if _word_bool(local_attr(element, "done")):
+                item["resolved"] = True
 
     def _parse_xml_part(self, part_name: str) -> ET.Element | None:
         """Read an XML part; log a warning and return None on failure."""
@@ -208,6 +276,10 @@ class AncillaryParser:
                 _TAG_W_SMART_TAG,
             ):
                 nested = self._container_content(child, part)
+                if child_tag == _TAG_W_STRUCTURED_DOCUMENT_TAG:
+                    control = parse_content_control(child)
+                    self._attach_control(nested["runs"], control)
+                    raw_hints.append(dict(control))
                 if nested["text"].strip() or self._has_objects(nested["runs"]):
                     if runs:
                         runs.append({"text": "\n"})
@@ -215,6 +287,12 @@ class AncillaryParser:
                     text_parts.append(nested["text"])
                     raw_hints.extend(nested["rawHints"])
         return {"text": "\n".join(text_parts), "runs": runs, "rawHints": raw_hints}
+
+    @staticmethod
+    def _attach_control(runs: list[Run], control: ContentControl) -> None:
+        """Attach one block-level ancillary control to its already-parsed runs."""
+        for run in runs:
+            run.setdefault("contentControls", []).append(control)
 
     def _table_content(self, tbl: ET.Element, part: str) -> AncillaryContent:
         """Flatten a table in ancillary content to row text while preserving inline runs."""
@@ -252,3 +330,8 @@ class AncillaryParser:
     def _has_objects(self, runs: list[Run]) -> bool:
         """Check whether any run carries non-text objects (images, footnotes, equations)."""
         return any("objects" in run for run in runs)
+
+
+def _word_bool(value: str | None) -> bool:
+    """Interpret the OOXML on/off lexical values used by comment completion state."""
+    return value is not None and value.lower() not in {"0", "false", "off", "none"}

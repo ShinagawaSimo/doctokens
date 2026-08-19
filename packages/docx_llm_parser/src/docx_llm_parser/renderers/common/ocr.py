@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from html import escape
 
-from ..core.models import OcrStoredResult
+from ...core.models import OcrStoredResult
 
 
 def ocr_text(value: object) -> str:

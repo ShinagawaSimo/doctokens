@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass, field
-from typing import NamedTuple
+from typing import NamedTuple, cast
 from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.models import RelationshipRecord
 from ooxml_llm_core.package import PackageReader
+from ooxml_llm_core.xml import local_name
 
 from ._sheet_post import (
     apply_comments,
@@ -18,9 +20,11 @@ from ._sheet_post import (
     apply_spill_sources,
 )
 from ._utils import col_letter, parse_ref
+from .features import RichValueCatalog
 from .formats import FormatIndex
 from .models import (
     Cell,
+    CellControl,
     ConditionalFormat,
     DataValidation,
     FilterColumn,
@@ -83,19 +87,22 @@ class SheetWorkingSet:
         root: ET.Element,
         package: PackageReader,
         sheet_relationships: list[RelationshipRecord],
+        threaded_comment_people: Mapping[str, str],
+        format_index: FormatIndex | None,
+        rich_values: RichValueCatalog,
     ) -> SheetParseResult:
         expand_shared_formula_groups(self.shared_formula_groups)
         apply_merge_cells(root, self.cells_by_coord)
         apply_spill_sources(self.spill_sources, self.cells_by_coord)
-        apply_hyperlinks(root, self.cells_by_coord, sheet_relationships)
-        apply_comments(self.cells_by_coord, package, sheet_relationships)
+        apply_hyperlinks(root, self.cells_by_coord, sheet_relationships, self.rows)
+        apply_comments(self.cells_by_coord, package, sheet_relationships, self.rows, threaded_comment_people)
         result = SheetParseResult(
             self.rows,
             _parse_hidden_cols(root),
             root.find(f"{{{NS_S}}}sheetProtection") is not None,
             *_parse_auto_filter(root),
             _parse_data_validations(root),
-            _parse_conditional_formats(root),
+            _parse_conditional_formats(root, format_index),
         )
         self.cells_by_coord.clear()
         self.shared_formula_groups.clear()
@@ -114,6 +121,8 @@ class WorksheetScanner:
         rich_text_map: dict[int, list[RichTextRun]] | None,
         format_index: FormatIndex | None,
         sheet_relationships: list[RelationshipRecord],
+        threaded_comment_people: Mapping[str, str],
+        rich_values: RichValueCatalog,
     ) -> None:
         self.package = package
         self.sheet_part = sheet_part
@@ -121,6 +130,8 @@ class WorksheetScanner:
         self.rich_text_map = rich_text_map
         self.format_index = format_index
         self.sheet_relationships = sheet_relationships
+        self.threaded_comment_people = threaded_comment_people
+        self.rich_values = rich_values
 
     def parse(self) -> SheetParseResult:
         if not self.package.exists(self.sheet_part):
@@ -154,6 +165,7 @@ class WorksheetScanner:
                         self.rich_text_map,
                         self.format_index,
                         ref,
+                        self.rich_values,
                     )
                     previous_col = cell["col"]
                     current_cells.append(cell)
@@ -165,7 +177,14 @@ class WorksheetScanner:
                     current_cells = None
         if root is None:
             return SheetParseResult([], [], False, "", [], [], [])
-        return working.finalize(root, self.package, self.sheet_relationships)
+        return working.finalize(
+            root,
+            self.package,
+            self.sheet_relationships,
+            self.threaded_comment_people,
+            self.format_index,
+            self.rich_values,
+        )
 
 
 def parse_sheet(
@@ -175,6 +194,8 @@ def parse_sheet(
     rich_text_map: dict[int, list[RichTextRun]] | None = None,
     format_index: FormatIndex | None = None,
     sheet_relationships: list[RelationshipRecord] | None = None,
+    threaded_comment_people: Mapping[str, str] | None = None,
+    rich_values: RichValueCatalog | None = None,
 ) -> SheetParseResult:
     """Parse a worksheet XML part into typed cell rows and sheet-level metadata."""
     return WorksheetScanner(
@@ -184,6 +205,8 @@ def parse_sheet(
         rich_text_map,
         format_index,
         sheet_relationships or [],
+        threaded_comment_people or {},
+        rich_values or RichValueCatalog(),
     ).parse()
 
 
@@ -196,14 +219,93 @@ def _parse_auto_filter(root: ET.Element) -> tuple[str, list[FilterColumn]]:
 
     filter_range = auto_filter.get("ref", "")
     for filter_column in auto_filter.findall(f"{{{NS_S}}}filterColumn"):
-        column_id = int(filter_column.get("colId", "0"))
-        filters = filter_column.find(f"{{{NS_S}}}filters")
-        if filters is None:
-            continue
-        values = [item.get("val", "") for item in filters.findall(f"{{{NS_S}}}filter") if item.get("val")]
-        if values:
-            filter_cols.append({"col": column_id, "type": "values", "values": values})
+        column_id = _safe_int(filter_column.get("colId"), 0)
+        filter_cols.extend(_parse_filter_column(column_id, filter_column))
     return filter_range, filter_cols
+
+
+def _parse_filter_column(column_id: int, element: ET.Element) -> list[FilterColumn]:
+    """Read every Excel filter form without evaluating the resulting row set."""
+    result: list[FilterColumn] = []
+    filters = element.find(f"{{{NS_S}}}filters")
+    date_group: list[dict[str, str]] = []
+    if filters is not None:
+        item: FilterColumn = {"col": column_id, "type": "values"}
+        values = [child.get("val", "") for child in filters.findall(f"{{{NS_S}}}filter") if child.get("val")]
+        date_group.extend(
+            dict(child.attrib) for child in filters.findall(f"{{{NS_S}}}dateGroupItem")
+        )
+        if values:
+            item["values"] = values
+        if filters.get("blank") == "1":
+            item["blank"] = True
+        if calendar_type := filters.get("calendarType"):
+            item["calendarType"] = calendar_type
+        if values or item.get("blank") or item.get("calendarType"):
+            result.append(item)
+
+    custom = element.find(f"{{{NS_S}}}customFilters")
+    if custom is not None:
+        for index, rule in enumerate(custom.findall(f"{{{NS_S}}}customFilter")):
+            item = {
+                "col": column_id,
+                "type": "custom",
+                "operator": rule.get("operator", "equal"),
+                "value": rule.get("val", ""),
+            }
+            if index == 0 and custom.get("and") == "1":
+                item["and"] = True
+            result.append(item)
+
+    dynamic = element.find(f"{{{NS_S}}}dynamicFilter")
+    if dynamic is not None:
+        item = {"col": column_id, "type": "dynamic", "operator": dynamic.get("type", "")}
+        for attr_name in ("val", "maxVal"):
+            if attr_value := dynamic.get(attr_name):
+                item["value" if attr_name == "val" else "value2"] = attr_value
+        result.append(item)
+
+    top10 = element.find(f"{{{NS_S}}}top10")
+    if top10 is not None:
+        item = {
+            "col": column_id,
+            "type": "top10",
+            "top": top10.get("top", "1") == "1",
+            "percent": top10.get("percent", "0") == "1",
+            "rank": top10.get("val", ""),
+        }
+        if filter_value := top10.get("filterVal"):
+            item["filterValue"] = filter_value
+        result.append(item)
+
+    color = element.find(f"{{{NS_S}}}colorFilter")
+    if color is not None:
+        item = {
+            "col": column_id,
+            "type": "color",
+            "cellColor": color.get("cellColor", "1") == "1",
+        }
+        if dxf_id := color.get("dxfId"):
+            item["dxfId"] = _safe_int(dxf_id, 0)
+        result.append(item)
+
+    icon = element.find(f"{{{NS_S}}}iconFilter")
+    if icon is not None:
+        item = {"col": column_id, "type": "icon"}
+        if icon_set := icon.get("iconSet"):
+            item["iconSet"] = icon_set
+        if icon_id := icon.get("iconId"):
+            item["iconId"] = _safe_int(icon_id, 0)
+        result.append(item)
+
+    # A few producers place dateGroupItem directly under filterColumn; accept it
+    # in addition to the SpreadsheetML-standard location under filters.
+    date_group.extend(
+        dict(child.attrib) for child in element.findall(f"{{{NS_S}}}dateGroupItem")
+    )
+    if date_group:
+        result.append({"col": column_id, "type": "dateGroup", "dateGroup": date_group})
+    return result
 
 
 def _parse_data_validations(root: ET.Element) -> list[DataValidation]:
@@ -221,20 +323,107 @@ def _parse_data_validations(root: ET.Element) -> list[DataValidation]:
     ]
 
 
-def _parse_conditional_formats(root: ET.Element) -> list[ConditionalFormat]:
+def _parse_conditional_formats(
+    root: ET.Element,
+    format_index: FormatIndex | None,
+) -> list[ConditionalFormat]:
     formats: list[ConditionalFormat] = []
     for conditional_format in root.findall(f"{{{NS_S}}}conditionalFormatting"):
         ranges = conditional_format.get("sqref", "")
-        formats.extend(
-            {
+        for rule in conditional_format.findall(f"{{{NS_S}}}cfRule"):
+            item: ConditionalFormat = {
                 "ranges": ranges,
-                "priority": int(rule.get("priority", "0")),
+                "priority": _safe_int(rule.get("priority"), 0),
                 "ruleType": rule.get("type", ""),
-                "formula": rule.findtext(f"{{{NS_S}}}formula", ""),
+                "formulas": [formula.text or "" for formula in rule.findall(f"{{{NS_S}}}formula")],
+                "stopIfTrue": rule.get("stopIfTrue", "0") == "1",
             }
-            for rule in conditional_format.findall(f"{{{NS_S}}}cfRule")
-        )
+            dxf_id = rule.get("dxfId")
+            if dxf_id is not None:
+                parsed_dxf_id = _safe_int(dxf_id, 0)
+                item["dxfId"] = parsed_dxf_id
+                if format_index is not None:
+                    dxf_style = format_index.differential_style(parsed_dxf_id)
+                    if dxf_style:
+                        item["dxfStyle"] = dxf_style
+            if operator := rule.get("operator"):
+                item["operator"] = operator
+            if text := rule.get("text"):
+                item["text"] = text
+            if rank := rule.get("rank"):
+                item["rank"] = _safe_int(rank, 0)
+            if rule.get("percent") == "1":
+                item["percent"] = True
+
+            detail = _conditional_format_detail(rule)
+            if detail is not None:
+                item["formatKind"], item["formatDetails"] = detail
+            formats.append(item)
     return formats
+
+
+def _conditional_format_detail(rule: ET.Element) -> tuple[str, dict[str, object]] | None:
+    """Capture visual rule semantics without evaluating colors or thresholds."""
+    for child in rule:
+        name = local_name(child.tag)
+        if name == "colorScale":
+            stops: list[dict[str, str]] = []
+            cfvos = [item for item in child if local_name(item.tag) == "cfvo"]
+            colors = [item for item in child if local_name(item.tag) == "color"]
+            for index, cfvo in enumerate(cfvos):
+                stop = {key: value for key, value in cfvo.attrib.items() if key in {"type", "val", "gte"}}
+                if index < len(colors):
+                    color = colors[index].get("rgb") or colors[index].get("theme") or colors[index].get("indexed")
+                    if color:
+                        stop["color"] = color
+                stops.append(stop)
+            return "colorScale", {"stops": stops}
+        if name == "dataBar":
+            details: dict[str, object] = {}
+            for key in ("minLength", "maxLength", "showValue", "gradient", "border", "direction"):
+                value = child.get(key)
+                if value is not None:
+                    details[key] = value
+            color = next(
+                (
+                    item.get("rgb") or item.get("theme") or item.get("indexed")
+                    for item in child
+                    if local_name(item.tag) == "color"
+                ),
+                None,
+            )
+            if color:
+                details["color"] = color
+            thresholds = _format_thresholds(child)
+            if thresholds:
+                details["thresholds"] = thresholds
+            return "dataBar", details
+        if name == "iconSet":
+            icon_details: dict[str, object] = dict(child.attrib)
+            thresholds = _format_thresholds(child)
+            if thresholds:
+                icon_details["thresholds"] = thresholds
+            return "iconSet", icon_details
+    return None
+
+
+def _format_thresholds(parent: ET.Element) -> list[dict[str, str]]:
+    return [
+        {
+            key: value
+            for key, value in item.attrib.items()
+            if key in {"type", "val", "gte"}
+        }
+        for item in parent
+        if local_name(item.tag) == "cfvo"
+    ]
+
+
+def _safe_int(value: str | None, default: int) -> int:
+    try:
+        return int(value) if value is not None else default
+    except ValueError:
+        return default
 
 
 def _parse_hidden_cols(root: ET.Element) -> list[tuple[int, int]]:
@@ -299,6 +488,7 @@ def _parse_cell(
     rich_text_map: dict[int, list[RichTextRun]] | None,
     format_index: FormatIndex | None,
     ref: str,
+    rich_values: RichValueCatalog | None = None,
 ) -> Cell:
     col, row = parse_ref(ref)
     cell_type = cell_elem.get("t", "n")
@@ -310,6 +500,16 @@ def _parse_cell(
     _apply_row_attrs(cell, row_attrs)
     _attach_rich_text(cell, cell_type, value_elem, rich_text_map)
     _attach_style(cell, cell_elem)
+    if rich_values is not None and (rich_value := rich_values.resolve(cell_elem.get("vm"))):
+        cell["richValue"] = rich_value
+    if format_index is not None:
+        style_index = cell.get("style")
+        if control := format_index.cell_control(style_index):
+            control_data = cast(CellControl, dict(control))
+            cell["cellControl"] = control_data
+            if control.get("kind") == "checkbox":
+                control_data["value"] = text
+                control_data["state"] = {"true": "true", "false": "false", "": "empty"}.get(text, "empty")
     if formula is not None:
         cell["formula"] = formula
     cell.update(formula_meta)
@@ -317,6 +517,8 @@ def _parse_cell(
     semantic_type = _CELL_TYPE_MAP.get(cell_type)
     if semantic_type and semantic_type != "number":
         cell["type"] = semantic_type
+    if cell.get("richValue", {}).get("imagePart") or cell.get("richValue", {}).get("imageUrl"):
+        cell["type"] = "image"
     return cell
 
 
@@ -431,5 +633,5 @@ def _post_process_rows(
     cell_map = {(cell["col"], cell["row"]): cell for row_cells in rows for cell in row_cells}
     apply_merge_cells(root, cell_map)
     apply_spill_ranges(rows, cell_map)
-    apply_hyperlinks(root, cell_map, sheet_rels)
-    apply_comments(cell_map, pkg, sheet_rels)
+    apply_hyperlinks(root, cell_map, sheet_rels, rows)
+    apply_comments(cell_map, pkg, sheet_rels, rows)

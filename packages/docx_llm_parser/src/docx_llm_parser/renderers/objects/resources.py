@@ -6,10 +6,11 @@ import base64
 import zipfile
 from collections.abc import Callable
 
-from ..core.enums import ResourceType
-from ..core.models import ParsedDocument, ResourceDetail, TableBlock, TableRow
-from ._ocr import render_ocr_result
-from .objects import render_chart_resource, render_smartart_resource
+from ...core.enums import ResourceType
+from ...core.models import ParsedDocument, TableBlock, TableRow
+from ..common.ocr import render_ocr_result
+from .charts import render_chart_resource
+from .smartarts import render_smartart_resource
 
 
 def render_resource(
@@ -205,7 +206,7 @@ _AGGREGATORS: dict[str, Callable[[list[float]], float | int]] = {
 }
 
 
-def _aggregate_rows(rows: list[TableRow], operation: str, column: str) -> ResourceDetail:
+def _aggregate_rows(rows: list[TableRow], operation: str, column: str) -> dict[str, object]:
     operation = operation.lower()
     if operation not in _AGGREGATORS:
         raise ValueError(f"Unknown aggregate {operation!r}; expected one of: {', '.join(sorted(_AGGREGATORS))}")

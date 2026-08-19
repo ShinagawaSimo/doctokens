@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, TypedDict
 
-from ooxml_llm_core.chart_ml import ChartSeriesInfo
+from ooxml_llm_core.chart_ml import ChartPlotInfo, ChartSeriesInfo
 from ooxml_llm_core.models import MetricsSnapshot, ParseWarning
 
 DEFAULT_MAX_ZIP_ENTRIES = 10_000
@@ -106,7 +106,7 @@ class TableCell(TypedDict, total=False):
 
 
 class ShapeBlock(TypedDict, total=False):
-    """One shape on a slide, in XML (z-order) sequence."""
+    """One shape on a slide; ``z`` records XML stacking order."""
 
     id: str
     type: str
@@ -114,8 +114,13 @@ class ShapeBlock(TypedDict, total=False):
     text: str
     assetId: str
     alt: str
+    title: str
     href: str
+    link: str
     kind: str
+    geometryType: str
+    fromShape: str
+    toShape: str
     rows: list[list[str]]
     tableCells: list[list[TableCell]]
     columnWidths: list[int]
@@ -183,6 +188,7 @@ class ChartRecord(TypedDict, total=False):
     series: list[ChartSeriesInfo]
     series_count: int
     point_count: int
+    plots: list[ChartPlotInfo]
 
 
 class SmartArtRecord(TypedDict, total=False):
@@ -244,6 +250,14 @@ class SlideBlock(TypedDict):
     notes: str | None
     background: SlideBackground | None
     commentRefs: list[CommentRef]
+    section: str | None
+
+
+class PresentationSection(TypedDict):
+    """A named PowerPoint section and the presentation slide IDs it contains."""
+
+    name: str
+    slideIds: list[str]
 
 
 class CommentItem(TypedDict, total=False):
@@ -272,6 +286,7 @@ class ParsedPresentation:
     smartarts: list[SmartArtRecord] = field(default_factory=list)
     theme: dict[str, str] = field(default_factory=dict)
     comments: list[CommentItem] = field(default_factory=list)
+    sections: list[PresentationSection] = field(default_factory=list)
     warnings: list[ParseWarning] = field(default_factory=list)
     ocr_results: dict[str, OcrStoredResult] = field(default_factory=dict)
     metrics: MetricsSnapshot = field(default_factory=_empty_metrics)

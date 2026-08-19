@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ..core.models import ParsedDocument, ParseWarning
+from ...core.models import ParsedDocument, ParseWarning
 
 
 def record_render_metrics(

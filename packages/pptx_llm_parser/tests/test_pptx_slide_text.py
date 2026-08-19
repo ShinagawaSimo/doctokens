@@ -13,12 +13,13 @@ from _pptx_fixtures import (
     slide_xml_shapes,
     text_shape_xml,
 )
+from pptx_llm_parser import parse_pptx
 from pptx_llm_parser.core.models import ParseOptions, ShapeBlock
 from pptx_llm_parser.parser import PptxParser
 
 
 class SlideTextParsingTests(unittest.TestCase):
-    def _parse(self, shapes_xml: str) -> list[ShapeBlock]:
+    def _deck(self, shapes_xml: str) -> bytes:
         entries = {
             "[Content_Types].xml": content_types_xml(1),
             "_rels/.rels": root_rels_xml(),
@@ -26,7 +27,10 @@ class SlideTextParsingTests(unittest.TestCase):
             "ppt/_rels/presentation.xml.rels": presentation_rels_xml(1),
             "ppt/slides/slide1.xml": slide_xml_shapes(shapes_xml),
         }
-        parsed = PptxParser().parse(make_pptx(entries), ParseOptions())
+        return make_pptx(entries)
+
+    def _parse(self, shapes_xml: str) -> list[ShapeBlock]:
+        parsed = PptxParser().parse(self._deck(shapes_xml), ParseOptions())
         return parsed.slides[0]["shapes"]
 
     def test_runs_concatenate(self) -> None:
@@ -60,6 +64,33 @@ class SlideTextParsingTests(unittest.TestCase):
         parsed = self._parse(shapes)
         self.assertEqual(len(parsed), 1)
         self.assertEqual(parsed[0]["text"], "Keep")
+
+    def test_accessible_shape_and_connector_are_retained_in_xml_order(self) -> None:
+        def shape_xml(shape_id: int, description: str) -> str:
+            return (
+                f'<p:sp><p:nvSpPr><p:cNvPr id="{shape_id}" name="Node {shape_id}" descr="{description}"/>'
+                '<p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>'
+                '<a:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></a:xfrm>'
+                '<a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom></p:spPr></p:sp>'
+            )
+
+        connector = (
+            '<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="4" name="Flow" title="Flow connection"/>'
+            '<p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr><p:spPr>'
+            '<a:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></a:xfrm>'
+            '<a:prstGeom prst="line"><a:avLst/></a:prstGeom>'
+            '<a:stCxn id="2" idx="0"/><a:endCxn id="3" idx="0"/>'
+            '</p:spPr></p:cxnSp>'
+        )
+        shapes = self._parse(shape_xml(2, "Start") + shape_xml(3, "End") + connector)
+        self.assertEqual([shape["kind"] for shape in shapes], ["roundRect", "roundRect", "connector"])
+        self.assertEqual(shapes[2]["fromShape"], shapes[0]["id"])
+        self.assertEqual(shapes[2]["toShape"], shapes[1]["id"])
+        self.assertEqual(shapes[2]["title"], "Flow connection")
+        semantic = parse_pptx(self._deck(shape_xml(2, "Start") + shape_xml(3, "End") + connector), density="semantic")
+        structural = parse_pptx(self._deck(shape_xml(2, "Start") + shape_xml(3, "End") + connector), density="structural")
+        self.assertIn('<shape kind=connector geometry=line title="Flow connection" from=s1 to=s2', semantic)
+        self.assertIn('<shape id=s3 kind=connector title="Flow connection" from=s1 to=s2>', structural)
 
 
 if __name__ == "__main__":

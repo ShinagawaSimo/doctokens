@@ -5,11 +5,11 @@ from __future__ import annotations
 from collections.abc import Iterator
 from html import escape
 
-from ..core.models import AncillaryItem, OcrStoredResult, ParsedDocument
-from ._blocks import render_block
-from ._ocr import render_ocr_result
-from .inline import inline_content
-from .plain import block_text_only, inline_text_only
+from ...core.models import AncillaryItem, OcrStoredResult, ParsedDocument
+from ..common.ocr import render_ocr_result
+from ..inline import inline_content
+from ..plain import block_text_only, inline_text_only
+from .blocks import render_block
 
 # ── semantic rendering ──
 
@@ -72,7 +72,13 @@ def iter_plain(parsed: ParsedDocument) -> Iterator[str]:
             comment_map[comment_id] = comment_text
 
     parts: list[str] = []
+    current_section = 0
+    emit_sections = any(block.get("section", 1) != 1 for block in parsed.blocks)
     for block in parsed.blocks:
+        section = block.get("section", 1)
+        if emit_sections and section != current_section:
+            current_section = section
+            parts.append(f"[Section {section}]")
         text = block_text_only(block, footnote_map, endnote_order, comment_order, ocr_results)
         if text:
             parts.append(text)
@@ -139,6 +145,14 @@ def supplemental_to_html5(parsed: ParsedDocument, density: str) -> str:
             date = item.get("date")
             if date is not None:
                 attrs += f" date={escape(date, quote=True)}"
+            anchor = item.get("anchor")
+            if anchor:
+                attrs += f" anchor={escape(anchor, quote=True)}"
+            parent = item.get("parentId")
+            if parent:
+                attrs += f" parent={escape(parent, quote=True)}"
+            if item.get("resolved"):
+                attrs += " resolved"
             content = inline_content(item, density, parsed.ocr_results)
             lines.append(f"<{tag} {attrs}>{content}")
     return "\n".join(lines)
@@ -146,16 +160,33 @@ def supplemental_to_html5(parsed: ParsedDocument, density: str) -> str:
 
 def _emit_body(parsed: ParsedDocument, density: str, ocr_results: dict[str, OcrStoredResult]) -> Iterator[str]:
     current_page = 0
+    current_section = 0
+    emit_sections = any(block.get("section", 1) != 1 for block in parsed.blocks)
+    used_anchors = _used_anchors(parsed)
     for block in parsed.blocks:
+        section = block.get("section", 1)
+        if emit_sections and section != current_section:
+            current_section = section
+            yield f"<section n={section}>\n"
         block_page = block.get("page", 1)
         if block_page != current_page:
             current_page = block_page
             yield f"<page={current_page}>\n"
 
-        if block["type"] == "paragraph":
-            yield f"<p>{inline_content(block, density, ocr_results)}\n"
+        yield from render_block(block, density, ocr_results, used_anchors)
+
+
+def _used_anchors(parsed: ParsedDocument) -> set[str]:
+    """Keep bookmark anchors only when a parsed navigation target refers to them."""
+    anchors: set[str] = set()
+    for block in parsed.blocks:
+        if block["type"] not in {"paragraph", "heading"}:
             continue
-        yield from render_block(block, density, ocr_results)
+        for run in block.get("runs", []):
+            link = run.get("link")
+            if link and link.get("anchor"):
+                anchors.add(link["anchor"])
+    return anchors
 
 
 def _emit_assets(

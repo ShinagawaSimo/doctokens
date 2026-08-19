@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import cast
 
-from ...core.models import Block, InlineContainer, InlineObject, OcrStoredResult, TableBlock
-from .. import _constants
-from .._ocr import ocr_text
-from .._text_utils import merge_text_runs
+from ...core.models import Block, ContentControl, InlineContainer, InlineObject, OcrStoredResult, TableBlock
+from ..common import constants as _constants
+from ..common.controls import wrap_plain_control
+from ..common.ocr import ocr_text
+from ..common.text import merge_text_runs
 
 
 def _string_field(value: object, default: str = "") -> str:
@@ -24,7 +25,9 @@ def block_text_only(
 ) -> str:
     """Render a parsed block as plain text."""
     if block["type"] == "table":
-        return table_text_only(block, ocr_results)
+        text = table_text_only(block, ocr_results)
+        controls = _controls(block.get("contentControls"))
+        return wrap_plain_control(text, controls) if controls else text
 
     text = inline_text_only(block, ocr_results)
 
@@ -50,21 +53,37 @@ def inline_text_only(
 ) -> str:
     """Extract plain text from a block-like object that carries inline runs."""
     if "runs" not in block:
-        return _string_field(block.get("text", ""))
+        content = _string_field(block.get("text", ""))
+        controls = _controls(block.get("contentControls"))
+        return wrap_plain_control(content, controls) if controls else content
 
     runs = merge_text_runs(block["runs"])
     if not runs:
-        return _string_field(block.get("text", ""))
+        content = _string_field(block.get("text", ""))
+        controls = _controls(block.get("contentControls"))
+        return wrap_plain_control(content, controls) if controls else content
 
     parts: list[str] = []
     for run in runs:
+        run_parts: list[str] = []
         text = run["text"]
         if text:
-            parts.append(text)
+            run_parts.append(text)
 
         if "objects" in run:
-            parts.extend(plain_object_placeholder(inline_object, ocr_results) for inline_object in run["objects"])
-    return "".join(parts)
+            run_parts.extend(plain_object_placeholder(inline_object, ocr_results) for inline_object in run["objects"])
+        run_content = "".join(run_parts)
+        controls = _controls(run.get("contentControls"))
+        parts.append(wrap_plain_control(run_content, controls) if controls else run_content)
+    content = "".join(parts)
+    controls = _controls(block.get("contentControls"))
+    return wrap_plain_control(content, controls) if controls else content
+
+
+def _controls(value: object) -> list[ContentControl]:
+    if not isinstance(value, list):
+        return []
+    return cast(list[ContentControl], value)
 
 
 def plain_object_placeholder(

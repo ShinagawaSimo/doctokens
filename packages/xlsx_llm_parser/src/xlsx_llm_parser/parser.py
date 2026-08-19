@@ -10,10 +10,11 @@ from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.package import PackageReader
 
 from ._sheet_post import (
-    detect_pivot_tables,
     parse_drawings,
     parse_tables,
+    parse_threaded_comment_people,
 )
+from .features import CellControlCatalog, PivotCatalog, RichValueCatalog
 from .formats import parse_styles
 from .models import (
     DefinedName,
@@ -42,8 +43,13 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
 
         date_1904, sheets, defined_names, external_links = _parse_workbook_xml(pkg)
         shared_strings, rich_text_map = _parse_shared_strings(pkg)
+        rich_values = RichValueCatalog.from_package(pkg)
+        cell_controls = CellControlCatalog.from_package(pkg)
+        pivot_catalog = PivotCatalog.from_package(pkg)
         fmt_index = parse_styles(pkg)
+        fmt_index.set_cell_controls(cell_controls.by_style)
         fmt_index.set_date_system(date_1904)
+        threaded_comment_people = parse_threaded_comment_people(pkg)
         next_table_index = 0
         next_image_index = 1
         next_chart_index = 1
@@ -54,7 +60,16 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
                 # Read sheet relationships once — shared across all helpers.
                 sheet_rels = list(pkg.read_relationships_for_part(sheet["part"]))
 
-                sheet_parse = parse_sheet(pkg, sheet["part"], shared_strings, rich_text_map, fmt_index, sheet_rels)
+                sheet_parse = parse_sheet(
+                    pkg,
+                    sheet["part"],
+                    shared_strings,
+                    rich_text_map,
+                    fmt_index,
+                    sheet_rels,
+                    threaded_comment_people,
+                    rich_values,
+                )
                 sheet["rows"] = sheet_parse.rows
                 if sheet_parse.hidden_cols:
                     sheet["hidden_cols"] = sheet_parse.hidden_cols
@@ -87,7 +102,7 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
                     sheet["images"] = images
                 if charts:
                     sheet["charts"] = charts
-                pivots = detect_pivot_tables(sheet_rels, start_index=next_pivot_index)
+                pivots = pivot_catalog.tables_for_relationships(sheet_rels, start_index=next_pivot_index)
                 next_pivot_index += len(pivots)
                 if pivots:
                     sheet["pivot_tables"] = pivots
@@ -99,6 +114,9 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
             "source": str(source) if isinstance(source, (str, Path)) else "<bytes>",
             "defined_names": defined_names,
             "external_links": external_links,
+            "pivot_caches": pivot_catalog.caches,
+            "slicers": pivot_catalog.slicers,
+            "timelines": pivot_catalog.timelines,
         },
     }
 

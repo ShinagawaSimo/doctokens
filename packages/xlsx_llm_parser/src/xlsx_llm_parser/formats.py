@@ -13,6 +13,8 @@ from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.package import PackageReader
 
+from .models import CellControl
+
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
@@ -137,6 +139,9 @@ class FormatIndex:
         self._fonts: list[FontInfo] = []
         # fillId → {"fill": str | None}
         self._fills: list[FillInfo] = []
+        # dxf index → compact semantic style summary used by conditional formatting.
+        self._differential_styles: list[str] = []
+        self._cell_controls: dict[int, CellControl] = {}
         self.date_1904 = False
 
     def set_date_system(self, date_1904: bool) -> None:
@@ -147,6 +152,24 @@ class FormatIndex:
 
     def register_fill(self, fill_info: FillInfo) -> None:
         self._fills.append(fill_info)
+
+    def register_differential_style(self, style: str) -> None:
+        self._differential_styles.append(style)
+
+    def differential_style(self, dxf_id: int) -> str:
+        """Return the meaningful formatting carried by a conditional-format dxf."""
+        if 0 <= dxf_id < len(self._differential_styles):
+            return self._differential_styles[dxf_id]
+        return ""
+
+    def set_cell_controls(self, controls: dict[int, CellControl]) -> None:
+        """Attach feature-property controls resolved for cell-XF indices."""
+        self._cell_controls = controls
+
+    def cell_control(self, style_index: int | None) -> CellControl | None:
+        if style_index is None:
+            return None
+        return self._cell_controls.get(style_index)
 
     def register_cell_format(
         self,
@@ -253,33 +276,18 @@ def parse_styles(pkg: PackageReader) -> FormatIndex:
     fonts_elem = root.find(f"{{{NS_S}}}fonts")
     if fonts_elem is not None:
         for font in fonts_elem.findall(f"{{{NS_S}}}font"):
-            info: FontInfo = {"bold": False, "italic": False, "underline": False}
-            if font.find(f"{{{NS_S}}}b") is not None:
-                info["bold"] = True
-            if font.find(f"{{{NS_S}}}i") is not None:
-                info["italic"] = True
-            if font.find(f"{{{NS_S}}}u") is not None:
-                info["underline"] = True
-            color = font.find(f"{{{NS_S}}}color")
-            if color is not None:
-                resolved = _resolve_color(color, theme)
-                if resolved:
-                    info["color"] = f"#{resolved}"
-            index.register_font(info)
+            index.register_font(_font_info(font, theme))
 
     # Fills: indexed by position
     fills_elem = root.find(f"{{{NS_S}}}fills")
     if fills_elem is not None:
         for fill in fills_elem.findall(f"{{{NS_S}}}fill"):
-            fill_info: FillInfo = {}
-            pf = fill.find(f"{{{NS_S}}}patternFill")
-            if pf is not None:
-                fg = pf.find(f"{{{NS_S}}}fgColor")
-                if fg is not None:
-                    resolved = _resolve_color(fg, theme)
-                    if resolved:
-                        fill_info["fill"] = f"#{resolved}"
-            index.register_fill(fill_info)
+            index.register_fill(_fill_info(fill, theme))
+
+    dxfs = root.find(f"{{{NS_S}}}dxfs")
+    if dxfs is not None:
+        for dxf in dxfs.findall(f"{{{NS_S}}}dxf"):
+            index.register_differential_style(_differential_style(dxf, theme))
 
     # Cell formats: each references numFmtId, fontId, fillId
     cell_xfs = root.find(f"{{{NS_S}}}cellXfs")
@@ -300,6 +308,66 @@ def parse_styles(pkg: PackageReader) -> FormatIndex:
             index.register_cell_format(fid, code, font_id, fill_id, locked, formula_hidden)
 
     return index
+
+
+def _font_info(font: ET.Element, theme: dict[int, str]) -> FontInfo:
+    info: FontInfo = {"bold": False, "italic": False, "underline": False}
+    if font.find(f"{{{NS_S}}}b") is not None:
+        info["bold"] = True
+    if font.find(f"{{{NS_S}}}i") is not None:
+        info["italic"] = True
+    if font.find(f"{{{NS_S}}}u") is not None:
+        info["underline"] = True
+    color = font.find(f"{{{NS_S}}}color")
+    if color is not None:
+        resolved = _resolve_color(color, theme)
+        if resolved:
+            info["color"] = f"#{resolved}"
+    return info
+
+
+def _fill_info(fill: ET.Element, theme: dict[int, str]) -> FillInfo:
+    info: FillInfo = {}
+    pattern_fill = fill.find(f"{{{NS_S}}}patternFill")
+    if pattern_fill is not None:
+        foreground = pattern_fill.find(f"{{{NS_S}}}fgColor")
+        if foreground is not None:
+            resolved = _resolve_color(foreground, theme)
+            if resolved:
+                info["fill"] = f"#{resolved}"
+    return info
+
+
+def _differential_style(dxf: ET.Element, theme: dict[int, str]) -> str:
+    """Summarize non-visual-noise dxf fields instead of retaining raw XML."""
+    parts: list[str] = []
+    font = dxf.find(f"{{{NS_S}}}font")
+    if font is not None:
+        font_info = _font_info(font, theme)
+        if font_info.get("bold"):
+            parts.append("bold")
+        if font_info.get("italic"):
+            parts.append("italic")
+        if font_info.get("underline"):
+            parts.append("underline")
+        if color := font_info.get("color"):
+            parts.append(f"color={color}")
+    fill = dxf.find(f"{{{NS_S}}}fill")
+    if fill is not None:
+        fill_info = _fill_info(fill, theme)
+        if color := fill_info.get("fill"):
+            parts.append(f"fill={color}")
+    num_fmt = dxf.find(f"{{{NS_S}}}numFmt")
+    if num_fmt is not None and (code := num_fmt.get("formatCode")):
+        parts.append(f"numberFormat={code}")
+    alignment = dxf.find(f"{{{NS_S}}}alignment")
+    if alignment is not None:
+        parts.extend(
+            f"{key}={value}"
+            for key in ("horizontal", "vertical", "wrapText")
+            if (value := alignment.get(key))
+        )
+    return " ".join(parts)
 
 
 def _rgb_hex(rgb: str) -> str:

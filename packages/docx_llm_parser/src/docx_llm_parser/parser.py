@@ -100,6 +100,7 @@ class DocxParser:
                 relationships,
                 asset_lookup,
                 object_lookup,
+                body_parser.comment_anchors,
                 metrics,
             )
 
@@ -225,6 +226,7 @@ class DocxParser:
         relationships: RelationshipIndex,
         asset_lookup: AssetLookup,
         object_lookup: ObjectLookup,
+        comment_anchors: dict[str, str],
         metrics: MetricsRecorder,
     ) -> AncillaryResult:
         with metrics.stage("ancillary"):
@@ -236,6 +238,7 @@ class DocxParser:
                 relationships=relationships,
                 asset_lookup=asset_lookup,
                 object_lookup=object_lookup,
+                comment_anchors=comment_anchors,
             ).parse()
 
     # OCR pipeline
@@ -330,7 +333,6 @@ class DocxParser:
             "format": "docx",
             "parser": "docx_llm_parser",
             "parserVersion": __version__,
-            "sectionRefs": result.body_parser.section_refs,
         }
 
         parsed = ParsedDocument(

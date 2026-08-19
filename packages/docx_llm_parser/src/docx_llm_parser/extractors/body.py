@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import cast
 from xml.etree import ElementTree as ET
 
 from ..core.constants import (
@@ -16,6 +17,7 @@ from ..core.models import (
     AssetLookup,
     Block,
     BodyEvent,
+    ContentControl,
     NumberingLabel,
     ObjectLookup,
     ParseOptions,
@@ -28,6 +30,7 @@ from ..core.models import (
 )
 from ..core.package import PackageReader
 from ..core.relationships import RelationshipIndex
+from ..ooxml.content_controls import parse_content_control
 from ..ooxml.numbering import NumberingState
 from ..ooxml.styles import StyleMap
 from .inline import InlineParser
@@ -73,6 +76,8 @@ class DocumentBodyParser:
             asset_lookup=asset_lookup,
             object_lookup=object_lookup,
             on_page_break=self._mark_page_break,
+            on_bookmark=self._register_bookmark,
+            on_comment_anchor=self._register_comment_anchor,
         )
         self.block_ids = BlockIdAllocator()
         self._order = 0
@@ -83,6 +88,10 @@ class DocumentBodyParser:
         self.body_events: list[BodyEvent] = []
         self._section_header_refs: list[tuple[str, str]] = []
         self._section_footer_refs: list[tuple[str, str]] = []
+        self._comment_anchors: dict[str, str] = {}
+        self._bookmarks_by_block: dict[str, list[str]] = {}
+        self._section_index = 1
+        self._section_break_pending = False
 
     def parse(self) -> list[Block]:
         """Stream-parse word/document.xml, preserving the original paragraph/table order."""
@@ -118,6 +127,7 @@ class DocumentBodyParser:
                     # Section break: Word always starts a new section on a new page when rendering.
                     self._collect_section_refs(elem)
                     self._pending_page_breaks += 1
+                    self._section_break_pending = True
                     elem.clear()
                 elif direct_body_child and lname == "sdt":
                     # Content controls wrap content (e.g. whole documents from
@@ -143,30 +153,48 @@ class DocumentBodyParser:
                 if lname == "body":
                     body_depth = None
                 stack.pop()
+        self._discard_unreferenced_anchors(blocks)
         for parsed_block in blocks:
             self._add_body_event(parsed_block)
+        if self._section_index == 1:
+            # A lone default section has no navigation value; omit it from the IR
+            # so all densities remain free of redundant section metadata.
+            for parsed_block in blocks:
+                cast(dict[str, object], parsed_block).pop("section", None)
         return blocks
 
-    def _parse_sdt(self, sdt: ET.Element, blocks: list[Block]) -> None:
-        """Parse paragraphs/tables wrapped in a content control (w:sdt)."""
+    def _parse_sdt(
+        self,
+        sdt: ET.Element,
+        blocks: list[Block],
+        parent_controls: tuple[ContentControl, ...] = (),
+    ) -> None:
+        """Parse a content control while preserving its metadata on its blocks."""
+        controls = (*parent_controls, parse_content_control(sdt))
         content = first_child(sdt, "w", "sdtContent")
         if content is None:
             return
         for child in content:
             child_tag = child.tag
             if child_tag == _TAG_W_PARAGRAPH:
-                block = self.parse_paragraph(child, "word/document.xml")
+                block = self.parse_paragraph(child, "word/document.xml", controls)
                 if block is not None:
                     blocks.append(block)
             elif child_tag == _TAG_W_TABLE:
-                blocks.extend(self.parse_table(child, "word/document.xml"))
+                blocks.extend(self.parse_table(child, "word/document.xml", controls))
             elif local_name(child_tag) == "sdt":
-                self._parse_sdt(child, blocks)
+                self._parse_sdt(child, blocks, controls)
 
-    def parse_paragraph(self, paragraph: ET.Element, part: str) -> TextBlock | None:
+    def parse_paragraph(
+        self,
+        paragraph: ET.Element,
+        part: str,
+        content_controls: tuple[ContentControl, ...] = (),
+    ) -> TextBlock | None:
         """Parse a paragraph; emit a heading only when the style outline level is explicit."""
         block_id = self.block_ids.allocate()
         self._order += 1
+        section_index = self._begin_section()
         # Apply the page-break count accumulated by the previous block.
         page_start = self._flush_pending_page_breaks()
 
@@ -178,6 +206,7 @@ class DocumentBodyParser:
             # renders the next content on a new page.
             self._collect_section_refs(section_break)
         runs, raw_hints = self.inline.paragraph_runs(paragraph, part, block_id, style_id)
+        anchors = self._bookmarks_by_block.pop(block_id, [])
         numbering = self._paragraph_numbering(paragraph, style_id, part, block_id)
         if numbering is not None:
             # Auto-numbering is visible Word text; insert it into the text stream as a synthetic run.
@@ -193,7 +222,12 @@ class DocumentBodyParser:
                 has_objects = True
         text = "".join(text_parts)
         # text.isspace() avoids the cost of text.strip() creating a new string.
-        if (not text or text.isspace()) and not has_objects and not self.options.preserve_empty_paragraphs:
+        if (
+            (not text or text.isspace())
+            and not has_objects
+            and not content_controls
+            and not self.options.preserve_empty_paragraphs
+        ):
             # Empty paragraphs (no visible text, no inline objects) produce no content.
             # lrpb/manual page breaks inside a paragraph have no visual effect in Word
             # rendering, so drop them without advancing the page number.
@@ -221,6 +255,7 @@ class DocumentBodyParser:
                 "text": text,
                 "level": heading_level,
                 "headingSource": "style",
+                "section": section_index,
             }
         else:
             block = {
@@ -231,9 +266,14 @@ class DocumentBodyParser:
                 "page": page_start,
                 "styleId": style_id,
                 "text": text,
+                "section": section_index,
             }
         if numbering is not None:
             block["numbering"] = numbering
+        if content_controls:
+            block["contentControls"] = list(content_controls)
+        if anchors:
+            block["anchors"] = anchors
         if self.options.include_runs:
             block["runs"] = runs
         if self.options.include_raw_hints and raw_hints:
@@ -242,15 +282,62 @@ class DocumentBodyParser:
             # The section break follows this paragraph; the next block starts
             # on a new page.
             self._pending_page_breaks += 1
+            self._section_break_pending = True
         return block
 
-    def parse_table(self, table: ET.Element, part: str) -> list[TableBlock]:
+    def _register_bookmark(self, name: str, block_id: str) -> None:
+        """Register a bookmark while its enclosing paragraph still has a stable block ID."""
+        anchors = self._bookmarks_by_block.setdefault(block_id, [])
+        if name not in anchors:
+            anchors.append(name)
+
+    def _register_comment_anchor(self, comment_id: str, block_id: str) -> None:
+        """Keep the first visible block for a Word comment range/reference."""
+        self._comment_anchors.setdefault(comment_id, block_id)
+
+    @staticmethod
+    def _discard_unreferenced_anchors(blocks: list[Block]) -> None:
+        """Avoid carrying bookmarks that are never a parsed internal-navigation target."""
+        all_blocks: list[Block] = []
+
+        def visit(items: list[Block]) -> None:
+            for item in items:
+                all_blocks.append(item)
+                if item["type"] == "table":
+                    for row in item["rows"]:
+                        for cell in row["cells"]:
+                            visit(cell["blocks"])
+
+        visit(blocks)
+        used = {
+            link["anchor"]
+            for item in all_blocks
+            if item["type"] in {"paragraph", "heading"}
+            for run in item.get("runs", [])
+            if (link := run.get("link")) is not None and link.get("anchor")
+        }
+        for item in all_blocks:
+            if item["type"] not in {"paragraph", "heading"}:
+                continue
+            anchors = [anchor for anchor in item.get("anchors", []) if anchor in used]
+            if anchors:
+                item["anchors"] = anchors
+            else:
+                cast(dict[str, object], item).pop("anchors", None)
+
+    def parse_table(
+        self,
+        table: ET.Element,
+        part: str,
+        content_controls: tuple[ContentControl, ...] = (),
+    ) -> list[TableBlock]:
         """Parse a Word table, preserving rows/columns, merged cells, and cell blocks.
         When a page break occurs inside the table, split it into multiple blocks so the
         renderer can emit <page n=N> between sub-tables.
         Multiple lrpb across cells in the same row collapse into a single page-break
         decision (based on _page_hint changes)."""
         self._order += 1
+        section_index = self._begin_section()
         table_id = self._next_table_id()
         # Apply the page-break count accumulated by the previous block.
         segment_page = self._flush_pending_page_breaks()
@@ -278,6 +365,8 @@ class DocumentBodyParser:
                             widest_column_count,
                             table_id,
                             len(sub_tables) + 1,
+                            section_index,
+                            content_controls,
                         )
                     )
                     segment_rows = []
@@ -300,6 +389,8 @@ class DocumentBodyParser:
                     widest_column_count,
                     table_id,
                     len(sub_tables) + 1,
+                    section_index,
+                    content_controls,
                 )
             )
 
@@ -313,10 +404,12 @@ class DocumentBodyParser:
         max_col: int,
         table_id: str,
         segment_index: int,
+        section_index: int,
+        content_controls: tuple[ContentControl, ...] = (),
     ) -> TableBlock:
         """Build a table block dictionary."""
         block_id = self.block_ids.allocate()
-        return {
+        block: TableBlock = {
             "id": block_id,
             "type": "table",
             "part": part,
@@ -326,7 +419,11 @@ class DocumentBodyParser:
             "segmentIndex": segment_index,
             "rows": rows,
             "columnCount": max_col,
+            "section": section_index,
         }
+        if content_controls:
+            block["contentControls"] = list(content_controls)
+        return block
 
     def _parse_table_row(self, row_element: ET.Element, row_index: int, part: str) -> tuple[TableRow, int]:
         """Parse one table row and return the row plus its visual column count."""
@@ -376,6 +473,8 @@ class DocumentBodyParser:
             elif child_tag == _TAG_W_TABLE:
                 # Nested tables are parsed recursively; page breaks inside them also split into sub-tables.
                 blocks.extend(self.parse_table(child, part))
+            elif local_name(child_tag) == "sdt":
+                self._parse_sdt(child, blocks)
         return blocks
 
     def _apply_vertical_merges(self, rows: list[TableRow], active: dict[int, TableCell] | None = None) -> None:
@@ -535,6 +634,13 @@ class DocumentBodyParser:
             elif lname == "footerReference":
                 self._section_footer_refs.append((r_id, ref_type))
 
+    def _begin_section(self) -> int:
+        """Advance at the first content block after a Word section break."""
+        if self._section_break_pending:
+            self._section_index += 1
+            self._section_break_pending = False
+        return self._section_index
+
     @property
     def section_refs(self) -> dict[str, list[tuple[str, str]]]:
         """Return the collected section references so AncillaryParser can filter unused headers/footers."""
@@ -542,6 +648,11 @@ class DocumentBodyParser:
             "headers": list(self._section_header_refs),
             "footers": list(self._section_footer_refs),
         }
+
+    @property
+    def comment_anchors(self) -> dict[str, str]:
+        """Return comment ID to first visible body-block mapping for supplemental comments."""
+        return dict(self._comment_anchors)
 
     def _warn(
         self,

@@ -11,9 +11,9 @@ from time import perf_counter
 
 from ..core.enums import Density
 from ..core.models import DocumentManifest, ParsedDocument
-from ._metrics import record_render_metrics, write_metrics_debug
-from ._render import iter_plain, iter_semantic, iter_structural
-from .resources import render_resource, table_groups
+from .common.metrics import record_render_metrics, write_metrics_debug
+from .document.pipeline import iter_plain, iter_semantic, iter_structural
+from .objects.resources import render_resource, table_groups
 
 __all__ = [
     "iter_html5",

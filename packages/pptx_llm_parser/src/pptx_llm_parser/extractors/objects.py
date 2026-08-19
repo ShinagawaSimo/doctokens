@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import cast
 from xml.etree import ElementTree as ET
 
-from ooxml_llm_core.chart_ml import parse_chart_xml
+from ooxml_llm_core.chart_ml import CHART_RELATIONSHIP_TYPES, parse_chart_xml
 from ooxml_llm_core.models import ParseWarning
 from ooxml_llm_core.relationships import RelationshipIndex
 
@@ -23,7 +23,6 @@ from ..core.models import (
 )
 from ..core.package import PackageReader
 
-CHART_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
 DIAGRAM_DATA_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData"
 DIAGRAM_LAYOUT_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout"
 
@@ -114,7 +113,8 @@ class EmbeddedObjectExtractor:
             return self._chart_lookup
         specs: dict[tuple[str, str], _ObjectSpec] = {}
         by_id: dict[str, _ObjectSpec] = {}
-        for index, record in enumerate(self._relationships.by_type(CHART_REL_TYPE), start=1):
+        chart_records = (record for record in self._relationships.records if record.type in CHART_RELATIONSHIP_TYPES)
+        for index, record in enumerate(chart_records, start=1):
             if record.resolved_target is not None:
                 spec = _ObjectSpec(record.source_part, record.id, f"chart{index}", record.resolved_target)
                 specs[(record.source_part, record.id)] = spec
@@ -229,7 +229,9 @@ class EmbeddedObjectExtractor:
         charts: list[ChartRecord] = []
         lookup: dict[tuple[str, str], ChartRecord] = {}
         index = 0
-        for record in self._relationships.by_type(CHART_REL_TYPE):
+        for record in self._relationships.records:
+            if record.type not in CHART_RELATIONSHIP_TYPES:
+                continue
             index += 1
             chart_id = f"chart{index}"
             part = record.resolved_target

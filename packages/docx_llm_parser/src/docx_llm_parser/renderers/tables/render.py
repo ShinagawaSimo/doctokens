@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from html import escape
 
 from ...core.models import OcrStoredResult, TableBlock, TableCell, TableRow
-from .. import _constants
+from ..common import constants as _constants
 from ..inline import inline_content
 
 

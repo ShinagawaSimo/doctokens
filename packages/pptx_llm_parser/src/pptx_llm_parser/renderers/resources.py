@@ -69,6 +69,10 @@ def _render_chart(parsed: ParsedPresentation, resource_id: str) -> str | None:
     series = chart.get("series", [])
     point_count = chart.get("point_count")
     attrs.add("series", len(series)).add("points", point_count if point_count is not None else 0)
+    plots = chart.get("plots", [])
+    is_combination = chart_type == "combination"
+    if is_combination and plots:
+        attrs.add("plots", ",".join(plot.get("chart_type", "unknown") for plot in plots))
     lines = [f"<chart{attrs.render()}>"]
     for index, item in enumerate(series, start=1):
         series_attrs = AttributeBuilder().add("id", index)
@@ -77,6 +81,16 @@ def _render_chart(parsed: ParsedPresentation, resource_id: str) -> str | None:
             series_attrs.add("name", name)
         series_attrs.add("categories", ",".join(item.get("categories", [])))
         series_attrs.add("values", ",".join(item.get("values", [])))
+        if is_combination and item.get("chart_type"):
+            series_attrs.add("type", item["chart_type"])
+        if item.get("bubble_sizes"):
+            series_attrs.add("bubbleSizes", ",".join(item["bubble_sizes"]))
+        if item.get("hidden"):
+            series_attrs.flag("hidden")
+        if item.get("x_values"):
+            series_attrs.add("xValues", ",".join(item["x_values"]))
+        if item.get("y_values"):
+            series_attrs.add("yValues", ",".join(item["y_values"]))
         if item.get("min") is not None:
             series_attrs.add("min", f"{item['min']:g}")
         if item.get("max") is not None:

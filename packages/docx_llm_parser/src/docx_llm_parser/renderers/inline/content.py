@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from html import escape
 
 from ...core.models import InlineContainer, InlineObject, OcrStoredResult, RunFormat
-from .._ocr import render_ocr_result
-from .._text_utils import filter_format, merge_text_runs
+from ..common.controls import wrap_control
+from ..common.ocr import render_ocr_result
+from ..common.text import filter_format, merge_text_runs
 from ..objects import chart_to_html5, smartart_to_html5
 
 
@@ -27,9 +29,15 @@ def inline_content(block: InlineContainer, density: str, ocr_results: dict[str, 
 
         if density == "semantic":
             if run.get("revision") == "inserted":
-                text = f"<ins>{text}</ins>"
+                text = f"<ins{_revision_attrs(run)}>{text}</ins>"
             elif run.get("revision") == "deleted":
-                text = f"<del>{text}</del>"
+                text = f"<del{_revision_attrs(run)}>{text}</del>"
+
+        field = run.get("field")
+        if field and field.get("kind") == "citation" and text:
+            key = field.get("key", "")
+            if key:
+                text = f"<cite key={escape(key, quote=True)}>{text}</cite>"
 
         link = run.get("link")
         if link and text:
@@ -39,12 +47,32 @@ def inline_content(block: InlineContainer, density: str, ocr_results: dict[str, 
             if anchor:
                 attrs += f" anchor={escape(anchor, quote=True)}"
             text = f"<a {attrs}>{text}</a>"
+        content_parts: list[str] = []
         if text:
-            parts.append(text)
-
+            content_parts.append(text)
         if "objects" in run:
-            parts.extend(inline_object(obj, density, ocr_results) for obj in run["objects"])
-    return "".join(parts)
+            content_parts.extend(inline_object(obj, density, ocr_results) for obj in run["objects"])
+        content = "".join(content_parts)
+        controls = run.get("contentControls", [])
+        if controls and content:
+            content = wrap_control(content, controls, density)
+        if content:
+            parts.append(content)
+    # A tab immediately followed by a hard line/page break has no text-layout
+    # meaning for an LLM, and would otherwise create trailing output whitespace.
+    return "".join(parts).replace("\t\n", "\n")
+
+
+def _revision_attrs(run: Mapping[str, object]) -> str:
+    """Render reviewer attribution only in semantic density, where review detail is useful."""
+    attrs = ""
+    author = run.get("revisionAuthor")
+    date = run.get("revisionDate")
+    if isinstance(author, str) and author:
+        attrs += f" author={escape(author, quote=True)}"
+    if isinstance(date, str) and date:
+        attrs += f" date={escape(date, quote=True)}"
+    return attrs
 
 
 def apply_inline_format(text: str, fmt: RunFormat, density: str) -> str:

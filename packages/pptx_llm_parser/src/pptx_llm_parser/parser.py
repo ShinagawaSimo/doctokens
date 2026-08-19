@@ -11,7 +11,7 @@ from xml.etree import ElementTree as ET
 from ooxml_llm_core.debug import DebugWriter
 from ooxml_llm_core.metrics import MetricsRecorder
 from ooxml_llm_core.models import ParseWarning
-from ooxml_llm_core.relationships import RelationshipIndex
+from ooxml_llm_core.relationships import HYPERLINK_RELATIONSHIP_TYPE, RelationshipIndex, office_relationship_type
 
 from .core.constants import attr, first_child, local_name
 from .core.models import (
@@ -24,6 +24,7 @@ from .core.models import (
     OcrStoredResult,
     ParsedPresentation,
     ParseOptions,
+    PresentationSection,
     SlideBlock,
     SmartArtLookup,
 )
@@ -37,8 +38,8 @@ from .ooxml.inheritance import LayoutMasterResolver
 from .ooxml.theme import ThemeParser
 
 PRESENTATION_PART = "ppt/presentation.xml"
-HYPERLINK_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
 _MAX_OCR_BATCH_BYTES = 64 * 1024 * 1024
+_SLIDE_RELATIONSHIP_TYPE = office_relationship_type("slide")
 
 
 @dataclass
@@ -59,6 +60,8 @@ class _ParseContext:
     comments: list[CommentItem]
     presentation_root: ET.Element
     slide_size: tuple[int, int] | None
+    sections: list[PresentationSection]
+    section_by_slide_id: dict[str, str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +71,35 @@ class _SlideRef:
     relationship_id: str
     slide_id: str
     part: str
+
+
+def _normalise_slide_navigation(slide: SlideBlock, refs: tuple[_SlideRef, ...], slide_number: int) -> None:
+    """Convert internal part paths and next/previous actions into useful slide anchors."""
+    target_by_part = {ref.part: f"#slide{index}" for index, ref in enumerate(refs, start=1)}
+
+    def normalise(target: str) -> str:
+        if target in target_by_part:
+            return target_by_part[target]
+        marker = "ppaction://hlinkshowjump?jump="
+        if not target.startswith(marker):
+            return target
+        jump = target.removeprefix(marker).lower()
+        target_index = {
+            "nextslide": min(slide_number + 1, len(refs)),
+            "previousslide": max(slide_number - 1, 1),
+            "firstslide": 1,
+            "lastslide": len(refs),
+        }.get(jump)
+        return f"#slide{target_index}" if target_index else target
+
+    for shape in slide["shapes"]:
+        link = shape.get("link")
+        if link:
+            shape["link"] = normalise(link)
+        for run in shape.get("runs", []):
+            run_link = run.get("link")
+            if run_link:
+                run["link"] = normalise(run_link)
 
 
 @dataclass(slots=True)
@@ -172,7 +204,9 @@ class _SlideSequence:
                 notes=self._context.notes.notes_for(ref.part),
                 background=background,
                 commentRefs=[],
+                section=self._context.section_by_slide_id.get(ref.slide_id),
             )
+            _normalise_slide_navigation(slide, self._refs, slide_number)
             if slide_number >= start_slide:
                 yield _SlideParseResult(slide)
 
@@ -237,6 +271,7 @@ class PptxParser:
             smartarts=smartarts,
             theme=context.theme,
             comments=context.comments,
+            sections=context.sections,
             warnings=warnings,
             ocr_results=ocr_results,
         )
@@ -276,6 +311,7 @@ class PptxParser:
                     smartarts=context.objects.loaded_smartarts,
                     theme=context.theme,
                     comments=context.comments,
+                    sections=context.sections,
                     warnings=warnings,
                 )
                 if options.ocr is not None:
@@ -293,10 +329,12 @@ class PptxParser:
         theme = theme_parser.parse()
         hyperlinks = {
             (record.source_part, record.id): record.resolved_target
-            for record in relationships.by_type(HYPERLINK_REL_TYPE)
+            for record in relationships.records
+            if record.type in {HYPERLINK_RELATIONSHIP_TYPE, _SLIDE_RELATIONSHIP_TYPE}
             if record.resolved_target is not None
         }
         presentation_root = self._read_xml(pkg, PRESENTATION_PART)
+        sections, section_by_slide_id = self._parse_sections(presentation_root)
         return _ParseContext(
             relationships=relationships,
             assets=assets,
@@ -312,6 +350,8 @@ class PptxParser:
             comments=CommentsParser(pkg, relationships, warnings).parse(),
             presentation_root=presentation_root,
             slide_size=self._parse_slide_size(presentation_root, warnings),
+            sections=sections,
+            section_by_slide_id=section_by_slide_id,
         )
 
     @staticmethod
@@ -452,3 +492,26 @@ class PptxParser:
         except ValueError:
             warnings.append(ParseWarning(code="SLDSZ_INVALID", message="Invalid p:sldSz dimensions", locator=PRESENTATION_PART))
             return None
+
+    @staticmethod
+    def _parse_sections(presentation_root: ET.Element) -> tuple[list[PresentationSection], dict[str, str]]:
+        """Extract PowerPoint's named sections without leaking their GUID storage IDs."""
+        sections: list[PresentationSection] = []
+        section_by_slide_id: dict[str, str] = {}
+        for element in presentation_root.iter():
+            if local_name(element.tag) != "section":
+                continue
+            name = element.get("name", "")
+            if not name:
+                continue
+            slide_ids = [
+                child.get("id", "")
+                for child in element.iter()
+                if local_name(child.tag) == "sldId" and child.get("id")
+            ]
+            if not slide_ids:
+                continue
+            sections.append({"name": name, "slideIds": slide_ids})
+            for slide_id in slide_ids:
+                section_by_slide_id.setdefault(slide_id, name)
+        return sections, section_by_slide_id

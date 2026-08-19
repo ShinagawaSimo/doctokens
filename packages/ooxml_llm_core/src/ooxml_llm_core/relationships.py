@@ -10,6 +10,17 @@ from typing import Any
 
 from ooxml_llm_core.models import RelationshipRecord
 
+OFFICE_DOCUMENT_RELATIONSHIP_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+"""Namespace shared by WordprocessingML, SpreadsheetML, and PresentationML relationships."""
+
+
+def office_relationship_type(local_name: str) -> str:
+    """Return a standard Office-document relationship type from its local name."""
+    return f"{OFFICE_DOCUMENT_RELATIONSHIP_NS}/{local_name}"
+
+
+HYPERLINK_RELATIONSHIP_TYPE = office_relationship_type("hyperlink")
+
 
 @dataclass(frozen=True)
 class RelationshipIndex:

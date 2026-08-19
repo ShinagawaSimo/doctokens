@@ -30,6 +30,20 @@ def local_name(tag: str) -> str:
     return tag
 
 
+def local_attr(el: ET.Element, local: str, default: str | None = None) -> str | None:
+    """Read an attribute by local name when its extension namespace varies.
+
+    Office versioned extension parts routinely use distinct namespace prefixes
+    for the same logical attribute (for example ``paraId``).  The caller has
+    already identified the extension element, so matching its local attribute
+    name is both interoperable and more useful than serializing namespace IDs.
+    """
+    for name, value in el.attrib.items():
+        if local_name(name) == local:
+            return value
+    return default
+
+
 def attr(
     el: ET.Element,
     prefix: str,

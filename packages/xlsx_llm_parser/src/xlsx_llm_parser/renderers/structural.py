@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import dataclass, field
 from html import escape
 
 from .._utils import col_letter, parse_ref
 from ..formats import FormatIndex
-from ..models import Cell, ParsedWorkbook, RichTextRun, SheetInfo
+from ..models import Cell, ParsedWorkbook, RichTextRun, SheetInfo, ThreadedComment
 from ._constants import (
     _CELL_BUDGET,
     _GRID_BOUND_SENTINEL,
@@ -15,6 +16,47 @@ from ._constants import (
 
 Density = str  # "plain" | "structural" | "semantic"
 _STYLE_RANGE_MIN_CELLS = 6
+
+
+@dataclass(frozen=True)
+class _CommentRecord:
+    id: str
+    ref: str
+    text: str
+    author: str = ""
+    date: str = ""
+    parent_id: str = ""
+    resolved: bool = False
+    mentions: tuple[str, ...] = ()
+
+
+@dataclass
+class _CommentCollector:
+    """Assign compact display IDs while retaining per-cell threaded conversations."""
+
+    by_cell: dict[tuple[int, int], list[_CommentRecord]] = field(default_factory=dict)
+    _legacy_index: int = 0
+
+    def register(self, cell: Cell) -> tuple[_CommentRecord, ...]:
+        key = (cell["col"], cell["row"])
+        existing = self.by_cell.get(key)
+        if existing is not None:
+            return tuple(existing)
+        records: list[_CommentRecord] = []
+        if cell.get("comment") is not None:
+            records.append(
+                _CommentRecord(
+                    id=f"comment{self._legacy_index}",
+                    ref=cell["ref"],
+                    text=cell["comment"],
+                    author=cell.get("commentAuthor", ""),
+                )
+            )
+            self._legacy_index += 1
+        records.extend(_threaded_comment_record(cell["ref"], item) for item in cell.get("threadedComments", []))
+        if records:
+            self.by_cell[key] = records
+        return tuple(records)
 
 
 # ── Public API ──
@@ -89,6 +131,7 @@ def _render_sheet(
     yield from _emit_data_validations(sheet, density)
     yield from _emit_conditional_formats(sheet, density)
     yield from _emit_external_links(wb, density)
+    yield from _emit_pivot_context(wb, density, emit=emit_globals)
     yield from _emit_images(sheet, density)
     yield from _emit_charts(sheet, density)
     yield from _emit_pivot_tables(sheet, density)
@@ -166,8 +209,31 @@ def _emit_autofilter(sheet: SheetInfo, density: Density) -> Iterator[str]:
         return
     yield f"<filter ref={filter_ref}>\n"
     for fc in sheet.get("filter_cols", []):
-        vals = ",".join(escape(v, quote=True) for v in fc.get("values", []))
-        yield f'<condition col={fc["col"]} type={fc["type"]} values="{vals}"/>\n'
+        attrs = [f'col={fc["col"]}', f'type={fc["type"]}']
+        if values := fc.get("values"):
+            attrs.append(f'values="{escape(",".join(values), quote=True)}"')
+        if fc.get("blank"):
+            attrs.append("blank")
+        attrs.extend(
+            f'{key}="{escape(str(value), quote=True)}"'
+            for key in ("calendarType", "operator", "value", "value2", "rank", "filterValue", "iconSet")
+            if (value := fc.get(key))
+        )
+        attrs.extend(key for key in ("and", "top", "percent") if fc.get(key))
+        if "cellColor" in fc:
+            attrs.append(f'cellColor={int(bool(fc["cellColor"]))}')
+        attrs.extend(
+            f"{key}={value}"
+            for key in ("dxfId", "iconId")
+            if (value := fc.get(key)) is not None
+        )
+        if date_groups := fc.get("dateGroup"):
+            groups = ";".join(
+                ":".join(f"{key}={value}" for key, value in sorted(group.items()))
+                for group in date_groups
+            )
+            attrs.append(f'groups="{escape(groups, quote=True)}"')
+        yield f"<condition {' '.join(attrs)}/>\n"
 
 
 def _emit_data_validations(sheet: SheetInfo, density: Density) -> Iterator[str]:
@@ -182,11 +248,62 @@ def _emit_conditional_formats(sheet: SheetInfo, density: Density) -> Iterator[st
         return
     for cf in sheet.get("conditional_formats", []):
         yield f"<conditionalFormatting ref={cf['ranges']}>\n"
-        parts = [f"<rule type={cf['ruleType']}"]
-        if cf.get("formula"):
-            parts.append(f' formula="{escape(cf["formula"], quote=True)}"')
+        parts = [f"<rule type={cf['ruleType']} priority={cf.get('priority', 0)}"]
+        formulas = cf.get("formulas") or []
+        if len(formulas) == 1:
+            parts.append(f' formula="{escape(formulas[0], quote=True)}"')
+        elif formulas:
+            parts.append(f' formulas="{escape(" | ".join(formulas), quote=True)}"')
+        if cf.get("operator"):
+            parts.append(f' operator="{escape(cf["operator"], quote=True)}"')
+        if cf.get("text"):
+            parts.append(f' text="{escape(cf["text"], quote=True)}"')
+        if cf.get("dxfId") is not None:
+            parts.append(f' dxf={cf["dxfId"]}')
+        if cf.get("dxfStyle"):
+            parts.append(f' style="{escape(cf["dxfStyle"], quote=True)}"')
+        if cf.get("stopIfTrue"):
+            parts.append(" stopIfTrue")
+        if cf.get("rank") is not None:
+            parts.append(f' rank={cf["rank"]}')
+        if cf.get("percent"):
+            parts.append(" percent")
+        if cf.get("formatKind"):
+            parts.append(f' format={cf["formatKind"]}')
+            if density == "semantic":
+                details = _format_conditional_details(cf.get("formatDetails"))
+                if details:
+                    parts.append(f' details="{escape(details, quote=True)}"')
         parts.append("/>\n")
         yield "".join(parts)
+
+
+def _format_conditional_details(details: object) -> str:
+    if not isinstance(details, dict):
+        return ""
+
+    values: list[str] = []
+    for key, value in details.items():
+        if key == "stops" and isinstance(value, list):
+            stops = [
+                ":".join(f"{item_key}={item_value}" for item_key, item_value in item.items())
+                for item in value
+                if isinstance(item, dict)
+            ]
+            if stops:
+                values.append(f"stops={';'.join(stops)}")
+            continue
+        if key == "thresholds" and isinstance(value, list):
+            thresholds = [
+                ":".join(f"{item_key}={item_value}" for item_key, item_value in item.items())
+                for item in value
+                if isinstance(item, dict)
+            ]
+            if thresholds:
+                values.append(f"thresholds={';'.join(thresholds)}")
+            continue
+        values.append(f"{key}={value}")
+    return ";".join(values)
 
 
 def _emit_external_links(wb: ParsedWorkbook | None, density: Density) -> Iterator[str]:
@@ -194,6 +311,55 @@ def _emit_external_links(wb: ParsedWorkbook | None, density: Density) -> Iterato
         return
     for link in wb["metadata"].get("external_links", []):
         yield f"<externalLink target={escape(link, quote=True)}/>\n"
+
+
+def _emit_pivot_context(
+    wb: ParsedWorkbook | None,
+    density: Density,
+    *,
+    emit: bool,
+) -> Iterator[str]:
+    """Emit workbook-level pivot sources and interactive filters once."""
+    if wb is None or not emit:
+        return
+    metadata = wb["metadata"]
+    if density == "plain":
+        for slicer in metadata.get("slicers", []):
+            name = slicer.get("name") or slicer.get("sourceName")
+            yield f"[Slicer {name}]\n" if name else "[Slicer]\n"
+        for timeline in metadata.get("timelines", []):
+            name = timeline.get("name") or timeline.get("sourceName")
+            yield f"[Timeline {name}]\n" if name else "[Timeline]\n"
+        return
+    for cache in metadata.get("pivot_caches", []):
+        attrs = [f'id={cache["id"]}', f'cacheId={cache["cacheId"]}']
+        if cache.get("sourceSheet"):
+            attrs.append(f'sheet="{escape(cache["sourceSheet"], quote=True)}"')
+        if cache.get("sourceRef"):
+            attrs.append(f'ref={cache["sourceRef"]}')
+        if cache.get("refreshOnLoad"):
+            attrs.append("refreshOnLoad")
+        if density == "semantic" and cache.get("fields"):
+            attrs.append(f'fields="{escape(",".join(cache["fields"]), quote=True)}"')
+        yield f"<pivotCache {' '.join(attrs)}/>\n"
+    for slicer in metadata.get("slicers", []):
+        attrs = [f'id={slicer["id"]}', 'type=slicer']
+        if slicer.get("name"):
+            attrs.append(f'name="{escape(slicer["name"], quote=True)}"')
+        if slicer.get("sourceName"):
+            attrs.append(f'source="{escape(slicer["sourceName"], quote=True)}"')
+        if slicer.get("cacheId") is not None:
+            attrs.append(f'cacheId={slicer["cacheId"]}')
+        yield f"<slicer {' '.join(attrs)}/>\n"
+    for timeline in metadata.get("timelines", []):
+        attrs = [f'id={timeline["id"]}']
+        if timeline.get("name"):
+            attrs.append(f'name="{escape(timeline["name"], quote=True)}"')
+        if timeline.get("sourceName"):
+            attrs.append(f'source="{escape(timeline["sourceName"], quote=True)}"')
+        if timeline.get("level"):
+            attrs.append(f'level={timeline["level"]}')
+        yield f"<timeline {' '.join(attrs)}/>\n"
 
 
 def _emit_images(sheet: SheetInfo, density: Density) -> Iterator[str]:
@@ -218,6 +384,8 @@ def _emit_charts(sheet: SheetInfo, density: Density) -> Iterator[str]:
 
     for ch in charts:
         attrs = f"id={ch['id']} ref={ch['ref']} type={ch.get('type', '?')}"
+        if ch.get("plotTypes"):
+            attrs += f" plots={escape(','.join(ch['plotTypes']), quote=True)}"
         attrs += f" series={ch.get('series_count', 0)}"
         names = _chart_series_names(ch)
         if names:
@@ -251,7 +419,24 @@ def _emit_pivot_tables(sheet: SheetInfo, density: Density) -> Iterator[str]:
             yield f"[PivotTable{name_part}]\n"
         return
     for pv in sheet.get("pivot_tables", []):
-        yield f"<pivotTable id={pv['id']} name={escape(pv['name'], quote=True)}/>\n"
+        attrs = [f'id={pv["id"]}', f'name={escape(pv.get("name", ""), quote=True)}']
+        if pv.get("ref"):
+            attrs.append(f'ref={pv["ref"]}')
+        if pv.get("sourceSheet"):
+            attrs.append(f'sourceSheet="{escape(pv["sourceSheet"], quote=True)}"')
+        if pv.get("sourceRef"):
+            attrs.append(f'sourceRef={pv["sourceRef"]}')
+        if density == "semantic" and pv.get("rowFields"):
+            attrs.append(f'rows="{escape(",".join(pv["rowFields"]), quote=True)}"')
+        if density == "semantic" and pv.get("columnFields"):
+            attrs.append(f'columns="{escape(",".join(pv["columnFields"]), quote=True)}"')
+        if density == "semantic" and pv.get("pageFields"):
+            attrs.append(f'pages="{escape(",".join(pv["pageFields"]), quote=True)}"')
+        if density == "semantic" and pv.get("dataFields"):
+            attrs.append(f'values="{escape(",".join(pv["dataFields"]), quote=True)}"')
+        if density == "semantic" and pv.get("filters"):
+            attrs.append(f'filters="{escape(",".join(pv["filters"]), quote=True)}"')
+        yield f"<pivotTable {' '.join(attrs)}/>\n"
 
 
 def _emit_tables(sheet: SheetInfo, density: Density) -> Iterator[str]:
@@ -302,7 +487,11 @@ def _render_plain(
             continue
         if row_cells[0]["row"] < start_row:
             continue
-        texts = [cell["text"] for cell in row_cells if not _is_hidden_col(cell["col"], hidden_cols)]
+        texts = [
+            f"{_plain_cell_text(cell)}{_plain_comment_suffix(cell)}"
+            for cell in row_cells
+            if not _is_hidden_col(cell["col"], hidden_cols)
+        ]
         yield "\t".join(texts) + "\n"
 
 
@@ -310,6 +499,35 @@ def _is_hidden_col(col: int, hidden_cols: list[tuple[int, int]] | None) -> bool:
     if hidden_cols is None:
         return False
     return any(start <= col <= end for start, end in hidden_cols)
+
+
+def _plain_comment_suffix(cell: Cell) -> str:
+    """Keep review context in plain output without rendering implementation IDs."""
+    parts: list[str] = []
+    if cell.get("comment") is not None:
+        author = cell.get("commentAuthor", "")
+        prefix = f" by {author}" if author else ""
+        parts.append(f"[Comment{prefix}: {cell['comment']}]")
+    for item in cell.get("threadedComments", []):
+        author = item.get("author", "")
+        qualifiers: list[str] = [author] if author else []
+        if item.get("parentId"):
+            qualifiers.append("reply")
+        if item.get("resolved"):
+            qualifiers.append("resolved")
+        label = f" ({', '.join(qualifiers)})" if qualifiers else ""
+        parts.append(f"[Comment{label}: {item.get('text', '')}]")
+    return " " + " ".join(parts) if parts else ""
+
+
+def _plain_cell_text(cell: Cell) -> str:
+    if (control := cell.get("cellControl")) and control.get("kind") == "checkbox":
+        return f"[Checkbox {control.get('state', cell['text'])}]"
+    if rich_value := cell.get("richValue"):
+        if rich_value.get("imagePart") or rich_value.get("imageUrl"):
+            return rich_value.get("alt") or rich_value.get("display") or "[Image]"
+        return rich_value.get("display") or rich_value.get("fallback") or cell["text"]
+    return cell["text"]
 
 
 # ── Grid rendering (structural / semantic) ──
@@ -346,7 +564,7 @@ def _render_grid(
         style_ranges, suppressed_styles = _repeated_style_ranges(rows, fmt_index, start_row)
         style_parts.extend(style_ranges)
 
-    comments: dict[tuple[int, int], tuple[str, str, str]] = {}  # (col,row) → (ref, author, text)
+    comments = _CommentCollector()
     cell_count = 0
     truncated = False
     body_parts: list[str] = []
@@ -394,14 +612,21 @@ def _visible_grid_bounds(rows: list[list[Cell]], start_row: int) -> tuple[int, i
     return min_col, min_row, max_col, max_row
 
 
-def _render_comments(comments: dict[tuple[int, int], tuple[str, str, str]]) -> Iterator[str]:
-    for comment_id, ((_col, _row), (ref, author, text)) in enumerate(
-        sorted(comments.items(), key=lambda item: (item[0][1], item[0][0]))
-    ):
-        attrs = f'id=comment{comment_id} cell="{escape(ref, quote=True)}"'
-        if author:
-            attrs += f" author={escape(author, quote=True)}"
-        yield f"<comment {attrs}>{escape(text)}\n"
+def _render_comments(comments: _CommentCollector) -> Iterator[str]:
+    for _coord, records in sorted(comments.by_cell.items(), key=lambda item: (item[0][1], item[0][0])):
+        for comment in records:
+            attrs = f'id={escape(comment.id, quote=True)} cell="{escape(comment.ref, quote=True)}"'
+            if comment.author:
+                attrs += f" author={escape(comment.author, quote=True)}"
+            if comment.date:
+                attrs += f" date={escape(comment.date, quote=True)}"
+            if comment.parent_id:
+                attrs += f" parent={escape(comment.parent_id, quote=True)}"
+            if comment.resolved:
+                attrs += " resolved"
+            if comment.mentions:
+                attrs += f' mentions="{escape(", ".join(comment.mentions), quote=True)}"'
+            yield f"<comment {attrs}>{escape(comment.text)}\n"
 
 
 def _render_row(
@@ -409,7 +634,7 @@ def _render_row(
     grid_min_col: int,
     density: Density,
     wb: ParsedWorkbook | None = None,
-    comments: dict[tuple[int, int], tuple[str, str, str]] | None = None,
+    comments: _CommentCollector | None = None,
     suppressed_styles: set[str] | None = None,
 ) -> str:
     actual_row = row_cells[0]["row"]
@@ -487,11 +712,39 @@ def _structural_cell_attrs(cell: Cell, fmt_index: FormatIndex | None) -> str:
         protection = fmt_index.protection_attrs(cell["style"])
         if protection:
             attrs += f" {protection}"
+    if control := cell.get("cellControl"):
+        attrs += f' control={control.get("kind", "unknown")}'
+        if control.get("state"):
+            attrs += f' state={control["state"]}'
+        if control.get("default") is not None:
+            attrs += f' default={control["default"]}'
+    if rich_value := cell.get("richValue"):
+        attrs += f' richType="{escape(rich_value.get("type", "rich"), quote=True)}"'
+        if rich_value.get("imagePart") or rich_value.get("imageUrl"):
+            attrs += " inCellImage"
+            if rich_value.get("alt"):
+                attrs += f' alt="{escape(rich_value["alt"], quote=True)}"'
     return attrs
 
 
 def _cell_body(cell: Cell, density: Density) -> str:
-    body = _render_rich_text(cell["rich"]) if density == "semantic" and cell.get("rich") else escape(cell["text"])
+    if (rich_value := cell.get("richValue")) and (
+        density == "plain" or rich_value.get("display") or rich_value.get("fallback")
+    ):
+        if rich_value.get("imagePart") or rich_value.get("imageUrl"):
+            body = escape(rich_value.get("alt") or rich_value.get("display") or "[Image]")
+        else:
+            body = escape(rich_value.get("display") or rich_value.get("fallback") or cell["text"])
+    else:
+        body = _render_rich_text(cell["rich"]) if density == "semantic" and cell.get("rich") else escape(cell["text"])
+    if density == "semantic" and (rich_value := cell.get("richValue")) and rich_value.get("fields"):
+        visible_fields = "; ".join(
+            f"{key}={value}"
+            for key, value in rich_value["fields"].items()
+            if not key.startswith("_") and key not in {"CalcOrigin", "ImageSizing", "ImageWidth", "ImageHeight"}
+        )
+        if visible_fields:
+            body += f' <richValue fields="{escape(visible_fields, quote=True)}"/>'
     if cell.get("hyperlink"):
         return f'<a href="{escape(cell["hyperlink"], quote=True)}">{body}</a>'
     return body
@@ -500,17 +753,33 @@ def _cell_body(cell: Cell, density: Density) -> str:
 def _body_with_comment_reference(
     cell: Cell,
     body: str,
-    comments: dict[tuple[int, int], tuple[str, str, str]],
+    comments: _CommentCollector,
 ) -> str:
-    if not cell.get("comment"):
+    records = comments.register(cell)
+    if not records:
         return body
-    comment_id = len(comments)
-    comments[(cell["col"], cell["row"])] = (
-        cell["ref"],
-        cell.get("commentAuthor", ""),
-        cell["comment"],
+    if len(records) == 1:
+        return f"{body}<commentref id={records[0].id}/>"
+    ids = " ".join(record.id for record in records)
+    return f'<commentref ids="{escape(ids, quote=True)}"/>'
+
+
+def _threaded_comment_record(ref: str, item: ThreadedComment) -> _CommentRecord:
+    mentions = tuple(
+        mention["person"]
+        for mention in item.get("mentions", [])
+        if isinstance(mention.get("person"), str) and mention["person"]
     )
-    return f"{body}<commentref id=comment{comment_id}/>"
+    return _CommentRecord(
+        id=item.get("id", ""),
+        ref=ref,
+        text=item.get("text", ""),
+        author=item.get("author", ""),
+        date=item.get("date", ""),
+        parent_id=item.get("parentId", ""),
+        resolved=bool(item.get("resolved")),
+        mentions=mentions,
+    )
 
 
 def _repeated_style_ranges(

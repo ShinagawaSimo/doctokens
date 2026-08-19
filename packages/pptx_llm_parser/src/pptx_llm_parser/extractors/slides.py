@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import cast
 from xml.etree import ElementTree as ET
 
+from ooxml_llm_core.chart_ml import CHART_EX_GRAPHIC_DATA_URI
 from ooxml_llm_core.models import ParseWarning
 from ooxml_llm_core.omml_latex import omath_to_latex
 
@@ -103,7 +104,7 @@ class _GroupTransform:
 
 
 class SlideParser:
-    """Extract per-slide shapes from slide part XML, in geometric reading order."""
+    """Extract shapes once, retaining XML z-order while rendering geometrically."""
 
     def __init__(
         self,
@@ -156,6 +157,7 @@ class SlideParser:
             )
             return []
         shapes: list[ShapeBlock] = []
+        drawing_id_to_shape_id: dict[str, str] = {}
         ordinal = 0
         z_index = 0
 
@@ -180,10 +182,7 @@ class SlideParser:
             elif name == "graphicFrame":
                 shape = self._graphic_frame_shape(node, part, candidate_ordinal)
             elif name == "cxnSp":
-                # Connection lines and other textless decoration are outside
-                # the current density contract. A future density may retain
-                # the complete drawing tree.
-                return
+                shape = self._connector_shape(node, candidate_ordinal)
             else:
                 self._warnings.append(
                     ParseWarning(
@@ -197,13 +196,18 @@ class SlideParser:
                 ordinal += 1
                 shape["z"] = z_index
                 self._attach_inheritance(shape, node, context, transform)
+                self._attach_shape_navigation(shape, node, part)
+                drawing_id = self._drawing_id(node)
+                if drawing_id:
+                    drawing_id_to_shape_id[drawing_id] = shape["id"]
                 shapes.append(shape)
 
         for child in sp_tree:
             visit(child, _GroupTransform())
-        # Geometric reading order: top→bottom, left→right; stable sort keeps
-        # XML order (z-order) for ties; shapes without coordinates sort last.
+        self._resolve_connector_endpoints(shapes, drawing_id_to_shape_id)
+        self._filter_decorative_shapes(shapes)
         shapes.sort(key=self._geometric_key)
+        self._renumber_shapes(shapes)
         return shapes
 
     def _background(
@@ -277,13 +281,22 @@ class SlideParser:
             shape["w"] = round(w / self._slide_size[0] * 1000)
             shape["h"] = round(h / self._slide_size[1] * 1000)
 
-    @staticmethod
-    def _geometric_key(shape: ShapeBlock) -> tuple[int, int]:
-        y = shape.get("y")
-        x = shape.get("x")
-        if y is None or x is None:
-            return (2**31, 0)
-        return (y, x)
+    def _attach_shape_navigation(self, shape: ShapeBlock, element: ET.Element, part: str) -> None:
+        """Keep click/hover actions attached to a whole shape, separate from run hyperlinks."""
+        self._attach_accessibility(shape, element)
+        c_nv_pr = self._find_descendant(element, "cNvPr")
+        if c_nv_pr is None:
+            return
+        action = first_child(c_nv_pr, "a", "hlinkClick")
+        if action is None:
+            action = first_child(c_nv_pr, "a", "hlinkHover")
+        if action is None:
+            return
+        relationship_id = attr(action, "r", "id")
+        target = self._hyperlink_lookup.get((part, relationship_id)) if relationship_id else None
+        target = target or action.get("action")
+        if target:
+            shape["link"] = target
 
     def _text_shape(self, sp: ET.Element, part: str, ordinal: int, context: LayoutContext) -> ShapeBlock | None:
         tx_body = first_child(sp, "p", "txBody")
@@ -295,7 +308,7 @@ class SlideParser:
             inherited_styles=self._shape_text_styles(sp, context, part),
         )
         if text_result.text is None:
-            return None
+            return self._descriptive_shape(sp, ordinal)
         text = text_result.text
         runs = text_result.runs
         paragraphs = text_result.paragraphs
@@ -310,6 +323,105 @@ class SlideParser:
         if paragraphs and any("bullet" in paragraph or "numberType" in paragraph for paragraph in paragraphs):
             shape["paragraphs"] = paragraphs
         return shape
+
+    def _descriptive_shape(self, sp: ET.Element, ordinal: int) -> ShapeBlock:
+        """Keep textless shapes only when their accessibility or action data matters."""
+        shape: ShapeBlock = {
+            "id": f"s{ordinal}",
+            "type": "shape",
+            "name": self._shape_name(sp) or "",
+            "kind": "shape",
+        }
+        geometry_type = self._geometry_type(sp)
+        if geometry_type:
+            shape["geometryType"] = geometry_type
+            shape["kind"] = geometry_type
+        self._attach_accessibility(shape, sp)
+        return shape
+
+    def _connector_shape(self, connector: ET.Element, ordinal: int) -> ShapeBlock:
+        """Represent a connector as a semantic edge between retained shapes."""
+        shape: ShapeBlock = {
+            "id": f"s{ordinal}",
+            "type": "shape",
+            "name": self._shape_name(connector) or "",
+            "kind": "connector",
+        }
+        geometry_type = self._geometry_type(connector)
+        if geometry_type:
+            shape["geometryType"] = geometry_type
+        self._attach_accessibility(shape, connector)
+        start = self._find_descendant(connector, "stCxn")
+        end = self._find_descendant(connector, "endCxn")
+        if start is not None and (start_id := start.get("id")):
+            shape["fromShape"] = start_id
+        if end is not None and (end_id := end.get("id")):
+            shape["toShape"] = end_id
+        return shape
+
+    @staticmethod
+    def _is_meaningful_shape(shape: ShapeBlock) -> bool:
+        return bool(shape.get("alt") or shape.get("title") or shape.get("link") or shape.get("fromShape") or shape.get("toShape"))
+
+    @staticmethod
+    def _resolve_connector_endpoints(
+        shapes: list[ShapeBlock],
+        drawing_id_to_shape_id: dict[str, str],
+    ) -> None:
+        for shape in shapes:
+            if shape.get("kind") != "connector":
+                continue
+            from_drawing_id = shape.get("fromShape")
+            if from_drawing_id is not None:
+                from_shape_id = drawing_id_to_shape_id.get(from_drawing_id)
+                if from_shape_id is None:
+                    shape.pop("fromShape", None)
+                else:
+                    shape["fromShape"] = from_shape_id
+            to_drawing_id = shape.get("toShape")
+            if to_drawing_id is not None:
+                to_shape_id = drawing_id_to_shape_id.get(to_drawing_id)
+                if to_shape_id is None:
+                    shape.pop("toShape", None)
+                else:
+                    shape["toShape"] = to_shape_id
+
+    @staticmethod
+    def _filter_decorative_shapes(shapes: list[ShapeBlock]) -> None:
+        """Keep a connector's endpoints, but omit otherwise inert drawing marks."""
+        connector_endpoints = {
+            endpoint
+            for shape in shapes
+            if shape.get("kind") == "connector" and SlideParser._is_meaningful_shape(shape)
+            for endpoint in (shape.get("fromShape"), shape.get("toShape"))
+            if endpoint is not None
+        }
+        shapes[:] = [
+            shape
+            for shape in shapes
+            if shape["type"] != "shape"
+            or SlideParser._is_meaningful_shape(shape)
+            or shape["id"] in connector_endpoints
+        ]
+
+    @staticmethod
+    def _geometric_key(shape: ShapeBlock) -> tuple[int, int]:
+        y = shape.get("y")
+        x = shape.get("x")
+        if y is None or x is None:
+            return (2**31, 0)
+        return (y, x)
+
+    @staticmethod
+    def _renumber_shapes(shapes: list[ShapeBlock]) -> None:
+        """Keep compact, contiguous IR IDs after density-driven decoration filtering."""
+        replacement_ids = {shape["id"]: f"s{index}" for index, shape in enumerate(shapes, start=1)}
+        for shape in shapes:
+            shape["id"] = replacement_ids[shape["id"]]
+            if from_shape := shape.get("fromShape"):
+                shape["fromShape"] = replacement_ids.get(from_shape, from_shape)
+            if to_shape := shape.get("toShape"):
+                shape["toShape"] = replacement_ids.get(to_shape, to_shape)
 
     def _shape_text_styles(
         self,
@@ -455,6 +567,8 @@ class SlideParser:
         if uri == "http://schemas.openxmlformats.org/drawingml/2006/table":
             return self._table_shape(frame, part, ordinal)
         if uri == "http://schemas.openxmlformats.org/drawingml/2006/chart":
+            return self._chart_shape(frame, part, ordinal)
+        if uri == CHART_EX_GRAPHIC_DATA_URI:
             return self._chart_shape(frame, part, ordinal)
         if uri == "http://schemas.openxmlformats.org/drawingml/2006/diagram":
             return self._smartart_shape(frame, part, ordinal)
@@ -688,6 +802,25 @@ class SlideParser:
         descr = c_nv_pr.get("descr")
         title = c_nv_pr.get("title")
         return descr or title or None
+
+    @staticmethod
+    def _geometry_type(shape: ET.Element) -> str | None:
+        geometry = SlideParser._find_descendant(shape, "prstGeom")
+        return geometry.get("prst") if geometry is not None else None
+
+    @staticmethod
+    def _drawing_id(shape: ET.Element) -> str | None:
+        c_nv_pr = SlideParser._find_descendant(shape, "cNvPr")
+        return c_nv_pr.get("id") if c_nv_pr is not None else None
+
+    def _attach_accessibility(self, result: ShapeBlock, shape: ET.Element) -> None:
+        c_nv_pr = self._find_descendant(shape, "cNvPr")
+        if c_nv_pr is None:
+            return
+        if description := c_nv_pr.get("descr"):
+            result["alt"] = description
+        if title := c_nv_pr.get("title"):
+            result["title"] = title
 
     @staticmethod
     def _find_descendant(element: ET.Element, local: str) -> ET.Element | None:

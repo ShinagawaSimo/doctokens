@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from xml.etree import ElementTree as ET
 
-from ooxml_llm_core.chart_ml import parse_chart_xml
+from ooxml_llm_core.chart_ml import CHART_RELATIONSHIP_TYPES, parse_chart_xml
 
 from ..core.constants import qualified_name
 from ..core.models import (
     Chart,
+    ChartPlot,
     ChartSeries,
     ObjectLookup,
     ParseWarning,
@@ -20,9 +21,10 @@ from ..core.models import (
 from ..core.package import PackageReader
 from ..core.relationships import RelationshipIndex
 
-CHART_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
 DIAGRAM_DATA_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData"
 DIAGRAM_LAYOUT_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout"
+# Kept as a module constant for callers that used the former extractor API.
+CHART_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
 
 
 class EmbeddedObjectExtractor:
@@ -74,7 +76,8 @@ class EmbeddedObjectExtractor:
     def _extract_charts(self, lookup: ObjectLookup) -> list[Chart]:
         """Parse the chart parts targeted by chart relationships."""
         charts: list[Chart] = []
-        for chart_index, rel in enumerate(self.relationships.by_type(CHART_REL_TYPE), start=1):
+        chart_relationships = (record for record in self.relationships.records if record.type in CHART_RELATIONSHIP_TYPES)
+        for chart_index, rel in enumerate(chart_relationships, start=1):
             chart_id = f"chart{chart_index}"
             target = rel.resolved_target
             if rel.target_mode == "External" or not target or not self.package.exists(target):
@@ -168,6 +171,20 @@ def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> Chart:
             row["categories"] = s["categories"]
         if s.get("values"):
             row["values"] = s["values"]
+        if "plot_index" in s:
+            row["plotIndex"] = s["plot_index"]
+        if "chart_type" in s:
+            row["chartType"] = s["chart_type"]
+        if s.get("x_values"):
+            row["xValues"] = s["x_values"]
+        if s.get("y_values"):
+            row["yValues"] = s["y_values"]
+        if s.get("bubble_sizes"):
+            row["bubbleSizes"] = s["bubble_sizes"]
+        if s.get("category_formula"):
+            row["categoryFormula"] = s["category_formula"]
+        if s.get("hidden"):
+            row["hidden"] = True
         series.append(row)
 
     chart: Chart = {
@@ -182,6 +199,16 @@ def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> Chart:
     title = info.get("title", "")
     if title:
         chart["title"] = title
+    plots: list[ChartPlot] = []
+    for source_plot in info.get("plots", []):
+        plot: ChartPlot = {
+            "index": source_plot["index"],
+            "chartType": source_plot["chart_type"],
+            "seriesIndices": source_plot.get("series_indices", []),
+        }
+        plots.append(plot)
+    if plots:
+        chart["plots"] = plots
     return chart
 
 

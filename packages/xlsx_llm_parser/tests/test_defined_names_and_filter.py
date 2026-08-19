@@ -174,6 +174,17 @@ class FilterTests(unittest.TestCase):
                     '<filterColumn colId="0">'
                     '<filters><filter val="East"/><filter val="West"/></filters>'
                     "</filterColumn>"
+                    '<filterColumn colId="1"><customFilters and="1">'
+                    '<customFilter operator="greaterThan" val="10"/>'
+                    '<customFilter operator="lessThanOrEqual" val="100"/>'
+                    "</customFilters></filterColumn>"
+                    '<filterColumn colId="2"><dynamicFilter type="thisMonth" val="45123"/></filterColumn>'
+                    '<filterColumn colId="3"><top10 top="1" percent="1" val="10"/></filterColumn>'
+                    '<filterColumn colId="4"><colorFilter dxfId="2" cellColor="0"/></filterColumn>'
+                    '<filterColumn colId="5"><iconFilter iconSet="3TrafficLights1" iconId="1"/></filterColumn>'
+                    '<filterColumn colId="6"><filters>'
+                    '<dateGroupItem year="2026" month="8" dateTimeGrouping="month"/>'
+                    '</filters></filterColumn>'
                     "</autoFilter>"
                     "<sheetData>"
                     '<row r="1"><c r="A1" t="inlineStr"><is><t>Region</t></is></c></row>'
@@ -189,6 +200,22 @@ class FilterTests(unittest.TestCase):
         self.assertIn("<filter ref=A1:K50>", semantic)
         self.assertIn("<condition", semantic)
         self.assertIn("<condition", structural)
+        self.assertIn(
+            '<condition col=1 type=custom operator="greaterThan" value="10" and/>',
+            semantic,
+        )
+        self.assertIn(
+            '<condition col=2 type=dynamic operator="thisMonth" value="45123"/>',
+            semantic,
+        )
+        self.assertIn('<condition col=3 type=top10 rank="10" top percent/>', semantic)
+        self.assertIn('<condition col=4 type=color cellColor=0 dxfId=2/>', semantic)
+        self.assertIn(
+            '<condition col=5 type=icon iconSet="3TrafficLights1" iconId=1/>',
+            semantic,
+        )
+        self.assertIn('type=dateGroup groups="dateTimeGrouping=month:month=8:year=2026"', semantic)
+        self.assertNotIn('<condition col=6 type=values/>', semantic)
 
 
 if __name__ == "__main__":

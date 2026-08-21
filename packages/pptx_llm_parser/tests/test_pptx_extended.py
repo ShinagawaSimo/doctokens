@@ -24,7 +24,7 @@ from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parser import PptxParser
 
 
-def _deck(shapes: str, *, slide_xml: str | None = None, slide_rels: str | None = None) -> bytes:
+def _deck(shapes: str, *, slide_xml: str | None = None, slide_rels: str | None = None) -> Path:
     entries: dict[str, str | bytes] = {
         "[Content_Types].xml": content_types_xml(1),
         "_rels/.rels": root_rels_xml(),

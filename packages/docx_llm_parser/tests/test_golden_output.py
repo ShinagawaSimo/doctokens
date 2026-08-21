@@ -1,91 +1,61 @@
 """Golden output tests — freeze HTML and debug JSON to catch unintended changes."""
 
-import json
-import os
 import unittest
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 from _fixtures import write_rich_docx
 from docx_llm_parser import Density, parse_docx
 from docx_llm_parser.core.models import ParseOptions
 from docx_llm_parser.parser import DocxParser
 
-GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
+from test_support.file_contract import (
+    assert_json_matches_golden,
+    assert_text_matches_golden,
+    golden_root,
+    output_path,
+    source_path,
+    write_text_result,
+)
+
+GOLDEN_DIR = golden_root("docx")
 _EXCLUDE_DEBUG = {"metrics.json"}
 
 
 class GoldenOutputTests(unittest.TestCase):
     def test_semantic_output_matches_golden(self) -> None:
-        html = _render_density(Density.SEMANTIC)
-        golden_path = GOLDEN_DIR / "parsed.html"
-        if os.environ.get("UPDATE_GOLDEN"):
-            _write_golden(golden_path, html)
-        expected = _read_golden(golden_path)
-        self.assertEqual(expected, html, f"semantic output changed; see {golden_path}")
+        actual = _render_density(Density.SEMANTIC)
+        assert_text_matches_golden(actual, GOLDEN_DIR / "parsed.html")
 
     def test_structural_output_matches_golden(self) -> None:
-        html = _render_density(Density.STRUCTURAL)
-        golden_path = GOLDEN_DIR / "structural.html"
-        if os.environ.get("UPDATE_GOLDEN"):
-            _write_golden(golden_path, html)
-        expected = _read_golden(golden_path)
-        self.assertEqual(expected, html, f"structural output changed; see {golden_path}")
+        actual = _render_density(Density.STRUCTURAL)
+        assert_text_matches_golden(actual, GOLDEN_DIR / "structural.html")
 
     def test_plain_output_matches_golden(self) -> None:
-        text = _render_density(Density.PLAIN)
-        golden_path = GOLDEN_DIR / "plain.txt"
-        if os.environ.get("UPDATE_GOLDEN"):
-            _write_golden(golden_path, text)
-        expected = _read_golden(golden_path)
-        self.assertEqual(expected, text, f"plain output changed; see {golden_path}")
+        actual = _render_density(Density.PLAIN)
+        assert_text_matches_golden(actual, GOLDEN_DIR / "plain.txt")
 
     def test_debug_artifacts_match_golden(self) -> None:
-        with TemporaryDirectory() as temp_dir:
-            temp = Path(temp_dir)
-            docx_path = temp / "rich.docx"
-            output_dir = temp / "out"
-            write_rich_docx(docx_path)
-            DocxParser().parse(docx_path, ParseOptions(debug=True, output_dir=output_dir))
-            debug_dir = output_dir / ".debug"
-
-            for json_file in sorted(debug_dir.glob("*.json")):
-                name = json_file.name
-                if name in _EXCLUDE_DEBUG:
-                    continue
-                actual_text = json_file.read_text(encoding="utf-8")
-                # Normalize JSON for stable comparison
-                actual = json.loads(actual_text)
-                actual_normalized = json.dumps(actual, ensure_ascii=False, sort_keys=True)
-
-                golden_path = GOLDEN_DIR / name
-                if os.environ.get("UPDATE_GOLDEN"):
-                    _write_golden(golden_path, actual_normalized)
-
-                expected = _read_golden(golden_path)
-                self.assertEqual(
-                    expected,
-                    actual_normalized,
-                    f"debug artifact {name} changed; see {golden_path}",
-                )
-
-
-def _render_density(density: Density) -> str:
-    with TemporaryDirectory() as temp_dir:
-        temp = Path(temp_dir)
-        docx_path = temp / "rich.docx"
+        docx_path = source_path("docx", "golden-debug", "rich.docx")
+        output_dir = output_path("docx", "golden-debug", "parsed.html").parent
         write_rich_docx(docx_path)
-        return parse_docx(docx_path, density=density)
+        DocxParser().parse(docx_path, ParseOptions(debug=True, output_dir=output_dir))
+        debug_dir = output_dir / ".debug"
+
+        for json_file in sorted(debug_dir.glob("*.json")):
+            assert_json_matches_golden(json_file, GOLDEN_DIR / json_file.name, exclude=_EXCLUDE_DEBUG)
 
 
-def _read_golden(path: Path) -> str:
-    if not path.exists():
-        return ""
-    return path.read_text(encoding="utf-8")
-
-
-def _write_golden(path: Path, content: str) -> None:
-    path.write_text(content, encoding="utf-8")
+def _render_density(density: Density) -> Path:
+    docx_path = source_path("docx", "golden-output", "rich.docx")
+    output_name = {
+        Density.SEMANTIC: "parsed.html",
+        Density.STRUCTURAL: "structural.html",
+        Density.PLAIN: "plain.txt",
+    }[density]
+    actual = output_path("docx", "golden-output", output_name)
+    write_rich_docx(docx_path)
+    write_text_result(parse_docx(docx_path, density=density), actual)
+    return actual
 
 
 if __name__ == "__main__":

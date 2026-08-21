@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import os
 import re
 from collections.abc import Iterator
 from html import escape
 from pathlib import Path
-from tempfile import NamedTemporaryFile
 
 from .models import Cell, DefinedName, DrawingChart, ParsedWorkbook, SheetInfo
 from .parser import _parse_workbook
@@ -70,36 +68,6 @@ def _iter_rendered_workbook(wb: ParsedWorkbook, density: str, start_row: int) ->
         yield from _render_sheet(sheet, density, wb, start_row=start_row, emit_globals=sheet_index == 0)
         if sheet.get("kind") != "chartsheet" and start_row != 1:
             start_row = 1
-
-
-def write_document(
-    source: str | Path | bytes,
-    output_dir: str | Path,
-    *,
-    density: str = "structural",
-    start_row: int = 1,
-) -> Path:
-    """Parse *source* and write the rendered file to *output_dir* (atomic write)."""
-    _validate_density(density)
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / "parsed.html"
-    temp_path: Path | None = None
-    try:
-        with NamedTemporaryFile(
-            "w", encoding="utf-8", dir=output_dir, prefix=".parsed.html.", suffix=".tmp", delete=False
-        ) as stream:
-            temp_path = Path(stream.name)
-            for chunk in _iter_rendered_workbook(_parse_workbook(source), density, start_row):
-                stream.write(chunk)
-            stream.flush()
-            os.fsync(stream.fileno())
-        temp_path.replace(output_path)
-    except Exception:
-        if temp_path is not None and temp_path.exists():
-            temp_path.unlink()
-        raise
-    return output_path
 
 
 def render_range(

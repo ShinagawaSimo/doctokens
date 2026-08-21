@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from _pptx_fixtures import (
     clr_map_xml,
@@ -33,7 +34,7 @@ _LAYOUT_MASTER_REL = (
 )
 
 
-def _deck(shapes_xml: str, *, layout_shapes: str = "", master_shapes: str = "") -> bytes:
+def _deck(shapes_xml: str, *, layout_shapes: str = "", master_shapes: str = "") -> Path:
     entries: dict[str, str | bytes] = {
         "[Content_Types].xml": content_types_xml(
             1,

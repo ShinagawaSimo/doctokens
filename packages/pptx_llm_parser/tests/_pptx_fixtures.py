@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import zipfile
 from io import BytesIO
+from pathlib import Path
+
+from test_support.file_contract import materialize_bytes
 
 P_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
 A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -14,13 +17,13 @@ P14_NS = "http://schemas.microsoft.com/office/powerpoint/2010/main"
 PNG_BYTES = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
 
-def make_pptx(entries: dict[str, str | bytes]) -> bytes:
-    """Pack a dict of zip member name → content into an in-memory PPTX."""
+def make_pptx(entries: dict[str, str | bytes]) -> Path:
+    """Pack a dict of ZIP members into a real PPTX input file."""
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         for name, content in entries.items():
             archive.writestr(name, content)
-    return buffer.getvalue()
+    return materialize_bytes(buffer.getvalue(), suffix=".pptx", package="pptx", name="generated")
 
 
 _PRESENTATION_OVERRIDE = (
@@ -423,7 +426,7 @@ def table_shape_xml(rows: list[list[str]], *, name: str = "Table 3", shape_id: i
 </p:graphicFrame>"""
 
 
-def rich_deck_pptx(*, with_geometry: bool = False) -> bytes:
+def rich_deck_pptx(*, with_geometry: bool = False) -> Path:
     """Full-feature two-slide deck: shapes of every type, notes, comments.
 
     Slide 2 is hidden and carries a bold/red run. with_geometry gives the

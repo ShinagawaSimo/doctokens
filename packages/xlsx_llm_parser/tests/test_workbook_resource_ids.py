@@ -3,8 +3,11 @@
 import io
 import unittest
 import zipfile
+from pathlib import Path
 
 from xlsx_llm_parser import parse_xlsx
+
+from test_support.file_contract import materialize_bytes
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -15,12 +18,12 @@ NS_XDR = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
 NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
 
-def _make_xlsx(entries: dict[str, str | bytes]) -> bytes:
+def _make_xlsx(entries: dict[str, str | bytes]) -> Path:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return buf.getvalue()
+    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="resource-ids")
 
 
 def _content_types() -> str:

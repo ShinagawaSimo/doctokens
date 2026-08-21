@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from _pptx_fixtures import (
     PNG_BYTES,
@@ -18,7 +19,7 @@ from _pptx_fixtures import (
 from pptx_llm_parser import get_resource
 
 
-def _numeric_table_deck() -> bytes:
+def _numeric_table_deck() -> Path:
     entries: dict[str, str | bytes] = {
         "[Content_Types].xml": content_types_xml(1),
         "_rels/.rels": root_rels_xml(),

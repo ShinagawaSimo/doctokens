@@ -6,7 +6,7 @@ import re
 from xml.etree import ElementTree as ET
 
 from ..core.constants import attr, first_child, is_on
-from ..core.models import RunFormat
+from ..core.models import ParagraphBorder, ParagraphBorders, RunFormat
 
 VISIBLE_FORMAT_KEYS = (
     "bold",
@@ -15,6 +15,7 @@ VISIBLE_FORMAT_KEYS = (
     "strike",
     "superscript",
     "subscript",
+    "smallCaps",
     "color",
     "highlight",
     "bg",
@@ -32,10 +33,57 @@ def parse_run_format(run_properties: ET.Element | None) -> RunFormat:
     _read_underline(run_properties, fmt)
     _read_strike(run_properties, fmt)
     _read_vert_align(run_properties, fmt)
+    _read_bool_format(run_properties, "smallCaps", "smallCaps", fmt)
     _read_color(run_properties, fmt)
     _read_highlight(run_properties, fmt)
     _read_background(run_properties, fmt)
     return fmt
+
+
+def parse_paragraph_alignment(paragraph_properties: ET.Element | None) -> str | None:
+    """Read an explicit Word paragraph alignment value."""
+    if paragraph_properties is None:
+        return None
+    node = first_child(paragraph_properties, "w", "jc")
+    if node is None:
+        return None
+    value = attr(node, "w", "val")
+    return value.lower() if value else None
+
+
+def parse_paragraph_borders(paragraph_properties: ET.Element | None) -> ParagraphBorders:
+    """Read visible paragraph border sides and their colors."""
+    if paragraph_properties is None:
+        return {}
+    border_properties = first_child(paragraph_properties, "w", "pBdr")
+    if border_properties is None:
+        return {}
+    borders: ParagraphBorders = {}
+    for side in ("top", "left", "bottom", "right", "between", "bar"):
+        node = first_child(border_properties, "w", side)
+        if node is None:
+            continue
+        style = (attr(node, "w", "val") or "").lower()
+        if style in {"", "nil", "none"}:
+            continue
+        border: ParagraphBorder = {"style": style}
+        color = normalize_hex_color(attr(node, "w", "color"))
+        if color:
+            border["color"] = color
+        size = attr(node, "w", "sz")
+        if size:
+            border["size"] = size
+        borders[side] = border
+    return borders
+
+
+def merge_paragraph_borders(*borders: ParagraphBorders | None) -> ParagraphBorders:
+    """Merge paragraph border sides in style-inheritance order."""
+    merged: ParagraphBorders = {}
+    for item in borders:
+        if item:
+            merged.update({side: dict(value) for side, value in item.items()})
+    return merged
 
 
 def merge_run_formats(*formats: RunFormat | None) -> RunFormat:

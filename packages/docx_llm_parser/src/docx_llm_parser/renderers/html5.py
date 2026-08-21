@@ -3,15 +3,10 @@
 from __future__ import annotations
 
 import dataclasses
-import os
 from collections.abc import Iterator
-from pathlib import Path
-from tempfile import NamedTemporaryFile
-from time import perf_counter
 
 from ..core.enums import Density
 from ..core.models import DocumentManifest, ParsedDocument
-from .common.metrics import record_render_metrics, write_metrics_debug
 from .document.pipeline import iter_plain, iter_semantic, iter_structural
 from .objects.resources import render_resource, table_groups
 
@@ -21,52 +16,7 @@ __all__ = [
     "render_resource",
     "to_html5",
     "window",
-    "write_outputs",
 ]
-
-
-def write_outputs(
-    parsed: ParsedDocument,
-    output_dir: Path,
-    density: Density | str = Density.SEMANTIC,
-) -> dict[str, str]:
-    """Write the final markup file and record render timing in metrics."""
-    resolved_density = Density.parse(density)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    density_files = {
-        Density.PLAIN: "plain.txt",
-        Density.STRUCTURAL: "structural.html",
-        Density.SEMANTIC: "parsed.html",
-    }
-    fname = density_files[resolved_density]
-    output_path = output_dir / fname
-    start = perf_counter()
-    output_chars = 0
-    temp_path: Path | None = None
-    try:
-        with NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            dir=output_dir,
-            prefix=f".{fname}.",
-            suffix=".tmp",
-            delete=False,
-        ) as stream:
-            temp_path = Path(stream.name)
-            for chunk in iter_html5(parsed, resolved_density):
-                output_chars += len(chunk)
-                stream.write(chunk)
-            stream.flush()
-            os.fsync(stream.fileno())
-        temp_path.replace(output_path)
-    except Exception:
-        if temp_path is not None and temp_path.exists():
-            temp_path.unlink()
-        raise
-    elapsed_ms = (perf_counter() - start) * 1000
-    record_render_metrics(parsed, output_path, output_chars, elapsed_ms)
-    write_metrics_debug(parsed)
-    return {"html": str(output_path)}
 
 
 def to_html5(parsed: ParsedDocument, density: Density | str = Density.SEMANTIC) -> str:

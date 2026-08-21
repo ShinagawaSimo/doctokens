@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from _pptx_fixtures import (
     content_types_xml,
@@ -30,7 +31,7 @@ _NOTES_OVERRIDE = (
 )
 
 
-def _notes_deck(*, with_notes: bool = True, with_part: bool = True) -> bytes:
+def _notes_deck(*, with_notes: bool = True, with_part: bool = True) -> Path:
     entries: dict[str, str | bytes] = {
         "[Content_Types].xml": content_types_xml(1, extra_defaults=_NOTES_OVERRIDE),
         "_rels/.rels": root_rels_xml(),

@@ -1,0 +1,20 @@
+density=plain
+一.	Item 1
+
+二.	Item 2
+
+三.	Item 3
+
+十.	Item 10
+
+十一.	Item 11
+
+二十.	Item 20
+
+一百〇一.	Item 101
+
+一千〇一.	Item 1001
+
+一万〇一.	Item 10001
+
+一万〇五十.	Item 10050

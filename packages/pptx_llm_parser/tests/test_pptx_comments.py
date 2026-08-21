@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from _pptx_fixtures import (
     comment_authors_xml,
@@ -40,7 +41,7 @@ def _comments_deck(
     with_comments: bool = True,
     with_authors: bool = True,
     comments_content: str | None = None,
-) -> bytes:
+) -> Path:
     entries: dict[str, str | bytes] = {
         "[Content_Types].xml": content_types_xml(1, extra_defaults=_OVERRIDES),
         "_rels/.rels": root_rels_xml(),

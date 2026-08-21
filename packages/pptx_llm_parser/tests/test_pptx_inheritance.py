@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from _pptx_fixtures import (
@@ -43,7 +44,7 @@ def _deck(
     layout_clr_map: str = "",
     master_clr_map: str = "",
     slide_xml: str | None = None,
-) -> bytes:
+) -> Path:
     entries: dict[str, str | bytes] = {
         "[Content_Types].xml": content_types_xml(
             1,

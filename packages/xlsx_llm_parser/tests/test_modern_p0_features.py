@@ -3,8 +3,11 @@
 import io
 import unittest
 import zipfile
+from pathlib import Path
 
 from xlsx_llm_parser import parse_xlsx
+
+from test_support.file_contract import materialize_bytes
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -14,12 +17,12 @@ NS_XLRD = "http://schemas.microsoft.com/office/spreadsheetml/2017/richdata"
 NS_FPB = "http://schemas.microsoft.com/office/spreadsheetml/2022/featurepropertybag"
 
 
-def _make_xlsx(entries: dict[str, str | bytes]) -> bytes:
+def _make_xlsx(entries: dict[str, str | bytes]) -> Path:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return buf.getvalue()
+    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="modern-features")
 
 
 def _base_entries() -> dict[str, str]:
@@ -79,13 +82,8 @@ def _base_entries() -> dict[str, str]:
             '<k n="_rvRel:LocalImageIdentifier" t="i"/><k n="Text" t="s"/>'
             "</s></rvStructures>"
         ),
-        "xl/richData/rdrichvalue.xml": (
-            f'<rvData xmlns="{NS_XLRD}"><rv s="0">'
-            '<v>0</v><v>Logo</v></rv></rvData>'
-        ),
-        "xl/richData/richValueRel.xml": (
-            f'<richValueRel xmlns="{NS_XLRD}" xmlns:r="{NS_O}"><rel r:id="rImage"/></richValueRel>'
-        ),
+        "xl/richData/rdrichvalue.xml": (f'<rvData xmlns="{NS_XLRD}"><rv s="0"><v>0</v><v>Logo</v></rv></rvData>'),
+        "xl/richData/richValueRel.xml": (f'<richValueRel xmlns="{NS_XLRD}" xmlns:r="{NS_O}"><rel r:id="rImage"/></richValueRel>'),
         "xl/richData/_rels/richValueRel.xml.rels": (
             f'<Relationships xmlns="{NS_RP}">'
             f'<Relationship Id="rImage" Type="{NS_O}/image" Target="../media/logo.png"/>'
@@ -135,7 +133,7 @@ class ModernP0FeatureTests(unittest.TestCase):
         self.assertIn("<pivotCache id=cache1 cacheId=7", semantic)
         self.assertIn('<slicer id=slicer1 type=slicer name="RegionFilter" source="Region" cacheId=7/>', semantic)
         self.assertIn('<timeline id=timeline1 name="DateFilter" source="Date" level=months/>', semantic)
-        self.assertIn('<pivotTable id=pivot1 name=SalesPivot ref=D1:E5', semantic)
+        self.assertIn("<pivotTable id=pivot1 name=SalesPivot ref=D1:E5", semantic)
         self.assertIn('rows="Region"', semantic)
         self.assertIn('values="Sum of Amount"', semantic)
 

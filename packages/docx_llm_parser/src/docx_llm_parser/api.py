@@ -14,7 +14,6 @@ from .renderers.html5 import iter_html5 as _iter_html5
 from .renderers.html5 import render_resource as _render_resource
 from .renderers.html5 import to_html5 as _to_html5
 from .renderers.html5 import window as _window
-from .renderers.html5 import write_outputs
 
 
 def parse_docx(
@@ -33,19 +32,6 @@ def parse_docx(
     if stream:
         return _iter_html5(parsed, density)
     return _to_html5(parsed, density)
-
-
-def write_document(
-    source: str | Path | bytes,
-    output_dir: str | Path,
-    *,
-    density: Density | str = Density.SEMANTIC,
-    options: ParseOptions | None = None,
-) -> Path:
-    """Parse *source* and write the rendered file to *output_dir*."""
-    parsed = DocxParser().parse(source, options)
-    paths = write_outputs(parsed, Path(output_dir), density)
-    return Path(paths["html"])
 
 
 def render_window(

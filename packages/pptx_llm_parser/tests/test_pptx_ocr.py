@@ -12,6 +12,8 @@ from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parser import PptxParser
 from test_pptx_images import _image_deck
 
+from test_support.file_contract import materialize_bytes
+
 
 class _TextProvider(OcrProvider):
     def __init__(self) -> None:
@@ -70,7 +72,7 @@ class PptxOcrTests(unittest.TestCase):
         from io import BytesIO
 
         source = _image_deck()
-        input_zip = zipfile.ZipFile(BytesIO(source))
+        input_zip = zipfile.ZipFile(source)
         output = BytesIO()
         with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
             for name in input_zip.namelist():
@@ -78,7 +80,8 @@ class PptxOcrTests(unittest.TestCase):
             archive.writestr("ppt/media/unreferenced.png", b"not sent to provider")
         input_zip.close()
         provider = _TextProvider()
-        PptxParser().parse(output.getvalue(), ParseOptions(ocr=provider))
+        fixture = materialize_bytes(output.getvalue(), suffix=".pptx", package="pptx", name="ocr-unreferenced-image")
+        PptxParser().parse(fixture, ParseOptions(ocr=provider))
         self.assertEqual(provider.calls, 1)
 
     def test_error_details_stay_internal(self) -> None:

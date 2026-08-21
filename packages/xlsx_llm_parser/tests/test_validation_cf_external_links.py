@@ -3,8 +3,11 @@
 import io
 import unittest
 import zipfile
+from pathlib import Path
 
 from xlsx_llm_parser import parse_xlsx
+
+from test_support.file_contract import materialize_bytes
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -12,12 +15,12 @@ NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 NS_RP = "http://schemas.openxmlformats.org/package/2006/relationships"
 
 
-def _make_xlsx(entries: dict[str, str]) -> bytes:
+def _make_xlsx(entries: dict[str, str]) -> Path:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return buf.getvalue()
+    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="validation")
 
 
 class DataValidationTests(unittest.TestCase):
@@ -99,9 +102,9 @@ class ConditionalFormatTests(unittest.TestCase):
                     'Target="worksheets/sheet1.xml"/>'
                     "</Relationships>"
                 ),
-                    "xl/worksheets/sheet1.xml": (
-                        f'<worksheet xmlns="{NS_S}">'
-                        '<conditionalFormatting sqref="F4:F20">'
+                "xl/worksheets/sheet1.xml": (
+                    f'<worksheet xmlns="{NS_S}">'
+                    '<conditionalFormatting sqref="F4:F20">'
                     '<cfRule type="cellIs" priority="1" dxfId="0" stopIfTrue="1" operator="lessThan">'
                     "<formula>F4&lt;0</formula>"
                     "</cfRule>"
@@ -143,8 +146,7 @@ class ConditionalFormatTests(unittest.TestCase):
         )
         self.assertIn('format=colorScale details="stops=type=min:color=FFFF0000;type=max:color=FF00FF00"', semantic)
         self.assertIn(
-            'format=dataBar details="minLength=10;showValue=0;color=FF638EC6;'
-            'thresholds=type=min;type=max"',
+            'format=dataBar details="minLength=10;showValue=0;color=FF638EC6;thresholds=type=min;type=max"',
             semantic,
         )
         self.assertIn(
@@ -152,10 +154,10 @@ class ConditionalFormatTests(unittest.TestCase):
             'thresholds=type=percent:val=0;type=percent:val=33;type=percent:val=67"',
             semantic,
         )
-        self.assertIn('<rule type=top10 priority=5 rank=3 percent/>', semantic)
+        self.assertIn("<rule type=top10 priority=5 rank=3 percent/>", semantic)
         self.assertIn("<conditionalFormatting ref=F4:F20>", structural)
         self.assertIn('<rule type=cellIs priority=1 formula="F4&lt;0" operator="lessThan" dxf=0', structural)
-        self.assertIn('<rule type=colorScale priority=2 format=colorScale/>', structural)
+        self.assertIn("<rule type=colorScale priority=2 format=colorScale/>", structural)
         self.assertNotIn('details="', structural)
 
 

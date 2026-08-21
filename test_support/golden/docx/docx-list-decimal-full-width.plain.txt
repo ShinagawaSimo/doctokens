@@ -1,0 +1,6 @@
+density=plain
+１.	Item 1
+
+２.	Item 2
+
+３.	Item 3

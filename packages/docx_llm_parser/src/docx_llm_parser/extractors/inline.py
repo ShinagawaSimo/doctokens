@@ -348,20 +348,23 @@ class InlineParser:
                     runs,
                 )
 
-        # After iterating over the children, resolve rPr (already found in the loop above).
+        # Paragraph-style character properties apply to every run, including runs
+        # without their own rPr. Direct run properties and character styles then
+        # override the paragraph-style values according to the OOXML hierarchy.
+        run_style_id = None
         if run_properties is not None:
             rstyle = first_child(run_properties, "w", "rStyle")
             run_style_id = attr(rstyle, "w", "val") if rstyle is not None else None
             if run_style_id is not None:
                 parsed_run["styleId"] = run_style_id
-            run_format = merge_run_formats(
-                self.styles.resolve_run_format(paragraph_style_id),
-                self.styles.resolve_run_format(run_style_id),
-                parse_run_format(run_properties),
-            )
-            visible_format = visible_run_format(run_format)
-            if visible_format:
-                parsed_run["format"] = visible_format
+        run_format = merge_run_formats(
+            self.styles.resolve_run_format(paragraph_style_id),
+            self.styles.resolve_run_format(run_style_id),
+            parse_run_format(run_properties),
+        )
+        visible_format = visible_run_format(run_format)
+        if visible_format:
+            parsed_run["format"] = visible_format
 
         parsed_run["text"] = "".join(text_parts)
         return parsed_run

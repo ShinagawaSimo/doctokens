@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from _pptx_fixtures import (
     content_types_xml,
@@ -16,7 +17,7 @@ from _pptx_fixtures import (
 from pptx_llm_parser import Density, parse_pptx
 
 
-def _two_slide_deck() -> bytes:
+def _two_slide_deck() -> Path:
     slide1 = slide_xml_shapes(
         text_shape_xml([[("t", "Title")]], name="Title 1")
         + text_shape_xml([[("t", "Point one")], [("t", "Point two")]], name="Body 2")

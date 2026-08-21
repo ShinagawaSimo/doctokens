@@ -31,6 +31,11 @@ from ..core.models import (
 from ..core.package import PackageReader
 from ..core.relationships import RelationshipIndex
 from ..ooxml.content_controls import parse_content_control
+from ..ooxml.formatting import (
+    merge_paragraph_borders,
+    parse_paragraph_alignment,
+    parse_paragraph_borders,
+)
 from ..ooxml.numbering import NumberingState
 from ..ooxml.styles import StyleMap
 from .inline import InlineParser
@@ -68,6 +73,7 @@ class DocumentBodyParser:
         self.options = options
         self.warnings = warnings
         self.numbering_state = numbering_state
+        self.asset_lookup = asset_lookup
         self.inline = InlineParser(
             styles=styles,
             options=options,
@@ -200,6 +206,11 @@ class DocumentBodyParser:
 
         style_id = self._paragraph_style_id(paragraph)
         paragraph_properties = first_child(paragraph, "w", "pPr")
+        alignment = parse_paragraph_alignment(paragraph_properties) or self.styles.resolve_paragraph_alignment(style_id)
+        borders = merge_paragraph_borders(
+            self.styles.resolve_paragraph_borders(style_id),
+            parse_paragraph_borders(paragraph_properties),
+        )
         section_break = first_child(paragraph_properties, "w", "sectPr")
         if section_break is not None:
             # A sectPr in pPr ends the section after this paragraph; Word
@@ -210,7 +221,20 @@ class DocumentBodyParser:
         numbering = self._paragraph_numbering(paragraph, style_id, part, block_id)
         if numbering is not None:
             # Auto-numbering is visible Word text; insert it into the text stream as a synthetic run.
-            runs.insert(0, {"text": numbering["text"]})
+            marker_format = dict(numbering["markerFormat"])
+            numbering_run = {"text": numbering["text"]}
+            if numbering["pictureBulletId"]:
+                relationship_id = self.numbering_state.numbering.picture_bullet_relationship(numbering["pictureBulletId"])
+                asset = self.asset_lookup.get(("word/numbering.xml", relationship_id or ""))
+                if asset is not None:
+                    numbering["markerImageId"] = asset["id"]
+                    numbering_run = {
+                        "text": " ",
+                        "objects": [{"type": "image", "assetId": asset["id"], "alt": "Picture bullet"}],
+                    }
+            if marker_format:
+                numbering_run["format"] = marker_format
+            runs.insert(0, numbering_run)
             raw_hints.append({"type": "numbering", **numbering})
 
         # Collect text and detect inline objects in a single pass to avoid double iteration on the hot path.
@@ -270,6 +294,10 @@ class DocumentBodyParser:
             }
         if numbering is not None:
             block["numbering"] = numbering
+        if alignment and alignment != "left":
+            block["alignment"] = alignment
+        if borders:
+            block["borders"] = borders
         if content_controls:
             block["contentControls"] = list(content_controls)
         if anchors:
@@ -528,7 +556,14 @@ class DocumentBodyParser:
         num_id = direct_num_id or (style_numbering[0] if style_numbering else None)
         if num_id is None:
             return None
-        level = direct_numbering_level if direct_numbering_level is not None else (style_numbering[1] if style_numbering else 0)
+        if direct_numbering_level is not None:
+            level = direct_numbering_level
+        elif style_numbering:
+            level = self.numbering_state.numbering.level_for_style(style_numbering[0], style_id or "")
+            if level is None:
+                level = style_numbering[1]
+        else:
+            level = 0
         return self.numbering_state.advance(num_id, level, part=part, block_id=block_id)
 
     def _num_pr_values(self, numbering_properties: ET.Element | None) -> tuple[str | None, int | None]:

@@ -9,7 +9,6 @@ from xlsx_llm_parser.api import (
     parse_xlsx,
     query_data,
     render_range,
-    write_document,
 )
 
 __all__ = [
@@ -19,5 +18,4 @@ __all__ = [
     "parse_xlsx",
     "query_data",
     "render_range",
-    "write_document",
 ]

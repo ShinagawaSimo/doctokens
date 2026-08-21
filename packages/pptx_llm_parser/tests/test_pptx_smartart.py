@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from _pptx_fixtures import (
     content_types_xml,
@@ -21,7 +22,7 @@ from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parser import PptxParser
 
 
-def _smartart_deck(*, with_data: bool = True) -> bytes:
+def _smartart_deck(*, with_data: bool = True) -> Path:
     rels = (
         '<Relationship Id="rId2" '
         'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData" '

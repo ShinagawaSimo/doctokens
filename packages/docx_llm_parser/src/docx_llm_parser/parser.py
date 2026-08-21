@@ -74,7 +74,7 @@ class DocxParser:
         with PackageReader(docx_source_path, opts) as package:
             zip_index, content_types, relationships = self._open_package(package, metrics)
             styles = self._resolve_styles(package, warnings, metrics)
-            numbering = self._resolve_numbering(package, warnings, metrics)
+            numbering = self._resolve_numbering(package, warnings, metrics, styles)
             assets, asset_lookup = self._index_resources(package, relationships, content_types, warnings, metrics)
             object_lookup, charts, smartarts = self._index_objects(package, relationships, warnings, metrics)
 
@@ -157,9 +157,10 @@ class DocxParser:
         package: PackageReader,
         warnings: list[ParseWarning],
         metrics: MetricsRecorder,
+        styles: StyleMap,
     ) -> NumberingMap:
         with metrics.stage("numbering"):
-            return NumberingParser(package, warnings).parse()
+            return NumberingParser(package, warnings, styles.numbering_style_num_ids()).parse()
 
     @staticmethod
     def _index_resources(

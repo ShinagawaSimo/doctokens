@@ -3,8 +3,11 @@
 import io
 import unittest
 import zipfile
+from pathlib import Path
 
 from xlsx_llm_parser import parse_xlsx
+
+from test_support.file_contract import materialize_bytes
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -12,12 +15,12 @@ NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 NS_RP = "http://schemas.openxmlformats.org/package/2006/relationships"
 
 
-def _make_xlsx(entries: dict[str, str]) -> bytes:
+def _make_xlsx(entries: dict[str, str]) -> Path:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return buf.getvalue()
+    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="comments")
 
 
 class CommentTests(unittest.TestCase):
@@ -123,9 +126,9 @@ class CommentTests(unittest.TestCase):
                 "xl/threadedComments/threadedComment1.xml": (
                     f'<tc:ThreadedComments xmlns:tc="{threaded_ns}">'
                     '<tc:threadedComment ref="A2" id="root" personId="p1" dT="2026-08-01T00:00:00Z">'
-                    '<tc:text>Review this</tc:text></tc:threadedComment>'
+                    "<tc:text>Review this</tc:text></tc:threadedComment>"
                     '<tc:threadedComment ref="A2" id="reply" parentId="root" personId="p2" done="1">'
-                    '<tc:text>Done</tc:text></tc:threadedComment></tc:ThreadedComments>'
+                    "<tc:text>Done</tc:text></tc:threadedComment></tc:ThreadedComments>"
                 ),
                 "xl/worksheets/sheet1.xml": (
                     f'<worksheet xmlns="{NS_S}"><sheetData><row r="1">'

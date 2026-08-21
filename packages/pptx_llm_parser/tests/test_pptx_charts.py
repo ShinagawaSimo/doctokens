@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from _pptx_fixtures import (
     chart_shape_xml,
@@ -20,7 +21,7 @@ from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parser import PptxParser
 
 
-def _chart_deck(*, with_part: bool = True) -> bytes:
+def _chart_deck(*, with_part: bool = True) -> Path:
     rel = (
         '<Relationship Id="rId2" '
         'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" '
@@ -43,7 +44,7 @@ def _chart_deck(*, with_part: bool = True) -> bytes:
     return make_pptx(entries)
 
 
-def _chart_ex_deck() -> bytes:
+def _chart_ex_deck() -> Path:
     """One Office 2016+ ChartEx waterfall graphic frame."""
     chart_ex_rel = "http://schemas.microsoft.com/office/2014/relationships/chartEx"
     chart_ex_uri = "http://schemas.microsoft.com/office/drawing/2014/chartex"
@@ -66,8 +67,7 @@ def _chart_ex_deck() -> bytes:
             "[Content_Types].xml": content_types_xml(
                 1,
                 extra_defaults=(
-                    '<Override PartName="/ppt/charts/chartEx1.xml" '
-                    'ContentType="application/vnd.ms-office.chartex+xml"/>'
+                    '<Override PartName="/ppt/charts/chartEx1.xml" ContentType="application/vnd.ms-office.chartex+xml"/>'
                 ),
             ),
             "_rels/.rels": root_rels_xml(),

@@ -130,12 +130,17 @@ class NumberingAndAssetTests(unittest.TestCase):
     def test_numbering_state_formats_common_numbering_systems(self) -> None:
         formats = [
             ("decimalZero", 7, "07"),
+            ("ordinal", 21, "21st"),
             ("upperLetter", 27, "AA"),
-            ("lowerLetter", 28, "ab"),
+            ("lowerLetter", 28, "bb"),
             ("upperRoman", 9, "IX"),
             ("lowerRoman", 4, "iv"),
             ("chineseCounting", 21, "二十一"),
+            ("chineseCountingThousand", 10050, "一万〇五十"),
+            ("cardinalText", 1, "One"),
+            ("ordinalText", 3, "Third"),
             ("bullet", 1, "•"),
+            ("ideographDigital", 3, "三"),
             ("unsupportedFormat", 3, "3"),
         ]
         levels = {

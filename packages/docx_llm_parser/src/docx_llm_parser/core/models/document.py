@@ -11,7 +11,7 @@ from ooxml_llm_core.models import ContentTypes, MetricsSnapshot, ParseWarning, R
 
 from ..enums import RevisionMode
 from .blocks import AncillaryItem, Block
-from .content import Chart, ImageAsset, RunFormat, SmartArt
+from .content import Chart, ImageAsset, ParagraphBorders, RunFormat, SmartArt
 
 
 class OcrResultRecord(TypedDict, total=False):
@@ -85,11 +85,15 @@ class StyleRecord:
     type: str = "unknown"
     name: str | None = None
     based_on: str | None = None
+    link: str | None = None
     next: str | None = None
+    alignment: str | None = None
+    borders: ParagraphBorders = field(default_factory=dict)
     outline_level: int | None = None
     numbering_num_id: str | None = None
     numbering_level: int | None = None
     run_format: RunFormat = field(default_factory=dict)
+    is_custom: bool = False
     is_default: bool = False
     resolved_heading_level: int | None = None
 

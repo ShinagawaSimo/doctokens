@@ -8,9 +8,15 @@ from types import MappingProxyType
 from xml.etree import ElementTree as ET
 
 from ..core.constants import attr, first_child, qualified_name
-from ..core.models import ParseWarning, RunFormat, StyleRecord, append_warning
+from ..core.models import ParagraphBorders, ParseWarning, RunFormat, StyleRecord, append_warning
 from ..core.package import PackageReader
-from .formatting import merge_run_formats, parse_run_format
+from .formatting import (
+    merge_paragraph_borders,
+    merge_run_formats,
+    parse_paragraph_alignment,
+    parse_paragraph_borders,
+    parse_run_format,
+)
 
 
 class StyleMap:
@@ -22,6 +28,8 @@ class StyleMap:
         self._heading_level_cache: dict[str, int | None] = {}
         self._numbering_cache: dict[str, tuple[str, int] | None] = {}
         self._run_format_cache: dict[str, RunFormat] = {}
+        self._alignment_cache: dict[str, str | None] = {}
+        self._border_cache: dict[str, ParagraphBorders] = {}
 
     def resolve_heading_level(self, style_id: str | None) -> int | None:
         """Resolve the heading level from a styleId; no paragraph-text heuristics."""
@@ -41,6 +49,21 @@ class StyleMap:
             self._numbering_cache[style_id] = self._resolve_numbering(style_id, visited=set())
         return self._numbering_cache[style_id]
 
+    def numbering_style_num_ids(self) -> Mapping[str, str]:
+        """Return ``w:type=numbering`` styles and their bound ``numId`` values.
+
+        ``w:numStyleLink`` in numbering.xml points at one of these styles.  Keeping this
+        lookup on the style map lets the numbering parser resolve the link without parsing
+        styles.xml a second time.
+        """
+        return MappingProxyType(
+            {
+                style_id: record.numbering_num_id
+                for style_id, record in self.records.items()
+                if record.type == "numbering" and record.numbering_num_id is not None
+            }
+        )
+
     def resolve_run_format(self, style_id: str | None) -> RunFormat:
         """Resolve the visible run format of a styleId after inheritance."""
         if not style_id:
@@ -49,6 +72,22 @@ class StyleMap:
             # Runs usually far outnumber styles, so caching notably reduces repeated computation in large documents.
             self._run_format_cache[style_id] = self._resolve_run_format(style_id, visited=set())
         return self._run_format_cache[style_id]
+
+    def resolve_paragraph_alignment(self, style_id: str | None) -> str | None:
+        """Resolve a paragraph alignment through basedOn inheritance."""
+        if not style_id:
+            return None
+        if style_id not in self._alignment_cache:
+            self._alignment_cache[style_id] = self._resolve_paragraph_alignment(style_id, visited=set())
+        return self._alignment_cache[style_id]
+
+    def resolve_paragraph_borders(self, style_id: str | None) -> ParagraphBorders:
+        """Resolve visible paragraph borders through basedOn inheritance."""
+        if not style_id:
+            return {}
+        if style_id not in self._border_cache:
+            self._border_cache[style_id] = self._resolve_paragraph_borders(style_id, visited=set())
+        return self._border_cache[style_id]
 
     def to_debug_list(self) -> list[dict[str, object]]:
         """Produce a style summary for debug output."""
@@ -77,8 +116,9 @@ class StyleMap:
             # No heading fallback when the style table has no explicit record.
             return None
 
-        if record.outline_level is not None:
-            # OOXML outlineLvl is 0-based; output for the LLM is 1-based.
+        if record.outline_level is not None and record.outline_level < 9:
+            # OOXML outlineLvl is 0-based; 9 explicitly means no outline level.
+            # The output representation intentionally preserves all real levels.
             return record.outline_level + 1
 
         if record.based_on:
@@ -132,7 +172,37 @@ class StyleMap:
         if record.based_on:
             visited.add(style_id)
             inherited = self._resolve_run_format(record.based_on, visited)
-        return merge_run_formats(inherited, record.run_format)
+        linked = self.records.get(record.link) if record.type == "paragraph" and record.link else None
+        # The linked character style is a separate inheritance graph.  Reusing the
+        # paragraph graph's visited set can report a false cycle when both chains
+        # share a base style.
+        linked_format = self._resolve_run_format(linked.style_id, visited=set()) if linked is not None else {}
+        return merge_run_formats(inherited, linked_format, record.run_format)
+
+    def _resolve_paragraph_alignment(self, style_id: str, visited: set[str]) -> str | None:
+        if style_id in visited:
+            return None
+        record = self.records.get(style_id)
+        if record is None:
+            return None
+        if record.alignment is not None:
+            return record.alignment
+        if record.based_on:
+            visited.add(style_id)
+            return self._resolve_paragraph_alignment(record.based_on, visited)
+        return None
+
+    def _resolve_paragraph_borders(self, style_id: str, visited: set[str]) -> ParagraphBorders:
+        if style_id in visited:
+            return {}
+        record = self.records.get(style_id)
+        inherited: ParagraphBorders = {}
+        if record is None:
+            return inherited
+        if record.based_on:
+            visited.add(style_id)
+            inherited = self._resolve_paragraph_borders(record.based_on, visited)
+        return merge_paragraph_borders(inherited, record.borders)
 
 
 class StylesParser:
@@ -171,6 +241,7 @@ class StylesParser:
             )
             name = first_child(style, "w", "name")
             based_on = first_child(style, "w", "basedOn")
+            linked_style = first_child(style, "w", "link")
             next_style = first_child(style, "w", "next")
             paragraph_properties = first_child(style, "w", "pPr")
             run_properties = first_child(style, "w", "rPr")
@@ -179,12 +250,20 @@ class StylesParser:
 
             record.name = attr(name, "w", "val") if name is not None else None
             record.based_on = attr(based_on, "w", "val") if based_on is not None else None
+            record.link = attr(linked_style, "w", "val") if linked_style is not None else None
             record.next = attr(next_style, "w", "val") if next_style is not None else None
+            record.is_custom = (attr(style, "w", "customStyle") or "").lower() in {"1", "true"}
+            record.alignment = parse_paragraph_alignment(paragraph_properties)
+            record.borders = parse_paragraph_borders(paragraph_properties)
             record.run_format = parse_run_format(run_properties)
             outline_val = attr(outline, "w", "val") if outline is not None else None
             if outline_val is not None:
                 try:
-                    record.outline_level = int(outline_val)
+                    outline_level = int(outline_val)
+                    if 0 <= outline_level <= 9:
+                        record.outline_level = outline_level
+                    else:
+                        raise ValueError
                 except ValueError:
                     # An invalid outlineLvl does not affect parsing of other styles.
                     self.warnings.append(

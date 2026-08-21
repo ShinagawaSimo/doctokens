@@ -5,12 +5,15 @@ from __future__ import annotations
 import io
 import unittest
 import zipfile
+from pathlib import Path
 
 from docx_llm_parser import Density, parse_docx, render_window
 from docx_llm_parser.core.enums import RevisionMode
 from docx_llm_parser.core.models import ParseOptions
 from docx_llm_parser.parser import DocxParser
 from docx_llm_parser.renderers.html5 import to_html5
+
+from test_support.file_contract import materialize_bytes
 
 NS_W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -27,8 +30,8 @@ _NUMBERING_XML = f"""<w:numbering xmlns:w="{NS_W}">
 </w:numbering>"""
 
 
-def _make_docx(body_xml: str, extra_entries: dict[str, str] | None = None) -> bytes:
-    """Build a minimal DOCX whose body contains *body_xml*."""
+def _make_docx(body_xml: str, extra_entries: dict[str, str] | None = None) -> Path:
+    """Build a minimal DOCX on disk whose body contains *body_xml*."""
     entries: dict[str, str] = {
         "[Content_Types].xml": (
             f'<Types xmlns="{NS_CT}">'
@@ -54,7 +57,7 @@ def _make_docx(body_xml: str, extra_entries: dict[str, str] | None = None) -> by
     with zipfile.ZipFile(buffer, "w") as archive:
         for name, data in entries.items():
             archive.writestr(name, data)
-    return buffer.getvalue()
+    return materialize_bytes(buffer.getvalue(), suffix=".docx", package="docx", name="body-structure")
 
 
 class BodyStructureTests(unittest.TestCase):
@@ -80,13 +83,13 @@ class BodyStructureTests(unittest.TestCase):
             '<w:dataBinding w:xpath="/root/status"/>'
             '<w:dropDownList><w:listItem w:displayText="Open" w:value="open"/>'
             '<w:listItem w:displayText="Closed" w:value="closed"/></w:dropDownList>'
-            '</w:sdtPr><w:sdtContent><w:p><w:r><w:t>Open</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+            "</w:sdtPr><w:sdtContent><w:p><w:r><w:t>Open</w:t></w:r></w:p></w:sdtContent></w:sdt>"
             '<w:p><w:sdt><w:sdtPr><w:date><w:dateFormat w:val="yyyy-MM-dd"/></w:date></w:sdtPr>'
-            '<w:sdtContent><w:r><w:t>2026-08-19</w:t></w:r></w:sdtContent></w:sdt>'
-            '<w:r><w:t> / </w:t></w:r>'
+            "<w:sdtContent><w:r><w:t>2026-08-19</w:t></w:r></w:sdtContent></w:sdt>"
+            "<w:r><w:t> / </w:t></w:r>"
             '<w:sdt><w:sdtPr><w:checkbox checked="1"/></w:sdtPr>'
-            '<w:sdtContent><w:r><w:t>Yes</w:t></w:r></w:sdtContent></w:sdt></w:p>'
-            '<w:sdt><w:sdtPr><w:comboBox/></w:sdtPr><w:sdtContent><w:p/></w:sdtContent></w:sdt>'
+            "<w:sdtContent><w:r><w:t>Yes</w:t></w:r></w:sdtContent></w:sdt></w:p>"
+            "<w:sdt><w:sdtPr><w:comboBox/></w:sdtPr><w:sdtContent><w:p/></w:sdtContent></w:sdt>"
         )
         parsed = DocxParser().parse(data, ParseOptions())
         self.assertFalse(any(w.code == "UNSUPPORTED_PARAGRAPH_CHILD" for w in parsed.warnings))
@@ -105,22 +108,22 @@ class BodyStructureTests(unittest.TestCase):
             "placeholder=StatusPlaceholder binding=/root/status choices=Open=open|Closed=closed>Open</control>",
             semantic,
         )
-        self.assertIn('<control type=date dateFormat=yyyy-MM-dd>2026-08-19</control>', semantic)
-        self.assertIn('<control type=checkbox checked>Yes</control>', semantic)
-        self.assertIn('<control type=comboBox></control>', semantic)
+        self.assertIn("<control type=date dateFormat=yyyy-MM-dd>2026-08-19</control>", semantic)
+        self.assertIn("<control type=checkbox checked>Yes</control>", semantic)
+        self.assertIn("<control type=comboBox></control>", semantic)
 
         structural = to_html5(parsed, Density.STRUCTURAL)
         self.assertIn(
             "<control type=dropDownList label=Status locked choices=Open=open|Closed=closed>Open</control>",
             structural,
         )
-        self.assertNotIn('binding=/root/status', structural)
+        self.assertNotIn("binding=/root/status", structural)
 
         plain = to_html5(parsed, Density.PLAIN)
         self.assertIn("[Control dropDownList Status choices=Open=open|Closed=closed locked: Open]", plain)
-        self.assertIn('[Control date format=yyyy-MM-dd: 2026-08-19]', plain)
-        self.assertIn('[Control checkbox checked: Yes]', plain)
-        self.assertIn('[Control comboBox: ]', plain)
+        self.assertIn("[Control date format=yyyy-MM-dd: 2026-08-19]", plain)
+        self.assertIn("[Control checkbox checked: Yes]", plain)
+        self.assertIn("[Control comboBox: ]", plain)
 
     def test_unknown_body_child_warns(self) -> None:
         """Content-bearing wrappers we do not support are surfaced as warnings."""
@@ -164,6 +167,27 @@ class BodyStructureTests(unittest.TestCase):
         parsed = DocxParser().parse(data, ParseOptions())
         texts = [block["text"] for block in parsed.blocks]
         self.assertEqual(texts, ["1. ", "2. Item"])
+
+    def test_full_level_override_honors_its_start_override_in_final_text(self) -> None:
+        """A ``lvlOverride`` can replace formatting and independently restart its level."""
+        numbering = f"""<w:numbering xmlns:w="{NS_W}">
+          <w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0">
+            <w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>
+          </w:lvl></w:abstractNum>
+          <w:num w:numId="1"><w:abstractNumId w:val="1"/><w:lvlOverride w:ilvl="0">
+            <w:startOverride w:val="5"/><w:lvl w:ilvl="0"><w:numFmt w:val="upperRoman"/>
+            <w:lvlText w:val="(%1)"/><w:suff w:val="space"/></w:lvl>
+          </w:lvlOverride></w:num>
+        </w:numbering>"""
+        data = _make_docx(
+            '<w:p><w:pPr><w:numPr><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>Item</w:t></w:r></w:p>',
+            extra_entries={"word/numbering.xml": numbering},
+        )
+
+        parsed = DocxParser().parse(data, ParseOptions())
+
+        self.assertEqual(parsed.blocks[0]["text"], "(V) Item")
+        self.assertEqual(parsed.blocks[0]["numbering"]["counter"], 5)
 
     def test_hyperlink_without_relationship_degrades(self) -> None:
         """A dangling hyperlink r:id must not abort the whole parse."""
@@ -250,7 +274,7 @@ class BodyStructureTests(unittest.TestCase):
 
         rendered = parse_docx(data, density=Density.SEMANTIC, options=ParseOptions(revision_mode=RevisionMode.REVIEW))
         self.assertIn("<p anchor=target><cite key=Smith2024>(Smith, 2024)</cite>", rendered)
-        self.assertIn('<ins author=Editor date=2026-08-01T00:00:00Z>Added</ins>', rendered)
+        self.assertIn("<ins author=Editor date=2026-08-01T00:00:00Z>Added</ins>", rendered)
         self.assertIn("<comment id=1", rendered)
         self.assertIn("parent=0 resolved", rendered)
 

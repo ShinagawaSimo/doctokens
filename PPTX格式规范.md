@@ -210,11 +210,10 @@ density=plain
 ## 公共 API
 
 ```python
-from pptx_llm_parser import parse_pptx, iter_slides, render_window, get_resource, write_document, Density
+from pptx_llm_parser import parse_pptx, iter_slides, render_window, get_resource, Density
 
 html = parse_pptx("deck.pptx")                                     # semantic（默认）
 html = parse_pptx("deck.pptx", density=Density.STRUCTURAL)
-path = write_document("deck.pptx", "out", density=Density.PLAIN)
 ```
 
 | 函数 | 语义 |
@@ -223,7 +222,6 @@ path = write_document("deck.pptx", "out", density=Density.PLAIN)
 | `iter_slides(source, *, density, start_slide, options)` | 每张幻灯片一个分块；首个分块含密度标记行；批注为尾部独立分块 |
 | `render_window(source, *, slide, span, density, options)` | 渲染指定幻灯片窗口；`slide` 从 1 开始，`slide=-1` 表示最后一页，`span` 越界时截断 |
 | `get_resource(source, resource_type, resource_id, *, rows, columns, aggregate, aggregate_column, options)` | 按需提取单个资源（见下表） |
-| `write_document(source, output_dir, *, density, options)` | 渲染并写入 `parsed.html` / `structural.html` / `plain.txt` |
 
 ## 资源提取 API
 

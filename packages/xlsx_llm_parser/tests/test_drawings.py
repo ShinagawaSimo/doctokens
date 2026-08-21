@@ -3,12 +3,15 @@
 import io
 import unittest
 import zipfile
+from pathlib import Path
 
 from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.models import RelationshipRecord
 from ooxml_llm_core.package import PackageReader
 from xlsx_llm_parser import parse_xlsx
 from xlsx_llm_parser._sheet_post import parse_drawings
+
+from test_support.file_contract import materialize_bytes
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -19,12 +22,12 @@ NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 NS_C = "http://schemas.openxmlformats.org/drawingml/2006/chart"
 
 
-def _make_xlsx(entries: dict[str, str]) -> bytes:
+def _make_xlsx(entries: dict[str, str]) -> Path:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return buf.getvalue()
+    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="drawings")
 
 
 class ImageTests(unittest.TestCase):
@@ -183,7 +186,7 @@ class ChartTests(unittest.TestCase):
                 ),
                 "xl/drawings/drawing1.xml": (
                     f'<wsDr xmlns="{NS_XDR}" xmlns:a="{NS_A}" xmlns:cx="{chart_ex_uri}" xmlns:r="{NS_O}">'
-                    '<absoluteAnchor><graphicFrame><a:graphic><a:graphicData '
+                    "<absoluteAnchor><graphicFrame><a:graphic><a:graphicData "
                     f'uri="{chart_ex_uri}"><cx:chart r:id="rChartEx"/></a:graphicData>'
                     "</a:graphic></graphicFrame></absoluteAnchor></wsDr>"
                 ),

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import os
 import unittest
-from pathlib import Path
 
 from _pptx_fixtures import rich_deck_pptx
 from pptx_llm_parser import Density, parse_pptx
 
-GOLDEN_DIR = Path(__file__).parent / "golden"
+from test_support.file_contract import assert_text_matches_golden, golden_root, output_path, write_text_result
+
+GOLDEN_DIR = golden_root("pptx")
 
 _DENSITY_FILES = {
     Density.SEMANTIC: "parsed.html",
@@ -18,18 +18,12 @@ _DENSITY_FILES = {
 }
 
 
-def _write_golden(name: str, content: str) -> None:
-    GOLDEN_DIR.mkdir(exist_ok=True)
-    (GOLDEN_DIR / name).write_text(content, encoding="utf-8", newline="\n")
-
-
 class GoldenOutputTests(unittest.TestCase):
     def _check(self, density: Density, name: str) -> None:
-        text = parse_pptx(rich_deck_pptx(with_geometry=True), density=density)
-        if os.environ.get("UPDATE_GOLDEN"):
-            _write_golden(name, text)
+        actual = output_path("pptx", "golden-output", name)
+        write_text_result(parse_pptx(rich_deck_pptx(with_geometry=True), density=density), actual)
         golden_path = GOLDEN_DIR / name
-        self.assertEqual(text, golden_path.read_text(encoding="utf-8"))
+        assert_text_matches_golden(actual, golden_path)
 
     def test_semantic_golden(self) -> None:
         self._check(Density.SEMANTIC, "parsed.html")

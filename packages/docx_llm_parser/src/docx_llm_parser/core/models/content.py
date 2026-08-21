@@ -7,6 +7,15 @@ from typing import Literal, TypedDict
 RunFormat = dict[str, bool | str | None]
 
 
+class ParagraphBorder(TypedDict, total=False):
+    style: str
+    color: str
+    size: str
+
+
+ParagraphBorders = dict[str, ParagraphBorder]
+
+
 class LinkInfo(TypedDict, total=False):
     href: str
     anchor: str
@@ -210,6 +219,8 @@ __all__ = [
     "InlineObject",
     "LinkInfo",
     "ObjectLookup",
+    "ParagraphBorder",
+    "ParagraphBorders",
     "RawHint",
     "Run",
     "RunFormat",

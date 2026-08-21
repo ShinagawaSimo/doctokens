@@ -99,6 +99,8 @@ def apply_inline_format(text: str, fmt: RunFormat, density: str) -> str:
         text = f"<sup>{text}</sup>"
     if fmt.get("subscript"):
         text = f"<sub>{text}</sub>"
+    if fmt.get("smallCaps"):
+        text = f"<smallcaps>{text}</smallcaps>"
     return text
 
 

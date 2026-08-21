@@ -3,8 +3,11 @@
 import io
 import unittest
 import zipfile
+from pathlib import Path
 
 from xlsx_llm_parser import find_cells, parse_xlsx
+
+from test_support.file_contract import materialize_bytes
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -12,12 +15,12 @@ NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 NS_RP = "http://schemas.openxmlformats.org/package/2006/relationships"
 
 
-def _make_xlsx(entries: dict[str, str]) -> bytes:
+def _make_xlsx(entries: dict[str, str]) -> Path:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return buf.getvalue()
+    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="defined-names")
 
 
 class DefinedNameTests(unittest.TestCase):
@@ -184,7 +187,7 @@ class FilterTests(unittest.TestCase):
                     '<filterColumn colId="5"><iconFilter iconSet="3TrafficLights1" iconId="1"/></filterColumn>'
                     '<filterColumn colId="6"><filters>'
                     '<dateGroupItem year="2026" month="8" dateTimeGrouping="month"/>'
-                    '</filters></filterColumn>'
+                    "</filters></filterColumn>"
                     "</autoFilter>"
                     "<sheetData>"
                     '<row r="1"><c r="A1" t="inlineStr"><is><t>Region</t></is></c></row>'
@@ -209,13 +212,13 @@ class FilterTests(unittest.TestCase):
             semantic,
         )
         self.assertIn('<condition col=3 type=top10 rank="10" top percent/>', semantic)
-        self.assertIn('<condition col=4 type=color cellColor=0 dxfId=2/>', semantic)
+        self.assertIn("<condition col=4 type=color cellColor=0 dxfId=2/>", semantic)
         self.assertIn(
             '<condition col=5 type=icon iconSet="3TrafficLights1" iconId=1/>',
             semantic,
         )
         self.assertIn('type=dateGroup groups="dateTimeGrouping=month:month=8:year=2026"', semantic)
-        self.assertNotIn('<condition col=6 type=values/>', semantic)
+        self.assertNotIn("<condition col=6 type=values/>", semantic)
 
 
 if __name__ == "__main__":

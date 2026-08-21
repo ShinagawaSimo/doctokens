@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-from .content import ContentControl, RawHint, Run
+from .content import ContentControl, ParagraphBorders, RawHint, Run
 
 
 class NumberingLabel(TypedDict):
@@ -16,6 +16,10 @@ class NumberingLabel(TypedDict):
     template: str | None
     suffix: str
     counter: int
+    markerFormat: dict[str, bool | str | None]
+    pictureBulletId: str | None
+    markerImageId: str | None
+    legal: bool
 
 
 class ParagraphBlockRequired(TypedDict):
@@ -29,6 +33,8 @@ class ParagraphBlockRequired(TypedDict):
 
 
 class ParagraphBlock(ParagraphBlockRequired, total=False):
+    alignment: str
+    borders: ParagraphBorders
     runs: list[Run]
     rawHints: list[RawHint]
     numbering: NumberingLabel
@@ -50,6 +56,8 @@ class HeadingBlockRequired(TypedDict):
 
 
 class HeadingBlock(HeadingBlockRequired, total=False):
+    alignment: str
+    borders: ParagraphBorders
     runs: list[Run]
     rawHints: list[RawHint]
     numbering: NumberingLabel

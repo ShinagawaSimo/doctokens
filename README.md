@@ -138,8 +138,7 @@ pip install -e ".[paddle]"      # PaddleOCR + PaddlePaddle
 **DOCX：**
 
 ```python
-from pathlib import Path
-from docx_llm_parser import parse_docx, write_document, render_window, get_resource, Density
+from docx_llm_parser import parse_docx, render_window, get_resource, Density
 
 # 解析渲染
 html = parse_docx("example.docx")
@@ -148,9 +147,6 @@ html = parse_docx("example.docx", density=Density.STRUCTURAL)
 # 流式输出（大文档或网络传输场景）
 for chunk in parse_docx("large.docx", stream=True):
     send(chunk)
-
-# 写出文件
-path = write_document("example.docx", Path("out/example"))
 
 # 按页读取
 content = render_window("example.docx", page=3)
@@ -164,8 +160,7 @@ table = get_resource("example.docx", "table", "t2")
 **XLSX：**
 
 ```python
-from pathlib import Path
-from xlsx_llm_parser import parse_xlsx, write_document, render_range, find_cells, query_data, get_resource
+from xlsx_llm_parser import parse_xlsx, render_range, find_cells, query_data, get_resource
 
 # 解析渲染
 text = parse_xlsx("example.xlsx")
@@ -174,9 +169,6 @@ text = parse_xlsx("example.xlsx", density="plain")
 # 流式输出
 for chunk in parse_xlsx("large.xlsx", stream=True):
     send(chunk)
-
-# 写出文件
-path = write_document("example.xlsx", Path("out/example"))
 
 # 按范围渲染
 html = render_range("example.xlsx", sheet="Sheet1", range_spec="A1:D20")
@@ -214,7 +206,6 @@ chart = get_resource("example.xlsx", "chart", "chart1")
 | 函数 | 说明 |
 |------|------|
 | `parse_docx(source, *, density, stream?, options?)` | 解析 DOCX 并渲染为字符串（stream=True 返回迭代器） |
-| `write_document(source, output_dir, *, density, options?)` | 原子写出目标密度文件 |
 | `render_window(source, *, page, span?, density?, options?)` | 返回指定页码范围的内容片段 |
 | `get_resource(source, resource_type, resource_id)` | 获取单个资源详情（图片/图表/表格等） |
 
@@ -223,7 +214,6 @@ chart = get_resource("example.xlsx", "chart", "chart1")
 | 函数 | 说明 |
 |------|------|
 | `parse_xlsx(source, *, density, start_row?, stream?)` | 解析 XLSX 并渲染为字符串（stream=True 返回迭代器） |
-| `write_document(source, output_dir, *, density, start_row?)` | 原子写出目标密度文件 |
 | `render_range(source, *, sheet, range_spec, density?)` | A1 风格区域渲染 |
 | `find_cells(source, query, *, sheets?, kind?, limit?)` | 搜索单元格值/公式/批注/超链接/定义名称 |
 | `query_data(source, *, table_id?, sheet?, range_spec?, select?, where?, group_by?, aggregates?, order_by?, limit?)` | SQL-like 结构化查询 |

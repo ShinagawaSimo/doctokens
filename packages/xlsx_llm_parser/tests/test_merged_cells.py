@@ -3,24 +3,27 @@
 import io
 import unittest
 import zipfile
+from pathlib import Path
 
 from xlsx_llm_parser import parse_xlsx
+
+from test_support.file_contract import materialize_bytes
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 
 
-def _make_xlsx(entries: dict[str, str]) -> bytes:
+def _make_xlsx(entries: dict[str, str]) -> Path:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return buf.getvalue()
+    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="merged-cells")
 
 
 class MergeCellTests(unittest.TestCase):
-    def _make_merged(self, merge_cells: str, sheet_rows: list[str]) -> bytes:
+    def _make_merged(self, merge_cells: str, sheet_rows: list[str]) -> Path:
         return _make_xlsx(
             {
                 "[Content_Types].xml": (

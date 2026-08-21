@@ -4,21 +4,22 @@ import io
 import unittest
 import zipfile
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
-from xlsx_llm_parser import iter_workbook, parse_xlsx, render_range, write_document
+from xlsx_llm_parser import iter_workbook, parse_xlsx, render_range
+
+from test_support.file_contract import materialize_bytes, output_path, write_text_result
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 
 
-def _make_xlsx(entries: dict[str, str]) -> bytes:
+def _make_xlsx(entries: dict[str, str]) -> Path:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return buf.getvalue()
+    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="streaming")
 
 
 class StreamingTests(unittest.TestCase):
@@ -153,10 +154,9 @@ class StreamingTests(unittest.TestCase):
             parse_xlsx(data, density="semntic")
 
 
-class WriteDocumentTests(unittest.TestCase):
-    def test_write_document_atomic_output(self) -> None:
-        """write_document produces parsed.html matching the full render and
-        leaves no temporary files behind."""
+class TestOutputMaterializationTests(unittest.TestCase):
+    def test_test_adapter_writes_full_render_atomically(self) -> None:
+        """The test adapter writes parsed output without a production file API."""
         data = _make_xlsx(
             {
                 "[Content_Types].xml": (
@@ -195,18 +195,17 @@ class WriteDocumentTests(unittest.TestCase):
                 ),
             },
         )
-        with TemporaryDirectory() as temp_dir:
-            output_dir = Path(temp_dir)
-            path = write_document(data, output_dir)
-            self.assertEqual(path.name, "parsed.html")
-            self.assertEqual(path.read_text(encoding="utf-8"), parse_xlsx(data))
-            self.assertEqual(list(output_dir.glob(".*.tmp")), [])
+        output_dir = output_path("xlsx", "write-document", "parsed.html").parent
+        path = write_text_result(parse_xlsx(data), output_dir / "parsed.html")
+        self.assertEqual(path.name, "parsed.html")
+        self.assertEqual(path.read_text(encoding="utf-8"), parse_xlsx(data))
+        self.assertEqual(list(output_dir.glob(".*.tmp")), [])
 
 
 class TruncationTests(unittest.TestCase):
     """Large sheets produce head+tail with truncated attribute."""
 
-    def _make_sheet(self, num_rows: int) -> bytes:
+    def _make_sheet(self, num_rows: int) -> Path:
         rows_xml = [f'<row r="{r}"><c r="A{r}" t="inlineStr"><is><t>Row{r}</t></is></c></row>' for r in range(1, num_rows + 1)]
         return _make_xlsx(
             {

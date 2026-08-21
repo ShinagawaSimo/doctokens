@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import unittest
+from pathlib import Path
 
 from _pptx_fixtures import (
     PNG_BYTES,
@@ -21,7 +22,7 @@ from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parser import PptxParser
 
 
-def _image_deck(*, alt: str | None = None, external: bool = False) -> bytes:
+def _image_deck(*, alt: str | None = None, external: bool = False) -> Path:
     if external:
         rel = (
             '<Relationship Id="rId2" '

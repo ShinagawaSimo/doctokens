@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from _pptx_fixtures import (
     content_types_xml,
@@ -19,7 +20,7 @@ from pptx_llm_parser.parser import PptxParser
 
 
 class SlideTextParsingTests(unittest.TestCase):
-    def _deck(self, shapes_xml: str) -> bytes:
+    def _deck(self, shapes_xml: str) -> Path:
         entries = {
             "[Content_Types].xml": content_types_xml(1),
             "_rels/.rels": root_rels_xml(),
@@ -69,18 +70,18 @@ class SlideTextParsingTests(unittest.TestCase):
         def shape_xml(shape_id: int, description: str) -> str:
             return (
                 f'<p:sp><p:nvSpPr><p:cNvPr id="{shape_id}" name="Node {shape_id}" descr="{description}"/>'
-                '<p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>'
+                "<p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>"
                 '<a:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></a:xfrm>'
                 '<a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom></p:spPr></p:sp>'
             )
 
         connector = (
             '<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="4" name="Flow" title="Flow connection"/>'
-            '<p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr><p:spPr>'
+            "<p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr><p:spPr>"
             '<a:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></a:xfrm>'
             '<a:prstGeom prst="line"><a:avLst/></a:prstGeom>'
             '<a:stCxn id="2" idx="0"/><a:endCxn id="3" idx="0"/>'
-            '</p:spPr></p:cxnSp>'
+            "</p:spPr></p:cxnSp>"
         )
         shapes = self._parse(shape_xml(2, "Start") + shape_xml(3, "End") + connector)
         self.assertEqual([shape["kind"] for shape in shapes], ["roundRect", "roundRect", "connector"])

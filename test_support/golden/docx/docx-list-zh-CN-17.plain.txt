@@ -1,0 +1,26 @@
+density=plain
+// w:numFmt = ideographTraditional
+
+// lang=zh-CN
+
+// UI name: 甲, 乙, 丙 …
+
+甲.	Item 1
+
+乙.	Item 2
+
+丙.	Item 3
+
+丁.	Item 4
+
+戊.	Item 5
+
+己.	Item 6
+
+庚.	Item 7
+
+辛.	Item 8
+
+壬.	Item 9
+
+癸.	Item 10

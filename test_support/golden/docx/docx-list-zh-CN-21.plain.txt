@@ -1,0 +1,34 @@
+density=plain
+// w:numFmt = ordinalText
+
+// lang=zh-CN
+
+// UI name: First, Second, Third …
+
+First.	Item 1
+
+Second.	Item 2
+
+Third.	Item 3
+
+Fourth.	Item 4
+
+Fifth.	Item 5
+
+Sixth.	Item 6
+
+Seventh.	Item 7
+
+Eighth.	Item 8
+
+Ninth.	Item 9
+
+Tenth.	Item 10
+
+One Hundred First.	Item 101
+
+One Thousand First.	Item 1001
+
+Ten Thousand First.	Item 10001
+
+Ten Thousand Fiftieth.	Item 10050

@@ -1,0 +1,34 @@
+density=plain
+// w:numFmt = cardinalText
+
+// lang=zh-CN
+
+// UI name: One, Two, Three …
+
+One.	Item 1
+
+Two.	Item 2
+
+Three.	Item 3
+
+Four.	Item 4
+
+Five.	Item 5
+
+Six.	Item 6
+
+Seven.	Item 7
+
+Eight.	Item 8
+
+Nine.	Item 9
+
+Ten.	Item 10
+
+One Hundred One.	Item 101
+
+One Thousand One.	Item 1001
+
+Ten Thousand One.	Item 10001
+
+Ten Thousand Fifty.	Item 10050

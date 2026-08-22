@@ -1,0 +1,34 @@
+density=plain
+// w:numFmt = aiueoFullWidth
+
+// lang=zh-CN
+
+// UI name: ア, イ, ウ …
+
+ア.	Item 1
+
+イ.	Item 2
+
+ウ.	Item 3
+
+エ.	Item 4
+
+オ.	Item 5
+
+カ.	Item 6
+
+キ.	Item 7
+
+ク.	Item 8
+
+ケ.	Item 9
+
+コ.	Item 10
+
+ケ.	Item 101
+
+モ.	Item 1001
+
+テ.	Item 10001
+
+ニ.	Item 10050

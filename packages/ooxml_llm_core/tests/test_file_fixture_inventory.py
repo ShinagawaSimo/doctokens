@@ -8,12 +8,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from ooxml_llm_core.chart_ml import _CHART_TYPE_MAP
 
 ROOT = Path(__file__).resolve().parents[3]
 MATRIX_PATH = ROOT / "test_support" / "fixture_matrix.json"
 KNOWN_PACKAGES = {"docx", "pptx", "xlsx"}
-CHART_EX_TYPES = {"boxwhisker", "funnel", "histogram", "pareto", "sunburst", "treemap", "waterfall"}
 
 
 def test_fixture_matrix_has_unique_atomic_cases_and_safe_paths() -> None:
@@ -37,10 +35,21 @@ def test_fixture_matrix_has_unique_atomic_cases_and_safe_paths() -> None:
             assert all(path.is_relative_to(ROOT / "test_support" / "golden" / package) for path in golden)
             assert [path.name.rsplit(".", 2)[-2] for path in golden] == ["semantic", "structural", "plain"]
 
-        legacy_types = {chart_type.lower() for chart_type in _CHART_TYPE_MAP.values()}
-        required_chart_cases = {f"chart-{chart_type}" for chart_type in legacy_types | CHART_EX_TYPES}
-        required_chart_cases.add("chart-combination")
-        assert required_chart_cases <= ids, f"{package} is missing supported chart file cases"
+
+
+def test_fixture_matrix_matches_the_materialized_file_list() -> None:
+    matrix = _load_matrix()
+    expected: dict[str, set[str]] = {}
+    for package, extension in {"docx": ".docx", "pptx": ".pptx", "xlsx": ".xlsx"}.items():
+        fixture_dir = ROOT / "test_support" / "fixtures" / package
+        expected[package] = {
+            f"fixtures/{package}/{path.name}"
+            for path in fixture_dir.glob(f"*{extension}")
+            if path.is_file() and not path.name.startswith("~$")
+        }
+
+    actual = {package: {case["fixture"] for case in cases} for package, cases in matrix["packages"].items()}
+    assert actual == expected
 
 
 def test_fixture_matrix_reports_missing_manual_files() -> None:

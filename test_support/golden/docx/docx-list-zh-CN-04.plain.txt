@@ -1,0 +1,34 @@
+density=plain
+// w:numFmt = japaneseCounting
+
+// lang=zh-CN
+
+// UI name: 一,十,百 …
+
+一.	Item 1
+
+二.	Item 2
+
+三.	Item 3
+
+四.	Item 4
+
+五.	Item 5
+
+六.	Item 6
+
+七.	Item 7
+
+八.	Item 8
+
+九.	Item 9
+
+十.	Item 10
+
+百一.	Item 101
+
+千一.	Item 1001
+
+一万一.	Item 10001
+
+一万五十.	Item 10050

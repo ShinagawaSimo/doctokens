@@ -20,6 +20,20 @@ class NumberFormatRenderer:
     _ARABIC_ALPHA = "أبتثجحخدذرزسشصضطظعغفقكلمنهوي"
     _ARABIC_ABJAD = "أبجدهوزحطيكلمنسعفصقرشتثخذضظغ"
     _HEBREW_ALPHABET = "אבגדהוזחטיכלמנסעפצקרשת"
+    _AIUEO_HALF_WIDTH = (
+        "\uFF71\uFF72\uFF73\uFF74\uFF75\uFF76\uFF77\uFF78\uFF79\uFF7A"
+        "\uFF7B\uFF7C\uFF7D\uFF7E\uFF7F\uFF80\uFF81\uFF82\uFF83\uFF84"
+        "\uFF85\uFF86\uFF87\uFF88\uFF89\uFF8A\uFF8B\uFF8C\uFF8D\uFF8E"
+        "\uFF8F\uFF90\uFF91\uFF92\uFF93\uFF94\uFF95\uFF96\uFF97\uFF98"
+        "\uFF99\uFF9A\uFF9B\uFF9C\uFF66\uFF9D"
+    )
+    _IROHA_HALF_WIDTH = (
+        "\uFF72\uFF9B\uFF8A\uFF86\uFF8E\uFF8D\uFF84\uFF81\uFF98\uFF87"
+        "\uFF99\uFF66\uFF9C\uFF76\uFF96\uFF80\uFF9A\uFF7F\uFF82\uFF88"
+        "\uFF85\uFF97\uFF91\uFF73\u30F0\uFF89\uFF75\uFF78\uFF94\uFF8F"
+        "\uFF79\uFF8C\uFF7A\uFF74\uFF83\uFF71\uFF7B\uFF77\uFF95\uFF92"
+        "\uFF90\uFF7C\u30F1\uFF8B\uFF93\uFF7E\uFF7D\uFF9D"
+    )
 
     def __init__(self, warnings: list[ParseWarning]) -> None:
         self._warnings = warnings
@@ -52,8 +66,16 @@ class NumberFormatRenderer:
             "decimalFullWidth2": partial(self._translate_decimal_digits, digits="０１２３４５６７８９"),
             "hindiNumbers": partial(self._translate_decimal_digits, digits="०१२३४५६७८९"),
             "thaiNumbers": partial(self._translate_decimal_digits, digits="๐๑๒๓๔๕๖๗๘๙"),
-            "lowerLetter": partial(self._repeated_sequence, sequence="abcdefghijklmnopqrstuvwxyz"),
-            "upperLetter": partial(self._repeated_sequence, sequence="ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+            "lowerLetter": partial(
+                self._bounded_repeated_sequence,
+                sequence="abcdefghijklmnopqrstuvwxyz",
+                maximum=780,
+            ),
+            "upperLetter": partial(
+                self._bounded_repeated_sequence,
+                sequence="ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                maximum=780,
+            ),
             "upperRoman": lambda value: self._roman(value).upper(),
             "lowerRoman": lambda value: self._roman(value).lower(),
             "hex": lambda value: f"{value:X}",
@@ -61,10 +83,9 @@ class NumberFormatRenderer:
             "ordinalText": self._english_ordinal,
             "numberInDash": self._number_in_dash,
             "chicago": self._chicago,
-            # Word emits decimal for these two Office 2010 additions.
             "bahtText": str,
             "dollarText": str,
-            "decimalEnclosedCircle": lambda value: self._enclosed_decimal(value, (0x2460, 0x3251, 0x32B1)),
+            "decimalEnclosedCircle": lambda value: self._enclosed_decimal(value, (0x2460,)),
             "decimalEnclosedFullstop": lambda value: self._enclosed_decimal(value, (0x2488,)),
             "decimalEnclosedParen": lambda value: self._enclosed_decimal(value, (0x2474,)),
             "decimalEnclosedCircleChinese": self._chinese_circled_decimal,
@@ -73,21 +94,20 @@ class NumberFormatRenderer:
             "chosung": partial(self._cycled_sequence, sequence="ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ"),
             "aiueo": partial(
                 self._cycled_sequence,
-                sequence="あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわゐゑを",
+                sequence=self._AIUEO_HALF_WIDTH,
             ),
             "aiueoFullWidth": partial(
                 self._cycled_sequence,
-                sequence="アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヰヱヲ",
+                sequence="アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン",
             ),
             "iroha": partial(
                 self._cycled_sequence,
-                sequence="いろはにほへとちりぬるをわかよたれそつねならむうゐのおくやまけふこえてあさきゆめみしゑひもせす",
+                sequence=self._IROHA_HALF_WIDTH,
             ),
             "irohaFullWidth": partial(
                 self._cycled_sequence,
                 sequence="イロハニホヘトチリヌルヲワカヨタレソツネナラムウヰノオクヤマケフコエテアサキユメミシヱヒモセス",
             ),
-            # Word swaps these two sequence families relative to ISO/IEC 29500.
             "hindiVowels": partial(self._repeated_sequence, sequence="कखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसह"),
             "hindiConsonants": partial(self._repeated_sequence, sequence="अआइईउऊऋएऐओऔअंअः"),
             "thaiLetters": partial(self._repeated_sequence, sequence="กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรฤลฦวศษสหฬอฮ"),
@@ -97,8 +117,9 @@ class NumberFormatRenderer:
             "arabicAbjad": self._arabic_abjad,
             "hebrew1": self._hebrew_numeral,
             "hebrew2": partial(self._repeated_sequence, sequence=self._HEBREW_ALPHABET),
-            "ideographZodiac": partial(self._cycled_sequence, sequence="子丑寅卯辰巳午未申酉戌亥"),
-            "ideographZodiacTraditional": partial(self._cycled_sequence, sequence="甲乙丙丁戊己庚辛壬癸"),
+            "ideographTraditional": partial(self._bounded_sequence, sequence="甲乙丙丁戊己庚辛壬癸"),
+            "ideographZodiac": partial(self._bounded_sequence, sequence="子丑寅卯辰巳午未申酉戌亥"),
+            "ideographZodiacTraditional": self._sexagenary_cycle,
             "ideographDigital": self._chinese_digital,
             "taiwaneseDigital": partial(self._translate_decimal_digits, digits="零一二三四五六七八九"),
             "chineseCounting": partial(
@@ -146,26 +167,13 @@ class NumberFormatRenderer:
                 omit_one_ten=False,
             ),
             "japaneseCounting": partial(
-                self._limited_east_asian,
+                self._limited_japanese_counting,
                 format_name="Japanese counting",
-                digits="〇一二三四五六七八九",
-                small_units="十百千",
-                large_unit="万",
             ),
-            "japaneseDigitalTenThousand": partial(
-                self._limited_east_asian,
-                format_name="Japanese counting",
-                digits="〇一二三四五六七八九",
-                small_units="十百千",
-                large_unit="万",
-            ),
+            "japaneseDigitalTenThousand": self._chinese_digital,
             "japaneseLegal": partial(
-                self._limited_east_asian,
+                self._limited_japanese_legal,
                 format_name="Japanese legal",
-                digits="零壱弐参四五六七八九",
-                small_units="拾百阡",
-                large_unit="萬",
-                omit_one_ten=False,
             ),
             "koreanDigital": partial(self._translate_decimal_digits, digits="영일이삼사오육칠팔구"),
             "koreanCounting": partial(
@@ -258,6 +266,16 @@ class NumberFormatRenderer:
             word_thousand_rules=word_thousand_rules,
         )
 
+    def _limited_japanese_counting(self, value: int, *, format_name: str) -> str:
+        if value > 999_999:
+            return self._numbering_out_of_range(value, format_name)
+        return self._japanese_counting(value)
+
+    def _limited_japanese_legal(self, value: int, *, format_name: str) -> str:
+        if value > 999_999:
+            return self._numbering_out_of_range(value, format_name)
+        return self._japanese_legal(value)
+
     def _numbering_out_of_range(self, value: int, format_name: str) -> str:
         append_warning(
             self._warnings,
@@ -275,10 +293,31 @@ class NumberFormatRenderer:
         return sequence[repetition] * (index + 1)
 
     @staticmethod
+    def _bounded_repeated_sequence(value: int, sequence: str, maximum: int) -> str:
+        if value > maximum:
+            return str(value)
+        return NumberFormatRenderer._repeated_sequence(value, sequence)
+
+    @staticmethod
     def _cycled_sequence(value: int, sequence: str) -> str:
         if value <= 0 or not sequence:
             return str(value)
         return sequence[(value - 1) % len(sequence)]
+
+    @staticmethod
+    def _bounded_sequence(value: int, sequence: str) -> str:
+        if 1 <= value <= len(sequence):
+            return sequence[value - 1]
+        return str(value)
+
+    @staticmethod
+    def _sexagenary_cycle(value: int) -> str:
+        if value <= 0:
+            return str(value)
+        stems = "甲乙丙丁戊己庚辛壬癸"
+        branches = "子丑寅卯辰巳午未申酉戌亥"
+        index = value - 1
+        return stems[index % len(stems)] + branches[index % len(branches)]
 
     @staticmethod
     def _translate_decimal_digits(value: int, digits: str) -> str:
@@ -294,7 +333,7 @@ class NumberFormatRenderer:
 
     @staticmethod
     def _roman(value: int) -> str:
-        if value <= 0 or value > 3999:
+        if value <= 0:
             return str(value)
         pairs = (
             (1000, "M"),
@@ -326,6 +365,61 @@ class NumberFormatRenderer:
             "万",
             word_thousand_rules=word_thousand_rules,
         )
+
+    @staticmethod
+    def _japanese_counting(value: int) -> str:
+        """Render Japanese counting, which omits ``一`` before 十/百/千 and zeros."""
+        digits = "〇一二三四五六七八九"
+        small_units = "十百千"
+        if value == 0:
+            return digits[0]
+        if value < 0 or value > 999_999:
+            return str(value)
+
+        def section(number: int) -> str:
+            parts: list[str] = []
+            for divisor, unit in ((1000, small_units[2]), (100, small_units[1]), (10, small_units[0])):
+                digit, number = divmod(number, divisor)
+                if digit:
+                    if digit != 1:
+                        parts.append(digits[digit])
+                    parts.append(unit)
+            if number:
+                parts.append(digits[number])
+            return "".join(parts)
+
+        high, low = divmod(value, 10_000)
+        if not high:
+            return section(low)
+        result = section(high) + "万"
+        return result if not low else result + section(low)
+
+    @staticmethod
+    def _japanese_legal(value: int) -> str:
+        """Render Japanese legal numbering without zeroes or omitted unit ones."""
+        digits = "〇壱弐参四伍六七八九"
+        small_units = "拾百阡"
+        if value == 0:
+            return digits[0]
+        if value < 0 or value > 999_999:
+            return str(value)
+
+        def section(number: int) -> str:
+            parts: list[str] = []
+            for divisor, unit in ((1000, small_units[2]), (100, small_units[1]), (10, small_units[0])):
+                digit, number = divmod(number, divisor)
+                if digit:
+                    parts.append(digits[digit])
+                    parts.append(unit)
+            if number:
+                parts.append(digits[number])
+            return "".join(parts)
+
+        high, low = divmod(value, 10_000)
+        if not high:
+            return section(low)
+        result = section(high) + "萬"
+        return result if not low else result + section(low)
 
     @staticmethod
     def _east_asian_counting(

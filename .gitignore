@@ -19,7 +19,6 @@ build/
 *.docx
 !test_support/fixtures/**/*.docx
 docs/
-!docs/
 docs/*
-!docs/测试夹具与文件输出契约.md
 CLAUDE.md
+reference/

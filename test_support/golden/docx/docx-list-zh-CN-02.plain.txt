@@ -1,0 +1,34 @@
+density=plain
+// w:numFmt = decimalFullWidth
+
+// lang=zh-CN
+
+// UI name: 全角 …
+
+１.	Item 1
+
+２.	Item 2
+
+３.	Item 3
+
+４.	Item 4
+
+５.	Item 5
+
+６.	Item 6
+
+７.	Item 7
+
+８.	Item 8
+
+９.	Item 9
+
+１０.	Item 10
+
+１０１.	Item 101
+
+１００１.	Item 1001
+
+１０００１.	Item 10001
+
+１００５０.	Item 10050

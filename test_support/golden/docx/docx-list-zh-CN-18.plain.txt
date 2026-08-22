@@ -1,0 +1,30 @@
+density=plain
+// w:numFmt = ideographZodiac
+
+// lang=zh-CN
+
+// UI name: 子, 丑, 寅 …
+
+子.	Item 1
+
+丑.	Item 2
+
+寅.	Item 3
+
+卯.	Item 4
+
+辰.	Item 5
+
+巳.	Item 6
+
+午.	Item 7
+
+未.	Item 8
+
+申.	Item 9
+
+酉.	Item 10
+
+戌.	Item 11
+
+亥.	Item 12

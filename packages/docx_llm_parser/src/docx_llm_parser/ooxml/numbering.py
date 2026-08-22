@@ -267,6 +267,7 @@ class NumberingState:
     # Kept as small compatibility helpers for direct unit tests and callers.
     _chinese_counting = staticmethod(NumberFormatRenderer._chinese_counting)
     _chinese_digital = staticmethod(NumberFormatRenderer._chinese_digital)
+    _japanese_counting = staticmethod(NumberFormatRenderer._japanese_counting)
 
 
 class NumberingParser:

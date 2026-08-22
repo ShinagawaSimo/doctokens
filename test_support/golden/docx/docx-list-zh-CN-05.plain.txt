@@ -1,0 +1,34 @@
+density=plain
+// w:numFmt = japaneseLegal
+
+// lang=zh-CN
+
+// UI name: 壱,弍,参 …
+
+壱.	Item 1
+
+弐.	Item 2
+
+参.	Item 3
+
+四.	Item 4
+
+伍.	Item 5
+
+六.	Item 6
+
+七.	Item 7
+
+八.	Item 8
+
+九.	Item 9
+
+壱拾.	Item 10
+
+壱百壱.	Item 101
+
+壱阡壱.	Item 1001
+
+壱萬壱.	Item 10001
+
+壱萬伍拾.	Item 10050

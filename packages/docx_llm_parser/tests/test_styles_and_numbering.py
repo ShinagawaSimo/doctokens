@@ -120,6 +120,65 @@ class NumberingStateTests(unittest.TestCase):
         self.assertEqual(NumberingState._chinese_digital(12345), "一二三四五")
         self.assertEqual(NumberingState._chinese_digital(102), "一〇二")
 
+    def test_japanese_counting_omits_small_unit_ones_and_zeroes(self) -> None:
+        values = {
+            10: "十",
+            100: "百",
+            101: "百一",
+            1000: "千",
+            1001: "千一",
+            10000: "一万",
+            10001: "一万一",
+            10050: "一万五十",
+        }
+        for value, expected in values.items():
+            with self.subTest(value=value):
+                self.assertEqual(NumberingState._japanese_counting(value), expected)
+
+    def test_japanese_digital_ten_thousand_keeps_each_digit(self) -> None:
+        renderer = NumberFormatRenderer([])
+        self.assertEqual(renderer.format(102, "japaneseDigitalTenThousand"), "一〇二")
+        self.assertEqual(renderer.format(10050, "japaneseDigitalTenThousand"), "一〇〇五〇")
+
+    def test_east_asian_character_sequences_follow_ooxml_ranges(self) -> None:
+        renderer = NumberFormatRenderer([])
+
+        self.assertEqual(renderer.format(1, "aiueo"), "ｱ")
+        self.assertEqual(renderer.format(46, "aiueo"), "ﾝ")
+        self.assertEqual(renderer.format(47, "aiueo"), "ｱ")
+        self.assertEqual(renderer.format(101, "aiueo"), "ｹ")
+        self.assertEqual(renderer.format(1, "aiueoFullWidth"), "ア")
+        self.assertEqual(renderer.format(46, "aiueoFullWidth"), "ン")
+        self.assertEqual(renderer.format(47, "aiueoFullWidth"), "ア")
+        self.assertEqual(renderer.format(101, "aiueoFullWidth"), "ケ")
+        self.assertEqual(renderer.format(780, "upperLetter"), "Z" * 30)
+        self.assertEqual(renderer.format(781, "upperLetter"), "781")
+        self.assertEqual(renderer.format(780, "lowerLetter"), "z" * 30)
+        self.assertEqual(renderer.format(781, "lowerLetter"), "781")
+        self.assertEqual(renderer.format(10001, "upperRoman"), "MMMMMMMMMMI")
+        self.assertEqual(renderer.format(10001, "lowerRoman"), "mmmmmmmmmmi")
+        japanese_legal = {
+            10: "壱拾",
+            101: "壱佰壱",
+            1001: "壱仟壱",
+            10000: "壱萬",
+            10001: "壱萬壱",
+            10050: "壱萬伍拾",
+        }
+        for value, expected in japanese_legal.items():
+            with self.subTest(japanese_legal=value):
+                self.assertEqual(renderer.format(value, "japaneseLegal"), expected)
+        self.assertEqual(renderer.format(1, "iroha"), "ｲ")
+        self.assertEqual(renderer.format(48, "iroha"), "ﾝ")
+        self.assertEqual(renderer.format(49, "iroha"), "ｲ")
+        self.assertEqual(renderer.format(10, "ideographTraditional"), "癸")
+        self.assertEqual(renderer.format(11, "ideographTraditional"), "11")
+        self.assertEqual(renderer.format(12, "ideographZodiac"), "亥")
+        self.assertEqual(renderer.format(13, "ideographZodiac"), "13")
+        self.assertEqual(renderer.format(1, "ideographZodiacTraditional"), "甲子")
+        self.assertEqual(renderer.format(60, "ideographZodiacTraditional"), "癸亥")
+        self.assertEqual(renderer.format(61, "ideographZodiacTraditional"), "甲子")
+
     def test_numbering_value_beyond_chinese_range_falls_back(self) -> None:
         warnings: list[ParseWarning] = []
         numbering = NumberingMap(
@@ -235,10 +294,8 @@ class NumberingStateTests(unittest.TestCase):
 
         self.assertEqual(renderer.format(1, "decimalEnclosedCircle"), "①")
         self.assertEqual(renderer.format(20, "decimalEnclosedCircle"), "⑳")
-        self.assertEqual(renderer.format(21, "decimalEnclosedCircle"), "㉑")
-        self.assertEqual(renderer.format(35, "decimalEnclosedCircle"), "㉟")
-        self.assertEqual(renderer.format(36, "decimalEnclosedCircle"), "㊱")
-        self.assertEqual(renderer.format(50, "decimalEnclosedCircle"), "㊿")
+        self.assertEqual(renderer.format(21, "decimalEnclosedCircle"), "21")
+        self.assertEqual(renderer.format(50, "decimalEnclosedCircle"), "50")
         self.assertEqual(renderer.format(1, "decimalEnclosedFullstop"), "⒈")
         self.assertEqual(renderer.format(1, "decimalEnclosedParen"), "⑴")
         self.assertEqual(renderer.format(51, "decimalEnclosedCircle"), "51")

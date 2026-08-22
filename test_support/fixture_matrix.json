@@ -3,197 +3,269 @@
   "description": "One Office file per atomic parser feature. Paths are relative to test_support.",
   "packages": {
     "docx": [
-      {"id": "paragraph", "fixture": "fixtures/docx/docx-paragraph.docx", "golden": ["golden/docx/docx-paragraph.semantic.html", "golden/docx/docx-paragraph.structural.html", "golden/docx/docx-paragraph.plain.txt"]},
-      {"id": "heading-style", "fixture": "fixtures/docx/docx-heading-style.docx", "golden": ["golden/docx/docx-heading-style.semantic.html", "golden/docx/docx-heading-style.structural.html", "golden/docx/docx-heading-style.plain.txt"]},
-      {"id": "list-multilevel", "fixture": "fixtures/docx/docx-list-multilevel.docx", "golden": ["golden/docx/docx-list-multilevel.semantic.html", "golden/docx/docx-list-multilevel.structural.html", "golden/docx/docx-list-multilevel.plain.txt"]},
-      {"id": "list-decimal", "fixture": "fixtures/docx/docx-list-decimal.docx", "golden": ["golden/docx/docx-list-decimal.semantic.html", "golden/docx/docx-list-decimal.structural.html", "golden/docx/docx-list-decimal.plain.txt"]},
-      {"id": "list-decimal-half-width", "fixture": "fixtures/docx/docx-list-decimal-half-width.docx", "golden": ["golden/docx/docx-list-decimal-half-width.semantic.html", "golden/docx/docx-list-decimal-half-width.structural.html", "golden/docx/docx-list-decimal-half-width.plain.txt"]},
-      {"id": "list-decimal-full-width", "fixture": "fixtures/docx/docx-list-decimal-full-width.docx", "golden": ["golden/docx/docx-list-decimal-full-width.semantic.html", "golden/docx/docx-list-decimal-full-width.structural.html", "golden/docx/docx-list-decimal-full-width.plain.txt"]},
-      {"id": "list-ordinal", "fixture": "fixtures/docx/docx-list-ordinal.docx", "golden": ["golden/docx/docx-list-ordinal.semantic.html", "golden/docx/docx-list-ordinal.structural.html", "golden/docx/docx-list-ordinal.plain.txt"]},
-      {"id": "list-decimal-zero", "fixture": "fixtures/docx/docx-list-decimal-zero.docx", "golden": ["golden/docx/docx-list-decimal-zero.semantic.html", "golden/docx/docx-list-decimal-zero.structural.html", "golden/docx/docx-list-decimal-zero.plain.txt"]},
-      {"id": "list-upper-letter", "fixture": "fixtures/docx/docx-list-upper-letter.docx", "golden": ["golden/docx/docx-list-upper-letter.semantic.html", "golden/docx/docx-list-upper-letter.structural.html", "golden/docx/docx-list-upper-letter.plain.txt"]},
-      {"id": "list-lower-letter", "fixture": "fixtures/docx/docx-list-lower-letter.docx", "golden": ["golden/docx/docx-list-lower-letter.semantic.html", "golden/docx/docx-list-lower-letter.structural.html", "golden/docx/docx-list-lower-letter.plain.txt"]},
-      {"id": "list-upper-roman", "fixture": "fixtures/docx/docx-list-upper-roman.docx", "golden": ["golden/docx/docx-list-upper-roman.semantic.html", "golden/docx/docx-list-upper-roman.structural.html", "golden/docx/docx-list-upper-roman.plain.txt"]},
-      {"id": "list-lower-roman", "fixture": "fixtures/docx/docx-list-lower-roman.docx", "golden": ["golden/docx/docx-list-lower-roman.semantic.html", "golden/docx/docx-list-lower-roman.structural.html", "golden/docx/docx-list-lower-roman.plain.txt"]},
-      {"id": "list-ideograph-digital", "fixture": "fixtures/docx/docx-list-chinese-counting.docx", "golden": ["golden/docx/docx-list-chinese-counting.semantic.html", "golden/docx/docx-list-chinese-counting.structural.html", "golden/docx/docx-list-chinese-counting.plain.txt"]},
-      {"id": "list-chinese-counting", "fixture": "fixtures/docx/docx-list-chinese-counting-verbal.docx", "golden": ["golden/docx/docx-list-chinese-counting-verbal.semantic.html", "golden/docx/docx-list-chinese-counting-verbal.structural.html", "golden/docx/docx-list-chinese-counting-verbal.plain.txt"]},
-      {"id": "list-chinese-counting-thousand", "fixture": "fixtures/docx/docx-list-chinese-counting-basic.docx", "golden": ["golden/docx/docx-list-chinese-counting-basic.semantic.html", "golden/docx/docx-list-chinese-counting-basic.structural.html", "golden/docx/docx-list-chinese-counting-basic.plain.txt"]},
-      {"id": "list-chinese-legal", "fixture": "fixtures/docx/docx-list-chinese-legal.docx", "golden": ["golden/docx/docx-list-chinese-legal.semantic.html", "golden/docx/docx-list-chinese-legal.structural.html", "golden/docx/docx-list-chinese-legal.plain.txt"]},
-      {"id": "list-cardinal-text", "fixture": "fixtures/docx/docx-list-cardinal-text.docx", "golden": ["golden/docx/docx-list-cardinal-text.semantic.html", "golden/docx/docx-list-cardinal-text.structural.html", "golden/docx/docx-list-cardinal-text.plain.txt"]},
-      {"id": "list-ordinal-text", "fixture": "fixtures/docx/docx-list-ordinal-text.docx", "golden": ["golden/docx/docx-list-ordinal-text.semantic.html", "golden/docx/docx-list-ordinal-text.structural.html", "golden/docx/docx-list-ordinal-text.plain.txt"]},
-      {"id": "list-bullet", "fixture": "fixtures/docx/docx-list-bullet.docx", "golden": ["golden/docx/docx-list-bullet.semantic.html", "golden/docx/docx-list-bullet.structural.html", "golden/docx/docx-list-bullet.plain.txt"]},
-      {"id": "list-bullet-symbol", "fixture": "fixtures/docx/docx-list-bullet-symbol.docx", "golden": ["golden/docx/docx-list-bullet-symbol.semantic.html", "golden/docx/docx-list-bullet-symbol.structural.html", "golden/docx/docx-list-bullet-symbol.plain.txt"]},
-      {"id": "list-bullet-color", "fixture": "fixtures/docx/docx-list-bullet-color.docx", "golden": ["golden/docx/docx-list-bullet-color.semantic.html", "golden/docx/docx-list-bullet-color.structural.html", "golden/docx/docx-list-bullet-color.plain.txt"]},
-      {"id": "list-enclosed-circle", "fixture": "fixtures/docx/docx-list-enclosed-circle.docx", "golden": ["golden/docx/docx-list-enclosed-circle.semantic.html", "golden/docx/docx-list-enclosed-circle.structural.html", "golden/docx/docx-list-enclosed-circle.plain.txt"]},
-      {"id": "list-bullet-picture", "fixture": "fixtures/docx/docx-list-bullet-picture.docx", "golden": ["golden/docx/docx-list-bullet-picture.semantic.html", "golden/docx/docx-list-bullet-picture.structural.html", "golden/docx/docx-list-bullet-picture.plain.txt"]},
-      {"id": "list-none", "fixture": "fixtures/docx/docx-list-none.docx", "golden": ["golden/docx/docx-list-none.semantic.html", "golden/docx/docx-list-none.structural.html", "golden/docx/docx-list-none.plain.txt"]},
-      {"id": "custom-paragraph-style", "fixture": "fixtures/docx/docx-custom-paragraph-style.docx", "golden": ["golden/docx/docx-custom-paragraph-style.semantic.html", "golden/docx/docx-custom-paragraph-style.structural.html", "golden/docx/docx-custom-paragraph-style.plain.txt"]},
-      {"id": "custom-character-style", "fixture": "fixtures/docx/docx-custom-character-style.docx", "golden": ["golden/docx/docx-custom-character-style.semantic.html", "golden/docx/docx-custom-character-style.structural.html", "golden/docx/docx-custom-character-style.plain.txt"]},
-      {"id": "custom-list-style", "fixture": "fixtures/docx/docx-custom-list-style.docx", "golden": ["golden/docx/docx-custom-list-style.semantic.html", "golden/docx/docx-custom-list-style.structural.html", "golden/docx/docx-custom-list-style.plain.txt"]},
-      {"id": "formatting", "fixture": "fixtures/docx/docx-formatting.docx", "golden": ["golden/docx/docx-formatting.semantic.html", "golden/docx/docx-formatting.structural.html", "golden/docx/docx-formatting.plain.txt"]},
-      {"id": "hyperlink", "fixture": "fixtures/docx/docx-hyperlink.docx", "golden": ["golden/docx/docx-hyperlink.semantic.html", "golden/docx/docx-hyperlink.structural.html", "golden/docx/docx-hyperlink.plain.txt"]},
-      {"id": "revision", "fixture": "fixtures/docx/docx-revision.docx", "golden": ["golden/docx/docx-revision.semantic.html", "golden/docx/docx-revision.structural.html", "golden/docx/docx-revision.plain.txt"]},
-      {"id": "comment", "fixture": "fixtures/docx/docx-comment.docx", "golden": ["golden/docx/docx-comment.semantic.html", "golden/docx/docx-comment.structural.html", "golden/docx/docx-comment.plain.txt"]},
-      {"id": "footnote-endnote", "fixture": "fixtures/docx/docx-footnote-endnote.docx", "golden": ["golden/docx/docx-footnote-endnote.semantic.html", "golden/docx/docx-footnote-endnote.structural.html", "golden/docx/docx-footnote-endnote.plain.txt"]},
-      {"id": "page-break", "fixture": "fixtures/docx/docx-page-break.docx", "golden": ["golden/docx/docx-page-break.semantic.html", "golden/docx/docx-page-break.structural.html", "golden/docx/docx-page-break.plain.txt"]},
-      {"id": "table-basic", "fixture": "fixtures/docx/docx-table-basic.docx", "golden": ["golden/docx/docx-table-basic.semantic.html", "golden/docx/docx-table-basic.structural.html", "golden/docx/docx-table-basic.plain.txt"]},
-      {"id": "table-merge", "fixture": "fixtures/docx/docx-table-merge.docx", "golden": ["golden/docx/docx-table-merge.semantic.html", "golden/docx/docx-table-merge.structural.html", "golden/docx/docx-table-merge.plain.txt"]},
-      {"id": "image-alt", "fixture": "fixtures/docx/docx-image-alt.docx", "golden": ["golden/docx/docx-image-alt.semantic.html", "golden/docx/docx-image-alt.structural.html", "golden/docx/docx-image-alt.plain.txt"]},
-      {"id": "textbox", "fixture": "fixtures/docx/docx-textbox.docx", "golden": ["golden/docx/docx-textbox.semantic.html", "golden/docx/docx-textbox.structural.html", "golden/docx/docx-textbox.plain.txt"]},
-      {"id": "smartart-process", "fixture": "fixtures/docx/docx-smartart-process.docx", "golden": ["golden/docx/docx-smartart-process.semantic.html", "golden/docx/docx-smartart-process.structural.html", "golden/docx/docx-smartart-process.plain.txt"]},
-      {"id": "content-control", "fixture": "fixtures/docx/docx-content-control.docx", "golden": ["golden/docx/docx-content-control.semantic.html", "golden/docx/docx-content-control.structural.html", "golden/docx/docx-content-control.plain.txt"]},
-      {"id": "content-control-dropdown", "fixture": "fixtures/docx/docx-content-control-dropdown.docx", "golden": ["golden/docx/docx-content-control-dropdown.semantic.html", "golden/docx/docx-content-control-dropdown.structural.html", "golden/docx/docx-content-control-dropdown.plain.txt"]},
-      {"id": "content-control-combo", "fixture": "fixtures/docx/docx-content-control-combo.docx", "golden": ["golden/docx/docx-content-control-combo.semantic.html", "golden/docx/docx-content-control-combo.structural.html", "golden/docx/docx-content-control-combo.plain.txt"]},
-      {"id": "content-control-date", "fixture": "fixtures/docx/docx-content-control-date.docx", "golden": ["golden/docx/docx-content-control-date.semantic.html", "golden/docx/docx-content-control-date.structural.html", "golden/docx/docx-content-control-date.plain.txt"]},
-      {"id": "content-control-checkbox", "fixture": "fixtures/docx/docx-content-control-checkbox.docx", "golden": ["golden/docx/docx-content-control-checkbox.semantic.html", "golden/docx/docx-content-control-checkbox.structural.html", "golden/docx/docx-content-control-checkbox.plain.txt"]},
-      {"id": "section-break", "fixture": "fixtures/docx/docx-section-break.docx", "golden": ["golden/docx/docx-section-break.semantic.html", "golden/docx/docx-section-break.structural.html", "golden/docx/docx-section-break.plain.txt"]},
-      {"id": "header-footer", "fixture": "fixtures/docx/docx-header-footer.docx", "golden": ["golden/docx/docx-header-footer.semantic.html", "golden/docx/docx-header-footer.structural.html", "golden/docx/docx-header-footer.plain.txt"]},
-      {"id": "equation", "fixture": "fixtures/docx/docx-equation.docx", "golden": ["golden/docx/docx-equation.semantic.html", "golden/docx/docx-equation.structural.html", "golden/docx/docx-equation.plain.txt"]},
-      {"id": "field", "fixture": "fixtures/docx/docx-field.docx", "golden": ["golden/docx/docx-field.semantic.html", "golden/docx/docx-field.structural.html", "golden/docx/docx-field.plain.txt"]},
-      {"id": "line-break-tab", "fixture": "fixtures/docx/docx-line-break-tab.docx", "golden": ["golden/docx/docx-line-break-tab.semantic.html", "golden/docx/docx-line-break-tab.structural.html", "golden/docx/docx-line-break-tab.plain.txt"]},
-      {"id": "vml-textbox", "fixture": "fixtures/docx/docx-vml-textbox.docx", "golden": ["golden/docx/docx-vml-textbox.semantic.html", "golden/docx/docx-vml-textbox.structural.html", "golden/docx/docx-vml-textbox.plain.txt"]},
-      {"id": "nested-table", "fixture": "fixtures/docx/docx-nested-table.docx", "golden": ["golden/docx/docx-nested-table.semantic.html", "golden/docx/docx-nested-table.structural.html", "golden/docx/docx-nested-table.plain.txt"]},
-      {"id": "floating-image", "fixture": "fixtures/docx/docx-floating-image.docx", "golden": ["golden/docx/docx-floating-image.semantic.html", "golden/docx/docx-floating-image.structural.html", "golden/docx/docx-floating-image.plain.txt"]},
-      {"id": "bookmark-citation", "fixture": "fixtures/docx/docx-bookmark-citation.docx", "golden": ["golden/docx/docx-bookmark-citation.semantic.html", "golden/docx/docx-bookmark-citation.structural.html", "golden/docx/docx-bookmark-citation.plain.txt"]},
-      {"id": "threaded-comment", "fixture": "fixtures/docx/docx-threaded-comment.docx", "golden": ["golden/docx/docx-threaded-comment.semantic.html", "golden/docx/docx-threaded-comment.structural.html", "golden/docx/docx-threaded-comment.plain.txt"]},
-      {"id": "chart-area", "fixture": "fixtures/docx/docx-chart-area.docx", "golden": ["golden/docx/docx-chart-area.semantic.html", "golden/docx/docx-chart-area.structural.html", "golden/docx/docx-chart-area.plain.txt"]},
-      {"id": "chart-area3d", "fixture": "fixtures/docx/docx-chart-area3d.docx", "golden": ["golden/docx/docx-chart-area3d.semantic.html", "golden/docx/docx-chart-area3d.structural.html", "golden/docx/docx-chart-area3d.plain.txt"]},
-      {"id": "chart-bar", "fixture": "fixtures/docx/docx-chart-bar.docx", "golden": ["golden/docx/docx-chart-bar.semantic.html", "golden/docx/docx-chart-bar.structural.html", "golden/docx/docx-chart-bar.plain.txt"]},
-      {"id": "chart-bar3d", "fixture": "fixtures/docx/docx-chart-bar3d.docx", "golden": ["golden/docx/docx-chart-bar3d.semantic.html", "golden/docx/docx-chart-bar3d.structural.html", "golden/docx/docx-chart-bar3d.plain.txt"]},
-      {"id": "chart-bubble", "fixture": "fixtures/docx/docx-chart-bubble.docx", "golden": ["golden/docx/docx-chart-bubble.semantic.html", "golden/docx/docx-chart-bubble.structural.html", "golden/docx/docx-chart-bubble.plain.txt"]},
-      {"id": "chart-doughnut", "fixture": "fixtures/docx/docx-chart-doughnut.docx", "golden": ["golden/docx/docx-chart-doughnut.semantic.html", "golden/docx/docx-chart-doughnut.structural.html", "golden/docx/docx-chart-doughnut.plain.txt"]},
-      {"id": "chart-line", "fixture": "fixtures/docx/docx-chart-line.docx", "golden": ["golden/docx/docx-chart-line.semantic.html", "golden/docx/docx-chart-line.structural.html", "golden/docx/docx-chart-line.plain.txt"]},
-      {"id": "chart-line3d", "fixture": "fixtures/docx/docx-chart-line3d.docx", "golden": ["golden/docx/docx-chart-line3d.semantic.html", "golden/docx/docx-chart-line3d.structural.html", "golden/docx/docx-chart-line3d.plain.txt"]},
-      {"id": "chart-ofpie", "fixture": "fixtures/docx/docx-chart-ofpie.docx", "golden": ["golden/docx/docx-chart-ofpie.semantic.html", "golden/docx/docx-chart-ofpie.structural.html", "golden/docx/docx-chart-ofpie.plain.txt"]},
-      {"id": "chart-pie", "fixture": "fixtures/docx/docx-chart-pie.docx", "golden": ["golden/docx/docx-chart-pie.semantic.html", "golden/docx/docx-chart-pie.structural.html", "golden/docx/docx-chart-pie.plain.txt"]},
-      {"id": "chart-pie3d", "fixture": "fixtures/docx/docx-chart-pie3d.docx", "golden": ["golden/docx/docx-chart-pie3d.semantic.html", "golden/docx/docx-chart-pie3d.structural.html", "golden/docx/docx-chart-pie3d.plain.txt"]},
-      {"id": "chart-radar", "fixture": "fixtures/docx/docx-chart-radar.docx", "golden": ["golden/docx/docx-chart-radar.semantic.html", "golden/docx/docx-chart-radar.structural.html", "golden/docx/docx-chart-radar.plain.txt"]},
-      {"id": "chart-scatter", "fixture": "fixtures/docx/docx-chart-scatter.docx", "golden": ["golden/docx/docx-chart-scatter.semantic.html", "golden/docx/docx-chart-scatter.structural.html", "golden/docx/docx-chart-scatter.plain.txt"]},
-      {"id": "chart-stock", "fixture": "fixtures/docx/docx-chart-stock.docx", "golden": ["golden/docx/docx-chart-stock.semantic.html", "golden/docx/docx-chart-stock.structural.html", "golden/docx/docx-chart-stock.plain.txt"]},
-      {"id": "chart-surface", "fixture": "fixtures/docx/docx-chart-surface.docx", "golden": ["golden/docx/docx-chart-surface.semantic.html", "golden/docx/docx-chart-surface.structural.html", "golden/docx/docx-chart-surface.plain.txt"]},
-      {"id": "chart-surface3d", "fixture": "fixtures/docx/docx-chart-surface3d.docx", "golden": ["golden/docx/docx-chart-surface3d.semantic.html", "golden/docx/docx-chart-surface3d.structural.html", "golden/docx/docx-chart-surface3d.plain.txt"]},
-      {"id": "chart-combination", "fixture": "fixtures/docx/docx-chart-combination.docx", "golden": ["golden/docx/docx-chart-combination.semantic.html", "golden/docx/docx-chart-combination.structural.html", "golden/docx/docx-chart-combination.plain.txt"]},
-      {"id": "chart-waterfall", "fixture": "fixtures/docx/docx-chart-waterfall.docx", "golden": ["golden/docx/docx-chart-waterfall.semantic.html", "golden/docx/docx-chart-waterfall.structural.html", "golden/docx/docx-chart-waterfall.plain.txt"]},
-      {"id": "chart-histogram", "fixture": "fixtures/docx/docx-chart-histogram.docx", "golden": ["golden/docx/docx-chart-histogram.semantic.html", "golden/docx/docx-chart-histogram.structural.html", "golden/docx/docx-chart-histogram.plain.txt"]},
-      {"id": "chart-pareto", "fixture": "fixtures/docx/docx-chart-pareto.docx", "golden": ["golden/docx/docx-chart-pareto.semantic.html", "golden/docx/docx-chart-pareto.structural.html", "golden/docx/docx-chart-pareto.plain.txt"]},
-      {"id": "chart-boxwhisker", "fixture": "fixtures/docx/docx-chart-boxwhisker.docx", "golden": ["golden/docx/docx-chart-boxwhisker.semantic.html", "golden/docx/docx-chart-boxwhisker.structural.html", "golden/docx/docx-chart-boxwhisker.plain.txt"]},
-      {"id": "chart-funnel", "fixture": "fixtures/docx/docx-chart-funnel.docx", "golden": ["golden/docx/docx-chart-funnel.semantic.html", "golden/docx/docx-chart-funnel.structural.html", "golden/docx/docx-chart-funnel.plain.txt"]},
-      {"id": "chart-treemap", "fixture": "fixtures/docx/docx-chart-treemap.docx", "golden": ["golden/docx/docx-chart-treemap.semantic.html", "golden/docx/docx-chart-treemap.structural.html", "golden/docx/docx-chart-treemap.plain.txt"]},
-      {"id": "chart-sunburst", "fixture": "fixtures/docx/docx-chart-sunburst.docx", "golden": ["golden/docx/docx-chart-sunburst.semantic.html", "golden/docx/docx-chart-sunburst.structural.html", "golden/docx/docx-chart-sunburst.plain.txt"]}
+      {
+        "id": "heading-style",
+        "fixture": "fixtures/docx/docx-heading-style.docx",
+        "golden": [
+          "golden/docx/docx-heading-style.semantic.html",
+          "golden/docx/docx-heading-style.structural.html",
+          "golden/docx/docx-heading-style.plain.txt"
+        ]
+      },
+      {
+        "id": "list-bullet-color",
+        "fixture": "fixtures/docx/docx-list-bullet-color.docx",
+        "golden": [
+          "golden/docx/docx-list-bullet-color.semantic.html",
+          "golden/docx/docx-list-bullet-color.structural.html",
+          "golden/docx/docx-list-bullet-color.plain.txt"
+        ]
+      },
+      {
+        "id": "list-bullet-symbol",
+        "fixture": "fixtures/docx/docx-list-bullet-symbol.docx",
+        "golden": [
+          "golden/docx/docx-list-bullet-symbol.semantic.html",
+          "golden/docx/docx-list-bullet-symbol.structural.html",
+          "golden/docx/docx-list-bullet-symbol.plain.txt"
+        ]
+      },
+      {
+        "id": "list-bullet",
+        "fixture": "fixtures/docx/docx-list-bullet.docx",
+        "golden": [
+          "golden/docx/docx-list-bullet.semantic.html",
+          "golden/docx/docx-list-bullet.structural.html",
+          "golden/docx/docx-list-bullet.plain.txt"
+        ]
+      },
+      {
+        "id": "list-multilevel",
+        "fixture": "fixtures/docx/docx-list-multilevel.docx",
+        "golden": [
+          "golden/docx/docx-list-multilevel.semantic.html",
+          "golden/docx/docx-list-multilevel.structural.html",
+          "golden/docx/docx-list-multilevel.plain.txt"
+        ]
+      },
+      {
+        "id": "list-none",
+        "fixture": "fixtures/docx/docx-list-none.docx",
+        "golden": [
+          "golden/docx/docx-list-none.semantic.html",
+          "golden/docx/docx-list-none.structural.html",
+          "golden/docx/docx-list-none.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-01",
+        "fixture": "fixtures/docx/docx-list-zh-CN-01.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-01.semantic.html",
+          "golden/docx/docx-list-zh-CN-01.structural.html",
+          "golden/docx/docx-list-zh-CN-01.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-02",
+        "fixture": "fixtures/docx/docx-list-zh-CN-02.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-02.semantic.html",
+          "golden/docx/docx-list-zh-CN-02.structural.html",
+          "golden/docx/docx-list-zh-CN-02.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-03",
+        "fixture": "fixtures/docx/docx-list-zh-CN-03.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-03.semantic.html",
+          "golden/docx/docx-list-zh-CN-03.structural.html",
+          "golden/docx/docx-list-zh-CN-03.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-04",
+        "fixture": "fixtures/docx/docx-list-zh-CN-04.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-04.semantic.html",
+          "golden/docx/docx-list-zh-CN-04.structural.html",
+          "golden/docx/docx-list-zh-CN-04.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-05",
+        "fixture": "fixtures/docx/docx-list-zh-CN-05.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-05.semantic.html",
+          "golden/docx/docx-list-zh-CN-05.structural.html",
+          "golden/docx/docx-list-zh-CN-05.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-06",
+        "fixture": "fixtures/docx/docx-list-zh-CN-06.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-06.semantic.html",
+          "golden/docx/docx-list-zh-CN-06.structural.html",
+          "golden/docx/docx-list-zh-CN-06.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-07",
+        "fixture": "fixtures/docx/docx-list-zh-CN-07.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-07.semantic.html",
+          "golden/docx/docx-list-zh-CN-07.structural.html",
+          "golden/docx/docx-list-zh-CN-07.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-08",
+        "fixture": "fixtures/docx/docx-list-zh-CN-08.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-08.semantic.html",
+          "golden/docx/docx-list-zh-CN-08.structural.html",
+          "golden/docx/docx-list-zh-CN-08.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-09",
+        "fixture": "fixtures/docx/docx-list-zh-CN-09.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-09.semantic.html",
+          "golden/docx/docx-list-zh-CN-09.structural.html",
+          "golden/docx/docx-list-zh-CN-09.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-10",
+        "fixture": "fixtures/docx/docx-list-zh-CN-10.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-10.semantic.html",
+          "golden/docx/docx-list-zh-CN-10.structural.html",
+          "golden/docx/docx-list-zh-CN-10.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-11",
+        "fixture": "fixtures/docx/docx-list-zh-CN-11.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-11.semantic.html",
+          "golden/docx/docx-list-zh-CN-11.structural.html",
+          "golden/docx/docx-list-zh-CN-11.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-12",
+        "fixture": "fixtures/docx/docx-list-zh-CN-12.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-12.semantic.html",
+          "golden/docx/docx-list-zh-CN-12.structural.html",
+          "golden/docx/docx-list-zh-CN-12.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-13",
+        "fixture": "fixtures/docx/docx-list-zh-CN-13.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-13.semantic.html",
+          "golden/docx/docx-list-zh-CN-13.structural.html",
+          "golden/docx/docx-list-zh-CN-13.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-14",
+        "fixture": "fixtures/docx/docx-list-zh-CN-14.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-14.semantic.html",
+          "golden/docx/docx-list-zh-CN-14.structural.html",
+          "golden/docx/docx-list-zh-CN-14.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-15",
+        "fixture": "fixtures/docx/docx-list-zh-CN-15.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-15.semantic.html",
+          "golden/docx/docx-list-zh-CN-15.structural.html",
+          "golden/docx/docx-list-zh-CN-15.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-16",
+        "fixture": "fixtures/docx/docx-list-zh-CN-16.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-16.semantic.html",
+          "golden/docx/docx-list-zh-CN-16.structural.html",
+          "golden/docx/docx-list-zh-CN-16.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-17",
+        "fixture": "fixtures/docx/docx-list-zh-CN-17.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-17.semantic.html",
+          "golden/docx/docx-list-zh-CN-17.structural.html",
+          "golden/docx/docx-list-zh-CN-17.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-18",
+        "fixture": "fixtures/docx/docx-list-zh-CN-18.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-18.semantic.html",
+          "golden/docx/docx-list-zh-CN-18.structural.html",
+          "golden/docx/docx-list-zh-CN-18.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-19",
+        "fixture": "fixtures/docx/docx-list-zh-CN-19.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-19.semantic.html",
+          "golden/docx/docx-list-zh-CN-19.structural.html",
+          "golden/docx/docx-list-zh-CN-19.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-20",
+        "fixture": "fixtures/docx/docx-list-zh-CN-20.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-20.semantic.html",
+          "golden/docx/docx-list-zh-CN-20.structural.html",
+          "golden/docx/docx-list-zh-CN-20.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-21",
+        "fixture": "fixtures/docx/docx-list-zh-CN-21.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-21.semantic.html",
+          "golden/docx/docx-list-zh-CN-21.structural.html",
+          "golden/docx/docx-list-zh-CN-21.plain.txt"
+        ]
+      },
+      {
+        "id": "list-zh-CN-22",
+        "fixture": "fixtures/docx/docx-list-zh-CN-22.docx",
+        "golden": [
+          "golden/docx/docx-list-zh-CN-22.semantic.html",
+          "golden/docx/docx-list-zh-CN-22.structural.html",
+          "golden/docx/docx-list-zh-CN-22.plain.txt"
+        ]
+      },
+      {
+        "id": "paragraph",
+        "fixture": "fixtures/docx/docx-paragraph.docx",
+        "golden": [
+          "golden/docx/docx-paragraph.semantic.html",
+          "golden/docx/docx-paragraph.structural.html",
+          "golden/docx/docx-paragraph.plain.txt"
+        ]
+      }
     ],
-    "pptx": [
-      {"id": "text", "fixture": "fixtures/pptx/pptx-text.pptx", "golden": ["golden/pptx/pptx-text.semantic.html", "golden/pptx/pptx-text.structural.html", "golden/pptx/pptx-text.plain.txt"]},
-      {"id": "rich-text", "fixture": "fixtures/pptx/pptx-rich-text.pptx", "golden": ["golden/pptx/pptx-rich-text.semantic.html", "golden/pptx/pptx-rich-text.structural.html", "golden/pptx/pptx-rich-text.plain.txt"]},
-      {"id": "hidden-slide", "fixture": "fixtures/pptx/pptx-hidden-slide.pptx", "golden": ["golden/pptx/pptx-hidden-slide.semantic.html", "golden/pptx/pptx-hidden-slide.structural.html", "golden/pptx/pptx-hidden-slide.plain.txt"]},
-      {"id": "notes", "fixture": "fixtures/pptx/pptx-notes.pptx", "golden": ["golden/pptx/pptx-notes.semantic.html", "golden/pptx/pptx-notes.structural.html", "golden/pptx/pptx-notes.plain.txt"]},
-      {"id": "comments", "fixture": "fixtures/pptx/pptx-comments.pptx", "golden": ["golden/pptx/pptx-comments.semantic.html", "golden/pptx/pptx-comments.structural.html", "golden/pptx/pptx-comments.plain.txt"]},
-      {"id": "image-alt", "fixture": "fixtures/pptx/pptx-image-alt.pptx", "golden": ["golden/pptx/pptx-image-alt.semantic.html", "golden/pptx/pptx-image-alt.structural.html", "golden/pptx/pptx-image-alt.plain.txt"]},
-      {"id": "table", "fixture": "fixtures/pptx/pptx-table.pptx", "golden": ["golden/pptx/pptx-table.semantic.html", "golden/pptx/pptx-table.structural.html", "golden/pptx/pptx-table.plain.txt"]},
-      {"id": "smartart", "fixture": "fixtures/pptx/pptx-smartart.pptx", "golden": ["golden/pptx/pptx-smartart.semantic.html", "golden/pptx/pptx-smartart.structural.html", "golden/pptx/pptx-smartart.plain.txt"]},
-      {"id": "shapes", "fixture": "fixtures/pptx/pptx-shapes.pptx", "golden": ["golden/pptx/pptx-shapes.semantic.html", "golden/pptx/pptx-shapes.structural.html", "golden/pptx/pptx-shapes.plain.txt"]},
-      {"id": "theme-color", "fixture": "fixtures/pptx/pptx-theme-color.pptx", "golden": ["golden/pptx/pptx-theme-color.semantic.html", "golden/pptx/pptx-theme-color.structural.html", "golden/pptx/pptx-theme-color.plain.txt"]},
-      {"id": "master-layout", "fixture": "fixtures/pptx/pptx-master-layout.pptx", "golden": ["golden/pptx/pptx-master-layout.semantic.html", "golden/pptx/pptx-master-layout.structural.html", "golden/pptx/pptx-master-layout.plain.txt"]},
-      {"id": "sections", "fixture": "fixtures/pptx/pptx-sections.pptx", "golden": ["golden/pptx/pptx-sections.semantic.html", "golden/pptx/pptx-sections.structural.html", "golden/pptx/pptx-sections.plain.txt"]},
-      {"id": "hyperlink", "fixture": "fixtures/pptx/pptx-hyperlink.pptx", "golden": ["golden/pptx/pptx-hyperlink.semantic.html", "golden/pptx/pptx-hyperlink.structural.html", "golden/pptx/pptx-hyperlink.plain.txt"]},
-      {"id": "media", "fixture": "fixtures/pptx/pptx-media.pptx", "golden": ["golden/pptx/pptx-media.semantic.html", "golden/pptx/pptx-media.structural.html", "golden/pptx/pptx-media.plain.txt"]},
-      {"id": "soft-break-tab", "fixture": "fixtures/pptx/pptx-soft-break-tab.pptx", "golden": ["golden/pptx/pptx-soft-break-tab.semantic.html", "golden/pptx/pptx-soft-break-tab.structural.html", "golden/pptx/pptx-soft-break-tab.plain.txt"]},
-      {"id": "group-shapes", "fixture": "fixtures/pptx/pptx-group-shapes.pptx", "golden": ["golden/pptx/pptx-group-shapes.semantic.html", "golden/pptx/pptx-group-shapes.structural.html", "golden/pptx/pptx-group-shapes.plain.txt"]},
-      {"id": "list", "fixture": "fixtures/pptx/pptx-list.pptx", "golden": ["golden/pptx/pptx-list.semantic.html", "golden/pptx/pptx-list.structural.html", "golden/pptx/pptx-list.plain.txt"]},
-      {"id": "merged-table", "fixture": "fixtures/pptx/pptx-merged-table.pptx", "golden": ["golden/pptx/pptx-merged-table.semantic.html", "golden/pptx/pptx-merged-table.structural.html", "golden/pptx/pptx-merged-table.plain.txt"]},
-      {"id": "slide-background", "fixture": "fixtures/pptx/pptx-slide-background.pptx", "golden": ["golden/pptx/pptx-slide-background.semantic.html", "golden/pptx/pptx-slide-background.structural.html", "golden/pptx/pptx-slide-background.plain.txt"]},
-      {"id": "placeholder-inheritance", "fixture": "fixtures/pptx/pptx-placeholder-inheritance.pptx", "golden": ["golden/pptx/pptx-placeholder-inheritance.semantic.html", "golden/pptx/pptx-placeholder-inheritance.structural.html", "golden/pptx/pptx-placeholder-inheritance.plain.txt"]},
-      {"id": "shape-order", "fixture": "fixtures/pptx/pptx-shape-order.pptx", "golden": ["golden/pptx/pptx-shape-order.semantic.html", "golden/pptx/pptx-shape-order.structural.html", "golden/pptx/pptx-shape-order.plain.txt"]},
-      {"id": "external-image", "fixture": "fixtures/pptx/pptx-external-image.pptx", "golden": ["golden/pptx/pptx-external-image.semantic.html", "golden/pptx/pptx-external-image.structural.html", "golden/pptx/pptx-external-image.plain.txt"]},
-      {"id": "audio", "fixture": "fixtures/pptx/pptx-audio.pptx", "golden": ["golden/pptx/pptx-audio.semantic.html", "golden/pptx/pptx-audio.structural.html", "golden/pptx/pptx-audio.plain.txt"]},
-      {"id": "video", "fixture": "fixtures/pptx/pptx-video.pptx", "golden": ["golden/pptx/pptx-video.semantic.html", "golden/pptx/pptx-video.structural.html", "golden/pptx/pptx-video.plain.txt"]},
-      {"id": "multiple-slides", "fixture": "fixtures/pptx/pptx-multiple-slides.pptx", "golden": ["golden/pptx/pptx-multiple-slides.semantic.html", "golden/pptx/pptx-multiple-slides.structural.html", "golden/pptx/pptx-multiple-slides.plain.txt"]},
-      {"id": "connector", "fixture": "fixtures/pptx/pptx-connector.pptx", "golden": ["golden/pptx/pptx-connector.semantic.html", "golden/pptx/pptx-connector.structural.html", "golden/pptx/pptx-connector.plain.txt"]},
-      {"id": "chart-area", "fixture": "fixtures/pptx/pptx-chart-area.pptx", "golden": ["golden/pptx/pptx-chart-area.semantic.html", "golden/pptx/pptx-chart-area.structural.html", "golden/pptx/pptx-chart-area.plain.txt"]},
-      {"id": "chart-area3d", "fixture": "fixtures/pptx/pptx-chart-area3d.pptx", "golden": ["golden/pptx/pptx-chart-area3d.semantic.html", "golden/pptx/pptx-chart-area3d.structural.html", "golden/pptx/pptx-chart-area3d.plain.txt"]},
-      {"id": "chart-bar", "fixture": "fixtures/pptx/pptx-chart-bar.pptx", "golden": ["golden/pptx/pptx-chart-bar.semantic.html", "golden/pptx/pptx-chart-bar.structural.html", "golden/pptx/pptx-chart-bar.plain.txt"]},
-      {"id": "chart-bar3d", "fixture": "fixtures/pptx/pptx-chart-bar3d.pptx", "golden": ["golden/pptx/pptx-chart-bar3d.semantic.html", "golden/pptx/pptx-chart-bar3d.structural.html", "golden/pptx/pptx-chart-bar3d.plain.txt"]},
-      {"id": "chart-bubble", "fixture": "fixtures/pptx/pptx-chart-bubble.pptx", "golden": ["golden/pptx/pptx-chart-bubble.semantic.html", "golden/pptx/pptx-chart-bubble.structural.html", "golden/pptx/pptx-chart-bubble.plain.txt"]},
-      {"id": "chart-doughnut", "fixture": "fixtures/pptx/pptx-chart-doughnut.pptx", "golden": ["golden/pptx/pptx-chart-doughnut.semantic.html", "golden/pptx/pptx-chart-doughnut.structural.html", "golden/pptx/pptx-chart-doughnut.plain.txt"]},
-      {"id": "chart-line", "fixture": "fixtures/pptx/pptx-chart-line.pptx", "golden": ["golden/pptx/pptx-chart-line.semantic.html", "golden/pptx/pptx-chart-line.structural.html", "golden/pptx/pptx-chart-line.plain.txt"]},
-      {"id": "chart-line3d", "fixture": "fixtures/pptx/pptx-chart-line3d.pptx", "golden": ["golden/pptx/pptx-chart-line3d.semantic.html", "golden/pptx/pptx-chart-line3d.structural.html", "golden/pptx/pptx-chart-line3d.plain.txt"]},
-      {"id": "chart-ofpie", "fixture": "fixtures/pptx/pptx-chart-ofpie.pptx", "golden": ["golden/pptx/pptx-chart-ofpie.semantic.html", "golden/pptx/pptx-chart-ofpie.structural.html", "golden/pptx/pptx-chart-ofpie.plain.txt"]},
-      {"id": "chart-pie", "fixture": "fixtures/pptx/pptx-chart-pie.pptx", "golden": ["golden/pptx/pptx-chart-pie.semantic.html", "golden/pptx/pptx-chart-pie.structural.html", "golden/pptx/pptx-chart-pie.plain.txt"]},
-      {"id": "chart-pie3d", "fixture": "fixtures/pptx/pptx-chart-pie3d.pptx", "golden": ["golden/pptx/pptx-chart-pie3d.semantic.html", "golden/pptx/pptx-chart-pie3d.structural.html", "golden/pptx/pptx-chart-pie3d.plain.txt"]},
-      {"id": "chart-radar", "fixture": "fixtures/pptx/pptx-chart-radar.pptx", "golden": ["golden/pptx/pptx-chart-radar.semantic.html", "golden/pptx/pptx-chart-radar.structural.html", "golden/pptx/pptx-chart-radar.plain.txt"]},
-      {"id": "chart-scatter", "fixture": "fixtures/pptx/pptx-chart-scatter.pptx", "golden": ["golden/pptx/pptx-chart-scatter.semantic.html", "golden/pptx/pptx-chart-scatter.structural.html", "golden/pptx/pptx-chart-scatter.plain.txt"]},
-      {"id": "chart-stock", "fixture": "fixtures/pptx/pptx-chart-stock.pptx", "golden": ["golden/pptx/pptx-chart-stock.semantic.html", "golden/pptx/pptx-chart-stock.structural.html", "golden/pptx/pptx-chart-stock.plain.txt"]},
-      {"id": "chart-surface", "fixture": "fixtures/pptx/pptx-chart-surface.pptx", "golden": ["golden/pptx/pptx-chart-surface.semantic.html", "golden/pptx/pptx-chart-surface.structural.html", "golden/pptx/pptx-chart-surface.plain.txt"]},
-      {"id": "chart-surface3d", "fixture": "fixtures/pptx/pptx-chart-surface3d.pptx", "golden": ["golden/pptx/pptx-chart-surface3d.semantic.html", "golden/pptx/pptx-chart-surface3d.structural.html", "golden/pptx/pptx-chart-surface3d.plain.txt"]},
-      {"id": "chart-combination", "fixture": "fixtures/pptx/pptx-chart-combination.pptx", "golden": ["golden/pptx/pptx-chart-combination.semantic.html", "golden/pptx/pptx-chart-combination.structural.html", "golden/pptx/pptx-chart-combination.plain.txt"]},
-      {"id": "chart-waterfall", "fixture": "fixtures/pptx/pptx-chart-waterfall.pptx", "golden": ["golden/pptx/pptx-chart-waterfall.semantic.html", "golden/pptx/pptx-chart-waterfall.structural.html", "golden/pptx/pptx-chart-waterfall.plain.txt"]},
-      {"id": "chart-histogram", "fixture": "fixtures/pptx/pptx-chart-histogram.pptx", "golden": ["golden/pptx/pptx-chart-histogram.semantic.html", "golden/pptx/pptx-chart-histogram.structural.html", "golden/pptx/pptx-chart-histogram.plain.txt"]},
-      {"id": "chart-pareto", "fixture": "fixtures/pptx/pptx-chart-pareto.pptx", "golden": ["golden/pptx/pptx-chart-pareto.semantic.html", "golden/pptx/pptx-chart-pareto.structural.html", "golden/pptx/pptx-chart-pareto.plain.txt"]},
-      {"id": "chart-boxwhisker", "fixture": "fixtures/pptx/pptx-chart-boxwhisker.pptx", "golden": ["golden/pptx/pptx-chart-boxwhisker.semantic.html", "golden/pptx/pptx-chart-boxwhisker.structural.html", "golden/pptx/pptx-chart-boxwhisker.plain.txt"]},
-      {"id": "chart-funnel", "fixture": "fixtures/pptx/pptx-chart-funnel.pptx", "golden": ["golden/pptx/pptx-chart-funnel.semantic.html", "golden/pptx/pptx-chart-funnel.structural.html", "golden/pptx/pptx-chart-funnel.plain.txt"]},
-      {"id": "chart-treemap", "fixture": "fixtures/pptx/pptx-chart-treemap.pptx", "golden": ["golden/pptx/pptx-chart-treemap.semantic.html", "golden/pptx/pptx-chart-treemap.structural.html", "golden/pptx/pptx-chart-treemap.plain.txt"]},
-      {"id": "chart-sunburst", "fixture": "fixtures/pptx/pptx-chart-sunburst.pptx", "golden": ["golden/pptx/pptx-chart-sunburst.semantic.html", "golden/pptx/pptx-chart-sunburst.structural.html", "golden/pptx/pptx-chart-sunburst.plain.txt"]}
-    ],
-    "xlsx": [
-      {"id": "values", "fixture": "fixtures/xlsx/xlsx-values.xlsx", "golden": ["golden/xlsx/xlsx-values.semantic.html", "golden/xlsx/xlsx-values.structural.html", "golden/xlsx/xlsx-values.plain.txt"]},
-      {"id": "shared-strings", "fixture": "fixtures/xlsx/xlsx-shared-strings.xlsx", "golden": ["golden/xlsx/xlsx-shared-strings.semantic.html", "golden/xlsx/xlsx-shared-strings.structural.html", "golden/xlsx/xlsx-shared-strings.plain.txt"]},
-      {"id": "formulas", "fixture": "fixtures/xlsx/xlsx-formulas.xlsx", "golden": ["golden/xlsx/xlsx-formulas.semantic.html", "golden/xlsx/xlsx-formulas.structural.html", "golden/xlsx/xlsx-formulas.plain.txt"]},
-      {"id": "array-formula", "fixture": "fixtures/xlsx/xlsx-array-formula.xlsx", "golden": ["golden/xlsx/xlsx-array-formula.semantic.html", "golden/xlsx/xlsx-array-formula.structural.html", "golden/xlsx/xlsx-array-formula.plain.txt"]},
-      {"id": "dynamic-array", "fixture": "fixtures/xlsx/xlsx-dynamic-array.xlsx", "golden": ["golden/xlsx/xlsx-dynamic-array.semantic.html", "golden/xlsx/xlsx-dynamic-array.structural.html", "golden/xlsx/xlsx-dynamic-array.plain.txt"]},
-      {"id": "formula-references", "fixture": "fixtures/xlsx/xlsx-formula-references.xlsx", "golden": ["golden/xlsx/xlsx-formula-references.semantic.html", "golden/xlsx/xlsx-formula-references.structural.html", "golden/xlsx/xlsx-formula-references.plain.txt"]},
-      {"id": "formula-string", "fixture": "fixtures/xlsx/xlsx-formula-string.xlsx", "golden": ["golden/xlsx/xlsx-formula-string.semantic.html", "golden/xlsx/xlsx-formula-string.structural.html", "golden/xlsx/xlsx-formula-string.plain.txt"]},
-      {"id": "number-formats", "fixture": "fixtures/xlsx/xlsx-number-formats.xlsx", "golden": ["golden/xlsx/xlsx-number-formats.semantic.html", "golden/xlsx/xlsx-number-formats.structural.html", "golden/xlsx/xlsx-number-formats.plain.txt"]},
-      {"id": "styles", "fixture": "fixtures/xlsx/xlsx-styles.xlsx", "golden": ["golden/xlsx/xlsx-styles.semantic.html", "golden/xlsx/xlsx-styles.structural.html", "golden/xlsx/xlsx-styles.plain.txt"]},
-      {"id": "merged-cells", "fixture": "fixtures/xlsx/xlsx-merged-cells.xlsx", "golden": ["golden/xlsx/xlsx-merged-cells.semantic.html", "golden/xlsx/xlsx-merged-cells.structural.html", "golden/xlsx/xlsx-merged-cells.plain.txt"]},
-      {"id": "table", "fixture": "fixtures/xlsx/xlsx-table.xlsx", "golden": ["golden/xlsx/xlsx-table.semantic.html", "golden/xlsx/xlsx-table.structural.html", "golden/xlsx/xlsx-table.plain.txt"]},
-      {"id": "filter", "fixture": "fixtures/xlsx/xlsx-filter.xlsx", "golden": ["golden/xlsx/xlsx-filter.semantic.html", "golden/xlsx/xlsx-filter.structural.html", "golden/xlsx/xlsx-filter.plain.txt"]},
-      {"id": "comments", "fixture": "fixtures/xlsx/xlsx-comments.xlsx", "golden": ["golden/xlsx/xlsx-comments.semantic.html", "golden/xlsx/xlsx-comments.structural.html", "golden/xlsx/xlsx-comments.plain.txt"]},
-      {"id": "threaded-comments", "fixture": "fixtures/xlsx/xlsx-threaded-comments.xlsx", "golden": ["golden/xlsx/xlsx-threaded-comments.semantic.html", "golden/xlsx/xlsx-threaded-comments.structural.html", "golden/xlsx/xlsx-threaded-comments.plain.txt"]},
-      {"id": "hyperlinks", "fixture": "fixtures/xlsx/xlsx-hyperlinks.xlsx", "golden": ["golden/xlsx/xlsx-hyperlinks.semantic.html", "golden/xlsx/xlsx-hyperlinks.structural.html", "golden/xlsx/xlsx-hyperlinks.plain.txt"]},
-      {"id": "internal-hyperlink", "fixture": "fixtures/xlsx/xlsx-internal-hyperlink.xlsx", "golden": ["golden/xlsx/xlsx-internal-hyperlink.semantic.html", "golden/xlsx/xlsx-internal-hyperlink.structural.html", "golden/xlsx/xlsx-internal-hyperlink.plain.txt"]},
-      {"id": "defined-names", "fixture": "fixtures/xlsx/xlsx-defined-names.xlsx", "golden": ["golden/xlsx/xlsx-defined-names.semantic.html", "golden/xlsx/xlsx-defined-names.structural.html", "golden/xlsx/xlsx-defined-names.plain.txt"]},
-      {"id": "hidden", "fixture": "fixtures/xlsx/xlsx-hidden.xlsx", "golden": ["golden/xlsx/xlsx-hidden.semantic.html", "golden/xlsx/xlsx-hidden.structural.html", "golden/xlsx/xlsx-hidden.plain.txt"]},
-      {"id": "outline", "fixture": "fixtures/xlsx/xlsx-outline.xlsx", "golden": ["golden/xlsx/xlsx-outline.semantic.html", "golden/xlsx/xlsx-outline.structural.html", "golden/xlsx/xlsx-outline.plain.txt"]},
-      {"id": "conditional-format", "fixture": "fixtures/xlsx/xlsx-conditional-format.xlsx", "golden": ["golden/xlsx/xlsx-conditional-format.semantic.html", "golden/xlsx/xlsx-conditional-format.structural.html", "golden/xlsx/xlsx-conditional-format.plain.txt"]},
-      {"id": "data-validation", "fixture": "fixtures/xlsx/xlsx-data-validation.xlsx", "golden": ["golden/xlsx/xlsx-data-validation.semantic.html", "golden/xlsx/xlsx-data-validation.structural.html", "golden/xlsx/xlsx-data-validation.plain.txt"]},
-      {"id": "protection", "fixture": "fixtures/xlsx/xlsx-protection.xlsx", "golden": ["golden/xlsx/xlsx-protection.semantic.html", "golden/xlsx/xlsx-protection.structural.html", "golden/xlsx/xlsx-protection.plain.txt"]},
-      {"id": "cell-protection", "fixture": "fixtures/xlsx/xlsx-cell-protection.xlsx", "golden": ["golden/xlsx/xlsx-cell-protection.semantic.html", "golden/xlsx/xlsx-cell-protection.structural.html", "golden/xlsx/xlsx-cell-protection.plain.txt"]},
-      {"id": "multiple-sheets", "fixture": "fixtures/xlsx/xlsx-multiple-sheets.xlsx", "golden": ["golden/xlsx/xlsx-multiple-sheets.semantic.html", "golden/xlsx/xlsx-multiple-sheets.structural.html", "golden/xlsx/xlsx-multiple-sheets.plain.txt"]},
-      {"id": "boolean-error", "fixture": "fixtures/xlsx/xlsx-boolean-error.xlsx", "golden": ["golden/xlsx/xlsx-boolean-error.semantic.html", "golden/xlsx/xlsx-boolean-error.structural.html", "golden/xlsx/xlsx-boolean-error.plain.txt"]},
-      {"id": "rich-shared-string", "fixture": "fixtures/xlsx/xlsx-rich-shared-string.xlsx", "golden": ["golden/xlsx/xlsx-rich-shared-string.semantic.html", "golden/xlsx/xlsx-rich-shared-string.structural.html", "golden/xlsx/xlsx-rich-shared-string.plain.txt"]},
-      {"id": "date-1904", "fixture": "fixtures/xlsx/xlsx-date-1904.xlsx", "golden": ["golden/xlsx/xlsx-date-1904.semantic.html", "golden/xlsx/xlsx-date-1904.structural.html", "golden/xlsx/xlsx-date-1904.plain.txt"]},
-      {"id": "theme-colors", "fixture": "fixtures/xlsx/xlsx-theme-colors.xlsx", "golden": ["golden/xlsx/xlsx-theme-colors.semantic.html", "golden/xlsx/xlsx-theme-colors.structural.html", "golden/xlsx/xlsx-theme-colors.plain.txt"]},
-      {"id": "external-link", "fixture": "fixtures/xlsx/xlsx-external-link.xlsx", "golden": ["golden/xlsx/xlsx-external-link.semantic.html", "golden/xlsx/xlsx-external-link.structural.html", "golden/xlsx/xlsx-external-link.plain.txt"]},
-      {"id": "rich-value", "fixture": "fixtures/xlsx/xlsx-rich-value.xlsx", "golden": ["golden/xlsx/xlsx-rich-value.semantic.html", "golden/xlsx/xlsx-rich-value.structural.html", "golden/xlsx/xlsx-rich-value.plain.txt"]},
-      {"id": "checkbox", "fixture": "fixtures/xlsx/xlsx-checkbox.xlsx", "golden": ["golden/xlsx/xlsx-checkbox.semantic.html", "golden/xlsx/xlsx-checkbox.structural.html", "golden/xlsx/xlsx-checkbox.plain.txt"]},
-      {"id": "image", "fixture": "fixtures/xlsx/xlsx-image.xlsx", "golden": ["golden/xlsx/xlsx-image.semantic.html", "golden/xlsx/xlsx-image.structural.html", "golden/xlsx/xlsx-image.plain.txt"]},
-      {"id": "drawing-chart", "fixture": "fixtures/xlsx/xlsx-drawing-chart.xlsx", "golden": ["golden/xlsx/xlsx-drawing-chart.semantic.html", "golden/xlsx/xlsx-drawing-chart.structural.html", "golden/xlsx/xlsx-drawing-chart.plain.txt"]},
-      {"id": "chart-area", "fixture": "fixtures/xlsx/xlsx-chart-area.xlsx", "golden": ["golden/xlsx/xlsx-chart-area.semantic.html", "golden/xlsx/xlsx-chart-area.structural.html", "golden/xlsx/xlsx-chart-area.plain.txt"]},
-      {"id": "chart-area3d", "fixture": "fixtures/xlsx/xlsx-chart-area3d.xlsx", "golden": ["golden/xlsx/xlsx-chart-area3d.semantic.html", "golden/xlsx/xlsx-chart-area3d.structural.html", "golden/xlsx/xlsx-chart-area3d.plain.txt"]},
-      {"id": "chart-bar", "fixture": "fixtures/xlsx/xlsx-chart-bar.xlsx", "golden": ["golden/xlsx/xlsx-chart-bar.semantic.html", "golden/xlsx/xlsx-chart-bar.structural.html", "golden/xlsx/xlsx-chart-bar.plain.txt"]},
-      {"id": "chart-bar3d", "fixture": "fixtures/xlsx/xlsx-chart-bar3d.xlsx", "golden": ["golden/xlsx/xlsx-chart-bar3d.semantic.html", "golden/xlsx/xlsx-chart-bar3d.structural.html", "golden/xlsx/xlsx-chart-bar3d.plain.txt"]},
-      {"id": "chart-bubble", "fixture": "fixtures/xlsx/xlsx-chart-bubble.xlsx", "golden": ["golden/xlsx/xlsx-chart-bubble.semantic.html", "golden/xlsx/xlsx-chart-bubble.structural.html", "golden/xlsx/xlsx-chart-bubble.plain.txt"]},
-      {"id": "chart-doughnut", "fixture": "fixtures/xlsx/xlsx-chart-doughnut.xlsx", "golden": ["golden/xlsx/xlsx-chart-doughnut.semantic.html", "golden/xlsx/xlsx-chart-doughnut.structural.html", "golden/xlsx/xlsx-chart-doughnut.plain.txt"]},
-      {"id": "chart-line", "fixture": "fixtures/xlsx/xlsx-chart-line.xlsx", "golden": ["golden/xlsx/xlsx-chart-line.semantic.html", "golden/xlsx/xlsx-chart-line.structural.html", "golden/xlsx/xlsx-chart-line.plain.txt"]},
-      {"id": "chart-line3d", "fixture": "fixtures/xlsx/xlsx-chart-line3d.xlsx", "golden": ["golden/xlsx/xlsx-chart-line3d.semantic.html", "golden/xlsx/xlsx-chart-line3d.structural.html", "golden/xlsx/xlsx-chart-line3d.plain.txt"]},
-      {"id": "chart-ofpie", "fixture": "fixtures/xlsx/xlsx-chart-ofpie.xlsx", "golden": ["golden/xlsx/xlsx-chart-ofpie.semantic.html", "golden/xlsx/xlsx-chart-ofpie.structural.html", "golden/xlsx/xlsx-chart-ofpie.plain.txt"]},
-      {"id": "chart-pie", "fixture": "fixtures/xlsx/xlsx-chart-pie.xlsx", "golden": ["golden/xlsx/xlsx-chart-pie.semantic.html", "golden/xlsx/xlsx-chart-pie.structural.html", "golden/xlsx/xlsx-chart-pie.plain.txt"]},
-      {"id": "chart-pie3d", "fixture": "fixtures/xlsx/xlsx-chart-pie3d.xlsx", "golden": ["golden/xlsx/xlsx-chart-pie3d.semantic.html", "golden/xlsx/xlsx-chart-pie3d.structural.html", "golden/xlsx/xlsx-chart-pie3d.plain.txt"]},
-      {"id": "chart-radar", "fixture": "fixtures/xlsx/xlsx-chart-radar.xlsx", "golden": ["golden/xlsx/xlsx-chart-radar.semantic.html", "golden/xlsx/xlsx-chart-radar.structural.html", "golden/xlsx/xlsx-chart-radar.plain.txt"]},
-      {"id": "chart-scatter", "fixture": "fixtures/xlsx/xlsx-chart-scatter.xlsx", "golden": ["golden/xlsx/xlsx-chart-scatter.semantic.html", "golden/xlsx/xlsx-chart-scatter.structural.html", "golden/xlsx/xlsx-chart-scatter.plain.txt"]},
-      {"id": "chart-stock", "fixture": "fixtures/xlsx/xlsx-chart-stock.xlsx", "golden": ["golden/xlsx/xlsx-chart-stock.semantic.html", "golden/xlsx/xlsx-chart-stock.structural.html", "golden/xlsx/xlsx-chart-stock.plain.txt"]},
-      {"id": "chart-surface", "fixture": "fixtures/xlsx/xlsx-chart-surface.xlsx", "golden": ["golden/xlsx/xlsx-chart-surface.semantic.html", "golden/xlsx/xlsx-chart-surface.structural.html", "golden/xlsx/xlsx-chart-surface.plain.txt"]},
-      {"id": "chart-surface3d", "fixture": "fixtures/xlsx/xlsx-chart-surface3d.xlsx", "golden": ["golden/xlsx/xlsx-chart-surface3d.semantic.html", "golden/xlsx/xlsx-chart-surface3d.structural.html", "golden/xlsx/xlsx-chart-surface3d.plain.txt"]},
-      {"id": "chart-combination", "fixture": "fixtures/xlsx/xlsx-chart-combination.xlsx", "golden": ["golden/xlsx/xlsx-chart-combination.semantic.html", "golden/xlsx/xlsx-chart-combination.structural.html", "golden/xlsx/xlsx-chart-combination.plain.txt"]},
-      {"id": "chart-waterfall", "fixture": "fixtures/xlsx/xlsx-chart-waterfall.xlsx", "golden": ["golden/xlsx/xlsx-chart-waterfall.semantic.html", "golden/xlsx/xlsx-chart-waterfall.structural.html", "golden/xlsx/xlsx-chart-waterfall.plain.txt"]},
-      {"id": "chart-histogram", "fixture": "fixtures/xlsx/xlsx-chart-histogram.xlsx", "golden": ["golden/xlsx/xlsx-chart-histogram.semantic.html", "golden/xlsx/xlsx-chart-histogram.structural.html", "golden/xlsx/xlsx-chart-histogram.plain.txt"]},
-      {"id": "chart-pareto", "fixture": "fixtures/xlsx/xlsx-chart-pareto.xlsx", "golden": ["golden/xlsx/xlsx-chart-pareto.semantic.html", "golden/xlsx/xlsx-chart-pareto.structural.html", "golden/xlsx/xlsx-chart-pareto.plain.txt"]},
-      {"id": "chart-boxwhisker", "fixture": "fixtures/xlsx/xlsx-chart-boxwhisker.xlsx", "golden": ["golden/xlsx/xlsx-chart-boxwhisker.semantic.html", "golden/xlsx/xlsx-chart-boxwhisker.structural.html", "golden/xlsx/xlsx-chart-boxwhisker.plain.txt"]},
-      {"id": "chart-funnel", "fixture": "fixtures/xlsx/xlsx-chart-funnel.xlsx", "golden": ["golden/xlsx/xlsx-chart-funnel.semantic.html", "golden/xlsx/xlsx-chart-funnel.structural.html", "golden/xlsx/xlsx-chart-funnel.plain.txt"]},
-      {"id": "chart-treemap", "fixture": "fixtures/xlsx/xlsx-chart-treemap.xlsx", "golden": ["golden/xlsx/xlsx-chart-treemap.semantic.html", "golden/xlsx/xlsx-chart-treemap.structural.html", "golden/xlsx/xlsx-chart-treemap.plain.txt"]},
-      {"id": "chart-sunburst", "fixture": "fixtures/xlsx/xlsx-chart-sunburst.xlsx", "golden": ["golden/xlsx/xlsx-chart-sunburst.semantic.html", "golden/xlsx/xlsx-chart-sunburst.structural.html", "golden/xlsx/xlsx-chart-sunburst.plain.txt"]},
-      {"id": "pivot-table", "fixture": "fixtures/xlsx/xlsx-pivot-table.xlsx", "golden": ["golden/xlsx/xlsx-pivot-table.semantic.html", "golden/xlsx/xlsx-pivot-table.structural.html", "golden/xlsx/xlsx-pivot-table.plain.txt"]},
-      {"id": "slicer", "fixture": "fixtures/xlsx/xlsx-slicer.xlsx", "golden": ["golden/xlsx/xlsx-slicer.semantic.html", "golden/xlsx/xlsx-slicer.structural.html", "golden/xlsx/xlsx-slicer.plain.txt"]},
-      {"id": "timeline", "fixture": "fixtures/xlsx/xlsx-timeline.xlsx", "golden": ["golden/xlsx/xlsx-timeline.semantic.html", "golden/xlsx/xlsx-timeline.structural.html", "golden/xlsx/xlsx-timeline.plain.txt"]}
-    ]
+    "pptx": [],
+    "xlsx": []
   }
 }

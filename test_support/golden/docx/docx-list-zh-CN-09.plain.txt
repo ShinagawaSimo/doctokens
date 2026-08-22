@@ -1,0 +1,34 @@
+density=plain
+// w:numFmt = irohaFullWidth
+
+// lang=zh-CN
+
+// UI name: イ,ロ,ハ …
+
+イ.	Item 1
+
+ロ.	Item 2
+
+ハ.	Item 3
+
+ニ.	Item 4
+
+ホ.	Item 5
+
+ヘ.	Item 6
+
+ト.	Item 7
+
+チ.	Item 8
+
+リ.	Item 9
+
+ヌ.	Item 10
+
+ト.	Item 101
+
+カ.	Item 1001
+
+サ.	Item 10001
+
+ユ.	Item 10050

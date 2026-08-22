@@ -1,0 +1,34 @@
+density=plain
+// w:numFmt = lowerRoman
+
+// lang=zh-CN
+
+// UI name: ⅰ,ⅱ,ⅲ …
+
+i.	Item 1
+
+ii.	Item 2
+
+iii.	Item 3
+
+iv.	Item 4
+
+v.	Item 5
+
+vi.	Item 6
+
+vii.	Item 7
+
+viii.	Item 8
+
+ix.	Item 9
+
+x.	Item 10
+
+ci.	Item 101
+
+mi.	Item 1001
+
+mmmmmmmmmmi.	Item 10001
+
+mmmmmmmmmml.	Item 10050

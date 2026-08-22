@@ -1,6 +1,0 @@
-density=plain
-First.	Item 1
-
-Second.	Item 2
-
-Third.	Item 3

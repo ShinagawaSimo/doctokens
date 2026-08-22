@@ -1,0 +1,30 @@
+density=plain
+// w:numFmt = upperLetter
+
+// lang=zh-CN
+
+// UI name: A, B, C …
+
+A.	Item 1
+
+B.	Item 2
+
+C.	Item 3
+
+D.	Item 4
+
+E.	Item 5
+
+F.	Item 6
+
+G.	Item 7
+
+H.	Item 8
+
+I.	Item 9
+
+J.	Item 10
+
+WWWW.	Item 101
+
+ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ.	Item 780

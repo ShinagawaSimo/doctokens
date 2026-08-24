@@ -9,6 +9,7 @@ from xml.etree import ElementTree as ET
 from ooxml_llm_core.chart_ml import CHART_EX_GRAPHIC_DATA_URI
 from ooxml_llm_core.models import ParseWarning
 from ooxml_llm_core.omml_latex import omath_to_latex
+from ooxml_llm_core.text_numbering import format_drawingml_autonumber
 
 from ..core.constants import attr, first_child, local_name
 from ..core.models import (
@@ -27,52 +28,7 @@ from ..core.models import (
 )
 from ..ooxml.colors import is_default_text_color, resolve_color_element
 from ..ooxml.inheritance import LayoutMasterResolver, shape_geometry
-
-HyperlinkLookup = dict[tuple[str, str], str]
-
-
-@dataclass(slots=True)
-class TextBodyResult:
-    """Single-pass text result for one DrawingML ``a:txBody`` subtree."""
-
-    text: str | None
-    runs: list[Run]
-    paragraphs: list[Paragraph]
-
-
-class DrawingTextParser:
-    """Build text, run and paragraph IR in one pass over a text body."""
-
-    def __init__(
-        self,
-        warnings: list[ParseWarning],
-        hyperlink_lookup: HyperlinkLookup,
-    ) -> None:
-        self._warnings = warnings
-        self._hyperlink_lookup = hyperlink_lookup
-
-    def parse(
-        self,
-        tx_body: ET.Element | None,
-        *,
-        part: str,
-        theme: dict[str, str],
-        color_map: dict[str, str],
-        inherited_styles: dict[int, ParagraphStyle] | None = None,
-    ) -> TextBodyResult:
-        paragraphs: list[Paragraph] = []
-        runs = shape_runs(
-            tx_body,
-            part,
-            self._warnings,
-            theme,
-            color_map,
-            self._hyperlink_lookup,
-            inherited_styles,
-            paragraphs,
-        )
-        text = "".join(run.get("text", "") for run in runs)
-        return TextBodyResult(text or None, runs, paragraphs)
+from .text import DrawingTextParser, HyperlinkLookup
 
 
 @dataclass(frozen=True)
@@ -127,7 +83,7 @@ class SlideParser:
         self._slide_size = slide_size
         self._theme = theme
         self._hyperlink_lookup = hyperlink_lookup
-        self._text_parser = DrawingTextParser(warnings, hyperlink_lookup)
+        self._text_parser = DrawingTextParser(warnings, hyperlink_lookup, shape_runs)
         self._table_index = 0
 
     def parse_slide(self, root: ET.Element, part: str) -> tuple[bool, list[ShapeBlock], SlideBackground | None]:
@@ -399,9 +355,7 @@ class SlideParser:
         shapes[:] = [
             shape
             for shape in shapes
-            if shape["type"] != "shape"
-            or SlideParser._is_meaningful_shape(shape)
-            or shape["id"] in connector_endpoints
+            if shape["type"] != "shape" or SlideParser._is_meaningful_shape(shape) or shape["id"] in connector_endpoints
         ]
 
     @staticmethod
@@ -1025,52 +979,7 @@ def _parse_int(value: str | None, default: int) -> int:
 
 
 def _format_list_number(number: int, number_type: str) -> str:
-    if number_type in {"alphaLcPeriod", "alphaLcParenRight"}:
-        return _alpha_number(number, upper=False) + ("." if number_type.endswith("Period") else ")")
-    if number_type in {"alphaUcPeriod", "alphaUcParenRight"}:
-        return _alpha_number(number, upper=True) + ("." if number_type.endswith("Period") else ")")
-    if number_type in {"romanLcPeriod", "romanLcParenRight"}:
-        return _roman_number(number).lower() + ("." if number_type.endswith("Period") else ")")
-    if number_type in {"romanUcPeriod", "romanUcParenRight"}:
-        return _roman_number(number) + ("." if number_type.endswith("Period") else ")")
-    if number_type.endswith("ParenRight"):
-        return f"{number})"
-    return f"{number}."
-
-
-def _alpha_number(number: int, *, upper: bool) -> str:
-    if number <= 0:
-        return str(number)
-    result = ""
-    while number:
-        number, remainder = divmod(number - 1, 26)
-        result = chr((65 if upper else 97) + remainder) + result
-    return result
-
-
-def _roman_number(number: int) -> str:
-    if number <= 0:
-        return str(number)
-    values = (
-        (1000, "M"),
-        (900, "CM"),
-        (500, "D"),
-        (400, "CD"),
-        (100, "C"),
-        (90, "XC"),
-        (50, "L"),
-        (40, "XL"),
-        (10, "X"),
-        (9, "IX"),
-        (5, "V"),
-        (4, "IV"),
-        (1, "I"),
-    )
-    result = []
-    for value, token in values:
-        count, number = divmod(number, value)
-        result.append(token * count)
-    return "".join(result)
+    return format_drawingml_autonumber(number, number_type)
 
 
 def _run_format(

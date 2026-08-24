@@ -6,6 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from ooxml_llm_core.limits import PackageLimits
+from ooxml_llm_core.options import PackageOptions
 from ooxml_llm_core.package import (
     PackageError,
     PackageReader,
@@ -95,3 +96,18 @@ class CorePackageReaderTests(unittest.TestCase):
     def test_bytes_source_rejects_invalid(self) -> None:
         with self.assertRaisesRegex(PackageError, "Not a valid zip"):
             PackageReader(b"not a zip file", PackageLimits()).__enter__()
+
+    def test_limits_and_unsafe_entry_names_are_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "max_zip_entries"):
+            PackageLimits(max_zip_entries=0)
+        for name in ("/absolute.xml", "C:/drive.xml", "../parent.xml"):
+            with self.subTest(name=name), self.assertRaisesRegex(PackageError, "Unsafe"):
+                PackageReader._validate_entry_name(name)
+
+    def test_common_ocr_option_validation(self) -> None:
+        with self.assertRaisesRegex(ValueError, "ocr_workers"):
+            PackageOptions.validate_ocr_options(None, 0, 1.0)
+        with self.assertRaisesRegex(ValueError, "ocr_timeout"):
+            PackageOptions.validate_ocr_options(None, 1, float("inf"))
+        with self.assertRaisesRegex(TypeError, "ocr must provide"):
+            PackageOptions.validate_ocr_options(object(), 1, 1.0)

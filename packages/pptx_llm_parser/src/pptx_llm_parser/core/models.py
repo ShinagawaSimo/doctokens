@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Literal, TypedDict
 
 from ooxml_llm_core.chart_ml import ChartPlotInfo, ChartSeriesInfo
-from ooxml_llm_core.models import MetricsSnapshot, ParseWarning
+from ooxml_llm_core.models import MetricsSnapshot, ParseReport, ParseWarning
+from ooxml_llm_core.options import PackageOptions
 
 DEFAULT_MAX_ZIP_ENTRIES = 10_000
 DEFAULT_MAX_ENTRY_UNCOMPRESSED_BYTES = 50 * 1024 * 1024
@@ -21,40 +20,16 @@ def _empty_metrics() -> MetricsSnapshot:
 
 
 @dataclass(frozen=True)
-class ParseOptions:
+class ParseOptions(PackageOptions):
     """Tunables for a single parse. Frozen so callers can share one instance safely."""
 
-    debug: bool = False
-    output_dir: Path = field(default_factory=lambda: Path("out"))
-    max_zip_entries: int = DEFAULT_MAX_ZIP_ENTRIES
-    max_entry_uncompressed_bytes: int = DEFAULT_MAX_ENTRY_UNCOMPRESSED_BYTES
-    max_total_uncompressed_bytes: int = DEFAULT_MAX_TOTAL_UNCOMPRESSED_BYTES
     ocr: object | None = None
     ocr_workers: int = 4
     ocr_timeout: float = 120.0
 
     def __post_init__(self) -> None:
-        for name in (
-            "max_zip_entries",
-            "max_entry_uncompressed_bytes",
-            "max_total_uncompressed_bytes",
-        ):
-            value = getattr(self, name)
-            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-                raise ValueError(f"{name} must be greater than zero")
-        if isinstance(self.ocr_workers, bool) or not isinstance(self.ocr_workers, int) or self.ocr_workers <= 0:
-            raise ValueError("ocr_workers must be greater than zero")
-        if (
-            isinstance(self.ocr_timeout, bool)
-            or not isinstance(self.ocr_timeout, (int, float))
-            or not math.isfinite(self.ocr_timeout)
-            or self.ocr_timeout <= 0
-        ):
-            raise ValueError("ocr_timeout must be greater than zero")
-        if self.ocr is not None and not any(
-            callable(getattr(self.ocr, method, None)) for method in ("extract", "extract_result")
-        ):
-            raise TypeError("ocr must provide an extract(image_bytes) or extract_result(image_bytes) method")
+        self.validate_package_options()
+        self.validate_ocr_options(self.ocr, self.ocr_workers, self.ocr_timeout)
 
 
 class RunFormat(TypedDict, total=False):
@@ -290,3 +265,4 @@ class ParsedPresentation:
     warnings: list[ParseWarning] = field(default_factory=list)
     ocr_results: dict[str, OcrStoredResult] = field(default_factory=dict)
     metrics: MetricsSnapshot = field(default_factory=_empty_metrics)
+    report: ParseReport | None = None

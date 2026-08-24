@@ -20,7 +20,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "packages" / "ooxml_llm_core" / "src"))
@@ -32,9 +31,9 @@ from docx_llm_parser import Density as DocxDensity  # noqa: E402
 from docx_llm_parser import parse_docx  # noqa: E402
 from pptx_llm_parser import Density as PptxDensity  # noqa: E402
 from pptx_llm_parser import parse_pptx  # noqa: E402
-from test_support.file_contract import write_text_result  # noqa: E402
 from xlsx_llm_parser import parse_xlsx  # noqa: E402
 
+from test_support.file_contract import write_text_result  # noqa: E402
 
 TEST_SUPPORT = ROOT / "test_support"
 MATRIX_PATH = TEST_SUPPORT / "fixture_matrix.json"
@@ -77,11 +76,7 @@ def _build_matrix() -> dict[str, Any]:
     for package, extension in _PACKAGE_EXTENSIONS.items():
         fixture_dir = TEST_SUPPORT / "fixtures" / package
         fixtures = sorted(
-            (
-                path
-                for path in fixture_dir.glob(f"*{extension}")
-                if path.is_file() and not path.name.startswith("~$")
-            ),
+            (path for path in fixture_dir.glob(f"*{extension}") if path.is_file() and not path.name.startswith("~$")),
             key=lambda path: path.name.lower(),
         )
         packages[package] = [_case(package, fixture) for fixture in fixtures]

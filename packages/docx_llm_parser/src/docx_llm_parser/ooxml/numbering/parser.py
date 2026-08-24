@@ -1,48 +1,17 @@
-"""Parse Word numbering definitions and materialize visible paragraph markers."""
+"""Parse ``word/numbering.xml`` into resolved numbering definitions."""
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, replace
 from types import MappingProxyType
 from xml.etree import ElementTree as ET
 
-from ..core.constants import attr, child_elements, first_child, is_on, qualified_name
-from ..core.models import NumberingLabel, ParseWarning, RunFormat, append_warning
-from ..core.package import PackageReader
-from .formatting import parse_run_format
-from .number_formats import NumberFormatRenderer
-
-
-@dataclass(frozen=True)
-class NumberingLevel:
-    """Display rules for one zero-based ``w:lvl`` definition."""
-
-    numbering_level: int
-    start: int = 1
-    number_format: str = "decimal"
-    level_text: str | None = None
-    suffix: str = "tab"
-    paragraph_style_id: str | None = None
-    marker_format: RunFormat = field(default_factory=dict)
-    picture_bullet_id: str | None = None
-    restart_level: int | None = None
-    is_legal: bool = False
-
-
-@dataclass(frozen=True)
-class NumberingInstance:
-    """A concrete ``w:num`` instance and its level-local overrides."""
-
-    numbering_id: str
-    abstract_num_id: str
-    level_overrides: Mapping[int, NumberingLevel] = field(default_factory=dict)
-    start_overrides: Mapping[int, int] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "level_overrides", MappingProxyType(dict(self.level_overrides)))
-        object.__setattr__(self, "start_overrides", MappingProxyType(dict(self.start_overrides)))
+from ...core.constants import attr, child_elements, first_child, is_on, qualified_name
+from ...core.models import ParseWarning
+from ...core.package import PackageReader
+from ..formatting import parse_run_format
+from .models import NumberingInstance, NumberingLevel
 
 
 class NumberingMap:
@@ -65,11 +34,9 @@ class NumberingMap:
         self.warnings = warnings
 
     def picture_bullet_relationship(self, picture_bullet_id: str | None) -> str | None:
-        """Return the relationship used by an optional ``w:lvlPicBulletId``."""
         return self.picture_bullet_relationships.get(picture_bullet_id or "")
 
     def level_for(self, num_id: str, numbering_level: int) -> NumberingLevel | None:
-        """Resolve an effective level, including overrides and style links."""
         return self._level_for(num_id, numbering_level, visited=set())
 
     def _level_for(self, num_id: str, numbering_level: int, visited: set[str]) -> NumberingLevel | None:
@@ -79,17 +46,14 @@ class NumberingMap:
         instance = self.instances.get(num_id)
         if instance is None:
             return None
-
         override = instance.level_overrides.get(numbering_level)
         if override is not None:
             return self._with_start_override(instance, numbering_level, override)
-
         linked_num_id = self.style_link_num_ids.get(instance.abstract_num_id)
         if linked_num_id and linked_num_id != num_id:
             linked_level = self._level_for(linked_num_id, numbering_level, visited)
             if linked_level is not None:
                 return self._with_start_override(instance, numbering_level, linked_level)
-
         base = self.abstract_levels.get(instance.abstract_num_id, {}).get(numbering_level)
         return self._with_start_override(instance, numbering_level, base)
 
@@ -105,7 +69,6 @@ class NumberingMap:
         return replace(level, start=start) if start is not None else level
 
     def level_for_style(self, num_id: str, style_id: str) -> int | None:
-        """Resolve a level bound to a paragraph style, following style-number links."""
         pending = [num_id]
         visited: set[str] = set()
         while pending:
@@ -116,14 +79,13 @@ class NumberingMap:
             instance = self.instances.get(current_num_id)
             if instance is None:
                 continue
-
             for level, override in instance.level_overrides.items():
                 if override.paragraph_style_id == style_id:
                     return level
             for level in sorted(self.abstract_levels.get(instance.abstract_num_id, {})):
                 if level in instance.level_overrides:
                     continue
-                definition: NumberingLevel | None = self.level_for(current_num_id, level)
+                definition = self.level_for(current_num_id, level)
                 if definition is not None and definition.paragraph_style_id == style_id:
                     return level
             linked_num_id = self.style_link_num_ids.get(instance.abstract_num_id)
@@ -132,10 +94,9 @@ class NumberingMap:
         return None
 
     def to_debug_dict(self) -> dict[str, object]:
-        """Produce a JSON-ready view of source numbering definitions."""
         return {
             "abstractNums": {
-                abstract_id: {str(level): asdict(definition) for level, definition in sorted(levels.items())}
+                abstract_id: {str(level): self._level_dict(definition) for level, definition in sorted(levels.items())}
                 for abstract_id, levels in sorted(self.abstract_levels.items())
             },
             "nums": {
@@ -143,7 +104,7 @@ class NumberingMap:
                     "numId": instance.numbering_id,
                     "abstractNumId": instance.abstract_num_id,
                     "levelOverrides": {
-                        str(level): asdict(definition) for level, definition in sorted(instance.level_overrides.items())
+                        str(level): self._level_dict(definition) for level, definition in sorted(instance.level_overrides.items())
                     },
                     "startOverrides": {str(level): start for level, start in sorted(instance.start_overrides.items())},
                 }
@@ -153,125 +114,20 @@ class NumberingMap:
             "styleLinks": dict(sorted(self.style_link_num_ids.items())),
         }
 
-
-class NumberingState:
-    """Maintain one document's list counters and turn levels into visible labels."""
-
-    def __init__(self, numbering: NumberingMap, warnings: list[ParseWarning]) -> None:
-        self.numbering = numbering
-        self.warnings = warnings
-        self._counters: dict[str, dict[int, int]] = {}
-        self._number_formatter = NumberFormatRenderer(warnings)
-
-    def advance(
-        self,
-        num_id: str,
-        numbering_level: int,
-        *,
-        part: str | None = None,
-        block_id: str | None = None,
-    ) -> NumberingLabel | None:
-        """Advance a list level and return its synthetic visible run metadata."""
-        level = self.numbering.level_for(num_id, numbering_level)
-        if level is None:
-            append_warning(
-                self.warnings,
-                "NUMBERING_LEVEL_MISSING",
-                f"Missing numbering level for numId={num_id}, numbering_level={numbering_level}",
-                part=part,
-                block_id=block_id,
-            )
-            return None
-
-        counters = self._counters.setdefault(num_id, {})
-        counters[numbering_level] = counters.get(numbering_level, level.start - 1) + 1
-        self._reset_deeper_levels(num_id, numbering_level, counters)
-
-        label = self._render_label(num_id, numbering_level, counters)
-        visible_text = "" if level.number_format == "none" or level.picture_bullet_id else label + self._suffix_text(level.suffix)
-        return {
-            "numId": num_id,
-            "level": numbering_level,
-            "label": label,
-            "text": visible_text,
-            "format": level.number_format,
-            "template": level.level_text,
-            "suffix": level.suffix,
-            "counter": counters[numbering_level],
-            "markerFormat": level.marker_format,
-            "pictureBulletId": level.picture_bullet_id,
-            "markerImageId": None,
-            "legal": level.is_legal,
-        }
-
-    def _reset_deeper_levels(self, num_id: str, used_level: int, counters: dict[int, int]) -> None:
-        for deeper_level in list(counters):
-            deeper = self.numbering.level_for(num_id, deeper_level)
-            if deeper_level > used_level and deeper is not None and self._restarts_after(deeper, used_level, deeper_level):
-                del counters[deeper_level]
-
     @staticmethod
-    def _restarts_after(deeper: NumberingLevel, used_level: int, deeper_level: int) -> bool:
-        """Return whether the current higher-level item restarts ``deeper``."""
-        if deeper.restart_level == 0:
-            return False
-        restart_boundary = deeper_level - 1 if deeper.restart_level is None else deeper.restart_level - 1
-        return used_level <= restart_boundary
-
-    def _render_label(self, num_id: str, numbering_level: int, counters: dict[int, int]) -> str:
-        current_level = self.numbering.level_for(num_id, numbering_level)
-        if current_level is None or current_level.number_format == "none" or current_level.picture_bullet_id:
-            return ""
-        template = current_level.level_text
-        if not template:
-            if current_level.number_format == "bullet" and not current_level.is_legal:
-                return "•"
-            return self._format_number(counters[numbering_level], self._format_for(current_level, current_level))
-        if current_level.number_format == "bullet" and "%" not in template:
-            return self._format_number(counters[numbering_level], "decimal") if current_level.is_legal else template
-
-        def replace_match(match: re.Match[str]) -> str:
-            if match.group(0) == "%%":
-                return "%"
-            reference_level = int(match.group(1)) - 1
-            reference = self.numbering.level_for(num_id, reference_level) or current_level
-            if reference.number_format == "none":
-                return ""
-            value = counters.get(reference_level, reference.start)
-            return self._format_number(value, self._format_for(current_level, reference))
-
-        return re.sub(r"%%|%([1-9])", replace_match, template)
-
-    @staticmethod
-    def _format_for(current_level: NumberingLevel, reference_level: NumberingLevel) -> str:
-        return "decimal" if current_level.is_legal else reference_level.number_format
-
-    def _format_number(self, value: int, number_format: str) -> str:
-        return self._number_formatter.format(value, number_format)
-
-    @staticmethod
-    def _bullet_symbol(template: str | None) -> str:
-        """Map common Symbol-font private-use bullets without retaining font metadata."""
-        if not template:
-            return "•"
-        return {"\uf06c": "●", "\uf06e": "■", "\uf075": "◆"}.get(template, template)
-
-    @staticmethod
-    def _suffix_text(suffix: str) -> str:
-        if suffix == "nothing":
-            return ""
-        if suffix == "space":
-            return " "
-        return "\t"
-
-    # Kept as small compatibility helpers for direct unit tests and callers.
-    _chinese_counting = staticmethod(NumberFormatRenderer._chinese_counting)
-    _chinese_digital = staticmethod(NumberFormatRenderer._chinese_digital)
-    _japanese_counting = staticmethod(NumberFormatRenderer._japanese_counting)
+    def _level_dict(level: NumberingLevel) -> dict[str, object]:
+        result = asdict(level)
+        if result.get("custom_format") is None:
+            result.pop("custom_format", None)
+        if result.get("language") is None:
+            result.pop("language", None)
+        if result.get("marker_font") is None:
+            result.pop("marker_font", None)
+        return result
 
 
 class NumberingParser:
-    """Read ``word/numbering.xml`` into immutable definition records."""
+    """Read Word's numbering part and resolve level-local overrides."""
 
     def __init__(
         self,
@@ -288,17 +144,10 @@ class NumberingParser:
             return NumberingMap({}, {}, self.warnings)
         with self.package.open_entry("word/numbering.xml") as stream:
             root = ET.parse(stream).getroot()
-
         picture_bullet_relationships = self._parse_picture_bullet_relationships(root)
         abstract_levels, style_link_num_ids = self._parse_abstract_numbers(root)
         instances = self._parse_instances(root)
-        return NumberingMap(
-            abstract_levels,
-            instances,
-            self.warnings,
-            picture_bullet_relationships,
-            style_link_num_ids,
-        )
+        return NumberingMap(abstract_levels, instances, self.warnings, picture_bullet_relationships, style_link_num_ids)
 
     def _parse_abstract_numbers(self, root: ET.Element) -> tuple[dict[str, dict[int, NumberingLevel]], dict[str, str]]:
         abstract_levels: dict[str, dict[int, NumberingLevel]] = {}
@@ -336,8 +185,6 @@ class NumberingParser:
                     start_overrides[level_index] = start
                 definition = self._parse_level(first_child(override, "w", "lvl"))
                 if definition is not None:
-                    # ``lvlOverride`` owns the target level; its embedded ``lvl``
-                    # cannot define restart behavior or redirect that target.
                     level_overrides[level_index] = replace(definition, numbering_level=level_index, restart_level=None)
             instances[num_id] = NumberingInstance(num_id, abstract_id, level_overrides, start_overrides)
         return instances
@@ -348,20 +195,46 @@ class NumberingParser:
         level_value = self._parse_int(attr(lvl, "w", "ilvl"), 0)
         start = self._parse_int(self._child_attr(lvl, "start", "val"), 1)
         assert level_value is not None and start is not None
-        number_format = self._child_attr(lvl, "numFmt", "val") or "decimal"
+        num_fmt = first_child(lvl, "w", "numFmt")
+        number_format = (attr(num_fmt, "w", "val") if num_fmt is not None else None) or "decimal"
+        custom_format = attr(num_fmt, "w", "format") if num_fmt is not None else None
         level_text = self._child_attr(lvl, "lvlText", "val")
+        run_properties = first_child(lvl, "w", "rPr")
         return NumberingLevel(
             numbering_level=level_value,
             start=start,
             number_format=number_format,
-            level_text=NumberingState._bullet_symbol(level_text) if number_format == "bullet" else level_text,
+            level_text=level_text,
             suffix=self._child_attr(lvl, "suff", "val") or "tab",
             paragraph_style_id=self._child_attr(lvl, "pStyle", "val"),
-            marker_format=parse_run_format(first_child(lvl, "w", "rPr")),
+            marker_format=parse_run_format(run_properties),
+            marker_font=self._run_font(run_properties),
             picture_bullet_id=self._child_attr(lvl, "lvlPicBulletId", "val"),
             restart_level=self._parse_int(self._child_attr(lvl, "lvlRestart", "val")),
             is_legal=is_on(first_child(lvl, "w", "isLgl")),
+            language=self._run_language(run_properties),
+            custom_format=custom_format,
         )
+
+    @classmethod
+    def _run_language(cls, run_properties: ET.Element | None) -> str | None:
+        if run_properties is None:
+            return None
+        language = cls._child_attr(run_properties, "lang", "val")
+        return language or cls._child_attr(run_properties, "lang", "eastAsia")
+
+    @classmethod
+    def _run_font(cls, run_properties: ET.Element | None) -> str | None:
+        if run_properties is None:
+            return None
+        fonts = first_child(run_properties, "w", "rFonts")
+        if fonts is None:
+            return None
+        for name in ("ascii", "hAnsi", "eastAsia", "cs"):
+            value = attr(fonts, "w", name)
+            if value:
+                return value
+        return None
 
     @staticmethod
     def _parse_picture_bullet_relationships(root: ET.Element) -> dict[str, str]:
@@ -391,3 +264,6 @@ class NumberingParser:
             return int(value)
         except ValueError:
             return default
+
+
+__all__ = ["NumberingMap", "NumberingParser"]

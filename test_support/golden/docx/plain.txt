@@ -1,0 +1,24 @@
+density=plain
+Document Title
+
+1. Hellolink	
+after break[fn2][ed3][cmt4] insertedx [fn2: Footnote text]
+
+[Image alt text]
+
+[Chart Chart Title (bar, 1 series: Series A)]
+
+[SmartArt "process" : Start Finish (2 nodes)]
+
+Box text
+
+Head
+Body
+
+Last page
+
+[Endnotes]
+[ed3: Endnote text]
+
+[Comments]
+[cmt4: Comment text]

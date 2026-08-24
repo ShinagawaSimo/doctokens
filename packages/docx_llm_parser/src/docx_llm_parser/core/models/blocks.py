@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 from .content import ContentControl, ParagraphBorders, RawHint, Run
 
@@ -17,6 +17,7 @@ class NumberingLabel(TypedDict):
     suffix: str
     counter: int
     markerFormat: dict[str, bool | str | None]
+    markerFont: NotRequired[str]
     pictureBulletId: str | None
     markerImageId: str | None
     legal: bool

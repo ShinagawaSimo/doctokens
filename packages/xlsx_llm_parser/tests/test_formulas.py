@@ -6,6 +6,14 @@ import zipfile
 from pathlib import Path
 
 from xlsx_llm_parser import parse_xlsx
+from xlsx_llm_parser.share_formulas import (
+    _col_row,
+    _offset_formula,
+    _offset_one_ref,
+    _quoted_spans,
+    expand_shared_formula_groups,
+    expand_shared_formulas,
+)
 
 from test_support.file_contract import materialize_bytes
 
@@ -243,6 +251,26 @@ class SharedFormulaTests(unittest.TestCase):
         self.assertIn('formula="1E5*A2"', semantic)
         # String literal text intact; only the real reference offsets.
         self.assertIn('formula="&quot;see A1&quot;&amp;A2"', semantic)
+
+    def test_shared_formula_edge_paths(self) -> None:
+        cells = [{"ref": "A1", "si": "0"}, {"ref": "A2", "si": "0"}]
+        expand_shared_formula_groups({"0": cells})
+        self.assertNotIn("formula", cells[1])
+        master = {"ref": "A1", "si": "1", "shared_ref": "A1:A2", "formula": ""}
+        slave = {"ref": "A2", "si": "1"}
+        expand_shared_formula_groups({"1": [master, slave]})
+        self.assertEqual(slave["formula"], "")
+        self.assertEqual(_offset_formula("A1", 0, 0), "A1")
+        self.assertEqual(_offset_formula('"A1"', 1, 1), '"A1"')
+        self.assertEqual(_offset_formula("Sheet 1!A1", 1, 1), "Sheet 1!A1")
+        self.assertEqual(_offset_formula("A1:B2", 1, 1), "B2:C3")
+        self.assertEqual(_offset_one_ref(False, False, "A", "1", 1, 1), "B2")
+        expand_shared_formulas([{"ref": "A1"}])
+        expand_shared_formula_groups({"2": [{"ref": "A1", "si": "2"}]})
+        self.assertEqual(_col_row("bad"), (0, 0))
+        self.assertEqual(_quoted_spans('"a""b"'), [(0, 6)])
+        self.assertEqual(_offset_formula("SUM(A1)", 1, 1), "SUM(B2)")
+        self.assertEqual(_offset_formula("A1:B", 1, 1), "B2:B")
 
 
 class ArrayFormulaTests(unittest.TestCase):

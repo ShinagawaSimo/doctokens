@@ -6,7 +6,7 @@ import zipfile
 from pathlib import Path
 
 from xlsx_llm_parser import find_cells, get_resource, query_data
-from xlsx_llm_parser.api import _render_chart_resource
+from xlsx_llm_parser.api import _get_resource_from_workbook, _render_chart_resource
 
 from test_support.file_contract import materialize_bytes
 
@@ -329,6 +329,47 @@ class GetResourceTests(unittest.TestCase):
         self.assertIn("<chart id=chart1 ref=C3 type=bar series=1 title=Sales>", html)
         self.assertIn("<series index=1 name=Q1 min=1.0 max=2.0>", html)
         self.assertIn("<point category=A value=1/>", html)
+
+    def test_render_chart_optional_fields_and_workbook_resource_dispatch(self) -> None:
+        html = _render_chart_resource(
+            {
+                "id": "chart2",
+                "ref": "D4",
+                "type": "combination",
+                "plotTypes": ["bar", "line"],
+                "series": [
+                    {
+                        "index": 1,
+                        "chartType": "line",
+                        "bubbleSizes": ["3"],
+                        "xValues": ["1"],
+                        "yValues": ["2"],
+                        "hidden": True,
+                        "points": [{"category": "A", "value": "1", "x": "1", "y": "2", "bubbleSize": "3"}],
+                    }
+                ],
+            }
+        )
+        self.assertIn("plots=bar,line", html)
+        self.assertIn("type=line", html)
+        self.assertIn("bubbleSizes=3", html)
+        self.assertIn("hidden", html)
+        self.assertIn("x=1", html)
+        self.assertIn("y=2", html)
+        self.assertIn("bubbleSize=3", html)
+        workbook = {
+            "sheets": [
+                {
+                    "charts": [{"id": "chart2", "ref": "D4", "type": "bar", "series": []}],
+                    "pivot_tables": [{"id": "pivot1", "name": "Pivot"}],
+                }
+            ],
+            "metadata": {},
+            "fmt_index": object(),
+            "report": object(),
+        }
+        self.assertIn("<chart", _get_resource_from_workbook(workbook, "chart", "chart2") or "")
+        self.assertIn("name=Pivot", _get_resource_from_workbook(workbook, "pivot_table", "pivot1") or "")
 
 
 if __name__ == "__main__":

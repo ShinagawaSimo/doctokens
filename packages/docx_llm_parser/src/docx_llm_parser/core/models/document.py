@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
 from typing import Literal, TypedDict
 
-from ooxml_llm_core.models import ContentTypes, MetricsSnapshot, ParseWarning, RelationshipRecord
+from ooxml_llm_core.models import ContentTypes, MetricsSnapshot, ParseReport, ParseWarning, RelationshipRecord
+from ooxml_llm_core.options import PackageOptions
 
 from ..enums import RevisionMode
 from .blocks import AncillaryItem, Block
@@ -36,45 +35,21 @@ class DocumentManifest(TypedDict):
 
 
 @dataclass(frozen=True)
-class ParseOptions:
+class ParseOptions(PackageOptions):
     """Parse configuration; immutable to keep concurrent tasks from interfering with each other."""
 
     preserve_empty_paragraphs: bool = False
     include_runs: bool = True
     include_raw_hints: bool = True
-    debug: bool = False
     revision_mode: RevisionMode = RevisionMode.FINAL
-    output_dir: Path = Path("out")
-    max_zip_entries: int = 10000
-    max_entry_uncompressed_bytes: int = 50 * 1024 * 1024
-    max_total_uncompressed_bytes: int = 500 * 1024 * 1024
     ocr: object | None = None
     ocr_workers: int = 4
     ocr_timeout: float = 120.0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "revision_mode", RevisionMode.parse(self.revision_mode))
-        limits = {
-            "max_zip_entries": self.max_zip_entries,
-            "max_entry_uncompressed_bytes": self.max_entry_uncompressed_bytes,
-            "max_total_uncompressed_bytes": self.max_total_uncompressed_bytes,
-        }
-        for name, value in limits.items():
-            if value <= 0:
-                raise ValueError(f"{name} must be greater than zero")
-        if isinstance(self.ocr_workers, bool) or not isinstance(self.ocr_workers, int) or self.ocr_workers <= 0:
-            raise ValueError("ocr_workers must be greater than zero")
-        if (
-            isinstance(self.ocr_timeout, bool)
-            or not isinstance(self.ocr_timeout, (int, float))
-            or not math.isfinite(self.ocr_timeout)
-            or self.ocr_timeout <= 0
-        ):
-            raise ValueError("ocr_timeout must be greater than zero")
-        if self.ocr is not None and not any(
-            callable(getattr(self.ocr, method, None)) for method in ("extract", "extract_result")
-        ):
-            raise TypeError("ocr must provide an extract(image_bytes) or extract_result(image_bytes) method")
+        self.validate_package_options()
+        self.validate_ocr_options(self.ocr, self.ocr_workers, self.ocr_timeout)
 
 
 @dataclass(slots=True)
@@ -121,6 +96,7 @@ class ParsedDocument:
     numbering: dict[str, object] = field(default_factory=dict)
     ocr_results: dict[str, OcrStoredResult] = field(default_factory=dict)
     metrics: MetricsSnapshot = field(default_factory=lambda: MetricsSnapshot(stagesMs={}, counters={}))
+    report: ParseReport | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -143,6 +119,7 @@ class ParsedDocument:
             "numbering": self.numbering,
             "ocrResults": self.ocr_results,
             "metrics": self.metrics,
+            "report": self.report.to_dict() if self.report is not None else None,
         }
 
 

@@ -5,7 +5,19 @@ from __future__ import annotations
 import unittest
 from xml.etree import ElementTree as ET
 
-from ooxml_llm_core.chart_ml import ChartParser, parse_chart_xml
+from ooxml_llm_core.chart_ml import (
+    ChartParser,
+    _first_dimension,
+    _flatten_category_levels,
+    _local_name,
+    _namespace,
+    _safe_int,
+    _summary_chart_type,
+    _to_float,
+    _true_value,
+    _unique_in_order,
+    parse_chart_xml,
+)
 
 NS_C = "http://schemas.openxmlformats.org/drawingml/2006/chart"
 NS_CX = "http://schemas.microsoft.com/office/drawing/2014/chartex"
@@ -80,6 +92,25 @@ class ChartParserTests(unittest.TestCase):
         self.assertEqual(chart["series"][0]["values"], ["8", "13"])
         self.assertEqual(chart["series"][0]["formula"], "Sheet1!$B$2:$B$3")
         self.assertNotIn("plots", chart)
+
+    def test_chart_helpers_and_empty_chart_paths(self) -> None:
+        self.assertEqual(ChartParser().parse(ET.Element("chartSpace"))["chart_type"], "unknown")
+        self.assertEqual(_flatten_category_levels([["A"], ["1", "2"]]), ["A / 1", "2"])
+        self.assertEqual(_summary_chart_type([]), "unknown")
+        self.assertEqual(_summary_chart_type(["bar", "bar"]), "bar")
+        self.assertEqual(_summary_chart_type(["bar", "line"]), "combination")
+        self.assertIsNone(_safe_int("bad"))
+        self.assertIsNone(_to_float("bad"))
+        self.assertEqual(_to_float("1.5"), 1.5)
+        self.assertTrue(_true_value("1"))
+        self.assertTrue(_true_value("true"))
+        self.assertFalse(_true_value("0"))
+        self.assertFalse(_true_value(None))
+        self.assertIsNone(_namespace("plain"))
+        self.assertEqual(_namespace("{urn:test}tag"), "urn:test")
+        self.assertEqual(_local_name("{urn:test}tag"), "tag")
+        self.assertEqual(_unique_in_order(["a", "a", "b"]), ["a", "b"])
+        self.assertEqual(_first_dimension({}), [])
 
 
 if __name__ == "__main__":

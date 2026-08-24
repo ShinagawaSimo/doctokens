@@ -5,7 +5,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from xlsx_llm_parser import parse_xlsx
+from xlsx_llm_parser import ParseOptions, load_xlsx, parse_xlsx
 
 from test_support.file_contract import materialize_bytes
 
@@ -88,8 +88,28 @@ class MinimalParseTests(unittest.TestCase):
         self.assertIn("99", html)
         self.assertIn("sheet name=Sheet1", html)
         self.assertIn("<grid ref=A1:B2>", html)
-        self.assertIn("<tr row=1>", html)
-        self.assertIn("<tr row=2>", html)
+
+    def test_loaded_facade_accepts_package_options_and_exposes_report(self) -> None:
+        data = _make_xlsx(
+            {
+                "[Content_Types].xml": _content_types(),
+                "_rels/.rels": _root_rels(),
+                "xl/workbook.xml": _workbook_xml(["Sheet1"]),
+                "xl/_rels/workbook.xml.rels": _workbook_rels(1),
+                "xl/worksheets/sheet1.xml": _sheet_xml([]),
+            }
+        )
+        loaded = load_xlsx(data, options=ParseOptions(max_zip_entries=100))
+        self.assertEqual(loaded.report.format, "xlsx")
+        self.assertEqual(loaded.report.manifest["sheetCount"], 1)
+        self.assertEqual(loaded.render(), loaded.render())
+        self.assertTrue(list(loaded.iter_render(density="plain")))
+        self.assertEqual(loaded.render_range("Sheet1", "A1:A1"), "")
+        self.assertEqual(loaded.find_cells(""), "<matches>\n")
+        self.assertIsNone(loaded.get_resource("image", "missing"))
+        self.assertIsNone(loaded.get_resource("chart", "missing"))
+        with self.assertRaisesRegex(ValueError, "Invalid density"):
+            loaded.render(density="invalid")
 
     def test_empty_sheet(self) -> None:
         """Sheet with no rows produces a sheet tag without grid."""

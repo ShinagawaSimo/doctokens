@@ -7,7 +7,7 @@ density=plain
 
 壹.	Item 1
 
-貳.	Item 2
+贰.	Item 2
 
 叁.	Item 3
 
@@ -15,7 +15,7 @@ density=plain
 
 伍.	Item 5
 
-陸.	Item 6
+陆.	Item 6
 
 柒.	Item 7
 

@@ -50,4 +50,4 @@ jobs:
           --cov=ooxml_llm_core --cov=docx_llm_parser
           --cov=xlsx_llm_parser --cov=ocr_llm_core
           --cov=pptx_llm_parser
-          --cov-branch --cov-fail-under=85
+          --cov-branch

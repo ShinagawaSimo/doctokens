@@ -16,6 +16,29 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.8",
 ]
+ocr = [
+    "ocr-llm-core>=0.1.0",
+]
+tesseract = [
+    "ocr-llm-core>=0.1.0",
+    "pytesseract>=0.3.10",
+    "Pillow>=8.0.0",
+]
+easyocr = [
+    "ocr-llm-core>=0.1.0",
+    "easyocr>=1.7.0",
+    "Pillow>=8.0.0",
+]
+# PaddleVLProvider uses the Python standard library and a remote PaddleOCR-VL API.
+paddle = [
+    "ocr-llm-core>=0.1.0",
+]
+all = [
+    "ocr-llm-core>=0.1.0",
+    "pytesseract>=0.3.10",
+    "Pillow>=8.0.0",
+    "easyocr>=1.7.0",
+]
 
 [tool.setuptools.packages.find]
 where = [
@@ -48,9 +71,9 @@ pythonpath = [
     "packages/ocr_llm_core/src",
     "packages/pptx_llm_parser/src",
 ]
-# Coverage flags are passed by CI (see .github/workflows/ci.yml) so that
-# running a single package's tests locally is not gated by whole-repo
-# coverage thresholds.
+# Coverage reporting is enabled by CI (see .github/workflows/ci.yml) so that
+# local package-level test runs remain lightweight and neither CI nor local
+# runs are gated by a repository-wide coverage percentage.
 addopts = [
     "-ra",
     "--strict-config",

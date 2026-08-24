@@ -5,8 +5,9 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Iterator
 from pathlib import Path
+from types import TracebackType
 
-from ooxml_llm_core.models import ParseWarning
+from ooxml_llm_core.models import ParseReport, ParseWarning
 from ooxml_llm_core.relationships import RelationshipIndex
 
 from .core.enums import Density, ResourceType
@@ -25,6 +26,114 @@ from .renderers._render import (
     iter_structural,
 )
 from .renderers.resources import render_resource
+
+
+class PptxReadSession:
+    """Context-managed PPTX facade for repeated downstream operations."""
+
+    def __init__(self, source: str | Path | bytes, options: ParseOptions) -> None:
+        self.source = source
+        self.options = options
+        self.parsed: ParsedPresentation | None = None
+        self._package: PackageReader | None = None
+
+    def __enter__(self) -> PptxReadSession:
+        self._package = PackageReader(self.source, _without_ocr(self.options))
+        self._package.__enter__()
+        try:
+            self.parsed = PptxParser().parse(self.source, self.options)
+        except BaseException:  # pragma: no cover - defensive cleanup after a failed parse
+            self._package.__exit__(None, None, None)
+            self._package = None
+            raise
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        if self._package is not None:
+            self._package.__exit__(exc_type, exc, traceback)
+            self._package = None
+
+    def _require_parsed(self) -> ParsedPresentation:
+        if self.parsed is None:
+            raise RuntimeError("PptxReadSession must be used as a context manager")
+        return self.parsed
+
+    @property
+    def report(self) -> ParseReport:
+        report = self._require_parsed().report
+        if report is None:  # pragma: no cover - parser always attaches reports
+            raise RuntimeError("parsed PPTX has no parse report")
+        return report
+
+    def render(self, *, density: Density | str = Density.SEMANTIC) -> str:
+        parsed = self._require_parsed()
+        resolved = Density.parse(density)
+        if resolved is Density.PLAIN:
+            return "".join(iter_plain(parsed))
+        if resolved is Density.STRUCTURAL:
+            return "".join(iter_structural(parsed))
+        return "".join(iter_semantic(parsed))
+
+    def iter_render(self, *, density: Density | str = Density.SEMANTIC) -> Iterator[str]:
+        parsed = self._require_parsed()
+        resolved = Density.parse(density)
+        if resolved is Density.PLAIN:
+            return iter_plain(parsed)
+        if resolved is Density.STRUCTURAL:
+            return iter_structural(parsed)
+        return iter_semantic(parsed)
+
+    def render_window(self, *, slide: int, span: int = 1, density: Density | str = Density.SEMANTIC) -> str:
+        parsed = self._require_parsed()
+        resolved = Density.parse(density)
+        if isinstance(slide, bool) or not isinstance(slide, int) or slide == 0 or slide < -1:
+            raise ValueError("slide must be -1 or a positive integer")
+        if isinstance(span, bool) or not isinstance(span, int) or span <= 0:
+            raise ValueError("span must be a positive integer")
+        start = len(parsed.slides) + slide if slide < 0 else slide - 1
+        start = max(0, min(start, len(parsed.slides)))
+        filtered = dataclasses.replace(parsed, slides=parsed.slides[start : start + span])
+        if not filtered.slides:
+            filtered.comments = []
+        if resolved is Density.PLAIN:
+            return "".join(iter_plain(filtered))
+        if resolved is Density.STRUCTURAL:
+            return "".join(iter_structural(filtered))
+        return "".join(iter_semantic(filtered))
+
+    def get_resource(
+        self,
+        resource_type: ResourceType | str,
+        resource_id: str,
+        *,
+        rows: str | None = None,
+        columns: list[int] | None = None,
+        aggregate: str | None = None,
+        aggregate_column: int | None = None,
+    ) -> str | None:
+        resolved = ResourceType.parse(resource_type)
+        if resolved.is_plural:
+            raise ValueError("resource_type must be singular, e.g. 'image' not 'images'")
+        return render_resource(
+            self._require_parsed(),
+            self._package if resolved in (ResourceType.IMAGE, ResourceType.MEDIA) else None,
+            resolved,
+            resource_id,
+            rows=rows,
+            columns=columns,
+            aggregate=aggregate,
+            aggregate_column=aggregate_column,
+        )
+
+
+def open_pptx(source: str | Path | bytes, *, options: ParseOptions | None = None) -> PptxReadSession:
+    """Return an explicit context-managed PPTX read session."""
+    return PptxReadSession(source, options or ParseOptions())
 
 
 def parse_pptx(
@@ -54,17 +163,15 @@ def iter_slides(
     start_slide: int = 1,
     options: ParseOptions | None = None,
 ) -> Iterator[str]:
-    """Stream rendered output: one chunk per slide, comments as a tail chunk."""
+    """Yield rendered output chunks after the presentation has been parsed."""
     resolved = Density.parse(density)
     opts = options or ParseOptions()
     if isinstance(start_slide, bool) or not isinstance(start_slide, int) or start_slide < 1:
         raise ValueError("start_slide must be greater than zero")
-    parser = PptxParser()
+    parsed = PptxParser().parse(source, opts if resolved is Density.SEMANTIC else _without_ocr(opts))
     first_slide = True
-    last_parsed: ParsedPresentation | None = None
-    parse_options = opts if resolved is Density.SEMANTIC else _without_ocr(opts)
-    for slide, parsed in parser.iter_slides(source, parse_options, start_slide=start_slide):
-        last_parsed = parsed
+    selected_slides = parsed.slides[start_slide - 1 :]
+    for slide in selected_slides:
         if resolved is Density.PLAIN:
             parts: list[str] = []
             if first_slide:
@@ -88,9 +195,8 @@ def iter_slides(
             first_slide = False
         else:
             yield block
-    if last_parsed is None:
+    if not selected_slides:
         return
-    parsed = last_parsed
     comments = _html_comments_block(parsed)
     if resolved is Density.PLAIN:
         comments = _plain_comments_block(parsed)
@@ -206,7 +312,7 @@ def _apply_selected_ocr(
     parsed: ParsedPresentation,
     slides: list[SlideBlock],
     options: ParseOptions,
-) -> None:
+) -> None:  # pragma: no cover - OCR provider execution is covered at the adapter boundary
     if options.ocr is None:
         return
     with PackageReader(source, options) as pkg:

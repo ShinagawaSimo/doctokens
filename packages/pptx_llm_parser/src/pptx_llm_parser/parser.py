@@ -10,7 +10,7 @@ from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.debug import DebugWriter
 from ooxml_llm_core.metrics import MetricsRecorder
-from ooxml_llm_core.models import ParseWarning
+from ooxml_llm_core.models import ParseReport, ParseWarning
 from ooxml_llm_core.relationships import HYPERLINK_RELATIONSHIP_TYPE, RelationshipIndex, office_relationship_type
 
 from .core.constants import attr, first_child, local_name
@@ -279,6 +279,21 @@ class PptxParser:
         parsed.metrics = metrics.snapshot()
         if options.debug:
             write_debug_artifacts(DebugWriter(options.output_dir / ".debug"), parsed)
+        parsed.report = ParseReport(
+            "pptx",
+            1,
+            {
+                "slideCount": len(parsed.slides),
+                "shapeCount": sum(len(slide["shapes"]) for slide in parsed.slides),
+                "imageCount": sum(1 for asset in parsed.assets if asset.get("type") == "image"),
+                "mediaCount": sum(1 for asset in parsed.assets if asset.get("type") == "media"),
+                "chartCount": len(parsed.charts),
+                "smartartCount": len(parsed.smartarts),
+                "commentCount": len(parsed.comments),
+            },
+            tuple(parsed.warnings),
+            parsed.metrics,
+        )
         return parsed
 
     def iter_slides(
@@ -288,12 +303,12 @@ class PptxParser:
         *,
         start_slide: int = 1,
     ) -> Generator[tuple[SlideBlock, ParsedPresentation], None, None]:
-        """Yield slides while the package is open, without materializing the deck.
+        """Enumerate slides through a lightweight internal reader.
 
-        Package-level indexes and comments are built once, then each slide XML
-        is read and released before the next iteration. The companion parsed
-        object contains the shared indexes plus the current slide, so callers
-        can render it with the same density functions as ``parse``.
+        Public ``stream``/``iter_slides`` APIs use parse-then-render semantics.
+        This internal path remains only for resource lookup code that can stop
+        after locating one table without exposing streaming parsing as a public
+        contract.
         """
         warnings: list[ParseWarning] = []
         with PackageReader(source, options) as pkg:
@@ -364,10 +379,7 @@ class PptxParser:
     ) -> None:
         """Resolve comment slide/shape references without discarding raw IDs."""
         slide_by_locator = {
-            locator: slide
-            for slide in slides
-            for locator in (slide["id"], slide["part"], slide["sldId"])
-            if locator
+            locator: slide for slide in slides for locator in (slide["id"], slide["part"], slide["sldId"]) if locator
         }
         for comment in comments:
             locator = comment.get("slideId")
@@ -504,11 +516,7 @@ class PptxParser:
             name = element.get("name", "")
             if not name:
                 continue
-            slide_ids = [
-                child.get("id", "")
-                for child in element.iter()
-                if local_name(child.tag) == "sldId" and child.get("id")
-            ]
+            slide_ids = [child.get("id", "") for child in element.iter() if local_name(child.tag) == "sldId" and child.get("id")]
             if not slide_ids:
                 continue
             sections.append({"name": name, "slideIds": slide_ids})

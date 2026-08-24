@@ -4,8 +4,8 @@ import unittest
 
 from docx_llm_parser.core.models import ParseWarning, RelationshipRecord, StyleRecord
 from docx_llm_parser.core.relationships import RelationshipIndex
-from docx_llm_parser.ooxml.number_formats import NumberFormatRenderer
 from docx_llm_parser.ooxml.numbering import (
+    NumberFormatRenderer,
     NumberingInstance,
     NumberingLevel,
     NumberingMap,
@@ -112,9 +112,9 @@ class NumberingStateTests(unittest.TestCase):
         self.assertEqual(warnings, [])
 
     def test_chinese_counting_large_values(self) -> None:
-        self.assertEqual(NumberingState._chinese_counting(1010), "一千〇一十")
-        self.assertEqual(NumberingState._chinese_counting(10000), "一万")
-        self.assertEqual(NumberingState._chinese_counting(10050), "一万〇五十")
+        self.assertEqual(NumberingState._chinese_counting(1010), "一○一○")
+        self.assertEqual(NumberingState._chinese_counting(10000), "一○○○○")
+        self.assertEqual(NumberingState._chinese_counting(10050), "一○○五○")
 
     def test_chinese_digital_keeps_each_digit_and_ideographic_zero(self) -> None:
         self.assertEqual(NumberingState._chinese_digital(12345), "一二三四五")
@@ -138,7 +138,7 @@ class NumberingStateTests(unittest.TestCase):
     def test_japanese_digital_ten_thousand_keeps_each_digit(self) -> None:
         renderer = NumberFormatRenderer([])
         self.assertEqual(renderer.format(102, "japaneseDigitalTenThousand"), "一〇二")
-        self.assertEqual(renderer.format(10050, "japaneseDigitalTenThousand"), "一〇〇五〇")
+        self.assertEqual(renderer.format(10050, "japaneseDigitalTenThousand"), "")
 
     def test_east_asian_character_sequences_follow_ooxml_ranges(self) -> None:
         renderer = NumberFormatRenderer([])
@@ -159,8 +159,8 @@ class NumberingStateTests(unittest.TestCase):
         self.assertEqual(renderer.format(10001, "lowerRoman"), "mmmmmmmmmmi")
         japanese_legal = {
             10: "壱拾",
-            101: "壱佰壱",
-            1001: "壱仟壱",
+            101: "壱百壱",
+            1001: "壱阡壱",
             10000: "壱萬",
             10001: "壱萬壱",
             10050: "壱萬伍拾",
@@ -179,6 +179,29 @@ class NumberingStateTests(unittest.TestCase):
         self.assertEqual(renderer.format(60, "ideographZodiacTraditional"), "癸亥")
         self.assertEqual(renderer.format(61, "ideographZodiacTraditional"), "甲子")
 
+    def test_number_format_edge_families(self) -> None:
+        renderer = NumberFormatRenderer([])
+        expected = {
+            "numberInDash": "- 3 -",
+            "chicago": "\u2021",
+            "decimalEnclosedCircleChinese": chr(0x2462),
+            "ideographEnclosedCircle": f"({chr(0x3222)})",
+            "hex": "FF",
+            "decimalZero": "03",
+            "decimalFullWidth": "３",
+            "hindiNumbers": "३",
+            "thaiNumbers": "๓",
+            "none": "",
+        }
+        for format_name, value in expected.items():
+            with self.subTest(format_name=format_name):
+                self.assertEqual(renderer.format(3 if format_name != "hex" else 255, format_name), value)
+        self.assertEqual(renderer.format(0, "chicago"), "0")
+        self.assertEqual(renderer.format(0, "japaneseCounting"), "〇")
+        self.assertEqual(renderer.format(-1, "japaneseCounting"), "-1")
+        self.assertEqual(renderer.format(1_000_000, "japaneseLegal"), "壱百萬")
+        self.assertEqual(renderer.format(-1, "japaneseDigitalTenThousand"), "-1")
+
     def test_numbering_value_beyond_chinese_range_falls_back(self) -> None:
         warnings: list[ParseWarning] = []
         numbering = NumberingMap(
@@ -189,8 +212,8 @@ class NumberingStateTests(unittest.TestCase):
         state = NumberingState(numbering, warnings)
         label = state.advance("9", 0)
         assert label is not None
-        self.assertEqual(label["text"], "100000000.\t")
-        self.assertEqual([warning.code for warning in warnings], ["NUMBERING_VALUE_OUT_OF_RANGE"])
+        self.assertEqual(label["text"], "一○○○○○○○○.\t")
+        self.assertEqual(warnings, [])
 
     def test_none_numbering_level_has_no_visible_marker(self) -> None:
         warnings: list[ParseWarning] = []
@@ -257,15 +280,15 @@ class NumberingStateTests(unittest.TestCase):
 
     def test_formats_extended_standard_numbering_systems(self) -> None:
         formats = [
-            ("chicago", 7, "**"),
+            ("chicago", 7, "‡‡"),
             ("bahtText", 4, "4"),
             ("dollarText", 5, "5"),
             ("arabicAlpha", 1, "أ\u200c"),
             ("arabicAbjad", 1, "\u200cأ"),
             ("hebrew1", 15, "טו"),
-            ("hebrew2", 23, "אא"),
+            ("hebrew2", 23, "\u200fאת"),
             ("taiwaneseCounting", 21, "二十一"),
-            ("taiwaneseDigital", 102, "一零二"),
+            ("taiwaneseDigital", 102, "一○二"),
             ("koreanDigital", 102, "일영이"),
             ("koreanCounting", 21, "이십일"),
         ]

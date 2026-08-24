@@ -1,0 +1,1 @@
+[{"code": "REVISION_INSERTION_INCLUDED", "locator": "word/document.xml:b2", "message": "Encountered insertion revision; parser includes inserted text in final/review mode."}, {"code": "REVISION_DELETION_SKIPPED", "locator": "word/document.xml:b2", "message": "Encountered deletion revision; deletion handling depends on revision_mode."}]

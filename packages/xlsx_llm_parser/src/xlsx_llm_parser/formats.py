@@ -362,11 +362,7 @@ def _differential_style(dxf: ET.Element, theme: dict[int, str]) -> str:
         parts.append(f"numberFormat={code}")
     alignment = dxf.find(f"{{{NS_S}}}alignment")
     if alignment is not None:
-        parts.extend(
-            f"{key}={value}"
-            for key in ("horizontal", "vertical", "wrapText")
-            if (value := alignment.get(key))
-        )
+        parts.extend(f"{key}={value}" for key in ("horizontal", "vertical", "wrapText") if (value := alignment.get(key)))
     return " ".join(parts)
 
 

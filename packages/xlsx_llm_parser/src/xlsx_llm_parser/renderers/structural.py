@@ -209,7 +209,7 @@ def _emit_autofilter(sheet: SheetInfo, density: Density) -> Iterator[str]:
         return
     yield f"<filter ref={filter_ref}>\n"
     for fc in sheet.get("filter_cols", []):
-        attrs = [f'col={fc["col"]}', f'type={fc["type"]}']
+        attrs = [f"col={fc['col']}", f"type={fc['type']}"]
         if values := fc.get("values"):
             attrs.append(f'values="{escape(",".join(values), quote=True)}"')
         if fc.get("blank"):
@@ -221,17 +221,10 @@ def _emit_autofilter(sheet: SheetInfo, density: Density) -> Iterator[str]:
         )
         attrs.extend(key for key in ("and", "top", "percent") if fc.get(key))
         if "cellColor" in fc:
-            attrs.append(f'cellColor={int(bool(fc["cellColor"]))}')
-        attrs.extend(
-            f"{key}={value}"
-            for key in ("dxfId", "iconId")
-            if (value := fc.get(key)) is not None
-        )
+            attrs.append(f"cellColor={int(bool(fc['cellColor']))}")
+        attrs.extend(f"{key}={value}" for key in ("dxfId", "iconId") if (value := fc.get(key)) is not None)
         if date_groups := fc.get("dateGroup"):
-            groups = ";".join(
-                ":".join(f"{key}={value}" for key, value in sorted(group.items()))
-                for group in date_groups
-            )
+            groups = ";".join(":".join(f"{key}={value}" for key, value in sorted(group.items())) for group in date_groups)
             attrs.append(f'groups="{escape(groups, quote=True)}"')
         yield f"<condition {' '.join(attrs)}/>\n"
 
@@ -259,17 +252,17 @@ def _emit_conditional_formats(sheet: SheetInfo, density: Density) -> Iterator[st
         if cf.get("text"):
             parts.append(f' text="{escape(cf["text"], quote=True)}"')
         if cf.get("dxfId") is not None:
-            parts.append(f' dxf={cf["dxfId"]}')
+            parts.append(f" dxf={cf['dxfId']}")
         if cf.get("dxfStyle"):
             parts.append(f' style="{escape(cf["dxfStyle"], quote=True)}"')
         if cf.get("stopIfTrue"):
             parts.append(" stopIfTrue")
         if cf.get("rank") is not None:
-            parts.append(f' rank={cf["rank"]}')
+            parts.append(f" rank={cf['rank']}")
         if cf.get("percent"):
             parts.append(" percent")
         if cf.get("formatKind"):
-            parts.append(f' format={cf["formatKind"]}')
+            parts.append(f" format={cf['formatKind']}")
             if density == "semantic":
                 details = _format_conditional_details(cf.get("formatDetails"))
                 if details:
@@ -332,33 +325,33 @@ def _emit_pivot_context(
             yield f"[Timeline {name}]\n" if name else "[Timeline]\n"
         return
     for cache in metadata.get("pivot_caches", []):
-        attrs = [f'id={cache["id"]}', f'cacheId={cache["cacheId"]}']
+        attrs = [f"id={cache['id']}", f"cacheId={cache['cacheId']}"]
         if cache.get("sourceSheet"):
             attrs.append(f'sheet="{escape(cache["sourceSheet"], quote=True)}"')
         if cache.get("sourceRef"):
-            attrs.append(f'ref={cache["sourceRef"]}')
+            attrs.append(f"ref={cache['sourceRef']}")
         if cache.get("refreshOnLoad"):
             attrs.append("refreshOnLoad")
         if density == "semantic" and cache.get("fields"):
             attrs.append(f'fields="{escape(",".join(cache["fields"]), quote=True)}"')
         yield f"<pivotCache {' '.join(attrs)}/>\n"
     for slicer in metadata.get("slicers", []):
-        attrs = [f'id={slicer["id"]}', 'type=slicer']
+        attrs = [f"id={slicer['id']}", "type=slicer"]
         if slicer.get("name"):
             attrs.append(f'name="{escape(slicer["name"], quote=True)}"')
         if slicer.get("sourceName"):
             attrs.append(f'source="{escape(slicer["sourceName"], quote=True)}"')
         if slicer.get("cacheId") is not None:
-            attrs.append(f'cacheId={slicer["cacheId"]}')
+            attrs.append(f"cacheId={slicer['cacheId']}")
         yield f"<slicer {' '.join(attrs)}/>\n"
     for timeline in metadata.get("timelines", []):
-        attrs = [f'id={timeline["id"]}']
+        attrs = [f"id={timeline['id']}"]
         if timeline.get("name"):
             attrs.append(f'name="{escape(timeline["name"], quote=True)}"')
         if timeline.get("sourceName"):
             attrs.append(f'source="{escape(timeline["sourceName"], quote=True)}"')
         if timeline.get("level"):
-            attrs.append(f'level={timeline["level"]}')
+            attrs.append(f"level={timeline['level']}")
         yield f"<timeline {' '.join(attrs)}/>\n"
 
 
@@ -419,13 +412,13 @@ def _emit_pivot_tables(sheet: SheetInfo, density: Density) -> Iterator[str]:
             yield f"[PivotTable{name_part}]\n"
         return
     for pv in sheet.get("pivot_tables", []):
-        attrs = [f'id={pv["id"]}', f'name={escape(pv.get("name", ""), quote=True)}']
+        attrs = [f"id={pv['id']}", f"name={escape(pv.get('name', ''), quote=True)}"]
         if pv.get("ref"):
-            attrs.append(f'ref={pv["ref"]}')
+            attrs.append(f"ref={pv['ref']}")
         if pv.get("sourceSheet"):
             attrs.append(f'sourceSheet="{escape(pv["sourceSheet"], quote=True)}"')
         if pv.get("sourceRef"):
-            attrs.append(f'sourceRef={pv["sourceRef"]}')
+            attrs.append(f"sourceRef={pv['sourceRef']}")
         if density == "semantic" and pv.get("rowFields"):
             attrs.append(f'rows="{escape(",".join(pv["rowFields"]), quote=True)}"')
         if density == "semantic" and pv.get("columnFields"):
@@ -713,11 +706,11 @@ def _structural_cell_attrs(cell: Cell, fmt_index: FormatIndex | None) -> str:
         if protection:
             attrs += f" {protection}"
     if control := cell.get("cellControl"):
-        attrs += f' control={control.get("kind", "unknown")}'
+        attrs += f" control={control.get('kind', 'unknown')}"
         if control.get("state"):
-            attrs += f' state={control["state"]}'
+            attrs += f" state={control['state']}"
         if control.get("default") is not None:
-            attrs += f' default={control["default"]}'
+            attrs += f" default={control['default']}"
     if rich_value := cell.get("richValue"):
         attrs += f' richType="{escape(rich_value.get("type", "rich"), quote=True)}"'
         if rich_value.get("imagePart") or rich_value.get("imageUrl"):
@@ -728,9 +721,7 @@ def _structural_cell_attrs(cell: Cell, fmt_index: FormatIndex | None) -> str:
 
 
 def _cell_body(cell: Cell, density: Density) -> str:
-    if (rich_value := cell.get("richValue")) and (
-        density == "plain" or rich_value.get("display") or rich_value.get("fallback")
-    ):
+    if (rich_value := cell.get("richValue")) and (density == "plain" or rich_value.get("display") or rich_value.get("fallback")):
         if rich_value.get("imagePart") or rich_value.get("imageUrl"):
             body = escape(rich_value.get("alt") or rich_value.get("display") or "[Image]")
         else:
@@ -766,9 +757,7 @@ def _body_with_comment_reference(
 
 def _threaded_comment_record(ref: str, item: ThreadedComment) -> _CommentRecord:
     mentions = tuple(
-        mention["person"]
-        for mention in item.get("mentions", [])
-        if isinstance(mention.get("person"), str) and mention["person"]
+        mention["person"] for mention in item.get("mentions", []) if isinstance(mention.get("person"), str) and mention["person"]
     )
     return _CommentRecord(
         id=item.get("id", ""),

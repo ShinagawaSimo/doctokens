@@ -298,57 +298,39 @@ supplemental 区（资产索引）：
 
 “项目符号”的颜色、加粗和斜体会进入 semantic 输出。图片项目符号会在段首以 `<img>` 输出。
 
-#### 明确支持的编号样式解析
+当前已对Microsoft Word 中的通用默认编号样式，以及系统环境语言为简体中文、日文时的新增默认编号样式进行了逐项验证，确认可精确还原 Word 中的自动编号行为特征。已验证的编号样式见下表：
 
-当前已对简体中文版本 Microsoft Word 中的默认编号样式（见下）逐项验证，确认可精确还原 Word 中的自动编号行为特征。
+| 编号样式枚举值                   | 规范名称          | 注释      |
+| ------------------------- | ------------- | ------- |
+| `aiueo`                   | AIUEO 顺序半角片假名 |         |
+| `aiueoFullWidth`          | AIUEO 顺序全角片假名 |         |
+| `bullet`                  | 项目符号          |         |
+| `cardinalText`            | 基数词文本         |         |
+| `chineseCountingThousand` | 中文计数千位系统      |         |
+| `chineseLegalSimplified`  | 中文简体法律格式      | 即中文大写数字 |
+| `decimal`                 | 十进制数字         |         |
+| `decimalEnclosedCircle`   | 带圈十进制数字       |         |
+| `decimalFullWidth`        | 全角阿拉伯数字       |         |
+| `decimalZero`             | 前导零阿拉伯数字      |         |
+| `ideographDigital`        | 表意数字          |         |
+| `ideographTraditional`    | 传统表意格式        | 即天干编号   |
+| `ideographZodiac`         | 生肖表意格式        | 即地支编号   |
+| `iroha`                   | 伊吕波顺序片假名      |         |
+| `irohaFullWidth`          | 全角伊吕波顺序片假名    |         |
+| `japaneseCounting`        | 日语计数系统        |         |
+| `japaneseLegal`           | 日语法律编号        | 即日文大写数字 |
+| `lowerLetter`             | 小写拉丁字母        |         |
+| `lowerRoman`              | 小写罗马数字        |         |
+| `none`                    | 无编号           |         |
+| `ordinal`                 | 序数词           |         |
+| `ordinalText`             | 序数词文本         |         |
+| `upperLetter`             | 大写拉丁字母        |         |
+| `upperRoman`              | 大写罗马数字        |         |
 
-| 编号样式                      | 样式特征和 Word 行为                                          |
-| ------------------------- | ------------------------------------------------------ |
-| `decimal`                 | 半角阿拉伯数字。                                               |
-| `decimalFullWidth`        | 全角阿拉伯数字。                                               |
-| `decimalZero`             | 两位十进制数字，个位数带前导零。                                       |
-| `decimalEnclosedCircle`   | 1–20 使用 Unicode 带圈数字，超出范围回退十进制。                        |
-| `ideographDigital`        | 逐位中文数字，例如 `102` 为 `一〇二`。                               |
-| `chineseCountingThousand` | 中文千进制，例如 `10050` 为 `一万〇五十`。                            |
-| `chineseLegalSimplified`  | 简体中文大写数字，例如`壹`、`贰`、`叁`。                                |
-| `japaneseCounting`        | 日文计数规则，例如 `10` 为 `十`、`1001` 为 `千一`、`10050` 为 `一万五十`。   |
-| `japaneseLegal`           | 日文大写数字；不写中间零，十、百、千前保留 `壱`，并使用 `伍`、`佰`、`仟`，例如 `10` 为 `壱拾`、`1001` 为 `壱仟壱`、`10050` 为 `壱萬伍拾`。 |
-| `aiueo`                   | 半角片假名，46 项循环。                                          |
-| `aiueoFullWidth`          | 全角片假名，46 项循环。                                          |
-| `iroha`                   | 半角伊吕波片假名，48 项循环。                                       |
-| `irohaFullWidth`          | 全角伊吕波片假名，48 项循环。                                       |
-| `upperRoman`              | 大写罗马数字；大数使用重复的 `M`，例如 `10001` 为 `MMMMMMMMMMI`。              |
-| `lowerRoman`              | 小写罗马数字；规则同 `upperRoman`。                              |
-| `upperLetter`             | 大写拉丁字母，按 Word 的重复字符规则编号；`780` 为 30 个 `Z`，`781` 起回退十进制。 |
-| `lowerLetter`             | 小写拉丁字母，按 Word 的重复字符规则编号；`780` 为 30 个 `z`，`781` 起回退十进制。 |
-| `ideographTraditional`    | 天干符号 `甲` 至 `癸`，仅支持 1–10；大于 10 回退十进制。                   |
-| `ideographZodiac`         | 地支符号 `子` 至 `亥`，仅支持 1–12；大于 12 回退十进制。                   |
-| `ordinal`                 | 阿拉伯序数，例如 `1st`、`2nd`、`3rd`。                            |
-| `cardinalText`            | 英文基数词，例如 `One`、`Two`、`Three`。                          |
-| `ordinalText`             | 英文序数词，例如 `First`、`Second`、`Third`。                     |
+其余的 ISO/IEC 29500 规范中所规定的标准编号格式均已支持显示转换，但尚未通过真实 Word 文件逐项验证其全部显示规则。
 
+项目的编号解析严格按照 Microsoft Word 的实际渲染表现实现，当 Word 的实际行为与 ISO/IEC 29500 规范及 MS-OI29500 规范描述不一致时，以 Word 的实际表现为准。当前已根据真实 Word 文件确认的与规范间的差异包括：
 
+* `aiueoFullWidth`在 Word 中，超过46项循环后回到第一项、始终以单字符编号，与 MS-OI29500 2.1.548 f. 描述的循环后增加一次字符重复次数不符。
 
-### 已支持但尚未测试的格式
-
-以下样式已经支持显示转换，但尚未在简体中文 Word 默认界面中测试其全部显示规则，尤其是语言、区域设置、超出范围和特殊字符行为：
-
-`decimalHalfWidth`、`decimalFullWidth2`、`hex`、`numberInDash`、`chicago`、`decimalEnclosedFullstop`、`decimalEnclosedParen`、`decimalEnclosedCircleChinese`、`ideographEnclosedCircle`、`ideographLegalTraditional`、`taiwaneseCounting`、`taiwaneseCountingThousand`、`taiwaneseDigital`、`japaneseDigitalTenThousand`、`koreanDigital`、`koreanCounting`、`ideographZodiacTraditional`、`ganada`、`chosung`、`hindiVowels`、`hindiConsonants`、`hindiNumbers`、`thaiLetters`、`thaiNumbers`、`russianLower`、`russianUpper`、`hebrew1`、`hebrew2`、`arabicAlpha`、`arabicAbjad`、`bahtText`、`dollarText`、`none`。
-
-其中 `ideographZodiacTraditional` 表示六十干支组合，不能与仅包含 1–10 天干符号的 `ideographTraditional` 或仅包含 1–12 地支符号的 `ideographZodiac` 混淆。Word 对 `bahtText` 和 `dollarText` 的实际处理为十进制文本；该兼容行为已纳入实现。
-
-### 明确不支持的格式
-
-以下标准编号格式目前不支持：
-
-`koreanLegal`、`koreanDigital2`、`hindiCounting`、`thaiCounting`、`vietnameseCounting`，以及应用自定义编号格式。
-
-遇到不支持的格式时，编号显示回退为十进制文本，段落正文仍然保留。
-
-### 范围与兼容行为
-
-中文、日文、韩文等文字计数格式在本项目中支持至 `999999`；超出范围时显示十进制文本。Word 对部分格式在该范围之外不显示编号，项目仍保留相应的数字信息。`japaneseDigitalTenThousand` 在 Word 中的有效显示范围为 `1` 至 `9999`。
-
-项目符号直接使用 Unicode 字符时可以保留符号及其可见格式。对于依赖字体私有区代码点的项目符号，目前仅能可靠还原常见模板中的 `F06C`（实心圆）、`F06E`（实心方块）和 `F075`（实心菱形）。
-
-同一编号样式在不同语言和区域设置下可能显示不同。本文列出的已验证结果仅适用于简体中文 Word 默认编号样式；其它语言和区域组合不应直接套用这些显示结果。
+* `chineseCountingThousand`在 Word 中，在万位后接不足一千的数值时显示`〇`（即10050→`一万〇五十`），与 MS-OI29500 2.1.548 e. 描述的中间不输出任何字（`一万五十`）及 ISO/IEC 29500 17.18.59 描述的中间输出`零`不符。

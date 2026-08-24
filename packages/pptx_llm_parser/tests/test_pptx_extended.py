@@ -90,6 +90,15 @@ class ExtendedPptxTests(unittest.TestCase):
         self.assertIn("<equation>\\frac{a}{b}</equation>", rendered)
         self.assertIn("<td colspan=2>A</td>", rendered)
 
+    def test_drawingml_autonumber_schemes_use_shared_formatters(self) -> None:
+        paragraphs = [
+            '<a:pPr><a:buAutoNum type="alphaUcParenBoth" startAt="3"/></a:pPr><a:r><a:t>Alpha</a:t></a:r>',
+            '<a:pPr><a:buAutoNum type="romanLcParenR" startAt="3"/></a:pPr><a:r><a:t>Roman</a:t></a:r>',
+            '<a:pPr><a:buAutoNum type="arabicDbPeriod" startAt="3"/></a:pPr><a:r><a:t>Full width</a:t></a:r>',
+        ]
+        parsed = PptxParser().parse(_deck(rich_text_shape_xml(paragraphs)), ParseOptions())
+        self.assertEqual(parsed.slides[0]["shapes"][0]["text"], "(C) Alpha\niii) Roman\n３． Full width")
+
     def test_markup_attributes_are_quoted_and_escaped(self) -> None:
         run = (
             '<a:r><a:rPr xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
@@ -105,9 +114,11 @@ class ExtendedPptxTests(unittest.TestCase):
         rendered = parse_pptx(_deck(rich_text_shape_xml([run]), slide_rels=rels), density=Density.SEMANTIC)
         self.assertIn('href="https://example.test/a?x=one%20two&amp;y=&quot;q&quot;"', rendered)
 
-    def test_stream_and_resources_do_not_call_full_parse(self) -> None:
-        with patch.object(PptxParser, "parse", side_effect=AssertionError("full parse called")):
+    def test_output_iteration_parses_once_and_resources_use_lightweight_lookup(self) -> None:
+        with patch.object(PptxParser, "parse", wraps=PptxParser().parse) as parse_mock:
             self.assertTrue(list(iter_slides(rich_deck_pptx(), density=Density.PLAIN)))
+            parse_mock.assert_called_once()
+        with patch.object(PptxParser, "parse", side_effect=AssertionError("full parse called")):
             self.assertIsNotNone(get_resource(rich_deck_pptx(), "image", "img1"))
             self.assertIsNotNone(get_resource(rich_deck_pptx(), "chart", "chart1"))
             self.assertIsNotNone(get_resource(rich_deck_pptx(), "table", "table1"))

@@ -88,6 +88,8 @@ XLSX 默认密度为 structural。输出首行标记密度（如 `density=struct
 - 支持 1900 和 1904（Mac）双日期系统
 - 无 `styles.xml` 时安全降级为原始数值
 
+Excel 单元格的 `numFmt` 是数值的显示格式，不是段落或文本流的自动编号定义。XLSX 不提供与 Word 列表或 PowerPoint 文本自动编号等价的段落级编号体系，因此本解析器不生成项目符号、列表序号或编号状态。
+
 ## 范围读取
 
 `render_range(source, sheet, range_spec, *, density)` 解析源文件并按 A1 范围筛选单元格，返回 `<grid ref=...>` 块。不输出密度标记。
@@ -240,3 +242,9 @@ definedName 中检测到的 `[Budget.xlsx]` 外部引用输出为 `<externalLink
 - `find_cells(source, query, *, sheets, kind, limit)` — 跨 sheet 搜索值/公式/批注/Defined Name
 - `query_data(source, *, table_id, sheet, range_spec, header_row, ...)` — 投影筛选 + 分组聚合
 - `get_resource(source, type, id)` — 按 ID 提取 image/chart/pivot_table 原子资源
+
+## 架构边界
+
+XLSX parser 只负责读取 package、解析确定性 SpreadsheetML 结构、生成 workbook/cell IR 和密度输出。`query_data` 目前是实验性、有限能力的下游辅助查询，不执行完整 SQL、公式求值或外部刷新。源文件缓存、跨请求 loaded session、重复文件参数去重、分块、检索、向量化和模型调用属于下游消费者；parser 不设置隐式全局缓存，也不替下游维护文档生命周期。
+
+`stream=True` 只控制输出是否以迭代器返回；它不承诺流式解析。当前调用会先完成 XLSX 解析，再按工作表产生输出块。

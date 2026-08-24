@@ -20,5 +20,10 @@ build/
 !test_support/fixtures/**/*.docx
 docs/
 docs/*
+**/docs/
+**/docs/*
 CLAUDE.md
+**/CLAUDE.md
+AGENT.md
+**/AGENT.md
 reference/

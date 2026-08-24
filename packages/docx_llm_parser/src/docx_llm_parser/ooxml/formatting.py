@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import cast
 from xml.etree import ElementTree as ET
 
 from ..core.constants import attr, first_child, is_on
@@ -82,7 +83,7 @@ def merge_paragraph_borders(*borders: ParagraphBorders | None) -> ParagraphBorde
     merged: ParagraphBorders = {}
     for item in borders:
         if item:
-            merged.update({side: dict(value) for side, value in item.items()})
+            merged.update({side: cast(ParagraphBorder, dict(value)) for side, value in item.items()})
     return merged
 
 

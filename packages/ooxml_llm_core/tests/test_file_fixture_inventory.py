@@ -36,7 +36,6 @@ def test_fixture_matrix_has_unique_atomic_cases_and_safe_paths() -> None:
             assert [path.name.rsplit(".", 2)[-2] for path in golden] == ["semantic", "structural", "plain"]
 
 
-
 def test_fixture_matrix_matches_the_materialized_file_list() -> None:
     matrix = _load_matrix()
     expected: dict[str, set[str]] = {}

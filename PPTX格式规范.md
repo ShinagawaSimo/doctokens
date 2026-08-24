@@ -78,6 +78,8 @@ density=plain
 - `name`：形状名称（仅 semantic，含空格时加引号）
 - 形状内多个段落以单个 `\n` 连接；structural 仅保留 `ph` 属性，plain 为纯文本
 
+文本段落支持字符项目符号和自动编号。自动编号的数字、字母和罗马数字会按文本框内的段落顺序及段落级别连续生成；`startAt` 指定序列的起始值。项目符号或编号文本会直接出现在段落文本开头。
+
 ### 图片 `<img>`
 
 ```
@@ -212,7 +214,7 @@ density=plain
 ```python
 from pptx_llm_parser import parse_pptx, iter_slides, render_window, get_resource, Density
 
-html = parse_pptx("deck.pptx")                                     # semantic（默认）
+html = parse_pptx("deck.pptx")  # semantic（默认）
 html = parse_pptx("deck.pptx", density=Density.STRUCTURAL)
 ```
 
@@ -249,3 +251,9 @@ html = parse_pptx("deck.pptx", density=Density.STRUCTURAL)
 - 主题色输出解析后的实际色值；接近默认黑色的颜色不输出
 - `truncated` 标记的语义：正文是摘要视图，完整数据通过 `get_resource` 按需获取
 - 外部链接的资源（图片、媒体）只记录、不下载，也不在输出中展开内容
+
+## 架构边界
+
+PPTX parser 只负责读取 package、解析确定性 PresentationML/DrawingML 结构、生成 slide/shape IR 和三种密度输出。源文件缓存、跨请求 read session、重复文件参数去重、分块、检索、向量化和模型调用属于下游消费者；parser 不设置隐式全局缓存，也不替下游维护文档生命周期。
+
+`stream=True` 只控制输出是否以迭代器返回；它不承诺流式解析。当前调用会先完成 PPTX 解析，再按幻灯片产生输出块。

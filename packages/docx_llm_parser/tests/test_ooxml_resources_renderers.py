@@ -139,7 +139,7 @@ class NumberingAndAssetTests(unittest.TestCase):
             ("chineseCountingThousand", 10050, "一万〇五十"),
             ("japaneseCounting", 101, "百一"),
             ("japaneseDigitalTenThousand", 102, "一〇二"),
-            ("japaneseLegal", 1001, "壱仟壱"),
+            ("japaneseLegal", 1001, "壱阡壱"),
             ("cardinalText", 1, "One"),
             ("ordinalText", 3, "Third"),
             ("bullet", 1, "•"),

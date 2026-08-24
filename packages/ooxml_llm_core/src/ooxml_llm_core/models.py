@@ -52,6 +52,26 @@ class ParseWarning:
     locator: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class ParseReport:
+    """Stable parser-facing diagnostics and orientation report."""
+
+    format: str
+    schema_version: int
+    manifest: dict[str, object]
+    warnings: tuple[ParseWarning, ...]
+    metrics: MetricsSnapshot
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "format": self.format,
+            "schemaVersion": self.schema_version,
+            "manifest": self.manifest,
+            "warnings": [{"code": item.code, "message": item.message, "locator": item.locator} for item in self.warnings],
+            "metrics": self.metrics,
+        }
+
+
 MetricValue = int | float | str
 JsonObject = dict[str, "JsonObject | MetricValue"]
 

@@ -6,7 +6,10 @@ import re
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from ooxml_llm_core.debug import DebugWriter
 from ooxml_llm_core.limits import PackageLimits
+from ooxml_llm_core.metrics import MetricsRecorder
+from ooxml_llm_core.models import ParseReport, ParseWarning
 from ooxml_llm_core.package import PackageReader
 
 from ._sheet_post import (
@@ -19,6 +22,7 @@ from .formats import parse_styles
 from .models import (
     DefinedName,
     ParsedWorkbook,
+    ParseOptions,
     RichTextRun,
     SheetInfo,
 )
@@ -35,10 +39,17 @@ _EXTERNAL_WORKBOOK_EXTENSIONS = (".xlsx", ".xlsm", ".xlsb", ".xls", ".xltx", ".x
 
 
 # OOXML cell type codes → LLM-readable semantic names.
-def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
+def _parse_workbook(source: str | Path | bytes, options: ParseOptions | None = None) -> ParsedWorkbook:
     """Parse an XLSX file and return a typed workbook IR."""
-    limits = PackageLimits()
-    with PackageReader(source, limits) as pkg:
+    opts = options or ParseOptions()
+    limits = PackageLimits(
+        max_zip_entries=opts.max_zip_entries,
+        max_entry_uncompressed_bytes=opts.max_entry_uncompressed_bytes,
+        max_total_uncompressed_bytes=opts.max_total_uncompressed_bytes,
+    )
+    metrics = MetricsRecorder()
+    warnings: list[ParseWarning] = []
+    with metrics.stage("parse"), PackageReader(source, limits) as pkg:
         pkg.validate(required_part="xl/workbook.xml")
 
         date_1904, sheets, defined_names, external_links = _parse_workbook_xml(pkg)
@@ -107,6 +118,33 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
                 if pivots:
                     sheet["pivot_tables"] = pivots
 
+    manifest: dict[str, object] = {
+        "sheetCount": len(sheets),
+        "cellCount": sum(len(row) for sheet in sheets for row in sheet.get("rows", [])),
+        "tableCount": sum(len(sheet.get("tables", [])) for sheet in sheets),
+        "imageCount": sum(len(sheet.get("images", [])) for sheet in sheets),
+        "chartCount": sum(len(sheet.get("charts", [])) for sheet in sheets),
+        "pivotTableCount": sum(len(sheet.get("pivot_tables", [])) for sheet in sheets),
+    }
+    metrics.set_counter("sheetCount", len(sheets))
+    metrics.set_counter("cellCount", manifest["cellCount"] if isinstance(manifest["cellCount"], int) else 0)
+    metrics.set_counter("tableCount", manifest["tableCount"] if isinstance(manifest["tableCount"], int) else 0)
+    metrics.set_counter("imageCount", manifest["imageCount"] if isinstance(manifest["imageCount"], int) else 0)
+    metrics.set_counter("chartCount", manifest["chartCount"] if isinstance(manifest["chartCount"], int) else 0)
+    metrics.set_counter(
+        "pivotTableCount",
+        manifest["pivotTableCount"] if isinstance(manifest["pivotTableCount"], int) else 0,
+    )
+    report = ParseReport("xlsx", 1, manifest, tuple(warnings), metrics.snapshot())
+    if opts.debug:
+        try:
+            debug = DebugWriter(opts.output_dir / ".debug")
+            with debug:
+                debug.write_json("report.json", report.to_dict())
+        except Exception as exc:
+            warnings.append(ParseWarning("XLSX_DEBUG_WRITE_FAILED", str(exc)))
+            report = ParseReport("xlsx", 1, manifest, tuple(warnings), metrics.snapshot())
+
     return {
         "sheets": sheets,
         "fmt_index": fmt_index,
@@ -118,6 +156,7 @@ def _parse_workbook(source: str | Path | bytes) -> ParsedWorkbook:
             "slicers": pivot_catalog.slicers,
             "timelines": pivot_catalog.timelines,
         },
+        "report": report,
     }
 
 

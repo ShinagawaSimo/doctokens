@@ -22,6 +22,7 @@ from ..core.models import (
     ObjectLookup,
     ParseOptions,
     ParseWarning,
+    Run,
     TableBlock,
     TableCell,
     TableRow,
@@ -36,7 +37,7 @@ from ..ooxml.formatting import (
     parse_paragraph_alignment,
     parse_paragraph_borders,
 )
-from ..ooxml.numbering import NumberingState
+from ..ooxml.numbering import NumberingState, parse_numbering_change
 from ..ooxml.styles import StyleMap
 from .inline import InlineParser
 
@@ -222,16 +223,19 @@ class DocumentBodyParser:
         if numbering is not None:
             # Auto-numbering is visible Word text; insert it into the text stream as a synthetic run.
             marker_format = dict(numbering["markerFormat"])
-            numbering_run = {"text": numbering["text"]}
+            numbering_run: Run = {"text": numbering["text"]}
             if numbering["pictureBulletId"]:
                 relationship_id = self.numbering_state.numbering.picture_bullet_relationship(numbering["pictureBulletId"])
                 asset = self.asset_lookup.get(("word/numbering.xml", relationship_id or ""))
                 if asset is not None:
                     numbering["markerImageId"] = asset["id"]
-                    numbering_run = {
-                        "text": " ",
-                        "objects": [{"type": "image", "assetId": asset["id"], "alt": "Picture bullet"}],
-                    }
+                    numbering_run = cast(
+                        Run,
+                        {
+                            "text": " ",
+                            "objects": [{"type": "image", "assetId": asset["id"], "alt": "Picture bullet"}],
+                        },
+                    )
             if marker_format:
                 numbering_run["format"] = marker_format
             runs.insert(0, numbering_run)
@@ -556,15 +560,29 @@ class DocumentBodyParser:
         num_id = direct_num_id or (style_numbering[0] if style_numbering else None)
         if num_id is None:
             return None
-        if direct_numbering_level is not None:
-            level = direct_numbering_level
-        elif style_numbering:
-            level = self.numbering_state.numbering.level_for_style(style_numbering[0], style_id or "")
-            if level is None:
-                level = style_numbering[1]
-        else:
-            level = 0
-        return self.numbering_state.advance(num_id, level, part=part, block_id=block_id)
+        level = direct_numbering_level
+        if level is None:
+            if style_numbering:
+                level = self.numbering_state.numbering.level_for_style(style_numbering[0], style_id or "")
+                if level is None:
+                    level = style_numbering[1]
+            else:
+                level = 0
+
+        previous_levels = None
+        if self.options.revision_mode == "original":
+            numbering_change = first_child(paragraph_properties, "w", "numberingChange")
+            original = attr(numbering_change, "w", "original") if numbering_change is not None else None
+            previous_levels = parse_numbering_change(original, self.warnings, part=part, block_id=block_id)
+            if not previous_levels:
+                previous_levels = None
+        return self.numbering_state.advance(
+            num_id,
+            level,
+            part=part,
+            block_id=block_id,
+            level_overrides=previous_levels,
+        )
 
     def _num_pr_values(self, numbering_properties: ET.Element | None) -> tuple[str | None, int | None]:
         """Read numId and ilvl from w:numPr."""

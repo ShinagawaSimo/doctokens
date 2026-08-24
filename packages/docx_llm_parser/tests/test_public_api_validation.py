@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from _fixtures import write_rich_docx
-from docx_llm_parser import Density, ResourceType, get_resource, parse_docx
+from docx_llm_parser import Density, ResourceType, get_resource, load_docx, parse_docx
 from docx_llm_parser.core.enums import RevisionMode
 from docx_llm_parser.core.models import ParseOptions
 
@@ -39,6 +39,27 @@ class PublicApiValidationTests(unittest.TestCase):
     def test_parse_options_normalizes_revision_mode(self) -> None:
         options = ParseOptions(revision_mode="review")  # type: ignore[arg-type]
         self.assertIs(options.revision_mode, RevisionMode.REVIEW)
+
+    def test_loaded_facade_exposes_report_and_reuses_parsed_document(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "test.docx"
+            write_rich_docx(path)
+            loaded = load_docx(path)
+            self.assertEqual(loaded.report.format, "docx")
+            self.assertIn("schemaVersion", loaded.report.to_dict())
+            self.assertEqual(loaded.render(), loaded.render())
+            self.assertTrue(list(loaded.iter_render(density=Density.PLAIN)))
+            self.assertTrue(loaded.render_window(page=1))
+            self.assertIsNone(loaded.get_resource("image", "missing"))
+            with self.assertRaisesRegex(ValueError, "singular"):
+                loaded.get_resource("images", "missing")
+
+    def test_parse_stream_returns_output_iterator_after_parse(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "test.docx"
+            write_rich_docx(path)
+            result = parse_docx(path, stream=True, density=Density.PLAIN)
+            self.assertTrue(list(result))
 
     def test_parse_options_reject_non_positive_limits(self) -> None:
         with self.assertRaisesRegex(ValueError, "must be greater than zero"):

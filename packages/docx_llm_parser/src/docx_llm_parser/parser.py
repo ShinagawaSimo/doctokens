@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from ooxml_llm_core.models import ParseReport
+
 from ._version import __version__
 from .core.debug import DebugWriter
 from .core.metrics import MetricsRecorder
@@ -370,6 +372,21 @@ class DocxParser:
             )
             parsed.metrics = metrics.snapshot()
             write_metrics_debug(debug, parsed)
+        parsed.report = ParseReport(
+            "docx",
+            1,
+            {
+                "pageCount": max((block.get("page", 1) for block in parsed.blocks), default=1),
+                "blockCount": len(parsed.blocks),
+                "tableCount": sum(1 for block in parsed.blocks if block["type"] == "table"),
+                "imageCount": len(parsed.assets),
+                "chartCount": len(parsed.charts),
+                "smartartCount": len(parsed.smartarts),
+                "commentCount": len(parsed.comments),
+            },
+            tuple(parsed.warnings),
+            parsed.metrics,
+        )
         return parsed
 
 

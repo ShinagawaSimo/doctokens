@@ -84,8 +84,7 @@ class RichValueCatalog:
             (
                 element
                 for element in metadata
-                if _local_name(element.tag) == "futureMetadata"
-                and element.get("name") == "XLRICHVALUE"
+                if _local_name(element.tag) == "futureMetadata" and element.get("name") == "XLRICHVALUE"
             ),
             None,
         )
@@ -154,22 +153,14 @@ class RichValueCatalog:
         for structure in root.iter():
             if _local_name(structure.tag) not in {"s", "structure"}:
                 continue
-            keys = [
-                key.get("n", key.get("name", ""))
-                for key in structure
-                if _local_name(key.tag) in {"k", "key"}
-            ]
+            keys = [key.get("n", key.get("name", "")) for key in structure if _local_name(key.tag) in {"k", "key"}]
             result.append((structure.get("t", ""), keys))
         return result
 
     @staticmethod
     def _parse_rich_relationships(pkg: PackageReader) -> list[RelationshipRecord | None]:
         part = next(
-            (
-                name
-                for name in _part_names(pkg)
-                if posixpath.basename(name).lower() in {"richvaluerel.xml", "richvaluerels.xml"}
-            ),
+            (name for name in _part_names(pkg) if posixpath.basename(name).lower() in {"richvaluerel.xml", "richvaluerels.xml"}),
             None,
         )
         if part is None:
@@ -234,12 +225,7 @@ class RichValueCatalog:
             text = "".join(fallback.itertext()).strip()
             if text:
                 descriptor["fallback"] = text
-        display = (
-            fields.get("_DisplayString")
-            or fields.get("Text")
-            or fields.get("Display")
-            or descriptor.get("fallback", "")
-        )
+        display = fields.get("_DisplayString") or fields.get("Text") or fields.get("Display") or descriptor.get("fallback", "")
         if display:
             descriptor["display"] = display
 
@@ -424,9 +410,7 @@ class PivotCatalog:
         cache_fields = next((node for node in root.iter() if _local_name(node.tag) == "cacheFields"), None)
         if cache_fields is not None:
             info["fields"] = [
-                field_node.get("name", "")
-                for field_node in cache_fields
-                if _local_name(field_node.tag) == "cacheField"
+                field_node.get("name", "") for field_node in cache_fields if _local_name(field_node.tag) == "cacheField"
             ]
         extension = next(
             (node for node in root.iter() if _local_name(node.tag) == "pivotCacheDefinition" and node is not root),
@@ -515,11 +499,7 @@ class PivotCatalog:
                 "type": "slicer",
             }
             cache = next(
-                (
-                    node
-                    for node in definition.iter()
-                    if _local_name(node.tag) in {"tabularSlicerCache", "olapSlicerCache"}
-                ),
+                (node for node in definition.iter() if _local_name(node.tag) in {"tabularSlicerCache", "olapSlicerCache"}),
                 None,
             )
             if cache is not None and cache.get("pivotCacheId"):
@@ -537,11 +517,7 @@ class PivotCatalog:
             if root is None:
                 continue
             definition = next(
-                (
-                    node
-                    for node in root.iter()
-                    if _local_name(node.tag) in {"timelineCacheDefinition", "timeline"}
-                ),
+                (node for node in root.iter() if _local_name(node.tag) in {"timelineCacheDefinition", "timeline"}),
                 root,
             )
             state = next(

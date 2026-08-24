@@ -2,9 +2,20 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TypedDict
 
 from ooxml_llm_core.annotations import AnnotationMention, ThreadedAnnotation
+from ooxml_llm_core.models import ParseReport
+from ooxml_llm_core.options import PackageOptions
+
+
+@dataclass(frozen=True)
+class ParseOptions(PackageOptions):
+    """XLSX parser options sharing OPC limits and diagnostics with other formats."""
+
+    def __post_init__(self) -> None:
+        self.validate_package_options()
 
 
 class RichTextRun(TypedDict, total=False):
@@ -268,3 +279,4 @@ class ParsedWorkbook(TypedDict):
     sheets: list[SheetInfo]
     metadata: WorkbookMetadata
     fmt_index: object  # FormatIndex from formats.py
+    report: ParseReport

@@ -232,9 +232,7 @@ def _parse_filter_column(column_id: int, element: ET.Element) -> list[FilterColu
     if filters is not None:
         item: FilterColumn = {"col": column_id, "type": "values"}
         values = [child.get("val", "") for child in filters.findall(f"{{{NS_S}}}filter") if child.get("val")]
-        date_group.extend(
-            dict(child.attrib) for child in filters.findall(f"{{{NS_S}}}dateGroupItem")
-        )
+        date_group.extend(dict(child.attrib) for child in filters.findall(f"{{{NS_S}}}dateGroupItem"))
         if values:
             item["values"] = values
         if filters.get("blank") == "1":
@@ -300,9 +298,7 @@ def _parse_filter_column(column_id: int, element: ET.Element) -> list[FilterColu
 
     # A few producers place dateGroupItem directly under filterColumn; accept it
     # in addition to the SpreadsheetML-standard location under filters.
-    date_group.extend(
-        dict(child.attrib) for child in element.findall(f"{{{NS_S}}}dateGroupItem")
-    )
+    date_group.extend(dict(child.attrib) for child in element.findall(f"{{{NS_S}}}dateGroupItem"))
     if date_group:
         result.append({"col": column_id, "type": "dateGroup", "dateGroup": date_group})
     return result
@@ -409,11 +405,7 @@ def _conditional_format_detail(rule: ET.Element) -> tuple[str, dict[str, object]
 
 def _format_thresholds(parent: ET.Element) -> list[dict[str, str]]:
     return [
-        {
-            key: value
-            for key, value in item.attrib.items()
-            if key in {"type", "val", "gte"}
-        }
+        {key: value for key, value in item.attrib.items() if key in {"type", "val", "gte"}}
         for item in parent
         if local_name(item.tag) == "cfvo"
     ]

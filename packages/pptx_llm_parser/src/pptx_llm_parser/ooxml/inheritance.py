@@ -177,7 +177,8 @@ class LayoutMasterResolver:
         master_by_type = {
             key.removeprefix("type:"): (info["x"], info["y"], info["w"], info["h"])
             for key, info in master_model.placeholders.items()
-            if key.startswith("type:") and all(info.get(name) is not None for name in ("x", "y", "w", "h"))        }
+            if key.startswith("type:") and all(info.get(name) is not None for name in ("x", "y", "w", "h"))
+        }
 
         placeholders: dict[str, PlaceholderInfo] = {}
         for shape in self._layout_shapes(layout_root):

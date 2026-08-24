@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "docx-llm-parser"
 description = "Parse DOCX files into LLM-readable semantic HTML5."
 requires-python = ">=3.10"
-dependencies = ["ooxml-llm-core>=0.1.0"]
+dependencies = ["ooxml-llm-core>=0.1.0", "typing_extensions>=4.6"]
 dynamic = ["version"]
 classifiers = [
     "Development Status :: 3 - Alpha",

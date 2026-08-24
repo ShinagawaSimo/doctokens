@@ -36,7 +36,7 @@ jobs:
           python -m pip install -e packages/ooxml_llm_core
           python -m pip install -e packages/docx_llm_parser
           python -m pip install -e packages/xlsx_llm_parser
-          python -m pip install -e packages/ocr_llm_core
+          python -m pip install -e "packages/ocr_llm_core[dev]"
           python -m pip install -e packages/pptx_llm_parser
       - name: Check formatting
         run: python -m ruff format --check .

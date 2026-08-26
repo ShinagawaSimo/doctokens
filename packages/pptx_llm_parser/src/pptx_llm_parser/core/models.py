@@ -53,7 +53,6 @@ class Run(TypedDict, total=False):
 class Paragraph(TypedDict, total=False):
     """One DrawingML paragraph, including list metadata."""
 
-    runs: list[Run]
     text: str
     level: int
     bullet: str

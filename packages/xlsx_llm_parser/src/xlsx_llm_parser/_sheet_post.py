@@ -7,7 +7,7 @@ redundant iteration and I/O.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.annotations import AnnotationMention, valid_parent_links
@@ -16,7 +16,7 @@ from ooxml_llm_core.models import RelationshipRecord
 from ooxml_llm_core.package import PackageReader
 from ooxml_llm_core.xml import local_name
 
-from ._utils import col_letter, parse_ref
+from ._utils import col_letter, coord_key, parse_ref
 from .models import (
     Cell,
     ChartPoint,
@@ -44,22 +44,16 @@ NS_C = "http://schemas.openxmlformats.org/drawingml/2006/chart"
 # ── Merge cells ──
 
 
-def apply_merge_cells(root: ET.Element, cell_map: dict[tuple[int, int], Cell]) -> None:
-    """Parse <mergeCells> and mark anchor cells with colspan/rowspan,
-    shadow cells with shadow=True (excluded from rendering)."""
-    merge_cells = root.find(f"{{{NS_S}}}mergeCells")
-    if merge_cells is None:
-        return
-
-    for merge_cell in merge_cells.findall(f"{{{NS_S}}}mergeCell"):
-        ref = merge_cell.get("ref", "")
+def apply_merge_refs(merge_refs: Iterable[str], cell_map: dict[int, Cell]) -> None:
+    """Apply already-scanned merge ranges to the compact cell coordinate map."""
+    for ref in merge_refs:
         if ":" not in ref:
             continue
         start_ref, end_ref = ref.split(":", 1)
         start_col, start_row = parse_ref(start_ref)
         end_col, end_row = parse_ref(end_ref)
 
-        anchor = cell_map.get((start_col, start_row))
+        anchor = cell_map.get(coord_key(start_col, start_row))
         if anchor is not None:
             anchor["colspan"] = end_col - start_col + 1
             anchor["rowspan"] = end_row - start_row + 1
@@ -69,7 +63,7 @@ def apply_merge_cells(root: ET.Element, cell_map: dict[tuple[int, int], Cell]) -
             for col in range(start_col, end_col + 1):
                 if col == start_col and row == start_row:
                     continue
-                shadow = cell_map.get((col, row))
+                shadow = cell_map.get(coord_key(col, row))
                 if shadow is not None:
                     shadow["shadow"] = True
 
@@ -77,19 +71,7 @@ def apply_merge_cells(root: ET.Element, cell_map: dict[tuple[int, int], Cell]) -
 # ── Dynamic array spill ──
 
 
-def apply_spill_ranges(rows: list[list[Cell]], cell_map: dict[tuple[int, int], Cell]) -> None:
-    """Detect dynamic-array spill ranges and mark source/recipient relationships.
-
-    Only true dynamic-array formulas (``<f aca="1">``) are spill sources.
-    Classic CSE array formulas share the ``t="array"``/``ref`` shape but do
-    not spill.  Cells inside the range that carry no independent formula are
-    marked as spill recipients pointing back to the source via ``spillFrom``.
-    """
-    sources = [cell for row_cells in rows for cell in row_cells if cell.get("formulaRange") and cell.get("dynamicArray")]
-    apply_spill_sources(sources, cell_map)
-
-
-def apply_spill_sources(sources: list[Cell], cell_map: dict[tuple[int, int], Cell]) -> None:
+def apply_spill_sources(sources: list[Cell], cell_map: dict[int, Cell]) -> None:
     """Apply spill relationships for a pre-collected source list."""
     for cell in sources:
         formula_range = cell.get("formulaRange")
@@ -113,7 +95,7 @@ def apply_spill_sources(sources: list[Cell], cell_map: dict[tuple[int, int], Cel
             for col in range(start_col, end_col + 1):
                 if col == cell["col"] and row == cell["row"]:
                     continue
-                recipient = cell_map.get((col, row))
+                recipient = cell_map.get(coord_key(col, row))
                 if recipient is not None and "formula" not in recipient and "si" not in recipient:
                     recipient["spillFrom"] = cell["ref"]
 
@@ -121,31 +103,25 @@ def apply_spill_sources(sources: list[Cell], cell_map: dict[tuple[int, int], Cel
 # ── Hyperlinks ──
 
 
-def apply_hyperlinks(
-    root: ET.Element,
-    cell_map: dict[tuple[int, int], Cell],
+def apply_hyperlink_specs(
+    specs: Iterable[tuple[str, str, str]],
+    cell_map: dict[int, Cell],
     sheet_rels: list[RelationshipRecord],
     rows: list[list[Cell]] | None = None,
+    rows_by_number: dict[int, list[Cell]] | None = None,
 ) -> None:
-    """Resolve <hyperlinks> via relationships and attach to cells."""
-    hyperlinks = root.find(f"{{{NS_S}}}hyperlinks")
-    if hyperlinks is None:
-        return
-
-    # Build rId → target from pre-read sheet rels
+    """Resolve scanned hyperlink declarations via relationships."""
     rel_targets: dict[str, str] = {}
     for rel in sheet_rels:
         target = rel.resolved_target or ""
         if target:
             rel_targets[rel.id] = target
 
-    for hyperlink in hyperlinks.findall(f"{{{NS_S}}}hyperlink"):
-        ref = hyperlink.get("ref", "")
-        location = hyperlink.get("location", "")
-        relationship_id = hyperlink.get(f"{{{NS_R}}}id", "")
-
+    for ref, relationship_id, location in specs:
+        if not ref:
+            continue
         col, row = parse_ref(ref)
-        cell = _ensure_cell(cell_map, rows, ref, col, row)
+        cell = _ensure_cell(cell_map, rows, rows_by_number, ref, col, row)
         if cell is None:
             continue
 
@@ -164,10 +140,11 @@ def apply_hyperlinks(
 
 
 def apply_comments(
-    cell_map: dict[tuple[int, int], Cell],
+    cell_map: dict[int, Cell],
     pkg: PackageReader,
     sheet_rels: list[RelationshipRecord],
     rows: list[list[Cell]] | None = None,
+    rows_by_number: dict[int, list[Cell]] | None = None,
     threaded_comment_people: Mapping[str, str] | None = None,
 ) -> None:
     """Parse legacy and threaded comments, keeping each collaboration thread on its cell."""
@@ -179,17 +156,21 @@ def apply_comments(
             break
     if comments_part is not None and pkg.exists(comments_part):
         try:
-            with pkg.open_entry(comments_part) as stream:
-                root = ET.parse(stream).getroot()
+            root = pkg.read_xml(comments_part)
         except ET.ParseError:
             root = None
         if root is not None:
-            _apply_legacy_comments(root, cell_map, rows)
+            _apply_legacy_comments(root, cell_map, rows, rows_by_number)
 
-    _apply_threaded_comments(cell_map, pkg, sheet_rels, rows, threaded_comment_people or {})
+    _apply_threaded_comments(cell_map, pkg, sheet_rels, rows, rows_by_number, threaded_comment_people or {})
 
 
-def _apply_legacy_comments(root: ET.Element, cell_map: dict[tuple[int, int], Cell], rows: list[list[Cell]] | None) -> None:
+def _apply_legacy_comments(
+    root: ET.Element,
+    cell_map: dict[int, Cell],
+    rows: list[list[Cell]] | None,
+    rows_by_number: dict[int, list[Cell]] | None,
+) -> None:
     """Attach legacy note-style comments while leaving threaded comments independent."""
     authors: list[str] = []
     authors_elem = root.find(f"{{{NS_S}}}authors")
@@ -204,7 +185,7 @@ def _apply_legacy_comments(root: ET.Element, cell_map: dict[tuple[int, int], Cel
             col, row = parse_ref(ref)
         except ValueError:
             continue
-        cell = _ensure_cell(cell_map, rows, ref, col, row)
+        cell = _ensure_cell(cell_map, rows, rows_by_number, ref, col, row)
         if cell is None:
             continue
         author_id_str = comment.get("authorId", "0")
@@ -226,8 +207,7 @@ def parse_threaded_comment_people(pkg: PackageReader) -> dict[str, str]:
     if not pkg.exists(part):
         return {}
     try:
-        with pkg.open_entry(part) as stream:
-            root = ET.parse(stream).getroot()
+        root = pkg.read_xml(part)
     except ET.ParseError:
         return {}
     people: dict[str, str] = {}
@@ -242,10 +222,11 @@ def parse_threaded_comment_people(pkg: PackageReader) -> dict[str, str]:
 
 
 def _apply_threaded_comments(
-    cell_map: dict[tuple[int, int], Cell],
+    cell_map: dict[int, Cell],
     pkg: PackageReader,
     sheet_rels: list[RelationshipRecord],
     rows: list[list[Cell]] | None,
+    rows_by_number: dict[int, list[Cell]] | None,
     people: Mapping[str, str],
 ) -> None:
     """Attach one modern comment conversation to its target cell without a package-wide scan."""
@@ -260,8 +241,7 @@ def _apply_threaded_comments(
     if part is None:
         return
     try:
-        with pkg.open_entry(part) as stream:
-            root = ET.parse(stream).getroot()
+        root = pkg.read_xml(part)
     except ET.ParseError:
         return
 
@@ -276,7 +256,7 @@ def _apply_threaded_comments(
             col, row = parse_ref(ref)
         except ValueError:
             continue
-        cell = _ensure_cell(cell_map, rows, ref, col, row)
+        cell = _ensure_cell(cell_map, rows, rows_by_number, ref, col, row)
         if cell is None:
             continue
         ordinal = per_cell_index.get(ref, 0) + 1
@@ -330,27 +310,29 @@ def _threaded_mentions(element: ET.Element, people: Mapping[str, str]) -> list[A
 
 
 def _ensure_cell(
-    cell_map: dict[tuple[int, int], Cell],
+    cell_map: dict[int, Cell],
     rows: list[list[Cell]] | None,
+    rows_by_number: dict[int, list[Cell]] | None,
     ref: str,
     col: int,
     row: int,
 ) -> Cell | None:
     """Materialize an otherwise empty annotated/navigable cell so its semantics remain visible."""
-    existing = cell_map.get((col, row))
+    existing = cell_map.get(coord_key(col, row))
     if existing is not None:
         return existing
     if rows is None:
         return None
     cell: Cell = {"ref": ref, "col": col, "row": row, "text": ""}
-    cell_map[(col, row)] = cell
-    target_row = next((row_cells for row_cells in rows if row_cells and row_cells[0]["row"] == row), None)
+    cell_map[coord_key(col, row)] = cell
+    target_row = rows_by_number.get(row) if rows_by_number is not None else None
     if target_row is None:
-        rows.append([cell])
-        rows.sort(key=lambda row_cells: row_cells[0]["row"] if row_cells else 0)
+        target_row = [cell]
+        rows.append(target_row)
+        if rows_by_number is not None:
+            rows_by_number[row] = target_row
     else:
         target_row.append(cell)
-        target_row.sort(key=lambda item: item["col"])
     return cell
 
 
@@ -382,8 +364,7 @@ def parse_tables(
         table_part = rel.resolved_target or ""
         if not table_part or not pkg.exists(table_part):
             continue
-        with pkg.open_entry(table_part) as stream:
-            root = ET.parse(stream).getroot()
+        root = pkg.read_xml(table_part)
 
         name = root.get("displayName", root.get("name", ""))
         ref = root.get("ref", "")
@@ -437,8 +418,7 @@ def parse_drawings(
     for rel in pkg.read_relationships_for_part(drawing_part):
         drawing_rels[rel.id] = rel
 
-    with pkg.open_entry(drawing_part) as stream:
-        root = ET.parse(stream).getroot()
+    root = pkg.read_xml(drawing_part)
 
     for anchor_name in ("twoCellAnchor", "oneCellAnchor", "absoluteAnchor"):
         for anchor in root.iter(f"{{{NS_XDR}}}{anchor_name}"):
@@ -515,8 +495,7 @@ def _parse_drawing_anchor(
 def _parse_chart_part(pkg: PackageReader, chart_part: str) -> DrawingChart:
     """Parse a chart XML part via shared ChartML parser; return structured dict."""
     try:
-        with pkg.open_entry(chart_part) as stream:
-            root = ET.parse(stream).getroot()
+        root = pkg.read_xml(chart_part)
         chart_info = parse_chart_xml(root)
     except Exception:
         return {"type": "", "title": "", "series_count": 0}

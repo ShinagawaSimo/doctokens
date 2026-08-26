@@ -218,8 +218,7 @@ class _SlideSequence:
                 yield _SlideParseResult(slide)
 
     def _read_xml(self, part: str) -> ET.Element:
-        with self._pkg.open_entry(part) as stream:
-            return ET.parse(stream).getroot()
+        return self._pkg.read_xml(part)
 
 
 class _CommentAttachmentPlan:
@@ -513,8 +512,7 @@ class PptxParser:
 
     @staticmethod
     def _read_xml(pkg: PackageReader, part: str) -> ET.Element:
-        with pkg.open_entry(part) as stream:
-            return ET.parse(stream).getroot()
+        return pkg.read_xml(part)
 
     def _parse_slide_size(self, presentation_root: ET.Element, warnings: list[ParseWarning]) -> tuple[int, int] | None:
         node = first_child(presentation_root, "p", "sldSz")

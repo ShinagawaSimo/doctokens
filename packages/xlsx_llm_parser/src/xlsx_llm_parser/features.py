@@ -48,8 +48,7 @@ def _find_part(pkg: PackageReader, names: set[str]) -> str | None:
 
 def _parse_part(pkg: PackageReader, part: str) -> ET.Element | None:
     try:
-        with pkg.open_entry(part) as stream:
-            return ET.parse(stream).getroot()
+        return pkg.read_xml(part)
     except (ET.ParseError, OSError, ValueError):
         return None
 

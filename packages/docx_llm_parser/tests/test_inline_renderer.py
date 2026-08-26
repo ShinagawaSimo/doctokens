@@ -293,11 +293,14 @@ class FakePackage:
         self.parts = parts
 
     def exists(self, name: str) -> bool:
-        # 对象解析器只需要 exists/open_entry 两个接口。
+        # 对象解析器只需要 exists/read_xml 两个接口。
         return name in self.parts
 
     def open_entry(self, name: str) -> BytesIO:
         return BytesIO(self.parts[name].encode("utf-8"))
+
+    def read_xml(self, name: str) -> ET.Element:
+        return ET.fromstring(self.parts[name])
 
 
 if __name__ == "__main__":

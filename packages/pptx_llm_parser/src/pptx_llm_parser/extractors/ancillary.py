@@ -76,8 +76,7 @@ class NotesParser:
         return None
 
     def _read_xml(self, part: str) -> ET.Element:
-        with self._pkg.open_entry(part) as stream:
-            return ET.parse(stream).getroot()
+        return self._pkg.read_xml(part)
 
 
 class CommentsParser:
@@ -200,8 +199,7 @@ class CommentsParser:
         return "".join(parts)
 
     def _read_xml(self, part: str) -> ET.Element:
-        with self._pkg.open_entry(part) as stream:
-            return ET.parse(stream).getroot()
+        return self._pkg.read_xml(part)
 
 
 def _safe_int(value: str | None) -> int | None:

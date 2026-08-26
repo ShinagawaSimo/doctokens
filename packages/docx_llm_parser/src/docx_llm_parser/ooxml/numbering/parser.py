@@ -109,8 +109,7 @@ class NumberingParser:
     def parse(self) -> NumberingMap:
         if not self.package.exists("word/numbering.xml"):
             return NumberingMap({}, {}, self.warnings)
-        with self.package.open_entry("word/numbering.xml") as stream:
-            root = ET.parse(stream).getroot()
+        root = self.package.read_xml("word/numbering.xml")
         picture_bullet_relationships = self._parse_picture_bullet_relationships(root)
         abstract_levels, style_link_num_ids = self._parse_abstract_numbers(root)
         instances = self._parse_instances(root)

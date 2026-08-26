@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any, cast
 from xml.etree import ElementTree as ET
 
+from ooxml_llm_core.xml import iterparse
+
 from ..core.constants import (
     _TAG_W_PARAGRAPH,
     _TAG_W_TABLE,
@@ -105,7 +107,7 @@ class DocumentBodyParser:
         """Stream-parse word/document.xml, preserving the original paragraph/table order."""
         blocks: list[Block] = []
         with self.package.open_entry("word/document.xml") as stream:
-            parser = ET.iterparse(stream, events=("start", "end"))
+            parser = iterparse(stream, events=("start", "end"))
             stack: list[str] = []
             body_depth: int | None = None
             for event, elem in parser:
@@ -362,27 +364,25 @@ class DocumentBodyParser:
     @staticmethod
     def _discard_unreferenced_anchors(blocks: list[Block]) -> None:
         """Avoid carrying bookmarks that are never a parsed internal-navigation target."""
-        all_blocks: list[Block] = []
+        anchored_blocks: list[TextBlock] = []
+        used: set[str] = set()
 
         def visit(items: list[Block]) -> None:
             for item in items:
-                all_blocks.append(item)
+                if item["type"] in {"paragraph", "heading"}:
+                    if item.get("anchors"):
+                        anchored_blocks.append(item)
+                    for run in item.get("runs", []):
+                        link = run.get("link")
+                        if link and link.get("anchor"):
+                            used.add(link["anchor"])
                 if item["type"] == "table":
                     for row in item["rows"]:
                         for cell in row["cells"]:
                             visit(cell["blocks"])
 
         visit(blocks)
-        used = {
-            link["anchor"]
-            for item in all_blocks
-            if item["type"] in {"paragraph", "heading"}
-            for run in item.get("runs", [])
-            if (link := run.get("link")) is not None and link.get("anchor")
-        }
-        for item in all_blocks:
-            if item["type"] not in {"paragraph", "heading"}:
-                continue
+        for item in anchored_blocks:
             anchors = [anchor for anchor in item.get("anchors", []) if anchor in used]
             if anchors:
                 item["anchors"] = anchors

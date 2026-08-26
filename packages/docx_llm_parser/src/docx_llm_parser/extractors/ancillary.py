@@ -234,8 +234,7 @@ class AncillaryParser:
     def _parse_xml_part(self, part_name: str) -> ET.Element | None:
         """Read an XML part; log a warning and return None on failure."""
         try:
-            with self.package.open_entry(part_name) as stream:
-                return ET.parse(stream).getroot()
+            return self.package.read_xml(part_name)
         except Exception as exc:
             append_warning(
                 self.warnings,

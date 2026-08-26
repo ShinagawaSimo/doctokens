@@ -284,7 +284,11 @@ class SlideParser:
             part=part,
             theme=context["theme"],
             color_map=context["color_map"],
-            inherited_styles=self._shape_text_styles(sp, context, part),
+            inherited_styles=(
+                self._shape_text_styles(sp, context, part)
+                if self._plan.needs(PptxFeature.THEME_AND_LAYOUT)
+                else None
+            ),
         )
         if text_result.text is None:
             return self._descriptive_shape(sp, ordinal)
@@ -879,7 +883,6 @@ def shape_runs(
         if paragraph:
             if paragraphs_out is not None:
                 metadata: Paragraph = {
-                    "runs": list(paragraph),
                     "text": "".join(run.get("text", "") for run in paragraph),
                     "level": level,
                 }

@@ -2,8 +2,10 @@
 
 import unittest
 import zipfile
+from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.options import PackageOptions
@@ -14,6 +16,7 @@ from ooxml_llm_core.package import (
     resolve_relationship_target,
     source_part_from_rels_path,
 )
+from ooxml_llm_core.xml import iterparse, parse_xml
 
 
 def _write_zip(path: Path, entries: dict[str, str]) -> None:
@@ -96,6 +99,78 @@ class CorePackageReaderTests(unittest.TestCase):
     def test_bytes_source_rejects_invalid(self) -> None:
         with self.assertRaisesRegex(PackageError, "Not a valid zip"):
             PackageReader(b"not a zip file", PackageLimits()).__enter__()
+
+    def test_small_parts_are_cached_but_xml_trees_are_not_shared(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "test.docx"
+            _write_zip(
+                path,
+                {
+                    "[Content_Types].xml": _content_types(),
+                    "word/document.xml": "<document><item>original</item></document>",
+                },
+            )
+            with PackageReader(path, PackageLimits()) as package:
+                first_bytes = package.read_part("word/document.xml")
+                second_bytes = package.read_part("word\\document.xml")
+                self.assertIs(first_bytes, second_bytes)
+
+                first_root = package.read_xml("word/document.xml")
+                first_root.find("item").text = "changed"  # type: ignore[union-attr]
+                second_root = package.read_xml("word/document.xml")
+                self.assertEqual(second_root.findtext("item"), "original")
+
+    def test_large_part_does_not_enter_the_session_cache(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "test.docx"
+            large_part = "word/large.xml"
+            _write_zip(
+                path,
+                {
+                    "[Content_Types].xml": _content_types(),
+                    large_part: "<root>" + "x" * (512 * 1024 + 1) + "</root>",
+                },
+            )
+            with PackageReader(path, PackageLimits()) as package:
+                root = package.read_xml(large_part)
+                self.assertEqual(root.tag, "root")
+                self.assertNotIn(large_part, package._part_cache)
+                self.assertEqual(package._part_cache_bytes, 0)
+
+    def test_xml_backend_preserves_parse_errors_and_disables_external_entities(self) -> None:
+        self.assertEqual(parse_xml(b"<root><item>ok</item></root>").findtext("item"), "ok")
+        parsed = iterparse(BytesIO(b"<root><item/></root>"), events=("end",))
+        self.assertEqual([element.tag for _event, element in parsed], ["item", "root"])
+        with self.assertRaises(ET.ParseError):
+            parse_xml(b"<root>")
+
+        payload = b'<!DOCTYPE root [<!ENTITY secret SYSTEM "file:///not-readable">]><root>&secret;</root>'
+        try:
+            root = parse_xml(payload)
+        except ET.ParseError:
+            return
+        self.assertNotIn("not-readable", "".join(root.itertext()))
+
+    def test_relationship_records_are_cached_with_independent_lists(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "test.docx"
+            _write_zip(
+                path,
+                {
+                    "[Content_Types].xml": _content_types(),
+                    "word/document.xml": "<w:document/>",
+                    "word/_rels/document.xml.rels": (
+                        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                        '<Relationship Id="rId1" Type="test" Target="styles.xml"/>'
+                        "</Relationships>"
+                    ),
+                },
+            )
+            with PackageReader(path, PackageLimits()) as package:
+                first = package.read_relationships_for_part("word/document.xml")
+                first.clear()
+                second = package.read_relationships_for_part("word/document.xml")
+                self.assertEqual([record.id for record in second], ["rId1"])
 
     def test_limits_and_unsafe_entry_names_are_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "max_zip_entries"):

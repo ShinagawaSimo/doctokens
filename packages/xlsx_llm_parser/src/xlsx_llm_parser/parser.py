@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.metrics import MetricsRecorder
@@ -197,8 +196,7 @@ def _parse_workbook_xml(
 
     Returns (date_1904, sheets, defined_names).
     """
-    with pkg.open_entry("xl/workbook.xml") as stream:
-        root = ET.parse(stream).getroot()
+    root = pkg.read_xml("xl/workbook.xml")
 
     # Date system: 1900 (default) or 1904 (Mac)
     wb_pr = root.find(f"{{{NS_S}}}workbookPr")
@@ -302,8 +300,7 @@ def _parse_shared_strings(
     if not pkg.exists("xl/sharedStrings.xml"):
         return [], {}
 
-    with pkg.open_entry("xl/sharedStrings.xml") as stream:
-        root = ET.parse(stream).getroot()
+    root = pkg.read_xml("xl/sharedStrings.xml")
 
     strings: list[str] = []
     rich_map: dict[int, list[RichTextRun]] = {}

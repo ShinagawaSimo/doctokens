@@ -60,8 +60,7 @@ class EmbeddedObjectExtractor:
             if not target or not self.package.exists(target):
                 continue
             try:
-                with self.package.open_entry(target) as stream:
-                    root = ET.parse(stream).getroot()
+                root = self.package.read_xml(target)
                 layout_type = _layout_category(root)
                 if layout_type:
                     layout_types_by_part[rel.source_part] = layout_type
@@ -90,8 +89,7 @@ class EmbeddedObjectExtractor:
                 )
                 continue
             try:
-                with self.package.open_entry(target) as stream:
-                    root = ET.parse(stream).getroot()
+                root = self.package.read_xml(target)
                 chart = parse_chart_root(root, chart_id, target)
             except Exception as exc:
                 self._warn(
@@ -124,8 +122,7 @@ class EmbeddedObjectExtractor:
                 )
                 continue
             try:
-                with self.package.open_entry(target) as stream:
-                    root = ET.parse(stream).getroot()
+                root = self.package.read_xml(target)
                 smartart = parse_smartart_root(root, smartart_id, target)
             except Exception as exc:
                 self._warn(

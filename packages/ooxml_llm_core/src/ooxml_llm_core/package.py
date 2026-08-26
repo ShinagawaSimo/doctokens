@@ -13,13 +13,15 @@ from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.models import ContentTypes, RelationshipRecord, ZipEntryInfo
-from ooxml_llm_core.xml import NS
+from ooxml_llm_core.xml import NS, parse_xml, parse_xml_stream
 
 # Minimum ratio of compressed/uncompressed size before an entry is
 # flagged as suspicious.
 _MIN_INFLATE_RATIO = 0.01
 # Entries smaller than this (bytes) are exempt from ratio checks.
 _GRACE_ENTRY_SIZE = 100_000
+_PART_CACHE_ENTRY_BYTES = 512 * 1024
+_PART_CACHE_TOTAL_BYTES = 8 * 1024 * 1024
 
 
 class PackageError(RuntimeError):
@@ -35,17 +37,19 @@ class PackageReader:
         self._zip: zipfile.ZipFile | None = None
         self._entry_index: list[ZipEntryInfo] | None = None
         self._names: set[str] = set()
+        self._part_cache: dict[str, bytes] = {}
+        self._part_cache_bytes = 0
+        self._relationships_by_source: dict[str, tuple[RelationshipRecord, ...]] = {}
+        self._all_relationships: tuple[RelationshipRecord, ...] | None = None
 
     def __enter__(self) -> PackageReader:
-        if isinstance(self._source, bytes):
-            if not zipfile.is_zipfile(BytesIO(self._source)):
-                raise PackageError("Not a valid zip byte stream")
-            self._zip = zipfile.ZipFile(BytesIO(self._source), "r")
-        else:
-            path = Path(self._source)
-            if not zipfile.is_zipfile(path):
-                raise PackageError(f"Not a zip file: {path}")
-            self._zip = zipfile.ZipFile(path, "r")
+        try:
+            source = BytesIO(self._source) if isinstance(self._source, bytes) else Path(self._source)
+            self._zip = zipfile.ZipFile(source, "r")
+        except (OSError, zipfile.BadZipFile) as exc:
+            if isinstance(self._source, bytes):
+                raise PackageError("Not a valid zip byte stream") from exc
+            raise PackageError(f"Not a zip file: {self._source}") from exc
         return self
 
     def __exit__(
@@ -56,6 +60,11 @@ class PackageReader:
     ) -> None:
         if self._zip is not None:
             self._zip.close()
+            self._zip = None
+        self._part_cache.clear()
+        self._part_cache_bytes = 0
+        self._relationships_by_source.clear()
+        self._all_relationships = None
 
     @property
     def zip_file(self) -> zipfile.ZipFile:
@@ -134,8 +143,7 @@ class PackageReader:
         return entry_index
 
     def read_content_types(self) -> ContentTypes:
-        with self.open_entry("[Content_Types].xml") as stream:
-            root = ET.parse(stream).getroot()
+        root = self.read_xml("[Content_Types].xml")
 
         defaults: dict[str, str] = {}
         overrides: dict[str, str] = {}
@@ -148,6 +156,8 @@ class PackageReader:
         return {"defaults": defaults, "overrides": overrides}
 
     def read_all_relationships(self) -> list[RelationshipRecord]:
+        if self._all_relationships is not None:
+            return list(self._all_relationships)
         self._ensure_index()
         rels_paths = sorted(
             name for name in self._names if name == "_rels/.rels" or ("/_rels/" in name and name.endswith(".rels"))
@@ -156,18 +166,22 @@ class PackageReader:
         for rels_path in rels_paths:
             source_part = source_part_from_rels_path(rels_path)
             relationships.extend(self.read_relationships_for_part(source_part))
+        self._all_relationships = tuple(relationships)
         return relationships
 
     def read_relationships_for_part(self, source_part: str | None) -> list[RelationshipRecord]:
+        source = source_part or ""
+        cached = self._relationships_by_source.get(source)
+        if cached is not None:
+            return list(cached)
         rels_path = rels_path_for_part(source_part)
         if not self.exists(rels_path):
+            self._relationships_by_source[source] = ()
             return []
 
-        with self.open_entry(rels_path) as stream:
-            root = ET.parse(stream).getroot()
+        root = self.read_xml(rels_path)
 
         records: list[RelationshipRecord] = []
-        source = source_part or ""
         for rel in root:
             if rel.tag != f"{{{NS['rel']}}}Relationship":
                 continue
@@ -186,14 +200,46 @@ class PackageReader:
                     resolved_target=resolved,
                 )
             )
+        self._relationships_by_source[source] = tuple(records)
         return records
+
+    def read_part(self, name: str) -> bytes:
+        """Read a small package part, caching bounded immutable bytes per session."""
+        normalized = self._normalized_name(name)
+        cached = self._part_cache.get(normalized)
+        if cached is not None:
+            return cached
+        with self.open_entry(normalized) as stream:
+            data = stream.read()
+        if (
+            len(data) <= _PART_CACHE_ENTRY_BYTES
+            and self._part_cache_bytes + len(data) <= _PART_CACHE_TOTAL_BYTES
+        ):
+            self._part_cache[normalized] = data
+            self._part_cache_bytes += len(data)
+        return data
+
+    def read_xml(self, name: str) -> ET.Element:
+        """Parse one package XML part from the bounded bytes cache when eligible."""
+        normalized = self._normalized_name(name)
+        self._ensure_index()
+        if normalized not in self._names:
+            raise PackageError(f"Missing zip entry: {normalized}")
+        if self.zip_file.getinfo(normalized).file_size > _PART_CACHE_ENTRY_BYTES:
+            with self.open_entry(normalized) as stream:
+                return parse_xml_stream(stream)
+        return parse_xml(self.read_part(normalized))
 
     def open_entry(self, name: str) -> IO[bytes]:
         self._ensure_index()
-        normalized = name.replace("\\", "/")
+        normalized = self._normalized_name(name)
         if normalized not in self._names:
             raise PackageError(f"Missing zip entry: {normalized}")
         return self.zip_file.open(normalized, "r")
+
+    @staticmethod
+    def _normalized_name(name: str) -> str:
+        return name.replace("\\", "/")
 
     def _ensure_index(self) -> None:
         if self._entry_index is None:

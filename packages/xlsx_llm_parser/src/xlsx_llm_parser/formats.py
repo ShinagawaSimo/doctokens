@@ -261,8 +261,7 @@ def parse_styles(pkg: PackageReader, *, include_semantic_details: bool = True) -
     # formats remain necessary at every density.
     theme = _parse_theme(pkg) if include_semantic_details else {}
 
-    with pkg.open_entry("xl/styles.xml") as stream:
-        root = ET.parse(stream).getroot()
+    root = pkg.read_xml("xl/styles.xml")
 
     # Custom number formats: numFmtId → formatCode
     custom_fmts: dict[int, str] = {}
@@ -382,8 +381,7 @@ def _parse_theme(pkg: PackageReader) -> dict[int, str]:
     if not pkg.exists("xl/theme/theme1.xml"):
         return _DEFAULT_THEME.copy()
 
-    with pkg.open_entry("xl/theme/theme1.xml") as stream:
-        root = ET.parse(stream).getroot()
+    root = pkg.read_xml("xl/theme/theme1.xml")
 
     scheme = root.find(f"{{{NS_A}}}themeElements/{{{NS_A}}}clrScheme")
     if scheme is None:

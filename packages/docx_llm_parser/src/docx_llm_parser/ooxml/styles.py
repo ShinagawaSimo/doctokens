@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from types import MappingProxyType
-from xml.etree import ElementTree as ET
 
 from ..core.constants import attr, first_child, qualified_name
 from ..core.models import ParagraphBorders, ParseWarning, RunFormat, StyleRecord, append_warning
@@ -221,8 +220,7 @@ class StylesParser:
             )
             return StyleMap({}, self.warnings)
 
-        with self.package.open_entry("word/styles.xml") as stream:
-            root = ET.parse(stream).getroot()
+        root = self.package.read_xml("word/styles.xml")
 
         records: dict[str, StyleRecord] = {}
         for style in root.findall(qualified_name("w", "style")):

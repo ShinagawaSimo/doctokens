@@ -6,7 +6,8 @@ their own extended namespace map to the helper functions.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from typing import IO, Any, cast
 from xml.etree import ElementTree as ET
 
 # OPC-generic namespaces (package-level).
@@ -15,6 +16,21 @@ NS: Mapping[str, str] = {
     "ct": "http://schemas.openxmlformats.org/package/2006/content-types",
     "xml": "http://www.w3.org/XML/1998/namespace",
 }
+
+
+def parse_xml(data: bytes) -> ET.Element:
+    """Parse complete XML with the standard library backend."""
+    return ET.fromstring(data)
+
+
+def parse_xml_stream(stream: IO[bytes]) -> ET.Element:
+    """Parse one XML part without retaining its decompressed bytes in a cache."""
+    return ET.parse(stream).getroot()
+
+
+def iterparse(stream: IO[bytes], *, events: tuple[str, ...]) -> Iterator[tuple[str, ET.Element]]:
+    """Iterate XML safely, preserving ElementTree parse-error behavior."""
+    yield from ET.iterparse(stream, events=cast(Any, events))
 
 
 def qualified_name(prefix: str, local: str, ns: Mapping[str, str] = NS) -> str:

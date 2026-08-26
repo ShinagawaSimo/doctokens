@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import cast
 from xml.etree import ElementTree as ET
 
-from ooxml_llm_core.debug import DebugWriter
 from ooxml_llm_core.metrics import MetricsRecorder
 from ooxml_llm_core.models import ParseReport, ParseWarning
 from ooxml_llm_core.relationships import HYPERLINK_RELATIONSHIP_TYPE, RelationshipIndex, office_relationship_type
@@ -29,7 +28,7 @@ from .core.models import (
     SmartArtLookup,
 )
 from .core.package import PackageReader
-from .diagnostics import record_metrics, write_debug_artifacts
+from .diagnostics import record_metrics
 from .extractors.ancillary import CommentsParser, NotesParser
 from .extractors.assets import AssetExtractor
 from .extractors.objects import EmbeddedObjectExtractor
@@ -277,8 +276,6 @@ class PptxParser:
         )
         record_metrics(parsed, metrics)
         parsed.metrics = metrics.snapshot()
-        if options.debug:
-            write_debug_artifacts(DebugWriter(options.output_dir / ".debug"), parsed)
         parsed.report = ParseReport(
             "pptx",
             1,

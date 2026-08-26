@@ -1,67 +1,9 @@
-"""Diagnostics, debug artifacts, and parse-content metrics."""
+"""In-memory parse-content metrics."""
 
 from __future__ import annotations
 
-from dataclasses import asdict
-
-from .core.debug import DebugWriter
 from .core.metrics import MetricsRecorder
-from .core.models import (
-    Block,
-    ContentTypes,
-    ParsedDocument,
-    ParseWarning,
-    ZipEntryInfo,
-)
-from .core.relationships import RelationshipIndex
-from .extractors.body import DocumentBodyParser
-
-
-def write_debug_artifacts(
-    debug: DebugWriter,
-    zip_index: list[ZipEntryInfo],
-    content_types: ContentTypes,
-    relationships: RelationshipIndex,
-    style_rows: list[dict[str, object]],
-    body_parser: DocumentBodyParser,
-    parsed: ParsedDocument,
-) -> None:
-    """Write debug artifacts; append a warning on failure rather than aborting."""
-    try:
-        debug.write_json(
-            "package.json",
-            {
-                "zipIndex": zip_index,
-                "contentTypes": content_types,
-                "relationships": relationships.to_debug_list(),
-            },
-        )
-        debug.write_json("styles.json", style_rows)
-        debug.write_json("numbering.json", parsed.numbering)
-        debug.write_json("blocks.json", parsed.blocks)
-        debug.write_json("manifest.json", _debug_manifest(parsed))
-        debug.write_jsonl("events.jsonl", body_parser.body_events)
-        debug.write_json("warnings.json", [asdict(item) for item in parsed.warnings])
-    except Exception as exc:
-        parsed.warnings.append(
-            ParseWarning(
-                code="DEBUG_WRITE_FAILED",
-                message=f"Failed to write debug artifacts: {exc}",
-            )
-        )
-
-
-def write_metrics_debug(debug: DebugWriter, parsed: ParsedDocument) -> None:
-    """Write metrics separately so debug-write timing is persisted."""
-    try:
-        debug.write_json("metrics.json", parsed.metrics)
-    except Exception as exc:
-        parsed.warnings.append(
-            ParseWarning(
-                code="METRICS_WRITE_FAILED",
-                message=f"Failed to write metrics debug artifact: {exc}",
-            )
-        )
+from .core.models import Block, ParsedDocument
 
 
 def record_content_metrics(parsed: ParsedDocument, metrics: MetricsRecorder) -> None:
@@ -91,44 +33,6 @@ def record_content_metrics(parsed: ParsedDocument, metrics: MetricsRecorder) -> 
     metrics.set_counter("endnoteCount", len(parsed.endnotes))
     metrics.set_counter("commentCount", len(parsed.comments))
     metrics.set_counter("warningCount", len(parsed.warnings))
-
-
-def _debug_manifest(parsed: ParsedDocument) -> dict[str, object]:
-    manifest: dict[str, object] = {
-        "assets": parsed.assets,
-        "embedded": {
-            "charts": parsed.charts,
-            "smartarts": parsed.smartarts,
-        },
-        "ancillary": {
-            "headers": parsed.headers,
-            "footers": parsed.footers,
-            "footnotes": parsed.footnotes,
-            "endnotes": parsed.endnotes,
-            "comments": parsed.comments,
-        },
-        "summary": {
-            "blockCount": len(parsed.blocks),
-            "assetCount": len(parsed.assets),
-            "chartCount": len(parsed.charts),
-            "smartartCount": len(parsed.smartarts),
-            "headerCount": len(parsed.headers),
-            "footerCount": len(parsed.footers),
-            "footnoteCount": len(parsed.footnotes),
-            "endnoteCount": len(parsed.endnotes),
-            "commentCount": len(parsed.comments),
-            "styleCount": len(parsed.styles),
-            "relationshipCount": len(parsed.relationships),
-            "warningCount": len(parsed.warnings),
-            "packageInfo": parsed.package_info,
-        },
-    }
-    if parsed.ocr_results:
-        manifest["ocrResults"] = parsed.ocr_results
-        summary = manifest["summary"]
-        if isinstance(summary, dict):
-            summary["ocrResultCount"] = len(parsed.ocr_results)
-    return manifest
 
 
 def _compute_block_stats(blocks: list[Block]) -> dict[str, int]:

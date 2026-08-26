@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 from typing import Any, cast
 from xml.etree import ElementTree as ET
 
@@ -31,7 +30,7 @@ def _body_parser() -> DocumentBodyParser:
     return DocumentBodyParser(
         cast(PackageReader, object()),
         StyleMap({}, warnings),
-        ParseOptions(output_dir=Path("out")),
+        ParseOptions(),
         warnings,
         RelationshipIndex.from_records([]),
         {},

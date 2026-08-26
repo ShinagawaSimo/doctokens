@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -123,16 +122,9 @@ class ExtendedPptxTests(unittest.TestCase):
             self.assertIsNotNone(get_resource(rich_deck_pptx(), "chart", "chart1"))
             self.assertIsNotNone(get_resource(rich_deck_pptx(), "table", "table1"))
 
-    def test_debug_artifacts_and_strict_numeric_options(self) -> None:
+    def test_strict_numeric_options(self) -> None:
         with self.assertRaisesRegex(ValueError, "max_zip_entries"):
             ParseOptions(max_zip_entries=True)
-        with tempfile.TemporaryDirectory() as directory:
-            parsed = PptxParser().parse(
-                _deck(text_shape_xml([[("t", "Debug")]])),
-                ParseOptions(debug=True, output_dir=Path(directory)),
-            )
-            self.assertIn("totalMs", parsed.metrics)
-            self.assertTrue((Path(directory) / ".debug" / "manifest.json").is_file())
 
 
 if __name__ == "__main__":

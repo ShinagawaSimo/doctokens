@@ -3,7 +3,7 @@
 Shared OOXML (Open Packaging Conventions) infrastructure used by format-specific LLM-oriented parsers.
 Provides ZIP package reading, relationship resolution, XML helpers, and parser warning models.
 
-It also provides the shared `PackageOptions` base for OPC limits/diagnostics
+It also provides the shared `PackageOptions` base for OPC limits and in-memory diagnostics
 and the `ParseReport` contract (`format`, `schemaVersion`, `manifest`,
 `warnings`, `metrics`). Format-specific parsers extend the options and keep
 their own document IRs.

@@ -72,7 +72,7 @@ class InlineRendererTests(unittest.TestCase):
         return _inline_content(cast(Any, {"text": "", "runs": runs}), "semantic")
 
     def test_omml_equation_renders_as_eq(self) -> None:
-        """OMML 公式应进入最终 XML，而不是只进入 debug。"""
+        """OMML 公式应进入最终 XML。"""
         xml = f"<w:p {NS}><m:oMath><m:r><m:t>x+1=y</m:t></m:r></m:oMath></w:p>"
 
         self.assertEqual(self._render_paragraph(xml), "<equation>x+1=y</equation>")

@@ -9,7 +9,6 @@ from typing import cast
 from ooxml_llm_core.models import ParseReport
 
 from ._version import __version__
-from .core.debug import DebugWriter
 from .core.metrics import MetricsRecorder
 from .core.models import (
     AncillaryResult,
@@ -28,7 +27,7 @@ from .core.models import (
 )
 from .core.package import PackageReader
 from .core.relationships import RelationshipIndex
-from .diagnostics import record_content_metrics, write_debug_artifacts, write_metrics_debug
+from .diagnostics import record_content_metrics
 from .extractors.ancillary import AncillaryParser
 from .extractors.assets import AssetExtractor
 from .extractors.body import DocumentBodyParser
@@ -54,10 +53,8 @@ class _ParseResult:
     charts: list[Chart]
     smartarts: list[SmartArt]
     blocks: list[Block]
-    body_parser: DocumentBodyParser
     ancillary: AncillaryResult
     ocr_results: dict[str, OcrStoredResult]
-    style_rows: list[dict[str, object]]
 
 
 class DocxParser:
@@ -67,9 +64,6 @@ class DocxParser:
         """Parse a single DOCX file, creating fresh per-call context for concurrency safety."""
         opts = options or ParseOptions()
         warnings: list[ParseWarning] = []
-        output_dir = opts.output_dir
-        debug_dir = output_dir / ".debug"
-        debug = DebugWriter(debug_dir, enabled=opts.debug)
         metrics = MetricsRecorder()
         source_name, docx_source_path = _source_info(docx_source, metrics)
 
@@ -106,9 +100,6 @@ class DocxParser:
                 metrics,
             )
 
-            with metrics.stage("style_debug_rows"):
-                style_rows = styles.to_debug_list()
-
         result = _ParseResult(
             source_path=docx_source_path,
             source_name=source_name,
@@ -121,12 +112,10 @@ class DocxParser:
             charts=charts,
             smartarts=smartarts,
             blocks=blocks,
-            body_parser=body_parser,
             ancillary=ancillary,
             ocr_results=ocr_results,
-            style_rows=style_rows,
         )
-        return self._build_document(result, warnings, metrics, debug, debug_dir, opts)
+        return self._build_document(result, warnings, metrics)
 
     # Package helpers
 
@@ -312,9 +301,6 @@ class DocxParser:
         result: _ParseResult,
         warnings: list[ParseWarning],
         metrics: MetricsRecorder,
-        debug: DebugWriter,
-        debug_dir: Path,
-        opts: ParseOptions,
     ) -> ParsedDocument:
         total_uncompressed = 0
         total_compressed = 0
@@ -345,7 +331,6 @@ class DocxParser:
             relationships=list(result.relationships.records),
             styles=list(result.styles.records.values()),
             warnings=warnings,
-            debug_dir=str(debug_dir) if opts.debug else None,
             content_types=result.content_types,
             assets=result.assets,
             charts=result.charts,
@@ -355,23 +340,10 @@ class DocxParser:
             footnotes=result.ancillary["footnotes"],
             endnotes=result.ancillary["endnotes"],
             comments=result.ancillary["comments"],
-            numbering=result.numbering.to_debug_dict(),
             ocr_results=result.ocr_results,
         )
         record_content_metrics(parsed, metrics)
-
-        with metrics.stage("debug_write"), debug:
-            write_debug_artifacts(
-                debug,
-                result.zip_index,
-                result.content_types,
-                result.relationships,
-                result.style_rows,
-                result.body_parser,
-                parsed,
-            )
-            parsed.metrics = metrics.snapshot()
-            write_metrics_debug(debug, parsed)
+        parsed.metrics = metrics.snapshot()
         parsed.report = ParseReport(
             "docx",
             1,

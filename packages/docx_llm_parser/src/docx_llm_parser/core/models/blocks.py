@@ -119,21 +119,6 @@ class TableBlock(TableBlockRequired, total=False):
 Block = TextBlock | TableBlock
 
 
-class BodyEventRequired(TypedDict):
-    id: str
-    type: str
-    order: int
-    part: str
-
-
-class BodyEvent(BodyEventRequired, total=False):
-    textPreview: str
-    numberingLabel: str
-    level: int
-    rowCount: int
-    columnCount: int
-
-
 class AncillaryContent(TypedDict):
     text: str
     runs: list[Run]
@@ -172,7 +157,6 @@ __all__ = [
     "AncillaryItem",
     "AncillaryResult",
     "Block",
-    "BodyEvent",
     "HeadingBlock",
     "InlineContainer",
     "NumberingLabel",

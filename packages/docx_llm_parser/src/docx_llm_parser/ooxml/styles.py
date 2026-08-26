@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import asdict
 from types import MappingProxyType
 from xml.etree import ElementTree as ET
 
@@ -88,16 +87,6 @@ class StyleMap:
         if style_id not in self._border_cache:
             self._border_cache[style_id] = self._resolve_paragraph_borders(style_id, visited=set())
         return self._border_cache[style_id]
-
-    def to_debug_list(self) -> list[dict[str, object]]:
-        """Produce a style summary for debug output."""
-        rows: list[dict[str, object]] = []
-        for style_id in sorted(self.records):
-            record = self.records[style_id]
-            row = asdict(record)
-            row["resolved_heading_level"] = self.resolve_heading_level(style_id)
-            rows.append(row)
-        return rows
 
     def _resolve_heading_level(self, style_id: str, visited: set[str]) -> int | None:
         """Recursively resolve the outline level along the basedOn inheritance chain."""

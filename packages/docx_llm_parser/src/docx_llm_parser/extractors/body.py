@@ -15,7 +15,6 @@ from ..core.constants import (
 from ..core.models import (
     AssetLookup,
     Block,
-    BodyEvent,
     ContentControl,
     NumberingLabel,
     ObjectLookup,
@@ -90,7 +89,6 @@ class DocumentBodyParser:
         self._page_hint = 1
         # Counter instead of boolean: a paragraph/table can contain multiple lastRenderedPageBreak elements.
         self._pending_page_breaks = 0
-        self.body_events: list[BodyEvent] = []
         self._section_header_refs: list[tuple[str, str]] = []
         self._section_footer_refs: list[tuple[str, str]] = []
         self._comment_anchors: dict[str, str] = {}
@@ -160,8 +158,6 @@ class DocumentBodyParser:
                     body_depth = None
                 stack.pop()
         self._discard_unreferenced_anchors(blocks)
-        for parsed_block in blocks:
-            self._add_body_event(parsed_block)
         if self._section_index == 1:
             # A lone default section has no navigation value; omit it from the IR
             # so all densities remain free of redundant section metadata.
@@ -504,25 +500,6 @@ class DocumentBodyParser:
                     if cell_text.strip():
                         parts.append(cell_text)
         return "\n".join(parts)
-
-    def _add_body_event(self, block: Block) -> None:
-        """Record a body event for debugging; it does not affect the final LLM output."""
-        event: BodyEvent = {
-            "id": block["id"],
-            "type": block["type"],
-            "order": block["order"],
-            "part": block["part"],
-        }
-        if block["type"] in {"paragraph", "heading"}:
-            event["textPreview"] = block["text"][:120]
-            if "numbering" in block:
-                event["numberingLabel"] = block["numbering"]["label"]
-        if block["type"] == "heading":
-            event["level"] = block["level"]
-        if block["type"] == "table":
-            event["rowCount"] = len(block["rows"])
-            event["columnCount"] = block["columnCount"]
-        self.body_events.append(event)
 
     def _mark_page_break(self) -> None:
         """Called by InlineParser when an lrpb/manual page break is found; increments the pending page-break count."""

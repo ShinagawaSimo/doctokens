@@ -3,20 +3,17 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class PackageOptions:
-    """Common package limits and diagnostic settings.
+    """Common package limits.
 
     Format parsers extend this type with format-specific switches.  The base
     class deliberately contains no cache or document lifecycle state.
     """
 
-    debug: bool = False
-    output_dir: Path = field(default_factory=lambda: Path("out"))
     max_zip_entries: int = 10_000
     max_entry_uncompressed_bytes: int = 50 * 1024 * 1024
     max_total_uncompressed_bytes: int = 500 * 1024 * 1024

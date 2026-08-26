@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any
 
 from ooxml_llm_core.models import RelationshipRecord
 
@@ -67,6 +66,3 @@ class RelationshipIndex:
         if source_part is not None:
             return self._by_source_type.get((source_part, rel_type), ())
         return self._by_type.get(rel_type, ())
-
-    def to_debug_list(self) -> list[dict[str, Any]]:
-        return [asdict(item) for item in self.records]

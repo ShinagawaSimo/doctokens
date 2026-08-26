@@ -28,15 +28,12 @@ class DocxPipelineTests(unittest.TestCase):
         parsed = DocxParser().parse(
             docx_path,
             ParseOptions(
-                debug=True,
-                output_dir=output_dir,
                 revision_mode=RevisionMode.REVIEW,
             ),
         )
 
         self.assertEqual(parsed.metadata["sourceFile"], "rich.docx")
         self.assertEqual(parsed.package_info["entryCount"], 15)
-        self.assertTrue((output_dir / ".debug" / "blocks.json").exists())
         self.assertEqual(len(parsed.assets), 1)
         self.assertEqual(parsed.assets[0]["contentType"], "image/png")
         self.assertEqual(parsed.charts[0]["chartType"], "bar")

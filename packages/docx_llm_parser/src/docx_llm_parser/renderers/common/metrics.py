@@ -5,10 +5,9 @@ across rendering paths."""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
-from ...core.models import ParsedDocument, ParseWarning
+from ...core.models import ParsedDocument
 
 
 def record_render_metrics(
@@ -34,20 +33,3 @@ def record_render_metrics(
     counters["outputChars"] = output_chars
     counters["outputBytes"] = output_path.stat().st_size
     counters["estimatedTokens"] = max(1, round(output_chars / 4))
-
-
-def write_metrics_debug(parsed: ParsedDocument) -> None:
-    """Rewrite metrics.json after rendering, including the final output stage timing."""
-    if not parsed.debug_dir:
-        return
-    try:
-        path = Path(parsed.debug_dir) / "metrics.json"
-        with path.open("w", encoding="utf-8") as f:
-            json.dump(parsed.metrics, f, ensure_ascii=False, indent=2)
-    except Exception as exc:
-        parsed.warnings.append(
-            ParseWarning(
-                code="METRICS_WRITE_FAILED",
-                message=f"Failed to write render metrics debug artifact: {exc}",
-            )
-        )

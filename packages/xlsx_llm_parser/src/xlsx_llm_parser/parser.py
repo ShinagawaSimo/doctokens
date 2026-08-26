@@ -6,7 +6,6 @@ import re
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from ooxml_llm_core.debug import DebugWriter
 from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.metrics import MetricsRecorder
 from ooxml_llm_core.models import ParseReport, ParseWarning
@@ -136,15 +135,6 @@ def _parse_workbook(source: str | Path | bytes, options: ParseOptions | None = N
         manifest["pivotTableCount"] if isinstance(manifest["pivotTableCount"], int) else 0,
     )
     report = ParseReport("xlsx", 1, manifest, tuple(warnings), metrics.snapshot())
-    if opts.debug:
-        try:
-            debug = DebugWriter(opts.output_dir / ".debug")
-            with debug:
-                debug.write_json("report.json", report.to_dict())
-        except Exception as exc:
-            warnings.append(ParseWarning("XLSX_DEBUG_WRITE_FAILED", str(exc)))
-            report = ParseReport("xlsx", 1, manifest, tuple(warnings), metrics.snapshot())
-
     return {
         "sheets": sheets,
         "fmt_index": fmt_index,

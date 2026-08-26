@@ -62,7 +62,7 @@
 
 ```
 doctokens/
-  ooxml_llm_core/     # 共享基础设施：ZIP 包读取、关系索引、XML 工具、debug/metrics
+  ooxml_llm_core/     # 共享基础设施：ZIP 包读取、关系索引、XML 工具、metrics
   docx_llm_parser/    # DOCX → 语义 HTML5（标题、表格、编号、脚注、修订、公式、图表、SmartArt）
   xlsx_llm_parser/    # XLSX → 结构化 HTML5（合并单元格、公式、数据表、透视表、实验性 SQL-like 查询）
   pptx_llm_parser/    # PPTX → 幻灯片结构化 HTML5（备注、批注、主题、母版、图表、SmartArt）

@@ -72,12 +72,6 @@ class RelationshipIndexTests(unittest.TestCase):
         self.assertEqual(len(images), 1)
         self.assertEqual(images[0].id, "r1")
 
-    def test_to_debug_list(self) -> None:
-        idx = RelationshipIndex.from_records([_rec("doc", "r1", "image")])
-        debug = idx.to_debug_list()
-        self.assertEqual(len(debug), 1)
-        self.assertEqual(debug[0]["id"], "r1")
-
     def test_duplicate_rId_last_wins(self) -> None:
         """Per from_records, duplicate (source_part, id) keeps the last record."""
         idx = RelationshipIndex.from_records(
@@ -91,4 +85,3 @@ class RelationshipIndexTests(unittest.TestCase):
     def test_from_records_empty_is_valid(self) -> None:
         idx = RelationshipIndex.from_records([])
         self.assertEqual(idx.by_source("any"), ())
-        self.assertEqual(idx.to_debug_list(), [])

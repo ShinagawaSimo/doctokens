@@ -83,7 +83,6 @@ class ParsedDocument:
     relationships: list[RelationshipRecord]
     styles: list[StyleRecord]
     warnings: list[ParseWarning]
-    debug_dir: str | None = None
     content_types: ContentTypes = field(default_factory=lambda: ContentTypes(defaults={}, overrides={}))
     assets: list[ImageAsset] = field(default_factory=list)
     charts: list[Chart] = field(default_factory=list)
@@ -93,7 +92,6 @@ class ParsedDocument:
     footnotes: list[AncillaryItem] = field(default_factory=list)
     endnotes: list[AncillaryItem] = field(default_factory=list)
     comments: list[AncillaryItem] = field(default_factory=list)
-    numbering: dict[str, object] = field(default_factory=dict)
     ocr_results: dict[str, OcrStoredResult] = field(default_factory=dict)
     metrics: MetricsSnapshot = field(default_factory=lambda: MetricsSnapshot(stagesMs={}, counters={}))
     report: ParseReport | None = None
@@ -106,7 +104,6 @@ class ParsedDocument:
             "relationships": [asdict(item) for item in self.relationships],
             "styles": [asdict(item) for item in self.styles],
             "warnings": [asdict(item) for item in self.warnings],
-            "debugDir": self.debug_dir,
             "contentTypes": self.content_types,
             "assets": self.assets,
             "charts": self.charts,
@@ -116,7 +113,6 @@ class ParsedDocument:
             "footnotes": self.footnotes,
             "endnotes": self.endnotes,
             "comments": self.comments,
-            "numbering": self.numbering,
             "ocrResults": self.ocr_results,
             "metrics": self.metrics,
             "report": self.report.to_dict() if self.report is not None else None,

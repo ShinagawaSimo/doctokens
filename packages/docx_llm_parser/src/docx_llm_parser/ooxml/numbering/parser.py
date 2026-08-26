@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import asdict, replace
+from dataclasses import replace
 from types import MappingProxyType
 from xml.etree import ElementTree as ET
 
@@ -92,39 +92,6 @@ class NumberingMap:
             if linked_num_id:
                 pending.append(linked_num_id)
         return None
-
-    def to_debug_dict(self) -> dict[str, object]:
-        return {
-            "abstractNums": {
-                abstract_id: {str(level): self._level_dict(definition) for level, definition in sorted(levels.items())}
-                for abstract_id, levels in sorted(self.abstract_levels.items())
-            },
-            "nums": {
-                num_id: {
-                    "numId": instance.numbering_id,
-                    "abstractNumId": instance.abstract_num_id,
-                    "levelOverrides": {
-                        str(level): self._level_dict(definition) for level, definition in sorted(instance.level_overrides.items())
-                    },
-                    "startOverrides": {str(level): start for level, start in sorted(instance.start_overrides.items())},
-                }
-                for num_id, instance in sorted(self.instances.items())
-            },
-            "pictureBullets": dict(sorted(self.picture_bullet_relationships.items())),
-            "styleLinks": dict(sorted(self.style_link_num_ids.items())),
-        }
-
-    @staticmethod
-    def _level_dict(level: NumberingLevel) -> dict[str, object]:
-        result = asdict(level)
-        if result.get("custom_format") is None:
-            result.pop("custom_format", None)
-        if result.get("language") is None:
-            result.pop("language", None)
-        if result.get("marker_font") is None:
-            result.pop("marker_font", None)
-        return result
-
 
 class NumberingParser:
     """Read Word's numbering part and resolve level-local overrides."""

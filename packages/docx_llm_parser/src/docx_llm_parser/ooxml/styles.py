@@ -197,9 +197,16 @@ class StyleMap:
 class StylesParser:
     """Read styles.xml and build a StyleMap."""
 
-    def __init__(self, package: PackageReader, warnings: list[ParseWarning]) -> None:
+    def __init__(
+        self,
+        package: PackageReader,
+        warnings: list[ParseWarning],
+        *,
+        include_character_formatting: bool = True,
+    ) -> None:
         self.package = package
         self.warnings = warnings
+        self.include_character_formatting = include_character_formatting
 
     def parse(self) -> StyleMap:
         """Parse the styles file; return an empty style table when it is missing."""
@@ -242,9 +249,10 @@ class StylesParser:
             record.link = attr(linked_style, "w", "val") if linked_style is not None else None
             record.next = attr(next_style, "w", "val") if next_style is not None else None
             record.is_custom = (attr(style, "w", "customStyle") or "").lower() in {"1", "true"}
-            record.alignment = parse_paragraph_alignment(paragraph_properties)
-            record.borders = parse_paragraph_borders(paragraph_properties)
-            record.run_format = parse_run_format(run_properties)
+            if self.include_character_formatting:
+                record.alignment = parse_paragraph_alignment(paragraph_properties)
+                record.borders = parse_paragraph_borders(paragraph_properties)
+                record.run_format = parse_run_format(run_properties)
             outline_val = attr(outline, "w", "val") if outline is not None else None
             if outline_val is not None:
                 try:

@@ -10,6 +10,7 @@ from _fixtures import write_rich_docx
 from docx_llm_parser import Density, ResourceType, get_resource, load_docx, parse_docx
 from docx_llm_parser.core.enums import RevisionMode
 from docx_llm_parser.core.models import ParseOptions
+from docx_llm_parser.plan import DocxFeature, DocxParsePlan
 
 
 def _docx_path() -> Path:
@@ -23,6 +24,14 @@ class PublicApiValidationTests(unittest.TestCase):
         self.assertEqual(str(Density.SEMANTIC), "semantic")
         self.assertEqual(str(RevisionMode.FINAL), "final")
         self.assertEqual(str(ResourceType.TABLES), "tables")
+
+    def test_parse_plan_distinguishes_render_session_and_resource_work(self) -> None:
+        plain = DocxParsePlan.render(Density.PLAIN)
+        self.assertFalse(plain.needs(DocxFeature.CHARACTER_FORMATTING))
+        self.assertFalse(plain.needs(DocxFeature.HEADERS))
+        self.assertTrue(plain.needs(DocxFeature.BODY))
+        self.assertTrue(DocxParsePlan.session().needs(DocxFeature.HEADERS))
+        self.assertFalse(DocxParsePlan.resource(ResourceType.IMAGE).needs(DocxFeature.BODY))
 
     def test_density_rejects_unknown_value(self) -> None:
 

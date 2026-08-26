@@ -35,6 +35,7 @@ from ..core.constants import (
 )
 from ..core.models import InlineObject, LinkInfo, RawHint, Run
 from ..ooxml.formatting import merge_run_formats, parse_run_format, visible_run_format
+from ..plan import DocxFeature
 from .inline_objects import drawing_objects, equation_object, parse_embedded_object, pict_objects
 
 
@@ -82,18 +83,20 @@ class RunParser:
         if run_properties is not None:
             rstyle = first_child(run_properties, "w", "rStyle")
             run_style_id = attr(rstyle, "w", "val") if rstyle is not None else None
-        run_format = merge_run_formats(
-            self.owner.styles.resolve_run_format(paragraph_style_id),
-            self.owner.styles.resolve_run_format(run_style_id),
-            parse_run_format(run_properties),
-        )
-        visible_format = visible_run_format(run_format)
+        visible_format = {}
+        if self.owner.plan.needs(DocxFeature.CHARACTER_FORMATTING):
+            run_format = merge_run_formats(
+                self.owner.styles.resolve_run_format(paragraph_style_id),
+                self.owner.styles.resolve_run_format(run_style_id),
+                parse_run_format(run_properties),
+            )
+            visible_format = visible_run_format(run_format)
         parsed_runs: list[Run] = []
         for index, (text_parts, objects) in enumerate(zip(text_segments, object_segments, strict=True)):
             parsed_run: Run = {"text": "".join(text_parts)}
             if objects:
                 parsed_run["objects"] = objects
-            if run_style_id is not None:
+            if run_style_id is not None and self.owner.plan.needs(DocxFeature.CHARACTER_FORMATTING):
                 parsed_run["styleId"] = run_style_id
             if visible_format:
                 parsed_run["format"] = visible_format
@@ -121,24 +124,30 @@ class RunParser:
         elif child_tag in (_TAG_W_BREAK, _TAG_W_CARRIAGE_RETURN):
             text_parts.append("\n")
             if attr(child, "w", "type") == "page":
+                # Pagination consumes this hint even when raw hints are not
+                # retained on the final block.
                 raw_hints.append({"type": "manualPageBreak"})
                 self.owner._mark_page_break()
         elif child_tag == _TAG_W_LAST_RENDERED_PAGE_BREAK:
-            raw_hints.append({"type": "lastRenderedPageBreak"})
+            if self.owner.plan.needs(DocxFeature.RAW_HINTS):
+                raw_hints.append({"type": "lastRenderedPageBreak"})
             self.owner._mark_page_break()
             split_segment()
         elif child_tag == _TAG_W_DRAWING:
             drawing = drawing_objects(child, part, self.owner.asset_lookup, self.owner.object_lookup)
             objects.extend(drawing)
-            raw_hints.extend({"type": "drawing", **obj} for obj in drawing)
+            if self.owner.plan.needs(DocxFeature.RAW_HINTS):
+                raw_hints.extend({"type": "drawing", **obj} for obj in drawing)
         elif child_tag == _TAG_W_PICTURE:
             pict = pict_objects(child)
             objects.extend(pict)
-            raw_hints.extend({"type": "pict", **obj} for obj in pict)
+            if self.owner.plan.needs(DocxFeature.RAW_HINTS):
+                raw_hints.extend({"type": "pict", **obj} for obj in pict)
         elif child_tag in (_TAG_M_OMATH, _TAG_M_OMATH_PARA):
             obj = equation_object(child)
             objects.append(obj)
-            raw_hints.append(obj)
+            if self.owner.plan.needs(DocxFeature.RAW_HINTS):
+                raw_hints.append(obj)
         elif child_tag == _TAG_W_FLD_CHAR:
             self.handle_field_character(child, raw_hints, runs)
         elif child_tag == _TAG_W_INSTR_TEXT:
@@ -148,7 +157,8 @@ class RunParser:
             field_hint: RawHint = {"type": "field", "node": "instrText"}
             if instruction:
                 field_hint["instruction"] = instruction
-            raw_hints.append(field_hint)
+            if self.owner.plan.needs(DocxFeature.RAW_HINTS):
+                raw_hints.append(field_hint)
         elif child_tag in (_TAG_W_FOOTNOTE_REF, _TAG_W_ENDNOTE_REF, _TAG_W_ANNOTATION_REF):
             return
         elif child_tag in (_TAG_W_FOOTNOTE_REFERENCE, _TAG_W_ENDNOTE_REFERENCE):
@@ -156,11 +166,13 @@ class RunParser:
             ref_type = "footnote" if local_name(child_tag) == "footnoteReference" else "endnote"
             obj = {"type": f"{ref_type}Ref", "id": note_id}
             objects.append(obj)
-            raw_hints.append(obj)
+            if self.owner.plan.needs(DocxFeature.RAW_HINTS):
+                raw_hints.append(obj)
         elif child_tag == _TAG_W_COMMENT_REFERENCE:
             obj = {"type": "commentRef", "id": attr(child, "w", "id")}
             objects.append(obj)
-            raw_hints.append(obj)
+            if self.owner.plan.needs(DocxFeature.RAW_HINTS):
+                raw_hints.append(obj)
             comment_id = obj.get("id")
             if isinstance(comment_id, str):
                 self.owner._mark_comment_anchor(comment_id, block_id)
@@ -174,7 +186,8 @@ class RunParser:
         elif child_tag == _TAG_W_OBJECT:
             obj = parse_embedded_object(child)
             objects.append(obj)
-            raw_hints.append(obj)
+            if self.owner.plan.needs(DocxFeature.RAW_HINTS):
+                raw_hints.append(obj)
         elif child_tag == _TAG_W_RUN_STYLE:
             return
         else:
@@ -188,7 +201,8 @@ class RunParser:
     def handle_field_character(self, field_char: ET.Element, raw_hints: list[RawHint], runs: list[Run]) -> None:
         """Track complex-field boundaries without emitting field-code text."""
         field_type = attr(field_char, "w", "fldCharType") or ""
-        raw_hints.append({"type": "field", "node": "fldChar", "state": field_type})
+        if self.owner.plan.needs(DocxFeature.RAW_HINTS):
+            raw_hints.append({"type": "field", "node": "fldChar", "state": field_type})
         if field_type == "begin":
             self.owner._field_stack.append(self.owner.field_context_type())
         elif field_type == "separate" and self.owner._field_stack:

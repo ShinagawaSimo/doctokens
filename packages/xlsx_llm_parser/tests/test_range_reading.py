@@ -6,6 +6,8 @@ import zipfile
 from pathlib import Path
 
 from xlsx_llm_parser import render_range
+from xlsx_llm_parser.parser import _parse_workbook
+from xlsx_llm_parser.plan import XlsxFeature, XlsxParsePlan
 
 from test_support.file_contract import materialize_bytes
 
@@ -23,6 +25,13 @@ def _make_xlsx(entries: dict[str, str]) -> Path:
 
 
 class RangeReadingTests(unittest.TestCase):
+    def test_range_plan_limits_sheet_and_skips_formula_ir_for_plain_output(self) -> None:
+        plan = XlsxParsePlan.range("plain", "Data", (1, 2, 3, 10))
+        self.assertEqual(plan.sheet_names, frozenset(("Data",)))
+        self.assertEqual(plan.cell_window, (1, 2, 3, 10))
+        self.assertFalse(plan.needs(XlsxFeature.FORMULAS))
+        self.assertTrue(plan.needs(XlsxFeature.DRAWINGS))
+
     def test_range_filters_columns(self) -> None:
         """Cells outside the requested column range are excluded."""
         data = _make_xlsx(
@@ -71,6 +80,8 @@ class RangeReadingTests(unittest.TestCase):
         self.assertIn("Name", html)
         self.assertNotIn("Age", html)
         self.assertNotIn("City", html)
+        workbook = _parse_workbook(data, plan=XlsxParsePlan.range("structural", "Data", (1, 1, 1, 1)))
+        self.assertEqual(workbook["report"].manifest["cellCount"], 1)
 
     def test_range_filters_rows(self) -> None:
         """Rows outside the requested row range are excluded."""

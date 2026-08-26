@@ -21,6 +21,7 @@ RunParser = Callable[
         HyperlinkLookup,
         dict[int, ParagraphStyle] | None,
         list[Paragraph] | None,
+        bool,
     ],
     list[Run],
 ]
@@ -38,10 +39,18 @@ class TextBodyResult:
 class DrawingTextParser:
     """Build text, run and paragraph IR through one injected run parser."""
 
-    def __init__(self, warnings: list[ParseWarning], hyperlink_lookup: HyperlinkLookup, run_parser: RunParser) -> None:
+    def __init__(
+        self,
+        warnings: list[ParseWarning],
+        hyperlink_lookup: HyperlinkLookup,
+        run_parser: RunParser,
+        *,
+        include_formatting: bool,
+    ) -> None:
         self._warnings = warnings
         self._hyperlink_lookup = hyperlink_lookup
         self._run_parser = run_parser
+        self._include_formatting = include_formatting
 
     def parse(
         self,
@@ -62,6 +71,7 @@ class DrawingTextParser:
             self._hyperlink_lookup,
             inherited_styles,
             paragraphs,
+            self._include_formatting,
         )
         text = "".join(run.get("text", "") for run in runs)
         return TextBodyResult(text or None, runs, paragraphs)

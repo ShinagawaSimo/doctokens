@@ -15,11 +15,14 @@ from xlsx_llm_parser.api import (
     render_range,
 )
 from xlsx_llm_parser.models import ParseOptions
+from xlsx_llm_parser.plan import XlsxFeature, XlsxParsePlan
 
 __all__ = [
     "LoadedWorkbook",
     "ParseOptions",
     "ParseReport",
+    "XlsxFeature",
+    "XlsxParsePlan",
     "find_cells",
     "get_resource",
     "iter_workbook",

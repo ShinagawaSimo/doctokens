@@ -25,6 +25,7 @@ from .models import (
     RichTextRun,
     SheetInfo,
 )
+from .plan import XlsxFeature, XlsxParsePlan
 from .worksheet import parse_sheet
 
 # SpreadsheetML main namespace
@@ -38,9 +39,15 @@ _EXTERNAL_WORKBOOK_EXTENSIONS = (".xlsx", ".xlsm", ".xlsb", ".xls", ".xltx", ".x
 
 
 # OOXML cell type codes → LLM-readable semantic names.
-def _parse_workbook(source: str | Path | bytes, options: ParseOptions | None = None) -> ParsedWorkbook:
+def _parse_workbook(
+    source: str | Path | bytes,
+    options: ParseOptions | None = None,
+    *,
+    plan: XlsxParsePlan | None = None,
+) -> ParsedWorkbook:
     """Parse an XLSX file and return a typed workbook IR."""
     opts = options or ParseOptions()
+    resolved_plan = plan or XlsxParsePlan.session()
     limits = PackageLimits(
         max_zip_entries=opts.max_zip_entries,
         max_entry_uncompressed_bytes=opts.max_entry_uncompressed_bytes,
@@ -51,15 +58,30 @@ def _parse_workbook(source: str | Path | bytes, options: ParseOptions | None = N
     with metrics.stage("parse"), PackageReader(source, limits) as pkg:
         pkg.validate(required_part="xl/workbook.xml")
 
-        date_1904, sheets, defined_names, external_links = _parse_workbook_xml(pkg)
-        shared_strings, rich_text_map = _parse_shared_strings(pkg)
-        rich_values = RichValueCatalog.from_package(pkg)
-        cell_controls = CellControlCatalog.from_package(pkg)
-        pivot_catalog = PivotCatalog.from_package(pkg)
-        fmt_index = parse_styles(pkg)
+        date_1904, sheets, defined_names, external_links = _parse_workbook_xml(
+            pkg,
+            include_defined_names=resolved_plan.needs(XlsxFeature.DEFINED_NAMES),
+            include_external_links=resolved_plan.needs(XlsxFeature.EXTERNAL_LINKS),
+        )
+        if resolved_plan.sheet_names is not None:
+            sheets = [sheet for sheet in sheets if sheet["name"] in resolved_plan.sheet_names]
+        shared_strings, rich_text_map = _parse_shared_strings(
+            pkg,
+            include_rich_text=resolved_plan.needs(XlsxFeature.RICH_TEXT),
+        )
+        rich_values = (
+            RichValueCatalog.from_package(pkg) if resolved_plan.needs(XlsxFeature.RICH_VALUES) else RichValueCatalog()
+        )
+        cell_controls = (
+            CellControlCatalog.from_package(pkg)
+            if resolved_plan.needs(XlsxFeature.CELL_CONTROLS)
+            else CellControlCatalog()
+        )
+        pivot_catalog = PivotCatalog.from_package(pkg) if resolved_plan.needs(XlsxFeature.PIVOTS) else PivotCatalog()
+        fmt_index = parse_styles(pkg, include_semantic_details=resolved_plan.needs(XlsxFeature.SEMANTIC_STYLES))
         fmt_index.set_cell_controls(cell_controls.by_style)
         fmt_index.set_date_system(date_1904)
-        threaded_comment_people = parse_threaded_comment_people(pkg)
+        threaded_comment_people = parse_threaded_comment_people(pkg) if resolved_plan.needs(XlsxFeature.COMMENTS) else {}
         next_table_index = 0
         next_image_index = 1
         next_chart_index = 1
@@ -79,6 +101,8 @@ def _parse_workbook(source: str | Path | bytes, options: ParseOptions | None = N
                     sheet_rels,
                     threaded_comment_people,
                     rich_values,
+                    plan=resolved_plan,
+                    cell_window=resolved_plan.cell_window,
                 )
                 sheet["rows"] = sheet_parse.rows
                 if sheet_parse.hidden_cols:
@@ -95,16 +119,24 @@ def _parse_workbook(source: str | Path | bytes, options: ParseOptions | None = N
                     sheet["conditional_formats"] = sheet_parse.conditional_formats
 
                 # Parse tables (ListObject) associated with this sheet
-                tables = parse_tables(sheet_rels, pkg, start_index=next_table_index)
+                tables = (
+                    parse_tables(sheet_rels, pkg, start_index=next_table_index)
+                    if resolved_plan.needs(XlsxFeature.TABLES)
+                    else []
+                )
                 next_table_index += len(tables)
                 sheet["tables"] = tables
 
                 # Parse drawing (images, shapes) + charts + pivots
-                images, charts = parse_drawings(
-                    sheet_rels,
-                    pkg,
-                    image_start=next_image_index,
-                    chart_start=next_chart_index,
+                images, charts = (
+                    parse_drawings(
+                        sheet_rels,
+                        pkg,
+                        image_start=next_image_index,
+                        chart_start=next_chart_index,
+                    )
+                    if resolved_plan.needs(XlsxFeature.DRAWINGS)
+                    else ([], [])
                 )
                 next_image_index += len(images)
                 next_chart_index += len(charts)
@@ -112,7 +144,11 @@ def _parse_workbook(source: str | Path | bytes, options: ParseOptions | None = N
                     sheet["images"] = images
                 if charts:
                     sheet["charts"] = charts
-                pivots = pivot_catalog.tables_for_relationships(sheet_rels, start_index=next_pivot_index)
+                pivots = (
+                    pivot_catalog.tables_for_relationships(sheet_rels, start_index=next_pivot_index)
+                    if resolved_plan.needs(XlsxFeature.PIVOTS)
+                    else []
+                )
                 next_pivot_index += len(pivots)
                 if pivots:
                     sheet["pivot_tables"] = pivots
@@ -152,6 +188,9 @@ def _parse_workbook(source: str | Path | bytes, options: ParseOptions | None = N
 
 def _parse_workbook_xml(
     pkg: PackageReader,
+    *,
+    include_defined_names: bool,
+    include_external_links: bool,
 ) -> tuple[bool, list[SheetInfo], list[DefinedName], list[str]]:
     """Parse xl/workbook.xml for date system, sheet names, part targets,
     and defined names.
@@ -194,7 +233,7 @@ def _parse_workbook_xml(
     # Defined names (global + sheet-scoped)
     defined_names: list[DefinedName] = []
     dn_elem = root.find(f"{{{NS_S}}}definedNames")
-    if dn_elem is not None:
+    if include_defined_names and dn_elem is not None:
         for dn in dn_elem.findall(f"{{{NS_S}}}definedName"):
             name = dn.get("name", "")
             if not name:
@@ -212,7 +251,7 @@ def _parse_workbook_xml(
             )
 
     # External references in defined names, excluding table structured references.
-    external_links = _external_links_from_defined_names(defined_names)
+    external_links = _external_links_from_defined_names(defined_names) if include_external_links else []
 
     return date_1904, sheets, defined_names, external_links
 
@@ -251,7 +290,11 @@ def _looks_like_external_reference(target: str) -> bool:
     return target.lower().endswith(_EXTERNAL_WORKBOOK_EXTENSIONS)
 
 
-def _parse_shared_strings(pkg: PackageReader) -> tuple[list[str], dict[int, list[RichTextRun]]]:
+def _parse_shared_strings(
+    pkg: PackageReader,
+    *,
+    include_rich_text: bool,
+) -> tuple[list[str], dict[int, list[RichTextRun]]]:
     """Parse xl/sharedStrings.xml into plain strings and rich-text run info.
 
     Returns (strings, rich_map) where rich_map maps SST index to formatted runs.
@@ -276,7 +319,7 @@ def _parse_shared_strings(pkg: PackageReader) -> tuple[list[str], dict[int, list
                 rt = r_elem.find(f"{{{NS_S}}}t")
                 txt = rt.text if rt is not None and rt.text else ""
                 texts.append(txt)
-                rp = r_elem.find(f"{{{NS_S}}}rPr")
+                rp = r_elem.find(f"{{{NS_S}}}rPr") if include_rich_text else None
                 if rp is not None:
                     run: RichTextRun = {"text": txt}
                     if rp.find(f"{{{NS_S}}}b") is not None:
@@ -294,7 +337,7 @@ def _parse_shared_strings(pkg: PackageReader) -> tuple[list[str], dict[int, list
                 else:
                     runs.append({"text": txt})
             strings.append("".join(texts))
-            if any(len(r) > 1 for r in runs):  # has formatting beyond just text
+            if include_rich_text and any(len(r) > 1 for r in runs):  # has formatting beyond just text
                 rich_map[idx] = runs
 
     return strings, rich_map

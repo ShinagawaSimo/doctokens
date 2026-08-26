@@ -25,6 +25,7 @@ from ..core.models import (
 from ..core.relationships import RelationshipIndex
 from ..ooxml.content_controls import parse_content_control
 from ..ooxml.styles import StyleMap
+from ..plan import DocxFeature, DocxParsePlan
 from .inline_objects import equation_object, parse_embedded_object
 from .run_parser import RunParser
 
@@ -51,6 +52,7 @@ class InlineParser:
         relationships: RelationshipIndex,
         asset_lookup: AssetLookup,
         object_lookup: ObjectLookup | None = None,
+        plan: DocxParsePlan | None = None,
         on_page_break: PageBreakCallback | None = None,
         on_bookmark: NavigationMarkerCallback | None = None,
         on_comment_anchor: NavigationMarkerCallback | None = None,
@@ -61,6 +63,7 @@ class InlineParser:
         self.relationships = relationships
         self.asset_lookup = asset_lookup
         self.object_lookup = object_lookup or {}
+        self.plan = plan or DocxParsePlan.session()
         self.on_page_break = on_page_break
         self.on_bookmark = on_bookmark
         self.on_comment_anchor = on_comment_anchor
@@ -161,7 +164,8 @@ class InlineParser:
             self._append_child_runs(node, part, block_id, paragraph_style_id, raw_hints, runs)
             return
         control = parse_content_control(node)
-        raw_hints.append(dict(control))
+        if self.plan.needs(DocxFeature.RAW_HINTS):
+            raw_hints.append(dict(control))
         start = len(runs)
         content = first_child(node, "w", "sdtContent")
         if content is not None:
@@ -207,7 +211,8 @@ class InlineParser:
         runs: list[Run],
     ) -> None:
         link = self._run_parser.hyperlink_info(hyperlink, part)
-        raw_hints.append({"type": "hyperlink", **link})
+        if self.plan.needs(DocxFeature.RAW_HINTS):
+            raw_hints.append({"type": "hyperlink", **link})
         start = len(runs)
         self._append_child_runs(hyperlink, part, block_id, paragraph_style_id, raw_hints, runs)
         for linked_run in runs[start:]:
@@ -270,10 +275,10 @@ class InlineParser:
         self._append_child_runs(field_node, part, block_id, paragraph_style_id, raw_hints, runs)
         self._run_parser.apply_field_instruction(attr(field_node, "w", "instr") or "", runs[start:])
 
-    @staticmethod
-    def _append_object_run(obj: InlineObject, raw_hints: list[RawHint], runs: list[Run]) -> None:
+    def _append_object_run(self, obj: InlineObject, raw_hints: list[RawHint], runs: list[Run]) -> None:
         runs.append({"text": "", "objects": [obj]})
-        raw_hints.append(obj)
+        if self.plan.needs(DocxFeature.RAW_HINTS):
+            raw_hints.append(obj)
 
     def _mark_page_break(self) -> None:
         if self.on_page_break is not None:

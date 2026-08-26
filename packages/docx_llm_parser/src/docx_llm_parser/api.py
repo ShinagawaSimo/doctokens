@@ -12,6 +12,7 @@ from .core.enums import Density, ResourceType
 from .core.models import ParsedDocument, ParseOptions
 from .core.package import PackageReader
 from .parser import DocxParser
+from .plan import DocxParsePlan
 from .renderers.html5 import iter_html5 as _iter_html5
 from .renderers.html5 import render_resource as _render_resource
 from .renderers.html5 import to_html5 as _to_html5
@@ -83,16 +84,17 @@ def parse_docx(
     Returns a string by default.  Set *stream=True* to receive an iterator
     of rendered output chunks. Parsing itself is still completed first.
     """
-    loaded = load_docx(source, options=options)
+    opts = options or ParseOptions()
+    parsed = DocxParser().parse(source, opts, plan=DocxParsePlan.render(density))
     if stream:
-        return loaded.iter_render(density=density)
-    return loaded.render(density=density)
+        return _iter_html5(parsed, density)
+    return _to_html5(parsed, density)
 
 
 def load_docx(source: str | Path | bytes, *, options: ParseOptions | None = None) -> LoadedDocx:
     """Parse once and return an explicit reusable DOCX facade."""
     opts = options or ParseOptions()
-    return LoadedDocx(DocxParser().parse(source, opts), opts)
+    return LoadedDocx(DocxParser().parse(source, opts, plan=DocxParsePlan.session()), opts)
 
 
 def render_window(
@@ -104,7 +106,9 @@ def render_window(
     options: ParseOptions | None = None,
 ) -> str:
     """Render a page range from *source*; ``page=-1`` selects the last page."""
-    return load_docx(source, options=options).render_window(page=page, span=span, density=density)
+    opts = options or ParseOptions()
+    parsed = DocxParser().parse(source, opts, plan=DocxParsePlan.render(density))
+    return _window(parsed, page, span, density)
 
 
 def get_resource(
@@ -130,7 +134,9 @@ def get_resource(
         raise ValueError("resource_type must be singular when getting one resource")
     opts = options or ParseOptions()
     if opts.ocr is None:
-        return load_docx(source, options=opts).get_resource(
+        parsed = DocxParser().parse(source, opts, plan=DocxParsePlan.resource(resolved_type))
+        items = _render_resource(
+            parsed,
             resolved_type,
             resource_id,
             rows=rows,
@@ -138,7 +144,8 @@ def get_resource(
             aggregate=aggregate,
             aggregate_column=aggregate_column,
         )
-    parsed = DocxParser().parse(source, dataclasses.replace(opts, ocr=None))
+        return items[0] if items else None
+    parsed = DocxParser().parse(source, dataclasses.replace(opts, ocr=None), plan=DocxParsePlan.resource(resolved_type))
     if resolved_type is ResourceType.IMAGE and opts.ocr is not None:
         asset = next((item for item in parsed.assets if item["id"] == resource_id), None)
         if asset is not None:

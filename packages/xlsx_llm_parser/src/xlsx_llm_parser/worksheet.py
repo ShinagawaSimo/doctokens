@@ -30,6 +30,7 @@ from .models import (
     FilterColumn,
     RichTextRun,
 )
+from .plan import XlsxFeature, XlsxParsePlan
 from .share_formulas import expand_shared_formula_groups
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -70,6 +71,7 @@ class SheetWorkingSet:
     cells_by_coord: dict[tuple[int, int], Cell] = field(default_factory=dict)
     shared_formula_groups: dict[str, list[Cell]] = field(default_factory=dict)
     spill_sources: list[Cell] = field(default_factory=list)
+    plan: XlsxParsePlan = field(default_factory=XlsxParsePlan.session)
 
     def add_row(self, cells: list[Cell]) -> None:
         self.rows.append(cells)
@@ -77,9 +79,9 @@ class SheetWorkingSet:
     def add_cell(self, cell: Cell) -> None:
         self.cells_by_coord[(cell["col"], cell["row"])] = cell
         si = cell.get("si")
-        if si is not None:
+        if self.plan.needs(XlsxFeature.FORMULAS) and si is not None:
             self.shared_formula_groups.setdefault(si, []).append(cell)
-        if cell.get("formulaRange") and cell.get("dynamicArray"):
+        if self.plan.needs(XlsxFeature.FORMULAS) and cell.get("formulaRange") and cell.get("dynamicArray"):
             self.spill_sources.append(cell)
 
     def finalize(
@@ -91,18 +93,22 @@ class SheetWorkingSet:
         format_index: FormatIndex | None,
         rich_values: RichValueCatalog,
     ) -> SheetParseResult:
-        expand_shared_formula_groups(self.shared_formula_groups)
+        if self.plan.needs(XlsxFeature.FORMULAS):
+            expand_shared_formula_groups(self.shared_formula_groups)
         apply_merge_cells(root, self.cells_by_coord)
-        apply_spill_sources(self.spill_sources, self.cells_by_coord)
-        apply_hyperlinks(root, self.cells_by_coord, sheet_relationships, self.rows)
-        apply_comments(self.cells_by_coord, package, sheet_relationships, self.rows, threaded_comment_people)
+        if self.plan.needs(XlsxFeature.FORMULAS):
+            apply_spill_sources(self.spill_sources, self.cells_by_coord)
+        if self.plan.needs(XlsxFeature.HYPERLINKS):
+            apply_hyperlinks(root, self.cells_by_coord, sheet_relationships, self.rows)
+        if self.plan.needs(XlsxFeature.COMMENTS):
+            apply_comments(self.cells_by_coord, package, sheet_relationships, self.rows, threaded_comment_people)
         result = SheetParseResult(
             self.rows,
             _parse_hidden_cols(root),
-            root.find(f"{{{NS_S}}}sheetProtection") is not None,
-            *_parse_auto_filter(root),
-            _parse_data_validations(root),
-            _parse_conditional_formats(root, format_index),
+            root.find(f"{{{NS_S}}}sheetProtection") is not None if self.plan.needs(XlsxFeature.SHEET_RULES) else False,
+            *(_parse_auto_filter(root) if self.plan.needs(XlsxFeature.SHEET_RULES) else ("", [])),
+            _parse_data_validations(root) if self.plan.needs(XlsxFeature.SHEET_RULES) else [],
+            _parse_conditional_formats(root, format_index) if self.plan.needs(XlsxFeature.SHEET_RULES) else [],
         )
         self.cells_by_coord.clear()
         self.shared_formula_groups.clear()
@@ -123,6 +129,8 @@ class WorksheetScanner:
         sheet_relationships: list[RelationshipRecord],
         threaded_comment_people: Mapping[str, str],
         rich_values: RichValueCatalog,
+        plan: XlsxParsePlan,
+        cell_window: tuple[int, int, int, int] | None,
     ) -> None:
         self.package = package
         self.sheet_part = sheet_part
@@ -132,12 +140,14 @@ class WorksheetScanner:
         self.sheet_relationships = sheet_relationships
         self.threaded_comment_people = threaded_comment_people
         self.rich_values = rich_values
+        self.plan = plan
+        self.cell_window = cell_window
 
     def parse(self) -> SheetParseResult:
         if not self.package.exists(self.sheet_part):
             return SheetParseResult([], [], False, "", [], [], [])
 
-        working = SheetWorkingSet()
+        working = SheetWorkingSet(plan=self.plan)
         root: ET.Element | None = None
         current_attrs: RowAttrs | None = None
         current_cells: list[Cell] | None = None
@@ -153,11 +163,15 @@ class WorksheetScanner:
                         effective_row = raw_attrs.number or previous_row + 1
                         previous_row = effective_row
                         current_attrs = RowAttrs(effective_row, raw_attrs.hidden, raw_attrs.outline_level, raw_attrs.collapsed)
-                        current_cells = []
+                        current_cells = [] if self._includes_row(effective_row) else None
                         previous_col = 0
                     continue
                 if element.tag == f"{{{NS_S}}}c" and current_attrs is not None and current_cells is not None:
                     ref = element.get("r", "") or f"{col_letter(previous_col + 1)}{current_attrs.number}"
+                    col, row = parse_ref(ref)
+                    if not self._includes_cell(col, row):
+                        previous_col = col
+                        continue
                     cell = _parse_cell(
                         element,
                         current_attrs,
@@ -166,6 +180,10 @@ class WorksheetScanner:
                         self.format_index,
                         ref,
                         self.rich_values,
+                        include_rich_text=self.plan.needs(XlsxFeature.RICH_TEXT),
+                        include_semantic_style=self.plan.needs(XlsxFeature.SEMANTIC_STYLES),
+                        include_formulas=self.plan.needs(XlsxFeature.FORMULAS),
+                        include_cell_controls=self.plan.needs(XlsxFeature.CELL_CONTROLS),
                     )
                     previous_col = cell["col"]
                     current_cells.append(cell)
@@ -186,6 +204,18 @@ class WorksheetScanner:
             self.rich_values,
         )
 
+    def _includes_row(self, row: int) -> bool:
+        if self.cell_window is None:
+            return True
+        _start_col, start_row, _end_col, end_row = self.cell_window
+        return start_row <= row <= end_row
+
+    def _includes_cell(self, col: int, row: int) -> bool:
+        if self.cell_window is None:
+            return True
+        start_col, start_row, end_col, end_row = self.cell_window
+        return start_col <= col <= end_col and start_row <= row <= end_row
+
 
 def parse_sheet(
     package: PackageReader,
@@ -196,6 +226,8 @@ def parse_sheet(
     sheet_relationships: list[RelationshipRecord] | None = None,
     threaded_comment_people: Mapping[str, str] | None = None,
     rich_values: RichValueCatalog | None = None,
+    plan: XlsxParsePlan | None = None,
+    cell_window: tuple[int, int, int, int] | None = None,
 ) -> SheetParseResult:
     """Parse a worksheet XML part into typed cell rows and sheet-level metadata."""
     return WorksheetScanner(
@@ -207,6 +239,8 @@ def parse_sheet(
         sheet_relationships or [],
         threaded_comment_people or {},
         rich_values or RichValueCatalog(),
+        plan or XlsxParsePlan.session(),
+        cell_window,
     ).parse()
 
 
@@ -433,36 +467,6 @@ def _parse_hidden_cols(root: ET.Element) -> list[tuple[int, int]]:
     return hidden_cols
 
 
-def _parse_rows(
-    root: ET.Element,
-    shared_strings: list[str],
-    rich_text_map: dict[int, list[RichTextRun]] | None,
-    format_index: FormatIndex | None,
-) -> list[list[Cell]]:
-    sheet_data = root.find(f"{{{NS_S}}}sheetData")
-    if sheet_data is None:
-        return []
-
-    rows: list[list[Cell]] = []
-    prev_row = 0
-    for row_elem in sheet_data.findall(f"{{{NS_S}}}row"):
-        row_attrs = _row_attrs(row_elem)
-        effective_row = row_attrs.number or prev_row + 1
-        prev_row = effective_row
-        row_cells: list[Cell] = []
-        prev_col = 0
-        for cell_elem in row_elem.findall(f"{{{NS_S}}}c"):
-            ref = cell_elem.get("r", "")
-            if not ref:
-                # Some writers omit r; inherit the previous cell's position.
-                ref = f"{col_letter(prev_col + 1)}{effective_row}"
-            cell = _parse_cell(cell_elem, row_attrs, shared_strings, rich_text_map, format_index, ref)
-            prev_col = cell["col"]
-            row_cells.append(cell)
-        rows.append(row_cells)
-    return rows
-
-
 def _row_attrs(row_elem: ET.Element) -> RowAttrs:
     outline_level_str = row_elem.get("outlineLevel")
     return RowAttrs(
@@ -481,21 +485,28 @@ def _parse_cell(
     format_index: FormatIndex | None,
     ref: str,
     rich_values: RichValueCatalog | None = None,
+    *,
+    include_rich_text: bool,
+    include_semantic_style: bool,
+    include_formulas: bool,
+    include_cell_controls: bool,
 ) -> Cell:
     col, row = parse_ref(ref)
     cell_type = cell_elem.get("t", "n")
     text, value_elem = _cell_text(cell_elem, cell_type, shared_strings)
     text = _formatted_text(cell_elem, cell_type, text, format_index)
-    formula, formula_meta = _formula_metadata(cell_elem)
+    formula, formula_meta = _formula_metadata(cell_elem) if include_formulas else (None, {})
 
     cell: Cell = {"ref": ref, "row": row_attrs.number or row, "col": col, "text": text}
     _apply_row_attrs(cell, row_attrs)
-    _attach_rich_text(cell, cell_type, value_elem, rich_text_map)
-    _attach_style(cell, cell_elem)
+    if include_rich_text:
+        _attach_rich_text(cell, cell_type, value_elem, rich_text_map)
+    if include_semantic_style:
+        _attach_style(cell, cell_elem)
     if rich_values is not None and (rich_value := rich_values.resolve(cell_elem.get("vm"))):
         cell["richValue"] = rich_value
-    if format_index is not None:
-        style_index = cell.get("style")
+    if include_cell_controls and format_index is not None:
+        style_index = cell.get("style") if include_semantic_style else _style_index(cell_elem)
         if control := format_index.cell_control(style_index):
             control_data = cast(CellControl, dict(control))
             cell["cellControl"] = control_data
@@ -512,6 +523,12 @@ def _parse_cell(
     if cell.get("richValue", {}).get("imagePart") or cell.get("richValue", {}).get("imageUrl"):
         cell["type"] = "image"
     return cell
+
+
+def _style_index(cell_elem: ET.Element) -> int | None:
+    with suppress(ValueError):
+        return int(cell_elem.get("s", ""))
+    return None
 
 
 def _cell_text(

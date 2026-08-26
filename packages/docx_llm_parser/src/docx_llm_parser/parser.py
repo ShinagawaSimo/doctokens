@@ -34,6 +34,7 @@ from .extractors.body import DocumentBodyParser
 from .extractors.objects import EmbeddedObjectExtractor
 from .ooxml.numbering import NumberingMap, NumberingParser, NumberingState
 from .ooxml.styles import StyleMap, StylesParser
+from .plan import DocxFeature, DocxParsePlan
 
 _MAX_OCR_BATCH_BYTES = 64 * 1024 * 1024
 
@@ -60,34 +61,60 @@ class _ParseResult:
 class DocxParser:
     """Public DOCX parser entry point."""
 
-    def parse(self, docx_source: str | Path | bytes, options: ParseOptions | None = None) -> ParsedDocument:
+    def parse(
+        self,
+        docx_source: str | Path | bytes,
+        options: ParseOptions | None = None,
+        *,
+        plan: DocxParsePlan | None = None,
+    ) -> ParsedDocument:
         """Parse a single DOCX file, creating fresh per-call context for concurrency safety."""
         opts = options or ParseOptions()
+        resolved_plan = plan or DocxParsePlan.session()
         warnings: list[ParseWarning] = []
         metrics = MetricsRecorder()
         source_name, docx_source_path = _source_info(docx_source, metrics)
 
         with PackageReader(docx_source_path, opts) as package:
             zip_index, content_types, relationships = self._open_package(package, metrics)
-            styles = self._resolve_styles(package, warnings, metrics)
-            numbering = self._resolve_numbering(package, warnings, metrics, styles)
-            assets, asset_lookup = self._index_resources(package, relationships, content_types, warnings, metrics)
-            object_lookup, charts, smartarts = self._index_objects(package, relationships, warnings, metrics)
+            needs_inline_content = resolved_plan.needs(DocxFeature.BODY) or _needs_ancillary_content(resolved_plan)
+            styles = (
+                self._resolve_styles(package, warnings, metrics, resolved_plan)
+                if needs_inline_content
+                else StyleMap({}, warnings)
+            )
+            numbering = (
+                self._resolve_numbering(package, warnings, metrics, styles)
+                if resolved_plan.needs(DocxFeature.BODY)
+                else NumberingMap({}, {}, warnings)
+            )
+            assets, asset_lookup = (
+                self._index_resources(package, relationships, content_types, warnings, metrics)
+                if resolved_plan.needs(DocxFeature.ASSET_INDEX)
+                else ([], {})
+            )
+            object_lookup, charts, smartarts = self._index_objects(package, relationships, warnings, metrics, resolved_plan)
 
             with metrics.stage("ocr"):
-                ocr_results = self._run_ocr(package, assets, opts)
+                ocr_results = self._run_ocr(package, assets, opts) if resolved_plan.needs(DocxFeature.OCR) else {}
 
-            body_parser, blocks = self._parse_body(
-                package,
-                styles,
-                opts,
-                warnings,
-                relationships,
-                asset_lookup,
-                object_lookup,
-                numbering,
-                metrics,
-            )
+            if resolved_plan.needs(DocxFeature.BODY):
+                body_parser, blocks = self._parse_body(
+                    package,
+                    styles,
+                    opts,
+                    warnings,
+                    relationships,
+                    asset_lookup,
+                    object_lookup,
+                    numbering,
+                    metrics,
+                    resolved_plan,
+                )
+                comment_anchors = body_parser.comment_anchors
+            else:
+                blocks = []
+                comment_anchors = {}
             ancillary = self._parse_ancillary(
                 package,
                 styles,
@@ -96,8 +123,9 @@ class DocxParser:
                 relationships,
                 asset_lookup,
                 object_lookup,
-                body_parser.comment_anchors,
+                comment_anchors,
                 metrics,
+                resolved_plan,
             )
 
         result = _ParseResult(
@@ -139,9 +167,14 @@ class DocxParser:
         package: PackageReader,
         warnings: list[ParseWarning],
         metrics: MetricsRecorder,
+        plan: DocxParsePlan,
     ) -> StyleMap:
         with metrics.stage("styles"):
-            return StylesParser(package, warnings).parse()
+            return StylesParser(
+                package,
+                warnings,
+                include_character_formatting=plan.needs(DocxFeature.CHARACTER_FORMATTING),
+            ).parse()
 
     @staticmethod
     def _resolve_numbering(
@@ -175,7 +208,10 @@ class DocxParser:
         relationships: RelationshipIndex,
         warnings: list[ParseWarning],
         metrics: MetricsRecorder,
+        plan: DocxParsePlan,
     ) -> tuple[ObjectLookup, list[Chart], list[SmartArt]]:
+        if not plan.needs(DocxFeature.EMBEDDED_DETAILS):
+            return {}, [], []
         with metrics.stage("embedded_objects"):
             return EmbeddedObjectExtractor(
                 package=package,
@@ -194,6 +230,7 @@ class DocxParser:
         object_lookup: ObjectLookup,
         numbering: NumberingMap,
         metrics: MetricsRecorder,
+        plan: DocxParsePlan,
     ) -> tuple[DocumentBodyParser, list[Block]]:
         body_parser = DocumentBodyParser(
             package,
@@ -204,6 +241,7 @@ class DocxParser:
             asset_lookup=asset_lookup,
             object_lookup=object_lookup,
             numbering_state=NumberingState(numbering, warnings),
+            plan=plan,
         )
         with metrics.stage("body"):
             blocks = body_parser.parse()
@@ -220,7 +258,10 @@ class DocxParser:
         object_lookup: ObjectLookup,
         comment_anchors: dict[str, str],
         metrics: MetricsRecorder,
+        plan: DocxParsePlan,
     ) -> AncillaryResult:
+        if not _needs_ancillary_content(plan):
+            return {"headers": [], "footers": [], "footnotes": [], "endnotes": [], "comments": []}
         with metrics.stage("ancillary"):
             return AncillaryParser(
                 package,
@@ -231,6 +272,7 @@ class DocxParser:
                 asset_lookup=asset_lookup,
                 object_lookup=object_lookup,
                 comment_anchors=comment_anchors,
+                plan=plan,
             ).parse()
 
     # OCR pipeline
@@ -360,6 +402,19 @@ class DocxParser:
             parsed.metrics,
         )
         return parsed
+
+
+def _needs_ancillary_content(plan: DocxParsePlan) -> bool:
+    return any(
+        plan.needs(feature)
+        for feature in (
+            DocxFeature.HEADERS,
+            DocxFeature.FOOTERS,
+            DocxFeature.FOOTNOTES,
+            DocxFeature.ENDNOTES,
+            DocxFeature.COMMENTS,
+        )
+    )
 
 
 def _source_info(docx_source: str | Path | bytes, metrics: MetricsRecorder) -> tuple[str, str | Path | bytes]:

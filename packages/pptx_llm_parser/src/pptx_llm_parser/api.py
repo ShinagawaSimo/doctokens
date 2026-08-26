@@ -16,6 +16,7 @@ from .core.package import PackageReader
 from .extractors.assets import AssetExtractor
 from .extractors.objects import EmbeddedObjectExtractor
 from .parser import PptxParser
+from .plan import PptxParsePlan
 from .renderers._render import (
     _html_comments_block,
     _html_slide_block,
@@ -41,7 +42,7 @@ class PptxReadSession:
         self._package = PackageReader(self.source, _without_ocr(self.options))
         self._package.__enter__()
         try:
-            self.parsed = PptxParser().parse(self.source, self.options)
+            self.parsed = PptxParser().parse(self.source, self.options, plan=PptxParsePlan.session())
         except BaseException:  # pragma: no cover - defensive cleanup after a failed parse
             self._package.__exit__(None, None, None)
             self._package = None
@@ -148,7 +149,11 @@ def parse_pptx(
     if stream:
         return iter_slides(source, density=resolved, options=options)
     opts = options or ParseOptions()
-    parsed = PptxParser().parse(source, opts if resolved is Density.SEMANTIC else _without_ocr(opts))
+    parsed = PptxParser().parse(
+        source,
+        opts if resolved is Density.SEMANTIC else _without_ocr(opts),
+        plan=PptxParsePlan.render(resolved),
+    )
     if resolved == Density.PLAIN:
         return "".join(iter_plain(parsed))
     if resolved == Density.STRUCTURAL:
@@ -168,7 +173,11 @@ def iter_slides(
     opts = options or ParseOptions()
     if isinstance(start_slide, bool) or not isinstance(start_slide, int) or start_slide < 1:
         raise ValueError("start_slide must be greater than zero")
-    parsed = PptxParser().parse(source, opts if resolved is Density.SEMANTIC else _without_ocr(opts))
+    parsed = PptxParser().parse(
+        source,
+        opts if resolved is Density.SEMANTIC else _without_ocr(opts),
+        plan=PptxParsePlan.render(resolved),
+    )
     first_slide = True
     selected_slides = parsed.slides[start_slide - 1 :]
     for slide in selected_slides:
@@ -219,7 +228,7 @@ def render_window(
     if isinstance(span, bool) or not isinstance(span, int) or span <= 0:
         raise ValueError("span must be a positive integer")
     opts = options or ParseOptions()
-    parsed = PptxParser().parse(source, _without_ocr(opts))
+    parsed = PptxParser().parse(source, _without_ocr(opts), plan=PptxParsePlan.render(resolved))
     start = len(parsed.slides) + slide if slide < 0 else slide - 1
     start = max(0, min(start, len(parsed.slides)))
     filtered = dataclasses.replace(parsed, slides=parsed.slides[start : start + span])
@@ -290,7 +299,7 @@ def get_resource(
             return None
         finally:
             iterator.close()
-    parsed = PptxParser().parse(source, _without_ocr(opts))
+    parsed = PptxParser().parse(source, _without_ocr(opts), plan=PptxParsePlan.resource(resolved))
     return render_resource(
         parsed,
         None,

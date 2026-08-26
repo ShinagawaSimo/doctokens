@@ -28,6 +28,7 @@ from ..core.models import (
 )
 from ..ooxml.colors import is_default_text_color, resolve_color_element
 from ..ooxml.inheritance import LayoutMasterResolver, shape_geometry
+from ..plan import PptxFeature, PptxParsePlan
 from .text import DrawingTextParser, HyperlinkLookup
 
 
@@ -59,6 +60,11 @@ class _GroupTransform:
         )
 
 
+def _minimal_layout_context() -> LayoutContext:
+    """Direct slide declarations used when a plan omits theme/layout work."""
+    return {"theme": {}, "placeholders": {}, "color_map": {}, "text_styles": {}}
+
+
 class SlideParser:
     """Extract shapes once, retaining XML z-order while rendering geometrically."""
 
@@ -69,10 +75,11 @@ class SlideParser:
         chart_lookup: ChartLookup,
         smartart_lookup: SmartArtLookup,
         layout_lookup: LayoutLookup,
-        resolver: LayoutMasterResolver,
+        resolver: LayoutMasterResolver | None,
         slide_size: tuple[int, int] | None,
         theme: dict[str, str],
         hyperlink_lookup: HyperlinkLookup,
+        plan: PptxParsePlan | None = None,
     ) -> None:
         self._warnings = warnings
         self._asset_lookup = asset_lookup
@@ -80,10 +87,16 @@ class SlideParser:
         self._smartart_lookup = smartart_lookup
         self._layout_lookup = layout_lookup
         self._resolver = resolver
+        self._plan = plan or PptxParsePlan.session()
         self._slide_size = slide_size
         self._theme = theme
         self._hyperlink_lookup = hyperlink_lookup
-        self._text_parser = DrawingTextParser(warnings, hyperlink_lookup, shape_runs)
+        self._text_parser = DrawingTextParser(
+            warnings,
+            hyperlink_lookup,
+            shape_runs,
+            include_formatting=self._plan.needs(PptxFeature.TEXT_FORMATTING),
+        )
         self._table_index = 0
 
     def parse_slide(self, root: ET.Element, part: str) -> tuple[bool, list[ShapeBlock], SlideBackground | None]:
@@ -97,8 +110,9 @@ class SlideParser:
                 )
             )
         hidden = root.get("show") == "0"
-        context = self._resolver.resolve(part, root)
-        return hidden, self._shapes(root, part, context), self._background(root, part, context)
+        context = self._resolver.resolve(part, root) if self._resolver is not None else _minimal_layout_context()
+        background = self._background(root, part, context) if self._plan.needs(PptxFeature.GEOMETRY) else None
+        return hidden, self._shapes(root, part, context), background
 
     def _shapes(self, root: ET.Element, part: str, context: LayoutContext) -> list[ShapeBlock]:
         c_sld = first_child(root, "p", "cSld")
@@ -123,7 +137,11 @@ class SlideParser:
             if name in {"nvGrpSpPr", "grpSpPr"}:
                 return
             if name == "grpSp":
-                group_transform = self._group_transform(node, transform, part)
+                group_transform = (
+                    self._group_transform(node, transform, part)
+                    if self._plan.needs(PptxFeature.GEOMETRY)
+                    else transform
+                )
                 for child in node:
                     visit(child, group_transform)
                 return
@@ -162,7 +180,8 @@ class SlideParser:
             visit(child, _GroupTransform())
         self._resolve_connector_endpoints(shapes, drawing_id_to_shape_id)
         self._filter_decorative_shapes(shapes)
-        shapes.sort(key=self._geometric_key)
+        if self._plan.needs(PptxFeature.GEOMETRY):
+            shapes.sort(key=self._geometric_key)
         self._renumber_shapes(shapes)
         return shapes
 
@@ -218,18 +237,22 @@ class SlideParser:
         ph = self._find_descendant(element, "ph")
         idx = ph.get("idx", "0") if ph is not None else None
         own_type = ph.get("type") if ph is not None else None
-        inherited = context["placeholders"].get(idx or "")
-        if inherited is None and own_type:
-            inherited = context["placeholders"].get(f"type:{own_type}")
+        inherited = None
+        if self._plan.needs(PptxFeature.THEME_AND_LAYOUT):
+            inherited = context["placeholders"].get(idx or "")
+            if inherited is None and own_type:
+                inherited = context["placeholders"].get(f"type:{own_type}")
         if ph is not None and ph.get("type"):
             shape["placeholderType"] = ph.get("type") or ""
         elif inherited is not None and inherited.get("type"):
             shape["placeholderType"] = inherited["type"]
-        geometry = shape_geometry(element, self._warnings)
-        if geometry is None and inherited is not None and all(inherited.get(key) is not None for key in ("x", "y", "w", "h")):
-            geometry = (inherited["x"], inherited["y"], inherited["w"], inherited["h"])
-        if geometry is not None:
-            geometry = (transform or _GroupTransform()).apply(geometry)
+        geometry = None
+        if self._plan.needs(PptxFeature.GEOMETRY):
+            geometry = shape_geometry(element, self._warnings)
+            if geometry is None and inherited is not None and all(inherited.get(key) is not None for key in ("x", "y", "w", "h")):
+                geometry = (inherited["x"], inherited["y"], inherited["w"], inherited["h"])
+            if geometry is not None:
+                geometry = (transform or _GroupTransform()).apply(geometry)
         if geometry is not None and self._slide_size is not None:
             x, y, w, h = geometry
             shape["x"] = round(x / self._slide_size[0] * 1000)
@@ -822,6 +845,7 @@ def shape_runs(
     links: HyperlinkLookup,
     inherited_styles: dict[int, ParagraphStyle] | None = None,
     paragraphs_out: list[Paragraph] | None = None,
+    include_formatting: bool = True,
 ) -> list[Run]:
     """Run-level IR for a txBody: paragraphs joined by synthetic newline runs."""
     if tx_body is None:
@@ -834,12 +858,21 @@ def shape_runs(
         p_pr = first_child(child, "a", "pPr")
         level = _parse_int(p_pr.get("lvl") if p_pr is not None else None, 0)
         style = (inherited_styles or {}).get(level, (inherited_styles or {}).get(0, {}))
-        base_format = cast(RunFormat, dict(style.get("runFormat", {})))
-        if p_pr is not None:
+        base_format = cast(RunFormat, dict(style.get("runFormat", {}))) if include_formatting else {}
+        if include_formatting and p_pr is not None:
             def_r_pr = first_child(p_pr, "a", "defRPr")
             if def_r_pr is not None:
                 base_format.update(_format_properties(def_r_pr, theme, color_map, warnings, part))
-        paragraph = paragraph_runs(child, part, warnings, theme, color_map, links, base_format)
+        paragraph = paragraph_runs(
+            child,
+            part,
+            warnings,
+            theme,
+            color_map,
+            links,
+            base_format,
+            include_formatting=include_formatting,
+        )
         prefix = _list_prefix(child, counters, style)
         if prefix:
             paragraph.insert(0, {"text": prefix})
@@ -866,6 +899,8 @@ def paragraph_runs(
     color_map: dict[str, str],
     links: HyperlinkLookup,
     base_format: RunFormat | None = None,
+    *,
+    include_formatting: bool = True,
 ) -> list[Run]:
     """Per-run extraction with rPr formats, hyperlinks, breaks, tabs, fields."""
     runs: list[Run] = []
@@ -880,8 +915,9 @@ def paragraph_runs(
             run: Run = {}
             if text:
                 run["text"] = text
-            run_format = cast(RunFormat, dict(base_format or {}))
-            run_format.update(_run_format(child, theme, color_map, warnings, part))
+            run_format = cast(RunFormat, dict(base_format or {})) if include_formatting else {}
+            if include_formatting:
+                run_format.update(_run_format(child, theme, color_map, warnings, part))
             if run_format:
                 run["format"] = run_format
             link = _run_link(child, links, part)
@@ -897,7 +933,18 @@ def paragraph_runs(
             if pending:
                 runs.append({"text": pending})
                 pending = ""
-            runs.extend(paragraph_runs(child, part, warnings, theme, color_map, links, base_format))
+            runs.extend(
+                paragraph_runs(
+                    child,
+                    part,
+                    warnings,
+                    theme,
+                    color_map,
+                    links,
+                    base_format,
+                    include_formatting=include_formatting,
+                )
+            )
         elif name in {"pPr", "endParaRPr"}:
             continue
         elif name in {"oMath", "oMathPara"}:

@@ -35,6 +35,7 @@ from ..core.package import PackageReader
 from ..core.relationships import RelationshipIndex
 from ..ooxml.content_controls import parse_content_control
 from ..ooxml.styles import StyleMap
+from ..plan import DocxFeature, DocxParsePlan
 from .inline import InlineParser
 
 
@@ -51,9 +52,11 @@ class AncillaryParser:
         asset_lookup: AssetLookup,
         object_lookup: ObjectLookup,
         comment_anchors: Mapping[str, str] | None = None,
+        plan: DocxParsePlan | None = None,
     ) -> None:
         self.package = package
         self.options = options
+        self.plan = plan or DocxParsePlan.session()
         self.warnings = warnings
         self.inline = InlineParser(
             styles=styles,
@@ -62,6 +65,7 @@ class AncillaryParser:
             relationships=relationships,
             asset_lookup=asset_lookup,
             object_lookup=object_lookup,
+            plan=self.plan,
         )
         self._block_index = 0
         self._comment_anchors = dict(comment_anchors or {})
@@ -69,11 +73,11 @@ class AncillaryParser:
     def parse(self) -> AncillaryResult:
         """Return five categories of ancillary content."""
         return {
-            "headers": self._parse_header_footer("header"),
-            "footers": self._parse_header_footer("footer"),
-            "footnotes": self._parse_notes("word/footnotes.xml", "footnote"),
-            "endnotes": self._parse_notes("word/endnotes.xml", "endnote"),
-            "comments": self._parse_comments(),
+            "headers": self._parse_header_footer("header") if self.plan.needs(DocxFeature.HEADERS) else [],
+            "footers": self._parse_header_footer("footer") if self.plan.needs(DocxFeature.FOOTERS) else [],
+            "footnotes": self._parse_notes("word/footnotes.xml", "footnote") if self.plan.needs(DocxFeature.FOOTNOTES) else [],
+            "endnotes": self._parse_notes("word/endnotes.xml", "endnote") if self.plan.needs(DocxFeature.ENDNOTES) else [],
+            "comments": self._parse_comments() if self.plan.needs(DocxFeature.COMMENTS) else [],
         }
 
     # ── per-part-type drivers ─────────────────────────────────────
@@ -143,7 +147,8 @@ class AncillaryParser:
                 paragraph_id = self._last_paragraph_id(comment)
                 if paragraph_id:
                     comment_by_paragraph_id[paragraph_id] = comment_id
-        self._apply_comment_thread_metadata(rows, comment_by_paragraph_id)
+        if self.plan.needs(DocxFeature.COMMENT_THREADING):
+            self._apply_comment_thread_metadata(rows, comment_by_paragraph_id)
         return rows
 
     # ── shared helpers ────────────────────────────────────────────
@@ -171,7 +176,7 @@ class AncillaryParser:
             row["author"] = author
         if date:
             row["date"] = date
-        if self.options.include_raw_hints and content["rawHints"]:
+        if self.plan.needs(DocxFeature.RAW_HINTS) and self.options.include_raw_hints and content["rawHints"]:
             row["rawHints"] = content["rawHints"]
         rows.append(row)
         return row

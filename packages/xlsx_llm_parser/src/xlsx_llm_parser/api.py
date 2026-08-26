@@ -11,6 +11,7 @@ from ooxml_llm_core.models import ParseReport
 
 from .models import Cell, DefinedName, DrawingChart, ParsedWorkbook, ParseOptions, SheetInfo
 from .parser import _parse_workbook
+from .plan import XlsxParsePlan
 from .query import AggregateSpec, OrderSpec, WhereCondition
 from .query import query_data as _query_data
 from .renderers.structural import (
@@ -115,10 +116,11 @@ def parse_xlsx(
     first data sheet, enabling paginated window reads of large grids.
     """
     _validate_density(density)
-    loaded = load_xlsx(source, options=options)
+    opts = options or ParseOptions()
+    workbook = _parse_workbook(source, opts, plan=XlsxParsePlan.render(density))
     if stream:
-        return loaded.iter_render(density=density, start_row=start_row)
-    return loaded.render(density=density, start_row=start_row)
+        return _iter_rendered_workbook(workbook, density, start_row)
+    return "".join(_iter_rendered_workbook(workbook, density, start_row))
 
 
 def iter_workbook(
@@ -129,13 +131,16 @@ def iter_workbook(
     options: ParseOptions | None = None,
 ) -> Iterator[str]:
     """Parse *source* and yield rendered output chunks after parsing completes."""
-    return load_xlsx(source, options=options).iter_render(density=density, start_row=start_row)
+    _validate_density(density)
+    opts = options or ParseOptions()
+    workbook = _parse_workbook(source, opts, plan=XlsxParsePlan.render(density))
+    return _iter_rendered_workbook(workbook, density, start_row)
 
 
 def load_xlsx(source: str | Path | bytes, *, options: ParseOptions | None = None) -> LoadedWorkbook:
     """Parse once and return an explicit reusable workbook facade."""
     opts = options or ParseOptions()
-    return LoadedWorkbook(_parse_workbook(source, opts), opts)
+    return LoadedWorkbook(_parse_workbook(source, opts, plan=XlsxParsePlan.session()), opts)
 
 
 def _iter_rendered_workbook(wb: ParsedWorkbook, density: str, start_row: int) -> Iterator[str]:
@@ -159,7 +164,16 @@ def render_range(
 
     Range reads are exact: the default-view cell budget never truncates them.
     """
-    return load_xlsx(source, options=options).render_range(sheet, range_spec, density=density)
+    _validate_density(density)
+    opts = options or ParseOptions()
+    start_col, start_row, end_col, end_row = _parse_range(range_spec)
+    workbook = _parse_workbook(
+        source,
+        opts,
+        plan=XlsxParsePlan.range(density, sheet, (start_col, start_row, end_col, end_row)),
+    )
+    sheet_info = _find_sheet(workbook, sheet)
+    return _render_grid(sheet_info.get("rows", []), density, workbook, cell_budget=None)
 
 
 def find_cells(
@@ -176,7 +190,14 @@ def find_cells(
     *kind* narrows to one of ``value``, ``formula``, ``comment``, ``hyperlink``,
     ``definedName``.
     """
-    return _find_cells_in_workbook(load_xlsx(source, options=options).workbook, query, sheets=sheets, kind=kind, limit=limit)
+    opts = options or ParseOptions()
+    return _find_cells_in_workbook(
+        _parse_workbook(source, opts, plan=XlsxParsePlan.session()),
+        query,
+        sheets=sheets,
+        kind=kind,
+        limit=limit,
+    )
 
 
 def _find_cells_in_workbook(

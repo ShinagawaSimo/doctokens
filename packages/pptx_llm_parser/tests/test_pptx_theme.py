@@ -15,6 +15,7 @@ from _pptx_fixtures import (
 )
 from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parser import PptxParser
+from pptx_llm_parser.plan import PptxFeature, PptxParsePlan
 
 _THEME_REL = (
     '<Relationship Id="rId99" '
@@ -44,6 +45,12 @@ def _theme_deck(*, with_theme: bool = True) -> Path:
 
 
 class ThemeParserTests(unittest.TestCase):
+    def test_plain_plan_avoids_theme_and_layout_resolution(self) -> None:
+        plan = PptxParsePlan.render("plain")
+        parsed = PptxParser().parse(_theme_deck(), ParseOptions(), plan=plan)
+        self.assertFalse(plan.needs(PptxFeature.THEME_AND_LAYOUT))
+        self.assertEqual(parsed.theme, {})
+
     def test_theme_colors_resolved(self) -> None:
         parsed = PptxParser().parse(_theme_deck(), ParseOptions())
         self.assertEqual(parsed.theme["dk1"], "#1A1A1A")

@@ -163,6 +163,8 @@ pip install -e ".[all]"         # OCR 核心及本地引擎依赖
 
 连续执行多个读取操作时，下游可以显式创建 loaded/session facade 复用一次解析结果：DOCX 使用 `load_docx()`，XLSX 使用 `load_xlsx()`，PPTX 使用 `open_pptx()` 上下文管理器。便利函数仍然是无状态入口，不会隐式缓存源文件。
 
+便利渲染入口会根据 `density` 创建格式专属的 `ParsePlan`，仅读取对应输出需要的 feature；例如 plain 不构造字符格式或语义样式，XLSX 的 `render_range()` 只选择目标工作表和 A1 窗口。loaded/session 入口始终使用完整计划，保证后续密度切换、检索和资源查询不因初始渲染粒度丢失数据。
+
 ---
 
 ### API

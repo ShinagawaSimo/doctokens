@@ -250,15 +250,16 @@ class FormatIndex:
         return self._fmt_cache[num_fmt_id]
 
 
-def parse_styles(pkg: PackageReader) -> FormatIndex:
-    """Parse xl/styles.xml and build a FormatIndex."""
+def parse_styles(pkg: PackageReader, *, include_semantic_details: bool = True) -> FormatIndex:
+    """Parse workbook number formats and, when needed, semantic cell styles."""
     index = FormatIndex()
 
     if not pkg.exists("xl/styles.xml"):
         return index
 
-    # Resolve theme colors so that theme="N" can be mapped to RGB.
-    theme = _parse_theme(pkg)
+    # Font/fill/dxf data is rendered only by semantic output. Numeric display
+    # formats remain necessary at every density.
+    theme = _parse_theme(pkg) if include_semantic_details else {}
 
     with pkg.open_entry("xl/styles.xml") as stream:
         root = ET.parse(stream).getroot()
@@ -273,18 +274,18 @@ def parse_styles(pkg: PackageReader) -> FormatIndex:
             custom_fmts[fid] = code
 
     # Fonts: indexed by position
-    fonts_elem = root.find(f"{{{NS_S}}}fonts")
+    fonts_elem = root.find(f"{{{NS_S}}}fonts") if include_semantic_details else None
     if fonts_elem is not None:
         for font in fonts_elem.findall(f"{{{NS_S}}}font"):
             index.register_font(_font_info(font, theme))
 
     # Fills: indexed by position
-    fills_elem = root.find(f"{{{NS_S}}}fills")
+    fills_elem = root.find(f"{{{NS_S}}}fills") if include_semantic_details else None
     if fills_elem is not None:
         for fill in fills_elem.findall(f"{{{NS_S}}}fill"):
             index.register_fill(_fill_info(fill, theme))
 
-    dxfs = root.find(f"{{{NS_S}}}dxfs")
+    dxfs = root.find(f"{{{NS_S}}}dxfs") if include_semantic_details else None
     if dxfs is not None:
         for dxf in dxfs.findall(f"{{{NS_S}}}dxf"):
             index.register_differential_style(_differential_style(dxf, theme))

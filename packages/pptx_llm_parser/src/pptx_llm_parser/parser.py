@@ -35,6 +35,7 @@ from .extractors.objects import EmbeddedObjectExtractor
 from .extractors.slides import SlideParser
 from .ooxml.inheritance import LayoutMasterResolver
 from .ooxml.theme import ThemeParser
+from .plan import PptxFeature, PptxParsePlan
 
 PRESENTATION_PART = "ppt/presentation.xml"
 _MAX_OCR_BATCH_BYTES = 64 * 1024 * 1024
@@ -54,7 +55,7 @@ class _ParseContext:
     layout_lookup: LayoutLookup
     theme: dict[str, str]
     hyperlinks: dict[tuple[str, str], str]
-    resolver: LayoutMasterResolver
+    resolver: LayoutMasterResolver | None
     notes: NotesParser
     comments: list[CommentItem]
     presentation_root: ET.Element
@@ -111,7 +112,13 @@ class _SlideParseResult:
 class _SlideSequence:
     """Validate the presentation slide list once and parse it in document order."""
 
-    def __init__(self, pkg: PackageReader, context: _ParseContext, warnings: list[ParseWarning]) -> None:
+    def __init__(
+        self,
+        pkg: PackageReader,
+        context: _ParseContext,
+        warnings: list[ParseWarning],
+        plan: PptxParsePlan,
+    ) -> None:
         self._pkg = pkg
         self._context = context
         self._warnings = warnings
@@ -126,6 +133,7 @@ class _SlideSequence:
             context.slide_size,
             context.theme,
             context.hyperlinks,
+            plan,
         )
 
     @property
@@ -250,18 +258,25 @@ class _CommentAttachmentPlan:
 class PptxParser:
     """Parse a PPTX file into a ParsedPresentation."""
 
-    def parse(self, source: str | Path | bytes, options: ParseOptions) -> ParsedPresentation:
+    def parse(
+        self,
+        source: str | Path | bytes,
+        options: ParseOptions,
+        *,
+        plan: PptxParsePlan | None = None,
+    ) -> ParsedPresentation:
+        resolved_plan = plan or PptxParsePlan.session()
         metrics = MetricsRecorder()
         warnings: list[ParseWarning] = []
         with PackageReader(source, options) as pkg:
             pkg.validate()
-            context = self._build_context(pkg, warnings)
-            sequence = _SlideSequence(pkg, context, warnings)
+            context = self._build_context(pkg, warnings, resolved_plan)
+            sequence = _SlideSequence(pkg, context, warnings, resolved_plan)
             slides = [result.slide for result in sequence.iter_results()]
             charts = context.objects.loaded_charts
             smartarts = context.objects.loaded_smartarts
             _CommentAttachmentPlan(context.comments, sequence.refs).attach_all(slides, context.slide_size)
-            ocr_results = self._run_ocr(pkg, context.assets, slides, options)
+            ocr_results = self._run_ocr(pkg, context.assets, slides, options) if resolved_plan.needs(PptxFeature.OCR) else {}
         parsed = ParsedPresentation(
             slides=slides,
             slide_size=context.slide_size,
@@ -310,8 +325,9 @@ class PptxParser:
         warnings: list[ParseWarning] = []
         with PackageReader(source, options) as pkg:
             pkg.validate()
-            context = self._build_context(pkg, warnings)
-            sequence = _SlideSequence(pkg, context, warnings)
+            plan = PptxParsePlan.session()
+            context = self._build_context(pkg, warnings, plan)
+            sequence = _SlideSequence(pkg, context, warnings, plan)
             comment_plan = _CommentAttachmentPlan(context.comments, sequence.refs)
             for result in sequence.iter_results(start_slide=start_slide):
                 slide = result.slide
@@ -331,14 +347,19 @@ class PptxParser:
                 comment_plan.attach(slide, context.slide_size)
                 yield slide, parsed
 
-    def _build_context(self, pkg: PackageReader, warnings: list[ParseWarning]) -> _ParseContext:
+    def _build_context(
+        self,
+        pkg: PackageReader,
+        warnings: list[ParseWarning],
+        plan: PptxParsePlan,
+    ) -> _ParseContext:
         relationships = RelationshipIndex.from_records(pkg.read_all_relationships())
         assets, asset_lookup = AssetExtractor(pkg, relationships, warnings).extract()
         objects = EmbeddedObjectExtractor(pkg, relationships, warnings)
         chart_lookup = objects.lazy_charts()
         smartart_lookup, layout_lookup = objects.lazy_smartarts()
-        theme_parser = ThemeParser(pkg, relationships, warnings)
-        theme = theme_parser.parse()
+        theme_parser = ThemeParser(pkg, relationships, warnings) if plan.needs(PptxFeature.THEME_AND_LAYOUT) else None
+        theme = theme_parser.parse() if theme_parser is not None else {}
         hyperlinks = {
             (record.source_part, record.id): record.resolved_target
             for record in relationships.records
@@ -357,7 +378,11 @@ class PptxParser:
             layout_lookup=layout_lookup,
             theme=theme,
             hyperlinks=hyperlinks,
-            resolver=LayoutMasterResolver(pkg, relationships, warnings, theme, theme_parser=theme_parser),
+            resolver=(
+                LayoutMasterResolver(pkg, relationships, warnings, theme, theme_parser=theme_parser)
+                if plan.needs(PptxFeature.THEME_AND_LAYOUT)
+                else None
+            ),
             notes=NotesParser(pkg, relationships, warnings),
             comments=CommentsParser(pkg, relationships, warnings).parse(),
             presentation_root=presentation_root,

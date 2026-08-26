@@ -35,6 +35,7 @@ from ..ooxml.formatting import (
 )
 from ..ooxml.numbering import NumberingState, parse_numbering_change
 from ..ooxml.styles import StyleMap
+from ..plan import DocxFeature, DocxParsePlan
 from .inline import InlineParser
 from .table_parser import TableParser
 
@@ -65,12 +66,14 @@ class DocumentBodyParser:
         asset_lookup: AssetLookup,
         object_lookup: ObjectLookup,
         numbering_state: NumberingState,
+        plan: DocxParsePlan | None = None,
     ) -> None:
         self.package = package
         self.styles = styles
         self.options = options
         self.warnings = warnings
         self.numbering_state = numbering_state
+        self.plan = plan or DocxParsePlan.session()
         self.asset_lookup = asset_lookup
         self.inline = InlineParser(
             styles=styles,
@@ -79,6 +82,7 @@ class DocumentBodyParser:
             relationships=relationships,
             asset_lookup=asset_lookup,
             object_lookup=object_lookup,
+            plan=self.plan,
             on_page_break=self._mark_page_break,
             on_bookmark=self._register_bookmark,
             on_comment_anchor=self._register_comment_anchor,
@@ -202,11 +206,14 @@ class DocumentBodyParser:
 
         style_id = self._paragraph_style_id(paragraph)
         paragraph_properties = first_child(paragraph, "w", "pPr")
-        alignment = parse_paragraph_alignment(paragraph_properties) or self.styles.resolve_paragraph_alignment(style_id)
-        borders = merge_paragraph_borders(
-            self.styles.resolve_paragraph_borders(style_id),
-            parse_paragraph_borders(paragraph_properties),
-        )
+        alignment = None
+        borders = {}
+        if self.plan.needs(DocxFeature.CHARACTER_FORMATTING):
+            alignment = parse_paragraph_alignment(paragraph_properties) or self.styles.resolve_paragraph_alignment(style_id)
+            borders = merge_paragraph_borders(
+                self.styles.resolve_paragraph_borders(style_id),
+                parse_paragraph_borders(paragraph_properties),
+            )
         section_break = first_child(paragraph_properties, "w", "sectPr")
         if section_break is not None:
             # A sectPr in pPr ends the section after this paragraph; Word
@@ -217,7 +224,7 @@ class DocumentBodyParser:
         numbering = self._paragraph_numbering(paragraph, style_id, part, block_id)
         if numbering is not None:
             # Auto-numbering is visible Word text; insert it into the text stream as a synthetic run.
-            marker_format = dict(numbering["markerFormat"])
+            marker_format = dict(numbering["markerFormat"]) if self.plan.needs(DocxFeature.CHARACTER_FORMATTING) else {}
             numbering_run: Run = {"text": numbering["text"]}
             if numbering["pictureBulletId"]:
                 relationship_id = self.numbering_state.numbering.picture_bullet_relationship(numbering["pictureBulletId"])
@@ -234,7 +241,8 @@ class DocumentBodyParser:
             if marker_format:
                 numbering_run["format"] = marker_format
             runs.insert(0, numbering_run)
-            raw_hints.append({"type": "numbering", **numbering})
+            if self.plan.needs(DocxFeature.RAW_HINTS):
+                raw_hints.append({"type": "numbering", **numbering})
 
         # Collect text and detect inline objects in a single pass to avoid double iteration on the hot path.
         text_parts: list[str] = []
@@ -332,7 +340,7 @@ class DocumentBodyParser:
             block["anchors"] = anchors
         if self.options.include_runs:
             block["runs"] = runs
-        if self.options.include_raw_hints and raw_hints:
+        if self.plan.needs(DocxFeature.RAW_HINTS) and self.options.include_raw_hints and raw_hints:
             block["rawHints"] = raw_hints
         if section_break is not None:
             # The section break follows this paragraph; the next block starts

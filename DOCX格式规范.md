@@ -73,7 +73,7 @@ density=plain
 
 ### 页标记 `<page=N>`
 
-页码标记出现在发生分页的两个段落/表格之间。页码由 OOXML 中的显式分页标记推导（`w:lastRenderedPageBreak`）。
+本解析器通过 OOXML 中存储的，上一次在 Word 等软件中打开 docx 文档时渲染的分页位置记号，生成解析后的页码标记。
 
 ```
 <page=1>

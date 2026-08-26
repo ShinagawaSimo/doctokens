@@ -7,6 +7,7 @@ from collections.abc import Iterator
 
 from ..core.enums import Density
 from ..core.models import DocumentManifest, ParsedDocument
+from .common.pages import iter_page_blocks
 from .document.pipeline import iter_plain, iter_semantic, iter_structural
 from .objects.resources import render_resource, table_groups
 
@@ -48,7 +49,7 @@ def window(
     if span < 1:
         raise ValueError("span must be greater than zero")
     page_index = _build_page_index(parsed)
-    total_pages = max(page_index.keys()) if page_index else 1
+    total_pages = _total_pages(parsed, page_index)
 
     if page == -1:
         start_page = total_pages
@@ -64,12 +65,15 @@ def window(
         empty_parsed = dataclasses.replace(parsed, blocks=[], headers=[], footers=[], comments=[])
         return "".join(iter_html5(empty_parsed, resolved_density))
 
-    start_block = page_index[start_page][0]
-    # When the span extends over hole pages, stop at the last block of the
-    # start page instead of leaking later pages into the window.
-    end_idx = page_index[end_page][1] if end_page in page_index else page_index[start_page][1]
-
-    window_blocks = parsed.blocks[start_block : end_idx + 1]
+    page_blocks = list(iter_page_blocks(parsed))
+    selected_pages = set(range(start_page, end_page + 1))
+    # When the span extends over hole pages, stop at the last available page
+    # before the hole instead of leaking later pages into the window.
+    for candidate in range(start_page, end_page + 1):
+        if candidate not in page_index:
+            selected_pages = set(range(start_page, candidate))
+            break
+    window_blocks = [block for block_page, block in page_blocks if block_page in selected_pages]
     window_parsed = dataclasses.replace(
         parsed,
         blocks=window_blocks,
@@ -83,7 +87,7 @@ def window(
 def manifest(parsed: ParsedDocument) -> DocumentManifest:
     """Return document metadata for LLM orientation on the first call."""
     page_index = _build_page_index(parsed)
-    pages = max(page_index.keys()) if page_index else 1
+    pages = _total_pages(parsed, page_index)
     return {
         "pages": pages,
         "tables": len(table_groups(parsed)),
@@ -94,21 +98,28 @@ def manifest(parsed: ParsedDocument) -> DocumentManifest:
     }
 
 
-def _build_page_index(parsed: ParsedDocument) -> dict[int, tuple[int, int]]:
-    """Build a mapping of page number to start and end block indexes."""
-    index: dict[int, tuple[int, int]] = {}
-    current_page = 1
-    page_start = 0
+def _total_pages(parsed: ParsedDocument, page_index: dict[int, tuple[int, int]]) -> int:
+    """Include a trailing page break even when its page has no content block."""
+    indexed_pages = max(page_index.keys()) if page_index else 1
+    block_end_pages = [int(block.get("pageEnd", block.get("page", 1))) for block in parsed.blocks]
+    return max([indexed_pages, *block_end_pages])
 
-    for i, block in enumerate(parsed.blocks):
-        block_page = block.get("page", 1)
+
+def _build_page_index(parsed: ParsedDocument) -> dict[int, tuple[int, int]]:
+    """Build a mapping of page number to virtual page-block indexes."""
+    index: dict[int, tuple[int, int]] = {}
+    current_page: int | None = None
+    page_start = 0
+    last_index = -1
+    for i, (block_page, _block) in enumerate(iter_page_blocks(parsed)):
+        last_index = i
         if block_page != current_page:
-            index[current_page] = (page_start, i - 1)
+            if current_page is not None:
+                index[current_page] = (page_start, i - 1)
             current_page = block_page
             page_start = i
-
-    if parsed.blocks:
-        index[current_page] = (page_start, len(parsed.blocks) - 1)
+    if current_page is not None:
+        index[current_page] = (page_start, last_index)
     else:
         index[1] = (0, -1)
 

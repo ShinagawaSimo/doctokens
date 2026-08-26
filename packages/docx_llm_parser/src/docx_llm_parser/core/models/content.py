@@ -193,6 +193,8 @@ class RunRequired(TypedDict):
 
 class Run(RunRequired, total=False):
     objects: list[InlineObject]
+    # Internal layout marker emitted between runs at a calculated page break.
+    pageBreak: bool
     styleId: str
     format: RunFormat
     link: LinkInfo

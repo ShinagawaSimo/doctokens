@@ -36,6 +36,8 @@ class ParagraphBlockRequired(TypedDict):
 
 
 class ParagraphBlock(ParagraphBlockRequired, total=False):
+    pageEnd: int
+    pageSegments: list[dict[str, object]]
     alignment: str
     borders: ParagraphBorders
     runs: list[Run]
@@ -59,6 +61,8 @@ class HeadingBlockRequired(TypedDict):
 
 
 class HeadingBlock(HeadingBlockRequired, total=False):
+    pageEnd: int
+    pageSegments: list[dict[str, object]]
     alignment: str
     borders: ParagraphBorders
     runs: list[Run]
@@ -108,6 +112,7 @@ class TableBlockRequired(TypedDict):
 
 
 class TableBlock(TableBlockRequired, total=False):
+    pageEnd: int
     contentControls: list[ContentControl]
 
 

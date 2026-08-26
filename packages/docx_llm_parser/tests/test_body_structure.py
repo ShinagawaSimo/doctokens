@@ -11,7 +11,7 @@ from docx_llm_parser import Density, parse_docx, render_window
 from docx_llm_parser.core.enums import RevisionMode
 from docx_llm_parser.core.models import ParseOptions
 from docx_llm_parser.parser import DocxParser
-from docx_llm_parser.renderers.html5 import to_html5
+from docx_llm_parser.renderers.html5 import manifest, to_html5
 
 from test_support.file_contract import materialize_bytes
 
@@ -228,6 +228,55 @@ class BodyStructureTests(unittest.TestCase):
         self.assertNotIn("Page three", hole_window)
         last_window = render_window(data, page=-1)
         self.assertIn("Page three", last_window)
+
+    def test_inline_rendered_page_break_splits_paragraph_and_windows(self) -> None:
+        """A calculated break keeps the text on the page where Word rendered it."""
+        data = _make_docx(
+            "<w:p><w:r><w:t>A</w:t><w:lastRenderedPageBreak/><w:t>B</w:t>"
+            "<w:lastRenderedPageBreak/><w:t>C</w:t></w:r></w:p>"
+            "<w:p><w:r><w:t>D</w:t></w:r></w:p>"
+        )
+        parsed = DocxParser().parse(data, ParseOptions())
+        paragraph = parsed.blocks[0]
+        self.assertEqual((paragraph["page"], paragraph["pageEnd"]), (1, 3))
+        self.assertEqual([run.get("text") for run in paragraph["runs"]], ["A", "", "B", "", "C"])
+        rendered = to_html5(parsed, Density.SEMANTIC)
+        self.assertIn("<p>A\n<page=2>\n<p>B\n<page=3>\n<p>C", rendered)
+        self.assertIn("<page=2>\n<p>B", render_window(data, page=2))
+        self.assertIn("<page=3>\n<p>C\n<p>D", render_window(data, page=3))
+
+    def test_inline_rendered_page_breaks_without_runs(self) -> None:
+        """The compact parse mode retains text page segments without run metadata."""
+        data = _make_docx(
+            "<w:p><w:r><w:t>A</w:t><w:lastRenderedPageBreak/><w:t>B</w:t></w:r></w:p>"
+        )
+        parsed = DocxParser().parse(data, ParseOptions(include_runs=False))
+        self.assertEqual(parsed.blocks[0]["pageSegments"], [{"page": 1, "text": "A"}, {"page": 2, "text": "B"}])
+        self.assertIn("<page=2>\n<p>B", to_html5(parsed, Density.STRUCTURAL))
+
+    def test_trailing_inline_break_contributes_to_page_count(self) -> None:
+        data = _make_docx("<w:p><w:r><w:t>A</w:t><w:lastRenderedPageBreak/></w:r></w:p>")
+        parsed = DocxParser().parse(data, ParseOptions())
+        self.assertEqual(manifest(parsed)["pages"], 2)
+
+    def test_leading_inline_break_assigns_block_to_first_content_page(self) -> None:
+        data = _make_docx("<w:p><w:r><w:lastRenderedPageBreak/><w:t>B</w:t></w:r></w:p>")
+        parsed = DocxParser().parse(data, ParseOptions())
+        self.assertEqual(parsed.blocks[0]["page"], 2)
+        self.assertIn("<page=2>\n<p>B", to_html5(parsed, Density.SEMANTIC))
+
+    def test_table_cell_paragraph_keeps_inline_pages_and_advances_body(self) -> None:
+        data = _make_docx(
+            "<w:tbl><w:tr><w:tc><w:p><w:r><w:t>A</w:t><w:lastRenderedPageBreak/>"
+            "<w:t>B</w:t><w:lastRenderedPageBreak/><w:t>C</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"
+            "<w:p><w:r><w:t>D</w:t></w:r></w:p>"
+        )
+        parsed = DocxParser().parse(data, ParseOptions())
+        self.assertEqual((parsed.blocks[0]["page"], parsed.blocks[0]["pageEnd"]), (1, 3))
+        self.assertEqual(parsed.blocks[1]["page"], 3)
+        rendered = to_html5(parsed, Density.SEMANTIC)
+        self.assertIn("<page=2>", rendered)
+        self.assertIn("<page=3>\n<p>D", rendered)
 
     def test_revision_mode_original(self) -> None:
         data = _make_docx(

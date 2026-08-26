@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from html import escape
+from typing import cast
 
-from ...core.models import OcrStoredResult, TableBlock, TableCell, TableRow
+from ...core.models import InlineContainer, OcrStoredResult, TableBlock, TableCell, TableRow
 from ..common import constants as _constants
+from ..common.pages import iter_block_page_segments
 from ..inline import inline_content
 
 
@@ -93,7 +95,13 @@ def cell_content(
             if density in {"structural", "semantic"}:
                 parts.append(nested_table(block, ocr_results))
         else:
-            parts.append(inline_content(block, density, ocr_results))
+            current_page: int | None = None
+            for block_page, fragment in iter_block_page_segments(block):
+                if current_page != block_page:
+                    if current_page is not None:
+                        parts.append(f"<page={block_page}>\n")
+                    current_page = block_page
+                parts.append(inline_content(cast(InlineContainer, fragment), density, ocr_results))
     return "\n".join(part for part in parts if part)
 
 

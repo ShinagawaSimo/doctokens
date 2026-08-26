@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Any, cast
 from xml.etree import ElementTree as ET
 
 from ..core.constants import (
     _TAG_W_PARAGRAPH,
     _TAG_W_TABLE,
     attr,
-    child_elements,
     first_child,
     local_name,
 )
@@ -24,8 +23,6 @@ from ..core.models import (
     ParseWarning,
     Run,
     TableBlock,
-    TableCell,
-    TableRow,
     TextBlock,
     append_warning,
 )
@@ -40,6 +37,7 @@ from ..ooxml.formatting import (
 from ..ooxml.numbering import NumberingState, parse_numbering_change
 from ..ooxml.styles import StyleMap
 from .inline import InlineParser
+from .table_parser import TableParser
 
 
 class BlockIdAllocator:
@@ -99,6 +97,7 @@ class DocumentBodyParser:
         self._bookmarks_by_block: dict[str, list[str]] = {}
         self._section_index = 1
         self._section_break_pending = False
+        self._table_parser = TableParser(self)
 
     def parse(self) -> list[Block]:
         """Stream-parse word/document.xml, preserving the original paragraph/table order."""
@@ -265,9 +264,23 @@ class DocumentBodyParser:
                 self._pending_page_breaks = 1
             return None
 
-        # lrpb/manual page breaks inside the paragraph advance this paragraph's starting page number.
-        page_start += self._pending_page_breaks
-        self._page_hint = page_start
+        manual_page_breaks = sum(1 for hint in raw_hints if hint.get("type") == "manualPageBreak")
+        # Explicit manual page breaks retain the parser's historical behavior:
+        # the paragraph is assigned to the page after the break. Calculated Word
+        # breaks are different: their inline position is preserved by sentinels.
+        page_start += manual_page_breaks
+        inline_page_breaks = sum(1 for run in runs if run.get("pageBreak"))
+        leading_page_breaks = 0
+        for run in runs:
+            if run.get("pageBreak"):
+                leading_page_breaks += 1
+                continue
+            if run["text"] or run.get("objects"):
+                break
+        content_page = page_start + leading_page_breaks
+        # Updating the shared hint immediately also lets table parsing split before
+        # the next row containing a calculated page break.
+        self._page_hint = page_start + inline_page_breaks
         self._pending_page_breaks = 0
 
         heading_level = self.styles.resolve_heading_level(style_id)
@@ -278,7 +291,7 @@ class DocumentBodyParser:
                 "type": "heading",
                 "part": part,
                 "order": self._order,
-                "page": page_start,
+                "page": content_page,
                 "styleId": style_id,
                 "text": text,
                 "level": heading_level,
@@ -291,11 +304,26 @@ class DocumentBodyParser:
                 "type": "paragraph",
                 "part": part,
                 "order": self._order,
-                "page": page_start,
+                "page": content_page,
                 "styleId": style_id,
                 "text": text,
                 "section": section_index,
             }
+        if inline_page_breaks:
+            block["pageEnd"] = page_start + inline_page_breaks
+            if not self.options.include_runs:
+                page_segments: list[dict[str, object]] = []
+                segment_text: list[str] = []
+                segment_page = page_start
+                for run in runs:
+                    if run.get("pageBreak"):
+                        page_segments.append({"page": segment_page, "text": "".join(segment_text)})
+                        segment_text = []
+                        segment_page += 1
+                    else:
+                        segment_text.append(run["text"])
+                page_segments.append({"page": segment_page, "text": "".join(segment_text)})
+                block["pageSegments"] = page_segments
         if numbering is not None:
             block["numbering"] = numbering
         if alignment and alignment != "left":
@@ -363,181 +391,13 @@ class DocumentBodyParser:
         part: str,
         content_controls: tuple[ContentControl, ...] = (),
     ) -> list[TableBlock]:
-        """Parse a Word table, preserving rows/columns, merged cells, and cell blocks.
-        When a page break occurs inside the table, split it into multiple blocks so the
-        renderer can emit <page n=N> between sub-tables.
-        Multiple lrpb across cells in the same row collapse into a single page-break
-        decision (based on _page_hint changes)."""
-        self._order += 1
-        section_index = self._begin_section()
-        table_id = self._next_table_id()
-        # Apply the page-break count accumulated by the previous block.
-        segment_page = self._flush_pending_page_breaks()
+        """Delegate table structure and table-local pagination to TableParser."""
+        return self._table_parser.parse(table, part, content_controls)
 
-        sub_tables: list[TableBlock] = []
-        segment_rows: list[TableRow] = []
-        merge_state: dict[int, TableCell] = {}
-        widest_column_count = 0
-        # Record the page number before processing this row, to tell whether the row triggered a page break.
-        page_before_row = self._page_hint
+    def _apply_vertical_merges(self, rows: list[Any], active: dict[int, Any] | None = None) -> None:
+        """Compatibility delegate for callers that inspect table merge state."""
+        self._table_parser.apply_vertical_merges(rows, active)
 
-        for row_index, row_element in enumerate(child_elements(table, "w", "tr")):
-            row, row_width = self._parse_table_row(row_element, row_index, part)
-            widest_column_count = max(widest_column_count, row_width)
-
-            # Did _page_hint change after processing this row? Multiple lrpb in one row count as a single page break.
-            if self._page_hint != page_before_row:
-                if segment_rows:
-                    self._apply_vertical_merges(segment_rows, merge_state)
-                    sub_tables.append(
-                        self._make_table_block(
-                            part,
-                            segment_page,
-                            segment_rows,
-                            widest_column_count,
-                            table_id,
-                            len(sub_tables) + 1,
-                            section_index,
-                            content_controls,
-                        )
-                    )
-                    segment_rows = []
-                # Multiple lrpb across cells in the same row collapse into one page break: the page number only increments by 1.
-                self._page_hint = page_before_row + 1
-                self._pending_page_breaks = 0
-                segment_page = self._page_hint
-
-            segment_rows.append(row)
-            page_before_row = self._page_hint
-
-        # Commit the final batch of rows.
-        if segment_rows:
-            self._apply_vertical_merges(segment_rows, merge_state)
-            sub_tables.append(
-                self._make_table_block(
-                    part,
-                    segment_page,
-                    segment_rows,
-                    widest_column_count,
-                    table_id,
-                    len(sub_tables) + 1,
-                    section_index,
-                    content_controls,
-                )
-            )
-
-        return sub_tables
-
-    def _make_table_block(
-        self,
-        part: str,
-        page: int,
-        rows: list[TableRow],
-        max_col: int,
-        table_id: str,
-        segment_index: int,
-        section_index: int,
-        content_controls: tuple[ContentControl, ...] = (),
-    ) -> TableBlock:
-        """Build a table block dictionary."""
-        block_id = self.block_ids.allocate()
-        block: TableBlock = {
-            "id": block_id,
-            "type": "table",
-            "part": part,
-            "order": self._order,
-            "page": page,
-            "tableId": table_id,
-            "segmentIndex": segment_index,
-            "rows": rows,
-            "columnCount": max_col,
-            "section": section_index,
-        }
-        if content_controls:
-            block["contentControls"] = list(content_controls)
-        return block
-
-    def _parse_table_row(self, row_element: ET.Element, row_index: int, part: str) -> tuple[TableRow, int]:
-        """Parse one table row and return the row plus its visual column count."""
-        cells: list[TableCell] = []
-        next_column = 0
-        is_header = first_child(first_child(row_element, "w", "trPr"), "w", "tblHeader") is not None
-        for cell_element in child_elements(row_element, "w", "tc"):
-            # A Word table is not a simple 2D array; colSpan/vMerge info must be recorded.
-            col_span = self._cell_col_span(cell_element)
-            vertical_merge = self._cell_v_merge(cell_element)
-            cell_blocks = self._parse_cell_blocks(cell_element, part)
-            cell: TableCell = {
-                "rowIndex": row_index,
-                "colIndex": next_column,
-                "rowSpan": 1,
-                "colSpan": col_span,
-                "text": self._cell_text_from_blocks(cell_blocks),
-                "blocks": cell_blocks,
-            }
-            if vertical_merge:
-                cell["vMerge"] = vertical_merge
-            cells.append(cell)
-            next_column += col_span
-
-        row: TableRow = {"rowIndex": row_index, "cells": cells}
-        if is_header:
-            # Repeated header rows help LLMs understand table semantics, so keep them as a lightweight flag.
-            row["isHeader"] = True
-        return row, next_column
-
-    def _next_table_id(self) -> str:
-        """Allocate a stable document-order ID for one logical table."""
-        self._table_index += 1
-        return f"t{self._table_index}"
-
-    def _parse_cell_blocks(self, tc: ET.Element, part: str) -> list[Block]:
-        """Parse cell content; cells can contain paragraphs and nested tables.
-        Optimization: compare against precomputed tag names to avoid a local_name call per child."""
-        blocks: list[Block] = []
-        for child in tc:
-            child_tag = child.tag
-            if child_tag == _TAG_W_PARAGRAPH:
-                # Cell paragraphs are kept as nested blocks to avoid losing multi-paragraph structure.
-                block = self.parse_paragraph(child, part)
-                if block is not None:
-                    blocks.append(block)
-            elif child_tag == _TAG_W_TABLE:
-                # Nested tables are parsed recursively; page breaks inside them also split into sub-tables.
-                blocks.extend(self.parse_table(child, part))
-            elif local_name(child_tag) == "sdt":
-                self._parse_sdt(child, blocks)
-        return blocks
-
-    def _apply_vertical_merges(self, rows: list[TableRow], active: dict[int, TableCell] | None = None) -> None:
-        """Add rowSpan to merge origins based on vMerge.
-
-        *active* carries merge origins across page-separated table segments,
-        so a restart in one segment keeps accumulating rowSpan in the next.
-        """
-        if active is None:
-            active = {}
-        for row in rows:
-            for cell in row["cells"]:
-                columns = range(cell["colIndex"], cell["colIndex"] + cell["colSpan"])
-                v_merge = cell.get("vMerge")
-                if v_merge == "restart":
-                    # A restart cell becomes the vertical merge origin for subsequent continue cells.
-                    for column in columns:
-                        active[column] = cell
-                elif v_merge == "continue":
-                    # A continue cell advances the origin's rowSpan while keeping its own position for grid reconstruction.
-                    origins: list[TableCell] = []
-                    for column in columns:
-                        origin = active.get(column)
-                        if origin is not None and origin not in origins:
-                            origins.append(origin)
-                    for origin in origins:
-                        origin["rowSpan"] += 1
-                else:
-                    # A non-merged cell truncates the previous active merge in the same column.
-                    for column in columns:
-                        active.pop(column, None)
 
     def _paragraph_style_id(self, paragraph: ET.Element) -> str | None:
         """Read the paragraph style ID."""

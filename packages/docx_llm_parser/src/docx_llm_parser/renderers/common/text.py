@@ -23,6 +23,13 @@ def merge_text_runs(runs: list[Run]) -> list[Run]:
     pending_key: RunSignature | None = None
 
     for run in runs:
+        # Page-break sentinels are layout boundaries, never visible text.
+        if run.get("pageBreak"):
+            if pending is not None:
+                merged.append(pending)
+                pending = None
+                pending_key = None
+            continue
         # Runs containing inline objects are not merged; they are added to the result directly.
         if "objects" in run:
             if pending is not None:
@@ -61,6 +68,17 @@ def merge_text_runs(runs: list[Run]) -> list[Run]:
     if pending is not None:
         merged.append(pending)
     return merged
+
+
+def split_runs_at_page_breaks(runs: list[Run]) -> list[list[Run]]:
+    """Split an inline run stream at calculated page-break sentinels."""
+    segments: list[list[Run]] = [[]]
+    for run in runs:
+        if run.get("pageBreak"):
+            segments.append([])
+        else:
+            segments[-1].append(run)
+    return segments
 
 
 def run_output_signature(run: Run) -> RunSignature:

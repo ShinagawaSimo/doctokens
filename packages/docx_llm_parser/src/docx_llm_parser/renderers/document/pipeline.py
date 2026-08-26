@@ -7,6 +7,7 @@ from html import escape
 
 from ...core.models import AncillaryItem, OcrStoredResult, ParsedDocument
 from ..common.ocr import render_ocr_result
+from ..common.pages import iter_page_blocks
 from ..inline import inline_content
 from ..plain import block_text_only, inline_text_only
 from .blocks import render_block
@@ -163,18 +164,16 @@ def _emit_body(parsed: ParsedDocument, density: str, ocr_results: dict[str, OcrS
     current_section = 0
     emit_sections = any(block.get("section", 1) != 1 for block in parsed.blocks)
     used_anchors = _used_anchors(parsed)
-    for block in parsed.blocks:
+    for block_page, block in iter_page_blocks(parsed):
         section = block.get("section", 1)
         if emit_sections and section != current_section:
             current_section = section
             yield f"<section n={section}>\n"
-        block_page = block.get("page", 1)
         if block_page != current_page:
             current_page = block_page
             yield f"<page={current_page}>\n"
 
         yield from render_block(block, density, ocr_results, used_anchors)
-
 
 def _used_anchors(parsed: ParsedDocument) -> set[str]:
     """Keep bookmark anchors only when a parsed navigation target refers to them."""

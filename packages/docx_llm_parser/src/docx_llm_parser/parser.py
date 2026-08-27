@@ -40,7 +40,7 @@ _MAX_OCR_BATCH_BYTES = 64 * 1024 * 1024
 
 
 @dataclass
-class _ParseResult:
+class _DocumentParseResult:
     """Intermediate results from each pipeline stage, bundled for document assembly."""
 
     source_path: str | Path | bytes
@@ -69,13 +69,13 @@ class DocxParser:
         plan: DocxParsePlan | None = None,
     ) -> ParsedDocument:
         """Parse a single DOCX file, creating fresh per-call context for concurrency safety."""
-        opts = options or ParseOptions()
+        parse_options = options or ParseOptions()
         resolved_plan = plan or DocxParsePlan.session()
         warnings: list[ParseWarning] = []
         metrics = MetricsRecorder()
-        source_name, docx_source_path = _source_info(docx_source, metrics)
+        source_name, source_path = _describe_source(docx_source, metrics)
 
-        with PackageReader(docx_source_path, opts) as package:
+        with PackageReader(source_path, parse_options) as package:
             zip_index, content_types, relationships = self._open_package(package, metrics)
             needs_inline_content = resolved_plan.needs(DocxFeature.BODY) or _needs_ancillary_content(resolved_plan)
             styles = (
@@ -96,13 +96,13 @@ class DocxParser:
             object_lookup, charts, smartarts = self._index_objects(package, relationships, warnings, metrics, resolved_plan)
 
             with metrics.stage("ocr"):
-                ocr_results = self._run_ocr(package, assets, opts) if resolved_plan.needs(DocxFeature.OCR) else {}
+                ocr_results = self._run_ocr(package, assets, parse_options) if resolved_plan.needs(DocxFeature.OCR) else {}
 
             if resolved_plan.needs(DocxFeature.BODY):
                 body_parser, blocks = self._parse_body(
                     package,
                     styles,
-                    opts,
+                    parse_options,
                     warnings,
                     relationships,
                     asset_lookup,
@@ -118,7 +118,7 @@ class DocxParser:
             ancillary = self._parse_ancillary(
                 package,
                 styles,
-                opts,
+                parse_options,
                 warnings,
                 relationships,
                 asset_lookup,
@@ -128,8 +128,8 @@ class DocxParser:
                 resolved_plan,
             )
 
-        result = _ParseResult(
-            source_path=docx_source_path,
+        parse_result = _DocumentParseResult(
+            source_path=source_path,
             source_name=source_name,
             zip_index=zip_index,
             content_types=content_types,
@@ -143,7 +143,7 @@ class DocxParser:
             ancillary=ancillary,
             ocr_results=ocr_results,
         )
-        return self._build_document(result, warnings, metrics)
+        return self._build_document(parse_result, warnings, metrics)
 
     # Package helpers
 
@@ -223,7 +223,7 @@ class DocxParser:
     def _parse_body(
         package: PackageReader,
         styles: StyleMap,
-        opts: ParseOptions,
+        parse_options: ParseOptions,
         warnings: list[ParseWarning],
         relationships: RelationshipIndex,
         asset_lookup: AssetLookup,
@@ -235,7 +235,7 @@ class DocxParser:
         body_parser = DocumentBodyParser(
             package,
             styles,
-            opts,
+            parse_options,
             warnings,
             relationships=relationships,
             asset_lookup=asset_lookup,
@@ -251,7 +251,7 @@ class DocxParser:
     def _parse_ancillary(
         package: PackageReader,
         styles: StyleMap,
-        opts: ParseOptions,
+        parse_options: ParseOptions,
         warnings: list[ParseWarning],
         relationships: RelationshipIndex,
         asset_lookup: AssetLookup,
@@ -266,7 +266,7 @@ class DocxParser:
             return AncillaryParser(
                 package,
                 styles,
-                opts,
+                parse_options,
                 warnings,
                 relationships=relationships,
                 asset_lookup=asset_lookup,
@@ -278,9 +278,13 @@ class DocxParser:
     # OCR pipeline
 
     @staticmethod
-    def _run_ocr(package: PackageReader, assets: list[ImageAsset], opts: ParseOptions) -> dict[str, OcrStoredResult]:
+    def _run_ocr(
+        package: PackageReader,
+        assets: list[ImageAsset],
+        parse_options: ParseOptions,
+    ) -> dict[str, OcrStoredResult]:
         """Run fail-soft OCR in bounded batches, reusing shared media parts."""
-        provider = getattr(opts, "ocr", None)
+        provider = getattr(parse_options, "ocr", None)
         if provider is None:
             return {}
 
@@ -299,18 +303,18 @@ class DocxParser:
         pending: dict[str, bytes] = {}
         aliases: dict[str, list[str]] = {}
         pending_bytes = 0
-        item_limit = max(1, opts.ocr_workers * 2)
+        item_limit = max(1, parse_options.ocr_workers * 2)
 
         def flush() -> None:
             nonlocal pending_bytes
             batch_results = run_ocr_batch(
                 pending,
                 provider,
-                max_workers=opts.ocr_workers,
-                timeout=opts.ocr_timeout,
+                max_workers=parse_options.ocr_workers,
+                timeout=parse_options.ocr_timeout,
             )
-            for primary_id, result in batch_results.items():
-                record = result.to_record()
+            for primary_id, ocr_result in batch_results.items():
+                record = ocr_result.to_record()
                 for asset_id in aliases[primary_id]:
                     results[asset_id] = cast(OcrStoredResult, dict(record))
             pending.clear()
@@ -340,16 +344,16 @@ class DocxParser:
 
     def _build_document(
         self,
-        result: _ParseResult,
+        parse_result: _DocumentParseResult,
         warnings: list[ParseWarning],
         metrics: MetricsRecorder,
     ) -> ParsedDocument:
         total_uncompressed = 0
         total_compressed = 0
-        for item in result.zip_index:
-            total_uncompressed += item["uncompressedSize"]
-            total_compressed += item["compressedSize"]
-        entry_count = len(result.zip_index)
+        for zip_entry in parse_result.zip_index:
+            total_uncompressed += zip_entry["uncompressedSize"]
+            total_compressed += zip_entry["compressedSize"]
+        entry_count = len(parse_result.zip_index)
         package_info: dict[str, object] = {
             "entryCount": entry_count,
             "totalUncompressedBytes": total_uncompressed,
@@ -359,49 +363,49 @@ class DocxParser:
         metrics.set_counter("zipUncompressedBytes", total_uncompressed)
         metrics.set_counter("zipCompressedBytes", total_compressed)
         metadata: dict[str, object] = {
-            "sourceFile": result.source_name,
-            "sourcePath": (str(result.source_path) if not isinstance(result.source_path, bytes) else ""),
+            "sourceFile": parse_result.source_name,
+            "sourcePath": (str(parse_result.source_path) if not isinstance(parse_result.source_path, bytes) else ""),
             "format": "docx",
             "parser": "docx_llm_parser",
             "parserVersion": __version__,
         }
 
-        parsed = ParsedDocument(
+        parsed_document = ParsedDocument(
             metadata=metadata,
             package_info=package_info,
-            blocks=result.blocks,
-            relationships=list(result.relationships.records),
-            styles=list(result.styles.records.values()),
+            blocks=parse_result.blocks,
+            relationships=list(parse_result.relationships.records),
+            styles=list(parse_result.styles.records.values()),
             warnings=warnings,
-            content_types=result.content_types,
-            assets=result.assets,
-            charts=result.charts,
-            smartarts=result.smartarts,
-            headers=result.ancillary["headers"],
-            footers=result.ancillary["footers"],
-            footnotes=result.ancillary["footnotes"],
-            endnotes=result.ancillary["endnotes"],
-            comments=result.ancillary["comments"],
-            ocr_results=result.ocr_results,
+            content_types=parse_result.content_types,
+            assets=parse_result.assets,
+            charts=parse_result.charts,
+            smartarts=parse_result.smartarts,
+            headers=parse_result.ancillary["headers"],
+            footers=parse_result.ancillary["footers"],
+            footnotes=parse_result.ancillary["footnotes"],
+            endnotes=parse_result.ancillary["endnotes"],
+            comments=parse_result.ancillary["comments"],
+            ocr_results=parse_result.ocr_results,
         )
-        record_content_metrics(parsed, metrics)
-        parsed.metrics = metrics.snapshot()
-        parsed.report = ParseReport(
+        record_content_metrics(parsed_document, metrics)
+        parsed_document.metrics = metrics.snapshot()
+        parsed_document.report = ParseReport(
             "docx",
             1,
             {
-                "pageCount": max((block.get("page", 1) for block in parsed.blocks), default=1),
-                "blockCount": len(parsed.blocks),
-                "tableCount": sum(1 for block in parsed.blocks if block["type"] == "table"),
-                "imageCount": len(parsed.assets),
-                "chartCount": len(parsed.charts),
-                "smartartCount": len(parsed.smartarts),
-                "commentCount": len(parsed.comments),
+                "pageCount": max((block.get("page", 1) for block in parsed_document.blocks), default=1),
+                "blockCount": len(parsed_document.blocks),
+                "tableCount": sum(1 for block in parsed_document.blocks if block["type"] == "table"),
+                "imageCount": len(parsed_document.assets),
+                "chartCount": len(parsed_document.charts),
+                "smartartCount": len(parsed_document.smartarts),
+                "commentCount": len(parsed_document.comments),
             },
-            tuple(parsed.warnings),
-            parsed.metrics,
+            tuple(parsed_document.warnings),
+            parsed_document.metrics,
         )
-        return parsed
+        return parsed_document
 
 
 def _needs_ancillary_content(plan: DocxParsePlan) -> bool:
@@ -417,10 +421,10 @@ def _needs_ancillary_content(plan: DocxParsePlan) -> bool:
     )
 
 
-def _source_info(docx_source: str | Path | bytes, metrics: MetricsRecorder) -> tuple[str, str | Path | bytes]:
-    if isinstance(docx_source, bytes):
-        metrics.set_counter("inputBytes", len(docx_source))
-        return "stream", docx_source
-    path = Path(docx_source)
-    metrics.set_counter("inputBytes", path.stat().st_size)
-    return path.name, path
+def _describe_source(source: str | Path | bytes, metrics: MetricsRecorder) -> tuple[str, str | Path | bytes]:
+    if isinstance(source, bytes):
+        metrics.set_counter("inputBytes", len(source))
+        return "stream", source
+    source_path = Path(source)
+    metrics.set_counter("inputBytes", source_path.stat().st_size)
+    return source_path.name, source_path

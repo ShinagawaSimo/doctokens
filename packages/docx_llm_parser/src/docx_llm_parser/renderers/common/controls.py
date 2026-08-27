@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from html import escape
+from html import escape as escape_text
 
 from ...core.models import ContentControl
 
@@ -31,27 +31,27 @@ def wrap_plain_control(content: str, controls: Sequence[ContentControl]) -> str:
 
 def _control_attrs(control: ContentControl, density: str) -> str:
     control_type = str(control.get("controlType") or "unknown")
-    attrs = [f"type={escape(control_type, quote=True)}"]
+    attrs = [f"type={escape_text(control_type, quote=True)}"]
     label = str(control.get("alias") or control.get("tag") or "")
     if label:
-        attrs.append(f"label={escape(label, quote=True)}")
+        attrs.append(f"label={escape_text(label, quote=True)}")
 
     if density == "semantic":
         tag = control.get("tag")
         if tag and tag != label:
-            attrs.append(f"tag={escape(tag, quote=True)}")
+            attrs.append(f"tag={escape_text(tag, quote=True)}")
         lock = control.get("lock")
         if lock:
-            attrs.append(f"lock={escape(lock, quote=True)}")
+            attrs.append(f"lock={escape_text(lock, quote=True)}")
         placeholder = _meaningful_placeholder(control.get("placeholder"))
         if placeholder:
-            attrs.append(f"placeholder={escape(placeholder, quote=True)}")
+            attrs.append(f"placeholder={escape_text(placeholder, quote=True)}")
         binding = control.get("binding") or {}
         xpath = binding.get("xpath")
         if xpath:
-            attrs.append(f"binding={escape(xpath, quote=True)}")
+            attrs.append(f"binding={escape_text(xpath, quote=True)}")
         if control.get("dateFormat"):
-            attrs.append(f"dateFormat={escape(str(control['dateFormat']), quote=True)}")
+            attrs.append(f"dateFormat={escape_text(str(control['dateFormat']), quote=True)}")
         if "checked" in control:
             attrs.append("checked" if control["checked"] else "unchecked")
         if control.get("multiLine"):
@@ -63,26 +63,26 @@ def _control_attrs(control: ContentControl, density: str) -> str:
 
     options = _option_text(control)
     if options:
-        attrs.append(f"choices={escape(options, quote=True)}")
+        attrs.append(f"choices={escape_text(options, quote=True)}")
     return " ".join(attrs)
 
 
 def _plain_label(control: ContentControl) -> str:
     control_type = str(control.get("controlType") or "unknown")
     label = str(control.get("alias") or control.get("tag") or "")
-    parts = [control_type]
+    label_parts = [control_type]
     if label:
-        parts.append(label)
+        label_parts.append(label)
     options = _option_text(control)
     if options:
-        parts.append(f"choices={options}")
+        label_parts.append(f"choices={options}")
     if control.get("dateFormat"):
-        parts.append(f"format={control['dateFormat']}")
+        label_parts.append(f"format={control['dateFormat']}")
     if "checked" in control:
-        parts.append("checked" if control["checked"] else "unchecked")
+        label_parts.append("checked" if control["checked"] else "unchecked")
     if control.get("lock") in {"sdtLocked", "contentLocked"}:
-        parts.append("locked")
-    return " ".join(parts)
+        label_parts.append("locked")
+    return " ".join(label_parts)
 
 
 def _option_text(control: ContentControl) -> str:

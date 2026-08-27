@@ -96,12 +96,12 @@ class MergeCellTests(unittest.TestCase):
                 "</row>",
             ],
         )
-        html = parse_xlsx(data, density="structural")
-        self.assertIn("Wide", html)
-        self.assertNotIn("Hidden", html)
-        self.assertIn("Next", html)
+        output = parse_xlsx(data, density="structural")
+        self.assertIn("Wide", output)
+        self.assertNotIn("Hidden", output)
+        self.assertIn("Next", output)
         # C1 should use col=C since B1 is shadow (col= expects A1:C1 range)
-        self.assertIn("<grid ref=A1:C1>", html)
+        self.assertIn("<grid ref=A1:C1>", output)
 
     def test_no_merge_cells_no_effect(self) -> None:
         data = self._make_merged(
@@ -110,9 +110,9 @@ class MergeCellTests(unittest.TestCase):
                 '<row r="1"><c r="A1" t="inlineStr"><is><t>Normal</t></is></c></row>',
             ],
         )
-        html = parse_xlsx(data, density="semantic")
-        self.assertIn("Normal", html)
-        self.assertNotIn("colspan", html)
+        output = parse_xlsx(data, density="semantic")
+        self.assertIn("Normal", output)
+        self.assertNotIn("colspan", output)
 
 
 if __name__ == "__main__":

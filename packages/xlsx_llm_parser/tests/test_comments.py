@@ -81,10 +81,10 @@ class CommentTests(unittest.TestCase):
                 ),
             },
         )
-        html = parse_xlsx(data, density="structural")
-        self.assertIn("<commentref id=comment0/>", html)
-        self.assertIn('<comment id=comment0 cell="A1" author=Alice>', html)
-        self.assertIn("Approved by auditor", html)
+        output = parse_xlsx(data, density="structural")
+        self.assertIn("<commentref id=comment0/>", output)
+        self.assertIn('<comment id=comment0 cell="A1" author=Alice>', output)
+        self.assertIn("Approved by auditor", output)
         # plain omits comments
         plain = parse_xlsx(data, density="plain")
         self.assertNotIn("comment", plain)
@@ -137,12 +137,12 @@ class CommentTests(unittest.TestCase):
                 ),
             }
         )
-        html = parse_xlsx(data, density="structural")
-        self.assertIn("thread-A2-1", html)
-        self.assertIn("thread-A2-2", html)
-        self.assertIn("author=Alice", html)
-        self.assertIn("parent=thread-A2-1 resolved", html)
-        self.assertIn('cell="A2"', html)
+        output = parse_xlsx(data, density="structural")
+        self.assertIn("thread-A2-1", output)
+        self.assertIn("thread-A2-2", output)
+        self.assertIn("author=Alice", output)
+        self.assertIn("parent=thread-A2-1 resolved", output)
+        self.assertIn('cell="A2"', output)
 
         plain = parse_xlsx(data, density="plain")
         self.assertIn("[Comment (Bob, reply, resolved): Done]", plain)

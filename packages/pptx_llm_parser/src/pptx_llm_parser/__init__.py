@@ -1,4 +1,4 @@
-"""PPTX to LLM-readable semantic HTML5 parser."""
+"""PPTX parser that produces LLM-readable self-defined output."""
 
 from ooxml_llm_core.models import ParseReport
 

@@ -50,7 +50,7 @@ class RenderOcrTextTest(unittest.TestCase):
             ImageAsset,
             ParsedDocument,
         )
-        from docx_llm_parser.renderers.html5 import to_html5
+        from docx_llm_parser.renderers.output import to_output
 
         assets: list[ImageAsset] = [
             {
@@ -78,21 +78,21 @@ class RenderOcrTextTest(unittest.TestCase):
             content_types=ContentTypes(defaults={}, overrides={}),
             ocr_results={"img1": "## Detected text\n\nSome content", "img2": ""},
         )
-        html = to_html5(parsed, Density.SEMANTIC)
+        output = to_output(parsed, Density.SEMANTIC)
         # img1 has OCR text
-        self.assertIn("<img id=img1>", html)
-        self.assertIn("<ocr-text id=img1>## Detected text", html)
+        self.assertIn("<img id=img1>", output)
+        self.assertIn("<ocr-text id=img1>## Detected text", output)
         # img2 has empty OCR — error marker
-        self.assertIn("<ocr-text id=img2 error>", html)
+        self.assertIn("<ocr-text id=img2 error>", output)
         # Order: img before ocr-text
-        pos_img = html.index("<img id=img1>")
-        pos_ocr = html.index("<ocr-text id=img1>")
+        pos_img = output.index("<img id=img1>")
+        pos_ocr = output.index("<ocr-text id=img1>")
         self.assertGreater(pos_ocr, pos_img)
 
     def test_structured_ocr_results_escape_text_and_preserve_empty(self) -> None:
         from docx_llm_parser.core.enums import Density
         from docx_llm_parser.core.models import ContentTypes, ImageAsset, ParsedDocument
-        from docx_llm_parser.renderers.html5 import to_html5
+        from docx_llm_parser.renderers.output import to_output
 
         assets: list[ImageAsset] = [
             {"id": "img1", "type": "image", "source": "embedded", "zipPath": "media/1.png"},
@@ -112,10 +112,10 @@ class RenderOcrTextTest(unittest.TestCase):
                 "img2": {"status": "empty", "text": ""},
             },
         )
-        html = to_html5(parsed, Density.SEMANTIC)
-        self.assertIn("<ocr-text id=img1>A &lt; B", html)
-        self.assertIn("<ocr-text id=img2 empty>", html)
-        self.assertNotIn("A < B", html)
+        output = to_output(parsed, Density.SEMANTIC)
+        self.assertIn("<ocr-text id=img1>A &lt; B", output)
+        self.assertIn("<ocr-text id=img2 empty>", output)
+        self.assertNotIn("A < B", output)
 
     def test_ocr_disabled_no_ocr_text_output(self) -> None:
         """Without ocr_results, no <ocr-text> elements appear."""
@@ -125,7 +125,7 @@ class RenderOcrTextTest(unittest.TestCase):
             ImageAsset,
             ParsedDocument,
         )
-        from docx_llm_parser.renderers.html5 import to_html5
+        from docx_llm_parser.renderers.output import to_output
 
         assets: list[ImageAsset] = [
             {"id": "img1", "type": "image", "source": "embedded", "zipPath": "media/img1.png"},
@@ -140,9 +140,9 @@ class RenderOcrTextTest(unittest.TestCase):
             assets=assets,
             content_types=ContentTypes(defaults={}, overrides={}),
         )
-        html = to_html5(parsed, Density.SEMANTIC)
-        self.assertIn("<img id=img1>", html)
-        self.assertNotIn("<ocr-text", html)
+        output = to_output(parsed, Density.SEMANTIC)
+        self.assertIn("<img id=img1>", output)
+        self.assertNotIn("<ocr-text", output)
 
     def test_inline_image_with_ocr_text(self) -> None:
         """Inline <img> inside a paragraph gets <ocr-text> sibling."""
@@ -152,7 +152,7 @@ class RenderOcrTextTest(unittest.TestCase):
             ImageAsset,
             ParsedDocument,
         )
-        from docx_llm_parser.renderers.html5 import to_html5
+        from docx_llm_parser.renderers.output import to_output
 
         assets: list[ImageAsset] = [
             {"id": "img7", "type": "image", "source": "embedded", "zipPath": "media/img7.png"},
@@ -178,15 +178,15 @@ class RenderOcrTextTest(unittest.TestCase):
             content_types=ContentTypes(defaults={}, overrides={}),
             ocr_results={"img7": "Diagram text"},
         )
-        html = to_html5(parsed, Density.SEMANTIC)
+        output = to_output(parsed, Density.SEMANTIC)
         # Inline image rendered inside paragraph block
-        self.assertIn("img id=img7", html)
-        self.assertIn("ocr-text id=img7>Diagram text", html)
+        self.assertIn("img id=img7", output)
+        self.assertIn("ocr-text id=img7>Diagram text", output)
 
     def test_nested_table_image_receives_ocr_in_semantic_and_plain_output(self) -> None:
         from docx_llm_parser.core.enums import Density
         from docx_llm_parser.core.models import ContentTypes, ImageAsset, ParsedDocument
-        from docx_llm_parser.renderers.html5 import to_html5
+        from docx_llm_parser.renderers.output import to_output
 
         image_paragraph = {
             "id": "p1",
@@ -241,15 +241,15 @@ class RenderOcrTextTest(unittest.TestCase):
             content_types=ContentTypes(defaults={}, overrides={}),
             ocr_results={"img-table": {"status": "success", "text": "Cell OCR"}},
         )
-        semantic = to_html5(parsed, Density.SEMANTIC)
-        plain = to_html5(parsed, Density.PLAIN)
+        semantic = to_output(parsed, Density.SEMANTIC)
+        plain = to_output(parsed, Density.PLAIN)
         self.assertIn("<ocr-text id=img-table>Cell OCR", semantic)
         self.assertIn("OCR: Cell OCR", plain)
 
     def test_supplemental_image_receives_ocr(self) -> None:
         from docx_llm_parser.core.enums import Density
         from docx_llm_parser.core.models import ContentTypes, ParsedDocument
-        from docx_llm_parser.renderers.html5 import to_html5
+        from docx_llm_parser.renderers.output import to_output
 
         header = {
             "id": "header1",
@@ -269,7 +269,7 @@ class RenderOcrTextTest(unittest.TestCase):
             headers=cast(Any, [header]),
             ocr_results={"img-header": {"status": "success", "text": "Header OCR"}},
         )
-        semantic = to_html5(parsed, Density.SEMANTIC)
+        semantic = to_output(parsed, Density.SEMANTIC)
         self.assertIn("<ocr-text id=img-header>Header OCR", semantic)
 
 
@@ -331,10 +331,10 @@ class EndToEndOcrTest(unittest.TestCase):
             docx_path = Path(temp_dir) / "test.docx"
             write_rich_docx(docx_path)
             opts = ParseOptions(ocr=MarkdownProvider(), ocr_workers=1)
-            html = parse_docx(docx_path, options=opts)
-            self.assertIn("density=semantic", html)
-            self.assertIsInstance(html, str)
-            self.assertTrue(len(html) > 0)
+            output = parse_docx(docx_path, options=opts)
+            self.assertIn("density=semantic", output)
+            self.assertIsInstance(output, str)
+            self.assertTrue(len(output) > 0)
 
     def test_pipeline_preserves_provider_error_details_in_internal_model(self) -> None:
         from pathlib import Path

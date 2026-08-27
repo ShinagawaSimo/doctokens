@@ -76,10 +76,10 @@ class RangeReadingTests(unittest.TestCase):
                 ),
             },
         )
-        html = render_range(data, "Data", "A1:A1")
-        self.assertIn("Name", html)
-        self.assertNotIn("Age", html)
-        self.assertNotIn("City", html)
+        output = render_range(data, "Data", "A1:A1")
+        self.assertIn("Name", output)
+        self.assertNotIn("Age", output)
+        self.assertNotIn("City", output)
         workbook = _parse_workbook(data, plan=XlsxParsePlan.range("structural", "Data", (1, 1, 1, 1)))
         self.assertEqual(workbook["report"].manifest["cellCount"], 1)
 
@@ -125,10 +125,10 @@ class RangeReadingTests(unittest.TestCase):
                 ),
             },
         )
-        html = render_range(data, "Data", "A2:A3")
-        self.assertNotIn("H1", html)
-        self.assertIn("D1", html)
-        self.assertIn("D2", html)
+        output = render_range(data, "Data", "A2:A3")
+        self.assertNotIn("H1", output)
+        self.assertIn("D1", output)
+        self.assertIn("D2", output)
 
     def test_range_preserves_real_row_numbers(self) -> None:
         """Output rows use real Excel row numbers, not relative."""
@@ -171,9 +171,9 @@ class RangeReadingTests(unittest.TestCase):
                 ),
             },
         )
-        html = render_range(data, "Data", "A5:A10")
-        self.assertIn("<tr row=5>", html)
-        self.assertIn("<tr row=10>", html)
+        output = render_range(data, "Data", "A5:A10")
+        self.assertIn("<tr row=5>", output)
+        self.assertIn("<tr row=10>", output)
 
     def test_range_sheet_not_found(self) -> None:
         """Unknown sheet name raises ValueError."""

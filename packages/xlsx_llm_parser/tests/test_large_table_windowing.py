@@ -109,12 +109,12 @@ class WindowingTests(unittest.TestCase):
                 "xl/worksheets/sheet1.xml": (f'<worksheet xmlns="{NS_S}"><sheetData>{rows_xml}</sheetData></worksheet>'),
             },
         )
-        html = parse_xlsx(data, density="structural")
+        output = parse_xlsx(data, density="structural")
         # Shows data rows within the budget and marks the grid as truncated.
-        self.assertIn("<tr row=1>", html)
-        self.assertIn("truncated", html)
+        self.assertIn("<tr row=1>", output)
+        self.assertIn("truncated", output)
         # Stops at cell budget; the last row is not shown.
-        self.assertNotIn("<tr row=599>", html)
+        self.assertNotIn("<tr row=599>", output)
 
 
 if __name__ == "__main__":

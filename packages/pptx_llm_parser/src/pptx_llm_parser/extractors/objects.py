@@ -92,11 +92,11 @@ class EmbeddedObjectExtractor:
 
     def __init__(
         self,
-        pkg: PackageReader,
+        package_reader: PackageReader,
         relationships: RelationshipIndex,
         warnings: list[ParseWarning],
     ) -> None:
-        self._pkg = pkg
+        self._package_reader = package_reader
         self._relationships = relationships
         self._warnings = warnings
         self._chart_lookup: _LazyChartLookup | None = None
@@ -164,14 +164,14 @@ class EmbeddedObjectExtractor:
         return lookup.get((spec.source_part, spec.relationship_id))
 
     def _load_chart(self, spec: _ObjectSpec) -> ChartRecord | None:
-        if not self._pkg.exists(spec.part):
+        if not self._package_reader.exists(spec.part):
             self._warnings.append(
                 ParseWarning(code="CHART_PART_MISSING", message=f"Chart part missing: {spec.part}", locator=spec.source_part)
             )
             return None
         try:
-            info = parse_chart_xml(self._read_xml(spec.part))
-            return cast(ChartRecord, {**info, "id": spec.object_id, "part": spec.part})
+            chart_data = parse_chart_xml(self._read_xml(spec.part))
+            return cast(ChartRecord, {**chart_data, "id": spec.object_id, "part": spec.part})
         except (ET.ParseError, ValueError, TypeError) as exc:
             self._warnings.append(
                 ParseWarning(code="CHART_PARSE_ERROR", message=f"Unable to parse chart: {exc}", locator=spec.part)
@@ -179,7 +179,7 @@ class EmbeddedObjectExtractor:
             return None
 
     def _load_smartart(self, spec: _ObjectSpec) -> SmartArtRecord | None:
-        if not self._pkg.exists(spec.part):
+        if not self._package_reader.exists(spec.part):
             self._warnings.append(
                 ParseWarning(
                     code="SMARTART_PART_MISSING",
@@ -190,7 +190,7 @@ class EmbeddedObjectExtractor:
             return None
         try:
             nodes, links = self._parse_diagram_data(self._read_xml(spec.part), spec.part)
-            result: SmartArtRecord = {
+            smartart_record: SmartArtRecord = {
                 "id": spec.object_id,
                 "part": spec.part,
                 "nodes": nodes,
@@ -200,8 +200,8 @@ class EmbeddedObjectExtractor:
             }
             category = self._layout_categories_by_source.get(spec.source_part)
             if category:
-                result["layoutType"] = category
-            return result
+                smartart_record["layoutType"] = category
+            return smartart_record
         except (ET.ParseError, ValueError, TypeError) as exc:
             self._warnings.append(
                 ParseWarning(code="SMARTART_PARSE_ERROR", message=f"Unable to parse diagram: {exc}", locator=spec.part)
@@ -211,19 +211,19 @@ class EmbeddedObjectExtractor:
     def _layout_lookup(self) -> LayoutLookup:
         if self._layout_lookup_cache is not None:
             return self._layout_lookup_cache
-        result: LayoutLookup = {}
+        layout_lookup: LayoutLookup = {}
         for record in self._relationships.by_type(DIAGRAM_LAYOUT_REL_TYPE):
-            if record.resolved_target is None or not self._pkg.exists(record.resolved_target):
+            if record.resolved_target is None or not self._package_reader.exists(record.resolved_target):
                 continue
             try:
                 category = self._parse_layout_category(self._read_xml(record.resolved_target))
             except ET.ParseError:
                 category = None
             if category:
-                result[(record.source_part, record.id)] = category
+                layout_lookup[(record.source_part, record.id)] = category
                 self._layout_categories_by_source.setdefault(record.source_part, category)
-        self._layout_lookup_cache = result
-        return result
+        self._layout_lookup_cache = layout_lookup
+        return layout_lookup
 
     def extract_charts(self) -> tuple[list[ChartRecord], ChartLookup]:
         charts: list[ChartRecord] = []
@@ -235,7 +235,7 @@ class EmbeddedObjectExtractor:
             index += 1
             chart_id = f"chart{index}"
             part = record.resolved_target
-            if part is None or not self._pkg.exists(part):
+            if part is None or not self._package_reader.exists(part):
                 self._warnings.append(
                     ParseWarning(
                         code="CHART_PART_MISSING",
@@ -244,11 +244,11 @@ class EmbeddedObjectExtractor:
                     )
                 )
                 continue
-            root = self._read_xml(part)
-            info = parse_chart_xml(root)
+            chart_root = self._read_xml(part)
+            chart_data = parse_chart_xml(chart_root)
             # ChartInfo keys are structurally compatible with ChartRecord; the
             # unpack merge cannot be verified statically, so cast is contained here.
-            chart = cast(ChartRecord, {**info, "id": chart_id, "part": part})
+            chart = cast(ChartRecord, {**chart_data, "id": chart_id, "part": part})
             charts.append(chart)
             lookup[(record.source_part, record.id)] = chart
         return charts, lookup
@@ -261,7 +261,7 @@ class EmbeddedObjectExtractor:
             index += 1
             smartart_id = f"smartart{index}"
             part = record.resolved_target
-            if part is None or not self._pkg.exists(part):
+            if part is None or not self._package_reader.exists(part):
                 self._warnings.append(
                     ParseWarning(
                         code="SMARTART_PART_MISSING",
@@ -270,8 +270,8 @@ class EmbeddedObjectExtractor:
                     )
                 )
                 continue
-            root = self._read_xml(part)
-            nodes, links = self._parse_diagram_data(root, part)
+            diagram_root = self._read_xml(part)
+            nodes, links = self._parse_diagram_data(diagram_root, part)
             smartart: SmartArtRecord = {
                 "id": smartart_id,
                 "part": part,
@@ -285,18 +285,18 @@ class EmbeddedObjectExtractor:
         layout_lookup: LayoutLookup = {}
         for record in self._relationships.by_type(DIAGRAM_LAYOUT_REL_TYPE):
             part = record.resolved_target
-            if part is None or not self._pkg.exists(part):
+            if part is None or not self._package_reader.exists(part):
                 continue
             category = self._parse_layout_category(self._read_xml(part))
             if category:
                 layout_lookup[(record.source_part, record.id)] = category
         return smartarts, data_lookup, layout_lookup
 
-    def _parse_diagram_data(self, root: ET.Element, part: str) -> tuple[list[SmartArtNode], list[SmartArtLink]]:
+    def _parse_diagram_data(self, diagram_root: ET.Element, part: str) -> tuple[list[SmartArtNode], list[SmartArtLink]]:
         nodes: list[SmartArtNode] = []
         node_map: dict[str, int] = {}
         links: list[SmartArtLink] = []
-        for element in root.iter():
+        for element in diagram_root.iter():
             name = local_name(element.tag)
             if name == "pt":
                 ordinal = len(nodes) + 1
@@ -323,8 +323,8 @@ class EmbeddedObjectExtractor:
         return "".join(parts)
 
     @staticmethod
-    def _parse_layout_category(root: ET.Element) -> str | None:
-        for element in root.iter():
+    def _parse_layout_category(layout_root: ET.Element) -> str | None:
+        for element in layout_root.iter():
             if local_name(element.tag) == "cat":
                 type_uri = element.get("type")
                 if type_uri:
@@ -332,4 +332,4 @@ class EmbeddedObjectExtractor:
         return None
 
     def _read_xml(self, part: str) -> ET.Element:
-        return self._pkg.read_xml(part)
+        return self._package_reader.read_xml(part)

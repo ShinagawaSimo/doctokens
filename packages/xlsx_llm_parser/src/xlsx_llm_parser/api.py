@@ -1,10 +1,10 @@
-"""Public API — accepts source files directly, returns rendered results."""
+"""Public XLSX API for parsing, rendering, searching, and querying."""
 
 from __future__ import annotations
 
 import re
 from collections.abc import Iterator
-from html import escape
+from html import escape as escape_text
 from pathlib import Path
 
 from ooxml_llm_core.models import ParseReport
@@ -26,30 +26,69 @@ _VALID_DENSITIES = {"plain", "structural", "semantic"}
 
 
 class LoadedWorkbook:
-    """Explicitly loaded XLSX facade for repeated downstream operations."""
+    """Reusable, already-parsed XLSX workbook facade.
 
-    def __init__(self, workbook: ParsedWorkbook, options: ParseOptions) -> None:
-        self.workbook = workbook
-        self.options = options
+    The workbook is parsed once by :func:`load_xlsx`.  This facade then serves
+    repeated output rendering, range reads, searches, queries, and resource
+    reads from the same in-memory representation.
+    """
+
+    def __init__(self, parsed_workbook: ParsedWorkbook, parse_options: ParseOptions) -> None:
+        self.parsed_workbook = parsed_workbook
+        self.parse_options = parse_options
 
     @property
     def report(self) -> ParseReport:
-        return self.workbook["report"]
+        """Return diagnostics collected while parsing this workbook."""
+        return self.parsed_workbook["report"]
 
     def render(self, *, density: str = "structural", start_row: int = 1) -> str:
+        """Render the complete loaded workbook.
+
+        Args:
+            density: ``plain`` for values only, ``structural`` for workbook
+                structure, or ``semantic`` for structure and formatting.
+            start_row: One-based row at which rendering starts on the first
+                data sheet; later sheets start at row one.
+
+        Returns:
+            The complete self-defined LLM output string.
+        """
         _validate_density(density)
         return "".join(self.iter_render(density=density, start_row=start_row))
 
     def iter_render(self, *, density: str = "structural", start_row: int = 1) -> Iterator[str]:
+        """Yield loaded-workbook output chunks at the requested density.
+
+        Args:
+            density: Output detail level: ``plain``, ``structural``, or
+                ``semantic``.
+            start_row: One-based starting row for the first data sheet.
+
+        Returns:
+            An iterator whose chunks concatenate to the value of :meth:`render`.
+        """
         _validate_density(density)
-        return _iter_rendered_workbook(self.workbook, density, start_row)
+        return _iter_rendered_workbook(self.parsed_workbook, density, start_row)
 
     def render_range(self, sheet: str, range_spec: str, *, density: str = "structural") -> str:
+        """Render an exact A1-style range from one loaded worksheet.
+
+        Args:
+            sheet: Worksheet name.
+            range_spec: A1-style range such as ``A1:C20``.
+            density: Output detail level: ``plain``, ``structural``, or
+                ``semantic``.
+
+        Returns:
+            Output for exactly the requested range.  The normal cell budget
+            does not truncate an exact range read.
+        """
         _validate_density(density)
-        sheet_info = _find_sheet(self.workbook, sheet)
+        sheet_info = _find_sheet(self.parsed_workbook, sheet)
         start_col, start_row, end_col, end_row = _parse_range(range_spec)
-        filtered = _filter_rows(sheet_info.get("rows", []), start_col, start_row, end_col, end_row)
-        return _render_grid(filtered, density, self.workbook, cell_budget=None)
+        selected_rows = _filter_rows(sheet_info.get("rows", []), start_col, start_row, end_col, end_row)
+        return _render_grid(selected_rows, density, self.parsed_workbook, cell_budget=None)
 
     def find_cells(
         self,
@@ -59,7 +98,20 @@ class LoadedWorkbook:
         kind: str | None = None,
         limit: int = 50,
     ) -> str:
-        return _find_cells_in_workbook(self.workbook, query, sheets=sheets, kind=kind, limit=limit)
+        """Search the loaded workbook for matching cell or defined-name data.
+
+        Args:
+            query: Text to find; matching is literal and case-sensitive.
+            sheets: Optional worksheet names to search.  By default all sheets
+                are searched.
+            kind: Optional field filter: ``value``, ``formula``, ``comment``,
+                ``hyperlink``, or ``definedName``.
+            limit: Maximum number of matches to return.
+
+        Returns:
+            Match records in the parser's self-defined output format.
+        """
+        return _find_cells_in_workbook(self.parsed_workbook, query, sheets=sheets, kind=kind, limit=limit)
 
     def query_data(
         self,
@@ -75,8 +127,26 @@ class LoadedWorkbook:
         order_by: list[OrderSpec] | None = None,
         limit: int | None = None,
     ) -> str:
+        """Query table or range data from the loaded workbook.
+
+        Args:
+            table_id: Declared table identifier to query.
+            sheet: Worksheet name for an explicit range query.
+            range_spec: A1-style range for an explicit range query.
+            header_row: One-based row containing column headers.
+            select: Column names to return.
+            where: Conditions using ``eq``, ``contains``, ``gt``, or ``lt``.
+            group_by: Column names used to group rows before aggregation.
+            aggregates: Aggregate specifications such as ``sum`` or ``count``.
+            order_by: Column and direction specifications; direction is
+                ``asc`` or ``desc``.
+            limit: Maximum number of result rows.
+
+        Returns:
+            Query results in the parser's self-defined tabular output format.
+        """
         return _query_data(
-            self.workbook,
+            self.parsed_workbook,
             table_id=table_id,
             sheet=sheet,
             range_spec=range_spec,
@@ -90,7 +160,16 @@ class LoadedWorkbook:
         )
 
     def get_resource(self, resource_type: str, resource_id: str) -> str | None:
-        return _get_resource_from_workbook(self.workbook, resource_type, resource_id)
+        """Return one image, chart, or pivot-table resource by identifier.
+
+        Args:
+            resource_type: ``image``, ``chart``, or ``pivot_table``.
+            resource_id: Resource identifier recorded in the workbook.
+
+        Returns:
+            The resource output, or ``None`` when the identifier is absent.
+        """
+        return _get_resource_from_workbook(self.parsed_workbook, resource_type, resource_id)
 
 
 def _validate_density(density: str) -> None:
@@ -106,21 +185,26 @@ def parse_xlsx(
     stream: bool = False,
     options: ParseOptions | None = None,
 ) -> str | Iterator[str]:
-    """Parse *source* and render the entire workbook at the given density.
+    """Parse an XLSX source and return the complete workbook output.
 
-    Returns a string by default.  Set *stream=True* to receive an iterator
-    of rendered output chunks. Parsing itself is still completed before the
-    iterator is returned.
+    Args:
+        source: A filesystem path, path-like string, or XLSX bytes.
+        density: ``plain``, ``structural``, or ``semantic`` output detail.
+        start_row: One-based row at which rendering starts on the first data
+            sheet; useful for paginating large sheets.
+        stream: When true, return an iterator of output chunks.  Parsing still
+            completes before the iterator is returned.
+        options: Optional parser limits and feature configuration.
 
-    *start_row* (1-based) begins rendering from the specified row for the
-    first data sheet, enabling paginated window reads of large grids.
+    Returns:
+        A complete output string, or an iterator when ``stream`` is true.
     """
     _validate_density(density)
-    opts = options or ParseOptions()
-    workbook = _parse_workbook(source, opts, plan=XlsxParsePlan.render(density))
+    parse_options = options or ParseOptions()
+    parsed_workbook = _parse_workbook(source, parse_options, plan=XlsxParsePlan.render(density))
     if stream:
-        return _iter_rendered_workbook(workbook, density, start_row)
-    return "".join(_iter_rendered_workbook(workbook, density, start_row))
+        return _iter_rendered_workbook(parsed_workbook, density, start_row)
+    return "".join(_iter_rendered_workbook(parsed_workbook, density, start_row))
 
 
 def iter_workbook(
@@ -130,24 +214,50 @@ def iter_workbook(
     start_row: int = 1,
     options: ParseOptions | None = None,
 ) -> Iterator[str]:
-    """Parse *source* and yield rendered output chunks after parsing completes."""
+    """Parse an XLSX source and yield workbook output chunks.
+
+    Args:
+        source: A filesystem path, path-like string, or XLSX bytes.
+        density: ``plain``, ``structural``, or ``semantic`` output detail.
+        start_row: One-based row at which rendering starts on the first data
+            sheet.
+        options: Optional parser limits and feature configuration.
+
+    Returns:
+        An iterator of output chunks.  Parsing completes before iteration.
+    """
     _validate_density(density)
-    opts = options or ParseOptions()
-    workbook = _parse_workbook(source, opts, plan=XlsxParsePlan.render(density))
-    return _iter_rendered_workbook(workbook, density, start_row)
+    parse_options = options or ParseOptions()
+    parsed_workbook = _parse_workbook(source, parse_options, plan=XlsxParsePlan.render(density))
+    return _iter_rendered_workbook(parsed_workbook, density, start_row)
 
 
 def load_xlsx(source: str | Path | bytes, *, options: ParseOptions | None = None) -> LoadedWorkbook:
-    """Parse once and return an explicit reusable workbook facade."""
-    opts = options or ParseOptions()
-    return LoadedWorkbook(_parse_workbook(source, opts, plan=XlsxParsePlan.session()), opts)
+    """Parse an XLSX source once and return a reusable workbook facade.
+
+    Args:
+        source: A filesystem path, path-like string, or XLSX bytes.
+        options: Optional parser limits and feature configuration.
+
+    Returns:
+        A :class:`LoadedWorkbook` for repeated output and data operations.
+    """
+    parse_options = options or ParseOptions()
+    parsed_workbook = _parse_workbook(source, parse_options, plan=XlsxParsePlan.session())
+    return LoadedWorkbook(parsed_workbook, parse_options)
 
 
-def _iter_rendered_workbook(wb: ParsedWorkbook, density: str, start_row: int) -> Iterator[str]:
-    """Yield rendered chunks for a parsed workbook."""
+def _iter_rendered_workbook(parsed_workbook: ParsedWorkbook, density: str, start_row: int) -> Iterator[str]:
+    """Yield output chunks for a parsed workbook."""
     yield f"density={density}\n"
-    for sheet_index, sheet in enumerate(wb["sheets"]):
-        yield from _render_sheet(sheet, density, wb, start_row=start_row, emit_globals=sheet_index == 0)
+    for sheet_index, sheet in enumerate(parsed_workbook["sheets"]):
+        yield from _render_sheet(
+            sheet,
+            density,
+            parsed_workbook,
+            start_row=start_row,
+            emit_globals=sheet_index == 0,
+        )
         if sheet.get("kind") != "chartsheet" and start_row != 1:
             start_row = 1
 
@@ -160,20 +270,29 @@ def render_range(
     density: str = "structural",
     options: ParseOptions | None = None,
 ) -> str:
-    """Render cells within an A1-style range from *source*.
+    """Parse a source and render cells within an exact A1-style range.
 
-    Range reads are exact: the default-view cell budget never truncates them.
+    Args:
+        source: A filesystem path, path-like string, or XLSX bytes.
+        sheet: Worksheet name.
+        range_spec: A1-style range such as ``A1:C20``.
+        density: ``plain``, ``structural``, or ``semantic`` output detail.
+        options: Optional parser limits and feature configuration.
+
+    Returns:
+        Output for exactly the requested range; the default cell budget does
+        not truncate an exact range read.
     """
     _validate_density(density)
-    opts = options or ParseOptions()
+    parse_options = options or ParseOptions()
     start_col, start_row, end_col, end_row = _parse_range(range_spec)
-    workbook = _parse_workbook(
+    parsed_workbook = _parse_workbook(
         source,
-        opts,
+        parse_options,
         plan=XlsxParsePlan.range(density, sheet, (start_col, start_row, end_col, end_row)),
     )
-    sheet_info = _find_sheet(workbook, sheet)
-    return _render_grid(sheet_info.get("rows", []), density, workbook, cell_budget=None)
+    sheet_info = _find_sheet(parsed_workbook, sheet)
+    return _render_grid(sheet_info.get("rows", []), density, parsed_workbook, cell_budget=None)
 
 
 def find_cells(
@@ -185,14 +304,23 @@ def find_cells(
     limit: int = 50,
     options: ParseOptions | None = None,
 ) -> str:
-    """Search values, formulas, comments, hyperlinks, and defined names across sheets.
+    """Search an XLSX source for matching cell or defined-name data.
 
-    *kind* narrows to one of ``value``, ``formula``, ``comment``, ``hyperlink``,
-    ``definedName``.
+    Args:
+        source: A filesystem path, path-like string, or XLSX bytes.
+        query: Text to find; matching is literal and case-sensitive.
+        sheets: Optional worksheet names to search; defaults to all sheets.
+        kind: Optional field filter: ``value``, ``formula``, ``comment``,
+            ``hyperlink``, or ``definedName``.
+        limit: Maximum number of matches to return.
+        options: Optional parser limits and feature configuration.
+
+    Returns:
+        Match records in the parser's self-defined output format.
     """
-    opts = options or ParseOptions()
+    parse_options = options or ParseOptions()
     return _find_cells_in_workbook(
-        _parse_workbook(source, opts, plan=XlsxParsePlan.session()),
+        _parse_workbook(source, parse_options, plan=XlsxParsePlan.session()),
         query,
         sheets=sheets,
         kind=kind,
@@ -201,7 +329,7 @@ def find_cells(
 
 
 def _find_cells_in_workbook(
-    wb: ParsedWorkbook,
+    parsed_workbook: ParsedWorkbook,
     query: str,
     *,
     sheets: list[str] | None,
@@ -212,18 +340,18 @@ def _find_cells_in_workbook(
         return "<matches>\n"
     pattern = re.compile(re.escape(query))  # exact match by default
     matches: list[str] = []
-    sheets_to_search = sheets or [s["name"] for s in wb["sheets"]]
+    sheets_to_search = sheets or [sheet["name"] for sheet in parsed_workbook["sheets"]]
     seen_names: set[str] = set()
 
     for sheet_name in sheets_to_search:
         if len(matches) >= limit:
             break
-        sheet_info = _find_sheet(wb, sheet_name)
+        sheet_info = _find_sheet(parsed_workbook, sheet_name)
         remaining = limit - len(matches)
         matches.extend(_find_cell_matches(sheet_info, sheet_name, pattern, kind, remaining))
         if len(matches) < limit and kind in {None, "definedName"}:
             remaining = limit - len(matches)
-            defined_names = wb["metadata"].get("defined_names", [])
+            defined_names = parsed_workbook["metadata"].get("defined_names", [])
             matches.extend(_find_defined_name_matches(defined_names, sheet_name, pattern, remaining, seen_names))
 
     parts = ["<matches>\n"]
@@ -250,7 +378,7 @@ def _find_cell_matches(
 
 
 def _cell_match(sheet_name: str, cell: Cell, pattern: re.Pattern[str], kind: str | None) -> str | None:
-    cell_ref = f"{escape(sheet_name, quote=True)}!{cell['ref']}"
+    cell_ref = f"{escape_text(sheet_name, quote=True)}!{cell['ref']}"
     fields = (
         ("value", cell["text"]),
         ("formula", cell.get("formula", "")),
@@ -262,7 +390,7 @@ def _cell_match(sheet_name: str, cell: Cell, pattern: re.Pattern[str], kind: str
             continue
         value = str(raw_value)
         if pattern.search(value):
-            return f'<match cell="{cell_ref}" field={field_name}>{escape(value)}'
+            return f'<match cell="{cell_ref}" field={field_name}>{escape_text(value)}'
     return None
 
 
@@ -285,8 +413,8 @@ def _find_defined_name_matches(
             continue
         if pattern.search(name) or pattern.search(defined_name.get("ref", "")):
             seen_names.add(name)
-            escaped_name = escape(name)
-            ref = escape(defined_name["ref"])
+            escaped_name = escape_text(name)
+            ref = escape_text(defined_name["ref"])
             matches.append(f"<match field=definedName>{escaped_name} = {ref}")
     return matches
 
@@ -306,12 +434,29 @@ def query_data(
     limit: int | None = None,
     options: ParseOptions | None = None,
 ) -> str:
-    """Query a declared Table or explicit range with projection, filtering,
-    grouping, and aggregation.  Returns lightweight tabular HTML.
+    """Query a declared table or explicit range in an XLSX source.
+
+    Args:
+        source: A filesystem path, path-like string, or XLSX bytes.
+        table_id: Declared table identifier to query.
+        sheet: Worksheet name for an explicit range query.
+        range_spec: A1-style range for an explicit range query.
+        header_row: One-based row containing column headers.
+        select: Column names to return.
+        where: Conditions using ``eq``, ``contains``, ``gt``, or ``lt``.
+        group_by: Column names used to group rows before aggregation.
+        aggregates: Aggregate specifications such as ``sum`` or ``count``.
+        order_by: Column and direction specifications; direction is ``asc`` or
+            ``desc``.
+        limit: Maximum number of result rows.
+        options: Optional parser limits and feature configuration.
+
+    Returns:
+        Query results in the parser's self-defined tabular output format.
     """
-    wb = load_xlsx(source, options=options).workbook
+    parsed_workbook = load_xlsx(source, options=options).parsed_workbook
     return _query_data(
-        wb,
+        parsed_workbook,
         table_id=table_id,
         sheet=sheet,
         range_spec=range_spec,
@@ -332,27 +477,40 @@ def get_resource(
     *,
     options: ParseOptions | None = None,
 ) -> str | None:
-    """Return a resource by type and ID as an HTML string for LLM consumption.
+    """Parse an XLSX source and return one resource by identifier.
 
-    *resource_type*: ``image``, ``chart``, ``pivot_table``, ``embedded_object``.
+    Args:
+        source: A filesystem path, path-like string, or XLSX bytes.
+        resource_type: ``image``, ``chart``, ``pivot_table``, or
+            ``embedded_object``.
+        resource_id: Resource identifier recorded in the workbook.
+        options: Optional parser limits and feature configuration.
+
+    Returns:
+        The resource output, or ``None`` when the identifier is absent.
     """
-    return _get_resource_from_workbook(load_xlsx(source, options=options).workbook, resource_type, resource_id)
+    parsed_workbook = load_xlsx(source, options=options).parsed_workbook
+    return _get_resource_from_workbook(parsed_workbook, resource_type, resource_id)
 
 
-def _get_resource_from_workbook(wb: ParsedWorkbook, resource_type: str, resource_id: str) -> str | None:
+def _get_resource_from_workbook(
+    parsed_workbook: ParsedWorkbook,
+    resource_type: str,
+    resource_id: str,
+) -> str | None:
 
     if resource_type == "image":
-        for sheet_info in wb["sheets"]:
+        for sheet_info in parsed_workbook["sheets"]:
             for image in sheet_info.get("images", []):
                 if image["id"] == resource_id:
                     return f"<image id={resource_id} ref={image['ref']}/>"
     elif resource_type == "chart":
-        for sheet_info in wb["sheets"]:
+        for sheet_info in parsed_workbook["sheets"]:
             for chart in sheet_info.get("charts", []):
                 if chart["id"] == resource_id:
                     return _render_chart_resource(chart)
     elif resource_type == "pivot_table":
-        for sheet_info in wb["sheets"]:
+        for sheet_info in parsed_workbook["sheets"]:
             for pivot_table in sheet_info.get("pivot_tables", []):
                 if pivot_table["id"] == resource_id:
                     return f"<pivotTable id={resource_id} name={pivot_table.get('name', '')}/>"
@@ -360,22 +518,21 @@ def _get_resource_from_workbook(wb: ParsedWorkbook, resource_type: str, resource
 
 
 def _render_chart_resource(chart: DrawingChart) -> str:
-    """Render a chart as an HTML string — full series data."""
-    from html import escape
+    """Render a chart as self-defined output with full series data."""
 
     attrs = f"id={chart['id']} ref={chart['ref']} type={chart.get('type', '?')}"
     if chart.get("plotTypes"):
-        attrs += f" plots={escape(','.join(chart['plotTypes']), quote=True)}"
+        attrs += f" plots={escape_text(','.join(chart['plotTypes']), quote=True)}"
     attrs += f" series={chart.get('series_count', 0)}"
     if chart.get("title"):
-        attrs += f" title={escape(chart['title'], quote=True)}"
+        attrs += f" title={escape_text(chart['title'], quote=True)}"
     parts = [f"<chart {attrs}>"]
     is_combination = chart.get("type") == "combination"
 
     for series in chart.get("series", []):
         series_attrs = f"index={series.get('index', 0)}"
         if series.get("name"):
-            series_attrs += f" name={escape(series['name'], quote=True)}"
+            series_attrs += f" name={escape_text(series['name'], quote=True)}"
         if "min" in series:
             series_attrs += f" min={series['min']}"
         if "max" in series:
@@ -383,7 +540,7 @@ def _render_chart_resource(chart: DrawingChart) -> str:
         if is_combination and series.get("chartType"):
             series_attrs += f" type={series['chartType']}"
         if series.get("bubbleSizes"):
-            series_attrs += f" bubbleSizes={escape(','.join(series['bubbleSizes']), quote=True)}"
+            series_attrs += f" bubbleSizes={escape_text(','.join(series['bubbleSizes']), quote=True)}"
         if series.get("hidden"):
             series_attrs += " hidden"
         parts.append(f"\n<series {series_attrs}>")
@@ -392,15 +549,15 @@ def _render_chart_resource(chart: DrawingChart) -> str:
             category = point.get("category", "")
             value = point.get("value", "")
             if category:
-                point_attrs += f" category={escape(category, quote=True)}"
+                point_attrs += f" category={escape_text(category, quote=True)}"
             if value:
-                point_attrs += f" value={escape(value, quote=True)}"
+                point_attrs += f" value={escape_text(value, quote=True)}"
             if point.get("x"):
-                point_attrs += f" x={escape(point['x'], quote=True)}"
+                point_attrs += f" x={escape_text(point['x'], quote=True)}"
             if point.get("y"):
-                point_attrs += f" y={escape(point['y'], quote=True)}"
+                point_attrs += f" y={escape_text(point['y'], quote=True)}"
             if point.get("bubbleSize"):
-                point_attrs += f" bubbleSize={escape(point['bubbleSize'], quote=True)}"
+                point_attrs += f" bubbleSize={escape_text(point['bubbleSize'], quote=True)}"
             parts.append(f"\n<point{point_attrs}/>")
 
     return "".join(parts)

@@ -27,10 +27,10 @@ from docx_llm_parser.ooxml.numbering import (
     NumberingState,
 )
 from docx_llm_parser.ooxml.omml_latex import omath_to_latex
-from docx_llm_parser.renderers.objects.charts import chart_to_html5, render_chart_resource
+from docx_llm_parser.renderers.objects.charts import chart_to_output, render_chart_resource
 from docx_llm_parser.renderers.objects.smartarts import (
     render_smartart_resource,
-    smartart_to_html5,
+    smartart_to_output,
 )
 from docx_llm_parser.renderers.tables.render import render_table, table_id
 
@@ -256,18 +256,18 @@ class RendererBranchTests(unittest.TestCase):
             "title": "Sales",
         }
 
-        self.assertIn("categories=Q1,Q2", chart_to_html5(cast(Any, chart)))
-        self.assertIn("names=Q1,Q2", chart_to_html5(cast(Any, {**chart, "chartType": "pie"})))
-        self.assertIn("points=12", chart_to_html5(cast(Any, {**chart, "chartType": "scatter"})))
-        self.assertIn("categories=Q1,Q2", chart_to_html5(cast(Any, {**chart, "chartType": "stock"})))
-        self.assertIn("names=S1,S2", chart_to_html5(cast(Any, {**chart, "chartType": "surface"})))
-        self.assertIn("<chart id=empty type=? series=0 truncated>", chart_to_html5(cast(Any, {"id": "empty"})))
-        chart_html = render_chart_resource(cast(Any, chart))
-        self.assertIn("id=chartX", chart_html)
-        self.assertIn("type=bar", chart_html)
-        self.assertIn("series=6", chart_html)
-        self.assertIn("name=S1", chart_html)
-        self.assertIn("<point category=Q1 value=1/>", chart_html)
+        self.assertIn("categories=Q1,Q2", chart_to_output(cast(Any, chart)))
+        self.assertIn("names=Q1,Q2", chart_to_output(cast(Any, {**chart, "chartType": "pie"})))
+        self.assertIn("points=12", chart_to_output(cast(Any, {**chart, "chartType": "scatter"})))
+        self.assertIn("categories=Q1,Q2", chart_to_output(cast(Any, {**chart, "chartType": "stock"})))
+        self.assertIn("names=S1,S2", chart_to_output(cast(Any, {**chart, "chartType": "surface"})))
+        self.assertIn("<chart id=empty type=? series=0 truncated>", chart_to_output(cast(Any, {"id": "empty"})))
+        chart_output = render_chart_resource(cast(Any, chart))
+        self.assertIn("id=chartX", chart_output)
+        self.assertIn("type=bar", chart_output)
+        self.assertIn("series=6", chart_output)
+        self.assertIn("name=S1", chart_output)
+        self.assertIn("<point category=Q1 value=1/>", chart_output)
 
         smartart = {
             "id": "sa1",
@@ -281,12 +281,12 @@ class RendererBranchTests(unittest.TestCase):
             "links": [{"from": index, "to": index + 1, "kind": "parOf"} for index in range(1, 19)],
         }
 
-        rendered_sa = smartart_to_html5(cast(Any, smartart))
+        rendered_sa = smartart_to_output(cast(Any, smartart))
         self.assertIn("truncated", rendered_sa)
         self.assertIn("Node 1", rendered_sa)
         self.assertIn("Node 14", rendered_sa)
-        sa_html = render_smartart_resource(cast(Any, smartart))
-        self.assertIn("Node 1", sa_html)
+        smartart_output = render_smartart_resource(cast(Any, smartart))
+        self.assertIn("Node 1", smartart_output)
 
         rows = [
             {

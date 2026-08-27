@@ -88,7 +88,7 @@ class IterSlidesTests(unittest.TestCase):
             self.assertRaisesRegex(RuntimeError, "boom"),
         ):
             session.__enter__()
-        self.assertIsNone(session._package)
+        self.assertIsNone(session._package_reader)
 
 
 if __name__ == "__main__":

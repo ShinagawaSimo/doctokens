@@ -80,15 +80,15 @@ class MultiSheetTests(unittest.TestCase):
                 "xl/worksheets/sheet3.xml": _sheet_xml([]),
             },
         )
-        html = parse_xlsx(data)
+        output = parse_xlsx(data)
         # Verify order
-        first_idx = html.index("First")
-        second_idx = html.index("Second")
-        third_idx = html.index("Third")
+        first_idx = output.index("First")
+        second_idx = output.index("Second")
+        third_idx = output.index("Third")
         self.assertLess(first_idx, second_idx)
         self.assertLess(second_idx, third_idx)
-        self.assertIn("Sheet1", html)
-        self.assertIn("Sheet2", html)
+        self.assertIn("Sheet1", output)
+        self.assertIn("Sheet2", output)
 
     def test_hidden_sheet(self) -> None:
         """Hidden sheets should have the hidden attribute."""
@@ -120,9 +120,9 @@ class MultiSheetTests(unittest.TestCase):
                 "xl/worksheets/sheet2.xml": _sheet_xml([]),
             },
         )
-        html = parse_xlsx(data)
-        self.assertIn("sheet name=Hidden hidden>", html)
-        self.assertNotIn("hidden", html.split("Hidden")[0])  # Visible has no hidden
+        output = parse_xlsx(data)
+        self.assertIn("sheet name=Hidden hidden>", output)
+        self.assertNotIn("hidden", output.split("Hidden")[0])  # Visible has no hidden
 
 
 class SharedStringsTests(unittest.TestCase):
@@ -156,9 +156,9 @@ class SharedStringsTests(unittest.TestCase):
                 ),
             },
         )
-        html = parse_xlsx(data)
-        self.assertIn("Product", html)
-        self.assertIn("Price", html)
+        output = parse_xlsx(data)
+        self.assertIn("Product", output)
+        self.assertIn("Price", output)
 
     def test_rich_text_shared_string(self) -> None:
         """Rich-text shared strings: concatenate text from all <r><t> runs."""
@@ -185,8 +185,8 @@ class SharedStringsTests(unittest.TestCase):
                 "xl/worksheets/sheet1.xml": _sheet_xml(['<row r="1"><c r="A1" t="s"><v>0</v></c></row>']),
             },
         )
-        html = parse_xlsx(data)
-        self.assertIn("BoldNormal", html)
+        output = parse_xlsx(data)
+        self.assertIn("BoldNormal", output)
 
     def test_shared_string_index_out_of_range(self) -> None:
         """Out-of-range SST index produces empty text (no crash)."""
@@ -213,9 +213,9 @@ class SharedStringsTests(unittest.TestCase):
                 "xl/worksheets/sheet1.xml": _sheet_xml(['<row r="1"><c r="A1" t="s"><v>99</v></c></row>']),
             },
         )
-        html = parse_xlsx(data)
+        output = parse_xlsx(data)
         # Cell with out-of-range SST index: empty text
-        self.assertIn("<td>", html)
+        self.assertIn("<td>", output)
 
     def test_missing_shared_strings_file(self) -> None:
         """Workbook without sharedStrings.xml should not crash on t='s' cells."""
@@ -241,8 +241,8 @@ class SharedStringsTests(unittest.TestCase):
                 "xl/worksheets/sheet1.xml": _sheet_xml(['<row r="1"><c r="A1" t="s"><v>0</v></c></row>']),
             },
         )
-        html = parse_xlsx(data)
-        self.assertIn("<td>", html)
+        output = parse_xlsx(data)
+        self.assertIn("<td>", output)
 
     def test_formula_string_cell(self) -> None:
         """t='str' cells use the cached formula result string from <v>."""
@@ -270,8 +270,8 @@ class SharedStringsTests(unittest.TestCase):
                 ),
             },
         )
-        html = parse_xlsx(data)
-        self.assertIn("Total: 42", html)
+        output = parse_xlsx(data)
+        self.assertIn("Total: 42", output)
 
     def test_formula_text_in_semantic(self) -> None:
         """Semantic density outputs formula= attribute on <td>."""
@@ -346,8 +346,8 @@ class SharedStringsTests(unittest.TestCase):
                 "xl/worksheets/sheet1.xml": _sheet_xml(['<row r="1"><c r="A1" t="d"><v>2024-01-15</v></c></row>']),
             },
         )
-        html = parse_xlsx(data)
-        self.assertIn("2024-01-15", html)
+        output = parse_xlsx(data)
+        self.assertIn("2024-01-15", output)
 
 
 class MissingReferenceTests(unittest.TestCase):
@@ -383,8 +383,8 @@ class MissingReferenceTests(unittest.TestCase):
                 ),
             },
         )
-        html = parse_xlsx(data)
-        self.assertIn("<tr row=1><td>first<td>second", html)
+        output = parse_xlsx(data)
+        self.assertIn("<tr row=1><td>first<td>second", output)
 
 
 if __name__ == "__main__":

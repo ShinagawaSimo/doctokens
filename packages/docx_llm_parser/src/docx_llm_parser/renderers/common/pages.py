@@ -9,9 +9,9 @@ from ...core.models import Block, ParsedDocument
 from .text import split_runs_at_page_breaks
 
 
-def iter_page_blocks(parsed: ParsedDocument) -> Iterator[tuple[int, Block]]:
+def iter_page_blocks(parsed_document: ParsedDocument) -> Iterator[tuple[int, Block]]:
     """Yield top-level blocks split at inline calculated page breaks."""
-    for block in parsed.blocks:
+    for block in parsed_document.blocks:
         if block["type"] in {"paragraph", "heading"}:
             yield from iter_block_page_segments(block)
         else:
@@ -25,20 +25,20 @@ def iter_block_page_segments(block: Block) -> Iterator[tuple[int, Block]]:
         yield page, block
         return
     if "runs" not in block:
-        page_segments = block.get("pageSegments")
-        if not isinstance(page_segments, list):
+        page_segment_records = block.get("pageSegments")
+        if not isinstance(page_segment_records, list):
             yield page, block
             return
-        for page_segment in page_segments:
+        for page_segment in page_segment_records:
             if not isinstance(page_segment, dict) or not page_segment.get("text"):
                 continue
-            fragment = dict(block)
+            page_fragment = dict(block)
             segment_page = cast(int, page_segment.get("page", page))
-            fragment["page"] = segment_page
-            fragment["text"] = str(page_segment.get("text", ""))
-            fragment.pop("pageSegments", None)
-            fragment.pop("pageEnd", None)
-            yield segment_page, cast(Block, fragment)
+            page_fragment["page"] = segment_page
+            page_fragment["text"] = str(page_segment.get("text", ""))
+            page_fragment.pop("pageSegments", None)
+            page_fragment.pop("pageEnd", None)
+            yield segment_page, cast(Block, page_fragment)
         return
 
     run_segments = split_runs_at_page_breaks(block["runs"])
@@ -51,9 +51,9 @@ def iter_block_page_segments(block: Block) -> Iterator[tuple[int, Block]]:
     for segment_index, segment_runs in enumerate(run_segments):
         if not any(run["text"] or run.get("objects") for run in segment_runs) and not block.get("contentControls"):
             continue
-        fragment = dict(block)
-        fragment["page"] = physical_page + segment_index
-        fragment["runs"] = segment_runs
-        fragment["text"] = "".join(run["text"] for run in segment_runs)
-        fragment.pop("pageEnd", None)
-        yield physical_page + segment_index, cast(Block, fragment)
+        page_fragment = dict(block)
+        page_fragment["page"] = physical_page + segment_index
+        page_fragment["runs"] = segment_runs
+        page_fragment["text"] = "".join(run["text"] for run in segment_runs)
+        page_fragment.pop("pageEnd", None)
+        yield physical_page + segment_index, cast(Block, page_fragment)

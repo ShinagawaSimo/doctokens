@@ -24,14 +24,14 @@ class AssetExtractor:
 
     def __init__(
         self,
-        pkg: PackageReader,
+        package_reader: PackageReader,
         relationships: RelationshipIndex,
         warnings: list[ParseWarning],
     ) -> None:
-        self._pkg = pkg
+        self._package_reader = package_reader
         self._relationships = relationships
         self._warnings = warnings
-        self._content_types = pkg.read_content_types()
+        self._content_types = package_reader.read_content_types()
 
     def extract(self) -> tuple[list[ImageAsset], AssetLookup]:
         assets: list[ImageAsset] = []
@@ -50,7 +50,7 @@ class AssetExtractor:
                     }
                 else:
                     zip_path = record.resolved_target
-                    if zip_path is None or not self._pkg.exists(zip_path):
+                    if zip_path is None or not self._package_reader.exists(zip_path):
                         self._warnings.append(
                             ParseWarning(
                                 code="ASSET_PART_MISSING",

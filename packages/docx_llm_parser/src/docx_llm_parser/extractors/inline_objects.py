@@ -30,7 +30,7 @@ class DrawingScanResult:
     @classmethod
     def scan(cls, drawing: ET.Element) -> DrawingScanResult:
         candidates: list[tuple[str, DrawingCommon]] = []
-        result = cls({"placement": "drawing"})
+        scan_result = cls({"placement": "drawing"})
 
         def walk(node: ET.Element, active: DrawingCommon | None) -> None:
             local = local_name(node.tag)
@@ -40,15 +40,15 @@ class DrawingScanResult:
             if local == "chart":
                 rel_id = attr(node, "r", "id")
                 if rel_id:
-                    result.chart_rel_ids.append(rel_id)
+                    scan_result.chart_rel_ids.append(rel_id)
             elif local == "relIds":
                 rel_id = attr(node, "r", "dm")
                 if rel_id:
-                    result.smartart_rel_ids.append(rel_id)
-            elif local == "blip" and result.image_rel_id is None:
-                result.image_rel_id = attr(node, "r", "embed")
+                    scan_result.smartart_rel_ids.append(rel_id)
+            elif local == "blip" and scan_result.image_rel_id is None:
+                scan_result.image_rel_id = attr(node, "r", "embed")
             elif local == "txbxContent":
-                result.textbox_nodes.append(node)
+                scan_result.textbox_nodes.append(node)
             if active is not None:
                 if local == "docPr":
                     name = node.get("name")
@@ -75,14 +75,14 @@ class DrawingScanResult:
         if chosen is None and candidates:
             chosen = candidates[0][1]
         if chosen is not None:
-            result.common = chosen
-        return result
+            scan_result.common = chosen
+        return scan_result
 
 
 def equation_object(node: ET.Element) -> InlineObject:
     """Convert an OMML equation to a LaTeX string."""
-    text = omath_to_latex(node)
-    return {"type": "equation", "text": text}
+    equation_text = omath_to_latex(node)
+    return {"type": "equation", "text": equation_text}
 
 
 def drawing_objects(
@@ -92,71 +92,75 @@ def drawing_objects(
     object_lookup: ObjectLookup,
 ) -> list[InlineObject]:
     """Extract image references, text boxes, charts, SmartArt, and placeholders."""
-    scan = DrawingScanResult.scan(drawing)
-    common = scan.common
-    objects: list[InlineObject] = []
+    drawing_scan = DrawingScanResult.scan(drawing)
+    drawing_common = drawing_scan.common
+    inline_objects: list[InlineObject] = []
 
-    objects.extend(_referenced_object(object_lookup, part, rel_id, "chart", common) for rel_id in scan.chart_rel_ids)
-    objects.extend(_referenced_object(object_lookup, part, rel_id, "smartart", common) for rel_id in scan.smartart_rel_ids)
+    inline_objects.extend(
+        _referenced_object(object_lookup, part, rel_id, "chart", drawing_common) for rel_id in drawing_scan.chart_rel_ids
+    )
+    inline_objects.extend(
+        _referenced_object(object_lookup, part, rel_id, "smartart", drawing_common) for rel_id in drawing_scan.smartart_rel_ids
+    )
 
-    rel_id = scan.image_rel_id
-    if rel_id:
-        _append_image_or_placeholder(objects, asset_lookup, part, rel_id, common)
+    image_relationship_id = drawing_scan.image_rel_id
+    if image_relationship_id:
+        _append_image_or_placeholder(inline_objects, asset_lookup, part, image_relationship_id, drawing_common)
 
-    objects.extend(_textbox_objects_from_nodes(scan.textbox_nodes, common))
-    if objects:
-        return objects
+    inline_objects.extend(_textbox_objects_from_nodes(drawing_scan.textbox_nodes, drawing_common))
+    if inline_objects:
+        return inline_objects
 
-    fallback_obj: InlineObject = {"type": "drawing"}
-    _copy_drawing_common(fallback_obj, common)
-    return [fallback_obj]
+    fallback_object: InlineObject = {"type": "drawing"}
+    _copy_drawing_common(fallback_object, drawing_common)
+    return [fallback_object]
 
 
 def pict_objects(pict: ET.Element) -> list[InlineObject]:
     """Extract text boxes from legacy VML pict; keep placeholders for other shapes."""
-    objects: list[InlineObject] = []
-    common: DrawingCommon = {"placement": "vml"}
+    inline_objects: list[InlineObject] = []
+    drawing_common: DrawingCommon = {"placement": "vml"}
     for shape in pict.iter(qualified_name("v", "shape")):
         shape_id = shape.get("id")
         alt = shape.get("alt")
         if shape_id:
-            common["name"] = shape_id
+            drawing_common["name"] = shape_id
         if alt:
-            common["alt"] = alt
+            drawing_common["alt"] = alt
 
-    objects.extend(_textbox_objects(pict, common))
-    if objects:
-        return objects
+    inline_objects.extend(_textbox_objects(pict, drawing_common))
+    if inline_objects:
+        return inline_objects
 
-    drawing: InlineObject = {"type": "drawing"}
-    _copy_drawing_common(drawing, common)
-    return [drawing]
+    drawing_object: InlineObject = {"type": "drawing"}
+    _copy_drawing_common(drawing_object, drawing_common)
+    return [drawing_object]
 
 
 def parse_embedded_object(obj_elem: ET.Element) -> InlineObject:
     """Extract the embedded object type from a w:object element."""
-    result: InlineObject = {"type": "embedded"}
+    embedded_object: InlineObject = {"type": "embedded"}
     ole = first_child(obj_elem, "o", "OLEObject")
     if ole is not None:
         progid = ole.get("ProgID", "")
         if progid:
-            result["embeddedType"] = _progid_to_type(progid)
-            result["progid"] = progid
-    if "embeddedType" not in result:
-        result["embeddedType"] = "unknown"
+            embedded_object["embeddedType"] = _progid_to_type(progid)
+            embedded_object["progid"] = progid
+    if "embeddedType" not in embedded_object:
+        embedded_object["embeddedType"] = "unknown"
 
     for shape in obj_elem.iter(qualified_name("v", "shape")):
         title = shape.get("title") or shape.get("alt")
         if title:
-            result["name"] = title
+            embedded_object["name"] = title
             break
-    if "name" not in result:
+    if "name" not in embedded_object:
         for doc_pr in obj_elem.iter(qualified_name("wp", "docPr")):
             name = doc_pr.get("name")
             if name:
-                result["name"] = name
+                embedded_object["name"] = name
                 break
-    return result
+    return embedded_object
 
 
 def _append_image_or_placeholder(
@@ -168,9 +172,9 @@ def _append_image_or_placeholder(
 ) -> None:
     asset = asset_lookup.get((part, rel_id))
     if asset is None:
-        drawing_obj: InlineObject = {"type": "drawing"}
-        _copy_drawing_common(drawing_obj, common)
-        objects.append(drawing_obj)
+        drawing_object: InlineObject = {"type": "drawing"}
+        _copy_drawing_common(drawing_object, common)
+        objects.append(drawing_object)
         return
 
     image: InlineObject = {"type": "image"}
@@ -213,49 +217,49 @@ def _referenced_object(
     return obj
 
 
-def _copy_drawing_common(obj: InlineObject, common: DrawingCommon) -> None:
-    if "placement" in common:
-        obj["placement"] = common["placement"]
-    if "name" in common:
-        obj["name"] = common["name"]
-    if "alt" in common:
-        obj["alt"] = common["alt"]
-    if "title" in common:
-        obj["title"] = common["title"]
-    if "cx" in common:
-        obj["cx"] = common["cx"]
-    if "cy" in common:
-        obj["cy"] = common["cy"]
+def _copy_drawing_common(inline_object: InlineObject, drawing_common: DrawingCommon) -> None:
+    if "placement" in drawing_common:
+        inline_object["placement"] = drawing_common["placement"]
+    if "name" in drawing_common:
+        inline_object["name"] = drawing_common["name"]
+    if "alt" in drawing_common:
+        inline_object["alt"] = drawing_common["alt"]
+    if "title" in drawing_common:
+        inline_object["title"] = drawing_common["title"]
+    if "cx" in drawing_common:
+        inline_object["cx"] = drawing_common["cx"]
+    if "cy" in drawing_common:
+        inline_object["cy"] = drawing_common["cy"]
 
 
-def _object_from_lookup(parsed: Chart | SmartArt) -> InlineObject:
-    obj: InlineObject = {
-        "type": parsed["type"],
-        "id": parsed["id"],
-        "part": parsed["part"],
+def _object_from_lookup(parsed_object: Chart | SmartArt) -> InlineObject:
+    inline_object: InlineObject = {
+        "type": parsed_object["type"],
+        "id": parsed_object["id"],
+        "part": parsed_object["part"],
     }
-    if parsed["type"] == "chart":
-        obj["chartType"] = parsed["chartType"]
-        obj["seriesCount"] = parsed["seriesCount"]
-        obj["pointCount"] = parsed["pointCount"]
-        obj["series"] = parsed["series"]
-        if "title" in parsed:
-            obj["title"] = parsed["title"]
-        if "plots" in parsed:
-            obj["plots"] = parsed["plots"]
+    if parsed_object["type"] == "chart":
+        inline_object["chartType"] = parsed_object["chartType"]
+        inline_object["seriesCount"] = parsed_object["seriesCount"]
+        inline_object["pointCount"] = parsed_object["pointCount"]
+        inline_object["series"] = parsed_object["series"]
+        if "title" in parsed_object:
+            inline_object["title"] = parsed_object["title"]
+        if "plots" in parsed_object:
+            inline_object["plots"] = parsed_object["plots"]
     else:
-        obj["nodeCount"] = parsed["nodeCount"]
-        obj["linkCount"] = parsed["linkCount"]
-        obj["rawLinkCount"] = parsed["rawLinkCount"]
-        obj["nodes"] = parsed["nodes"]
-        obj["links"] = parsed["links"]
-        if "layoutType" in parsed:
-            obj["layoutType"] = parsed["layoutType"]
-    if "sourcePart" in parsed:
-        obj["sourcePart"] = parsed["sourcePart"]
-    if "relationshipId" in parsed:
-        obj["relationshipId"] = parsed["relationshipId"]
-    return obj
+        inline_object["nodeCount"] = parsed_object["nodeCount"]
+        inline_object["linkCount"] = parsed_object["linkCount"]
+        inline_object["rawLinkCount"] = parsed_object["rawLinkCount"]
+        inline_object["nodes"] = parsed_object["nodes"]
+        inline_object["links"] = parsed_object["links"]
+        if "layoutType" in parsed_object:
+            inline_object["layoutType"] = parsed_object["layoutType"]
+    if "sourcePart" in parsed_object:
+        inline_object["sourcePart"] = parsed_object["sourcePart"]
+    if "relationshipId" in parsed_object:
+        inline_object["relationshipId"] = parsed_object["relationshipId"]
+    return inline_object
 
 
 def _drawing_container(drawing: ET.Element) -> tuple[str, ET.Element | None]:
@@ -269,9 +273,9 @@ def _drawing_container(drawing: ET.Element) -> tuple[str, ET.Element | None]:
 
 
 def _drawing_common_attrs(container: ET.Element | None, placement: str) -> DrawingCommon:
-    obj: DrawingCommon = {"placement": placement}
+    drawing_common: DrawingCommon = {"placement": placement}
     if container is None:
-        return obj
+        return drawing_common
 
     doc_pr = container.find(".//" + qualified_name("wp", "docPr"))
     if doc_pr is not None:
@@ -279,21 +283,21 @@ def _drawing_common_attrs(container: ET.Element | None, placement: str) -> Drawi
         descr = doc_pr.get("descr")
         title = doc_pr.get("title")
         if name:
-            obj["name"] = name
+            drawing_common["name"] = name
         if descr:
-            obj["alt"] = descr
+            drawing_common["alt"] = descr
         if title:
-            obj["title"] = title
+            drawing_common["title"] = title
 
     extent = first_child(container, "wp", "extent")
     if extent is not None:
         cx = extent.get("cx")
         cy = extent.get("cy")
         if cx is not None:
-            obj["cx"] = cx
+            drawing_common["cx"] = cx
         if cy is not None:
-            obj["cy"] = cy
-    return obj
+            drawing_common["cy"] = cy
+    return drawing_common
 
 
 def _textbox_content_nodes(node: ET.Element) -> list[ET.Element]:

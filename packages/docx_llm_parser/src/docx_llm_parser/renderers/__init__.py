@@ -1,8 +1,8 @@
-"""Final output renderers for LLM-facing markup."""
+"""Final output renderers for LLM-facing self-defined markup."""
 
-from .html5 import iter_html5, to_html5
+from .output import iter_output, to_output
 
 __all__ = [
-    "iter_html5",
-    "to_html5",
+    "iter_output",
+    "to_output",
 ]

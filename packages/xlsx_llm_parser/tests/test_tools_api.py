@@ -304,7 +304,7 @@ class GetResourceTests(unittest.TestCase):
         self.assertIn("ref=A1", r)
 
     def test_render_chart_resource_details(self) -> None:
-        html = _render_chart_resource(
+        output = _render_chart_resource(
             {
                 "id": "chart1",
                 "ref": "C3",
@@ -326,12 +326,12 @@ class GetResourceTests(unittest.TestCase):
             }
         )
 
-        self.assertIn("<chart id=chart1 ref=C3 type=bar series=1 title=Sales>", html)
-        self.assertIn("<series index=1 name=Q1 min=1.0 max=2.0>", html)
-        self.assertIn("<point category=A value=1/>", html)
+        self.assertIn("<chart id=chart1 ref=C3 type=bar series=1 title=Sales>", output)
+        self.assertIn("<series index=1 name=Q1 min=1.0 max=2.0>", output)
+        self.assertIn("<point category=A value=1/>", output)
 
     def test_render_chart_optional_fields_and_workbook_resource_dispatch(self) -> None:
-        html = _render_chart_resource(
+        output = _render_chart_resource(
             {
                 "id": "chart2",
                 "ref": "D4",
@@ -350,13 +350,13 @@ class GetResourceTests(unittest.TestCase):
                 ],
             }
         )
-        self.assertIn("plots=bar,line", html)
-        self.assertIn("type=line", html)
-        self.assertIn("bubbleSizes=3", html)
-        self.assertIn("hidden", html)
-        self.assertIn("x=1", html)
-        self.assertIn("y=2", html)
-        self.assertIn("bubbleSize=3", html)
+        self.assertIn("plots=bar,line", output)
+        self.assertIn("type=line", output)
+        self.assertIn("bubbleSizes=3", output)
+        self.assertIn("hidden", output)
+        self.assertIn("x=1", output)
+        self.assertIn("y=2", output)
+        self.assertIn("bubbleSize=3", output)
         workbook = {
             "sheets": [
                 {

@@ -11,7 +11,7 @@ from docx_llm_parser import Density, parse_docx, render_window
 from docx_llm_parser.core.enums import RevisionMode
 from docx_llm_parser.core.models import ParseOptions
 from docx_llm_parser.parser import DocxParser
-from docx_llm_parser.renderers.html5 import manifest, to_html5
+from docx_llm_parser.renderers.output import build_manifest, to_output
 
 from test_support.file_contract import materialize_bytes
 
@@ -102,7 +102,7 @@ class BodyStructureTests(unittest.TestCase):
         self.assertEqual(parsed.blocks[2]["text"], "")
         self.assertEqual(parsed.blocks[2]["contentControls"][0]["controlType"], "comboBox")
 
-        semantic = to_html5(parsed, Density.SEMANTIC)
+        semantic = to_output(parsed, Density.SEMANTIC)
         self.assertIn(
             "<control type=dropDownList label=Status tag=status lock=sdtLocked "
             "placeholder=StatusPlaceholder binding=/root/status choices=Open=open|Closed=closed>Open</control>",
@@ -112,14 +112,14 @@ class BodyStructureTests(unittest.TestCase):
         self.assertIn("<control type=checkbox checked>Yes</control>", semantic)
         self.assertIn("<control type=comboBox></control>", semantic)
 
-        structural = to_html5(parsed, Density.STRUCTURAL)
+        structural = to_output(parsed, Density.STRUCTURAL)
         self.assertIn(
             "<control type=dropDownList label=Status locked choices=Open=open|Closed=closed>Open</control>",
             structural,
         )
         self.assertNotIn("binding=/root/status", structural)
 
-        plain = to_html5(parsed, Density.PLAIN)
+        plain = to_output(parsed, Density.PLAIN)
         self.assertIn("[Control dropDownList Status choices=Open=open|Closed=closed locked: Open]", plain)
         self.assertIn("[Control date format=yyyy-MM-dd: 2026-08-19]", plain)
         self.assertIn("[Control checkbox checked: Yes]", plain)
@@ -240,30 +240,28 @@ class BodyStructureTests(unittest.TestCase):
         paragraph = parsed.blocks[0]
         self.assertEqual((paragraph["page"], paragraph["pageEnd"]), (1, 3))
         self.assertEqual([run.get("text") for run in paragraph["runs"]], ["A", "", "B", "", "C"])
-        rendered = to_html5(parsed, Density.SEMANTIC)
+        rendered = to_output(parsed, Density.SEMANTIC)
         self.assertIn("<p>A\n<page=2>\n<p>B\n<page=3>\n<p>C", rendered)
         self.assertIn("<page=2>\n<p>B", render_window(data, page=2))
         self.assertIn("<page=3>\n<p>C\n<p>D", render_window(data, page=3))
 
     def test_inline_rendered_page_breaks_without_runs(self) -> None:
         """The compact parse mode retains text page segments without run metadata."""
-        data = _make_docx(
-            "<w:p><w:r><w:t>A</w:t><w:lastRenderedPageBreak/><w:t>B</w:t></w:r></w:p>"
-        )
+        data = _make_docx("<w:p><w:r><w:t>A</w:t><w:lastRenderedPageBreak/><w:t>B</w:t></w:r></w:p>")
         parsed = DocxParser().parse(data, ParseOptions(include_runs=False))
         self.assertEqual(parsed.blocks[0]["pageSegments"], [{"page": 1, "text": "A"}, {"page": 2, "text": "B"}])
-        self.assertIn("<page=2>\n<p>B", to_html5(parsed, Density.STRUCTURAL))
+        self.assertIn("<page=2>\n<p>B", to_output(parsed, Density.STRUCTURAL))
 
     def test_trailing_inline_break_contributes_to_page_count(self) -> None:
         data = _make_docx("<w:p><w:r><w:t>A</w:t><w:lastRenderedPageBreak/></w:r></w:p>")
         parsed = DocxParser().parse(data, ParseOptions())
-        self.assertEqual(manifest(parsed)["pages"], 2)
+        self.assertEqual(build_manifest(parsed)["pages"], 2)
 
     def test_leading_inline_break_assigns_block_to_first_content_page(self) -> None:
         data = _make_docx("<w:p><w:r><w:lastRenderedPageBreak/><w:t>B</w:t></w:r></w:p>")
         parsed = DocxParser().parse(data, ParseOptions())
         self.assertEqual(parsed.blocks[0]["page"], 2)
-        self.assertIn("<page=2>\n<p>B", to_html5(parsed, Density.SEMANTIC))
+        self.assertIn("<page=2>\n<p>B", to_output(parsed, Density.SEMANTIC))
 
     def test_table_cell_paragraph_keeps_inline_pages_and_advances_body(self) -> None:
         data = _make_docx(
@@ -274,7 +272,7 @@ class BodyStructureTests(unittest.TestCase):
         parsed = DocxParser().parse(data, ParseOptions())
         self.assertEqual((parsed.blocks[0]["page"], parsed.blocks[0]["pageEnd"]), (1, 3))
         self.assertEqual(parsed.blocks[1]["page"], 3)
-        rendered = to_html5(parsed, Density.SEMANTIC)
+        rendered = to_output(parsed, Density.SEMANTIC)
         self.assertIn("<page=2>", rendered)
         self.assertIn("<page=3>\n<p>D", rendered)
 

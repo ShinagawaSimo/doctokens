@@ -43,7 +43,7 @@ _SLIDE_RELATIONSHIP_TYPE = office_relationship_type("slide")
 
 
 @dataclass
-class _ParseContext:
+class _PresentationParseContext:
     """Package-scoped collaborators shared by full and streaming parses."""
 
     relationships: RelationshipIndex
@@ -65,7 +65,7 @@ class _ParseContext:
 
 
 @dataclass(frozen=True, slots=True)
-class _SlideRef:
+class _SlideReference:
     """Validated presentation relationship for one slide entry."""
 
     relationship_id: str
@@ -73,11 +73,15 @@ class _SlideRef:
     part: str
 
 
-def _normalise_slide_navigation(slide: SlideBlock, refs: tuple[_SlideRef, ...], slide_number: int) -> None:
+def _normalize_slide_navigation(
+    slide: SlideBlock,
+    slide_references: tuple[_SlideReference, ...],
+    slide_number: int,
+) -> None:
     """Convert internal part paths and next/previous actions into useful slide anchors."""
-    target_by_part = {ref.part: f"#slide{index}" for index, ref in enumerate(refs, start=1)}
+    target_by_part = {reference.part: f"#slide{index}" for index, reference in enumerate(slide_references, start=1)}
 
-    def normalise(target: str) -> str:
+    def normalize(target: str) -> str:
         if target in target_by_part:
             return target_by_part[target]
         marker = "ppaction://hlinkshowjump?jump="
@@ -85,25 +89,25 @@ def _normalise_slide_navigation(slide: SlideBlock, refs: tuple[_SlideRef, ...], 
             return target
         jump = target.removeprefix(marker).lower()
         target_index = {
-            "nextslide": min(slide_number + 1, len(refs)),
+            "nextslide": min(slide_number + 1, len(slide_references)),
             "previousslide": max(slide_number - 1, 1),
             "firstslide": 1,
-            "lastslide": len(refs),
+            "lastslide": len(slide_references),
         }.get(jump)
         return f"#slide{target_index}" if target_index else target
 
     for shape in slide["shapes"]:
         link = shape.get("link")
         if link:
-            shape["link"] = normalise(link)
+            shape["link"] = normalize(link)
         for run in shape.get("runs", []):
             run_link = run.get("link")
             if run_link:
-                run["link"] = normalise(run_link)
+                run["link"] = normalize(run_link)
 
 
 @dataclass(slots=True)
-class _SlideParseResult:
+class _ParsedSlide:
     """Intermediate slide product shared by full and streaming parses."""
 
     slide: SlideBlock
@@ -114,35 +118,35 @@ class _SlideSequence:
 
     def __init__(
         self,
-        pkg: PackageReader,
-        context: _ParseContext,
+        package_reader: PackageReader,
+        parse_context: _PresentationParseContext,
         warnings: list[ParseWarning],
         plan: PptxParsePlan,
     ) -> None:
-        self._pkg = pkg
-        self._context = context
+        self._package_reader = package_reader
+        self._parse_context = parse_context
         self._warnings = warnings
         self._refs = tuple(self._collect_refs())
         self._parser = SlideParser(
             warnings,
-            context.asset_lookup,
-            context.chart_lookup,
-            context.smartart_lookup,
-            context.layout_lookup,
-            context.resolver,
-            context.slide_size,
-            context.theme,
-            context.hyperlinks,
+            parse_context.asset_lookup,
+            parse_context.chart_lookup,
+            parse_context.smartart_lookup,
+            parse_context.layout_lookup,
+            parse_context.resolver,
+            parse_context.slide_size,
+            parse_context.theme,
+            parse_context.hyperlinks,
             plan,
         )
 
     @property
-    def refs(self) -> tuple[_SlideRef, ...]:
+    def refs(self) -> tuple[_SlideReference, ...]:
         return self._refs
 
-    def _collect_refs(self) -> list[_SlideRef]:
-        sld_id_lst = first_child(self._context.presentation_root, "p", "sldIdLst")
-        if sld_id_lst is None:
+    def _collect_refs(self) -> list[_SlideReference]:
+        slide_id_list = first_child(self._parse_context.presentation_root, "p", "sldIdLst")
+        if slide_id_list is None:
             self._warnings.append(
                 ParseWarning(
                     code="PRESENTATION_MISSING_SLDIDLST",
@@ -151,12 +155,12 @@ class _SlideSequence:
                 )
             )
             return []
-        refs: list[_SlideRef] = []
-        for sld_id_el in sld_id_lst:
-            if local_name(sld_id_el.tag) != "sldId":
+        refs: list[_SlideReference] = []
+        for slide_id_element in slide_id_list:
+            if local_name(slide_id_element.tag) != "sldId":
                 continue
-            rid = attr(sld_id_el, "r", "id")
-            if rid is None:
+            relationship_id = attr(slide_id_element, "r", "id")
+            if relationship_id is None:
                 self._warnings.append(
                     ParseWarning(
                         code="SLIDE_MISSING_RID",
@@ -165,18 +169,18 @@ class _SlideSequence:
                     )
                 )
                 continue
-            relationship = self._context.relationships.get(PRESENTATION_PART, rid)
+            relationship = self._parse_context.relationships.get(PRESENTATION_PART, relationship_id)
             if relationship is None or relationship.resolved_target is None:
                 self._warnings.append(
                     ParseWarning(
                         code="SLIDE_REL_UNRESOLVED",
-                        message=f"Unresolved slide relationship {rid}",
+                        message=f"Unresolved slide relationship {relationship_id}",
                         locator=PRESENTATION_PART,
                     )
                 )
                 continue
             part = relationship.resolved_target
-            if not self._pkg.exists(part):
+            if not self._package_reader.exists(part):
                 self._warnings.append(
                     ParseWarning(
                         code="SLIDE_PART_MISSING",
@@ -185,20 +189,20 @@ class _SlideSequence:
                     )
                 )
                 continue
-            refs.append(_SlideRef(rid, sld_id_el.get("id", ""), part))
+            refs.append(_SlideReference(relationship_id, slide_id_element.get("id", ""), part))
         return refs
 
-    def iter_results(self, *, start_slide: int = 1) -> Generator[_SlideParseResult, None, None]:
+    def iter_results(self, *, start_slide: int = 1) -> Generator[_ParsedSlide, None, None]:
         slide_number = 0
         for ref in self._refs:
             try:
-                root = self._read_xml(ref.part)
+                slide_root = self._read_slide_xml(ref.part)
             except ET.ParseError as exc:
                 self._warnings.append(
                     ParseWarning(code="SLIDE_XML_INVALID", message=f"Invalid slide XML: {exc}", locator=ref.part)
                 )
                 continue
-            hidden, shapes, background = self._parser.parse_slide(root, ref.part)
+            hidden, shapes, background = self._parser.parse_slide(slide_root, ref.part)
             slide_number += 1
             slide = SlideBlock(
                 id=f"slide{slide_number}",
@@ -208,23 +212,23 @@ class _SlideSequence:
                 sldId=ref.slide_id,
                 hidden=hidden,
                 shapes=shapes,
-                notes=self._context.notes.notes_for(ref.part),
+                notes=self._parse_context.notes.notes_for(ref.part),
                 background=background,
                 commentRefs=[],
-                section=self._context.section_by_slide_id.get(ref.slide_id),
+                section=self._parse_context.section_by_slide_id.get(ref.slide_id),
             )
-            _normalise_slide_navigation(slide, self._refs, slide_number)
+            _normalize_slide_navigation(slide, self._refs, slide_number)
             if slide_number >= start_slide:
-                yield _SlideParseResult(slide)
+                yield _ParsedSlide(slide)
 
-    def _read_xml(self, part: str) -> ET.Element:
-        return self._pkg.read_xml(part)
+    def _read_slide_xml(self, part: str) -> ET.Element:
+        return self._package_reader.read_xml(part)
 
 
 class _CommentAttachmentPlan:
     """Group raw comments by validated slide locator before slide parsing."""
 
-    def __init__(self, comments: list[CommentItem], refs: tuple[_SlideRef, ...]) -> None:
+    def __init__(self, comments: list[CommentItem], refs: tuple[_SlideReference, ...]) -> None:
         self.by_slide_part: dict[str, list[CommentItem]] = {}
         self.unresolved: list[CommentItem] = []
         by_locator: dict[str, str] = {}
@@ -267,45 +271,52 @@ class PptxParser:
         resolved_plan = plan or PptxParsePlan.session()
         metrics = MetricsRecorder()
         warnings: list[ParseWarning] = []
-        with PackageReader(source, options) as pkg:
-            pkg.validate()
-            context = self._build_context(pkg, warnings, resolved_plan)
-            sequence = _SlideSequence(pkg, context, warnings, resolved_plan)
-            slides = [result.slide for result in sequence.iter_results()]
-            charts = context.objects.loaded_charts
-            smartarts = context.objects.loaded_smartarts
-            _CommentAttachmentPlan(context.comments, sequence.refs).attach_all(slides, context.slide_size)
-            ocr_results = self._run_ocr(pkg, context.assets, slides, options) if resolved_plan.needs(PptxFeature.OCR) else {}
-        parsed = ParsedPresentation(
+        with PackageReader(source, options) as package_reader:
+            package_reader.validate()
+            parse_context = self._build_parse_context(package_reader, warnings, resolved_plan)
+            slide_sequence = _SlideSequence(package_reader, parse_context, warnings, resolved_plan)
+            slides = [slide_result.slide for slide_result in slide_sequence.iter_results()]
+            charts = parse_context.objects.loaded_charts
+            smartarts = parse_context.objects.loaded_smartarts
+            _CommentAttachmentPlan(parse_context.comments, slide_sequence.refs).attach_all(
+                slides,
+                parse_context.slide_size,
+            )
+            ocr_results = (
+                self._run_ocr(package_reader, parse_context.assets, slides, options)
+                if resolved_plan.needs(PptxFeature.OCR)
+                else {}
+            )
+        parsed_presentation = ParsedPresentation(
             slides=slides,
-            slide_size=context.slide_size,
-            assets=context.assets,
+            slide_size=parse_context.slide_size,
+            assets=parse_context.assets,
             charts=charts,
             smartarts=smartarts,
-            theme=context.theme,
-            comments=context.comments,
-            sections=context.sections,
+            theme=parse_context.theme,
+            comments=parse_context.comments,
+            sections=parse_context.sections,
             warnings=warnings,
             ocr_results=ocr_results,
         )
-        record_metrics(parsed, metrics)
-        parsed.metrics = metrics.snapshot()
-        parsed.report = ParseReport(
+        record_metrics(parsed_presentation, metrics)
+        parsed_presentation.metrics = metrics.snapshot()
+        parsed_presentation.report = ParseReport(
             "pptx",
             1,
             {
-                "slideCount": len(parsed.slides),
-                "shapeCount": sum(len(slide["shapes"]) for slide in parsed.slides),
-                "imageCount": sum(1 for asset in parsed.assets if asset.get("type") == "image"),
-                "mediaCount": sum(1 for asset in parsed.assets if asset.get("type") == "media"),
-                "chartCount": len(parsed.charts),
-                "smartartCount": len(parsed.smartarts),
-                "commentCount": len(parsed.comments),
+                "slideCount": len(parsed_presentation.slides),
+                "shapeCount": sum(len(slide["shapes"]) for slide in parsed_presentation.slides),
+                "imageCount": sum(1 for asset in parsed_presentation.assets if asset.get("type") == "image"),
+                "mediaCount": sum(1 for asset in parsed_presentation.assets if asset.get("type") == "media"),
+                "chartCount": len(parsed_presentation.charts),
+                "smartartCount": len(parsed_presentation.smartarts),
+                "commentCount": len(parsed_presentation.comments),
             },
-            tuple(parsed.warnings),
-            parsed.metrics,
+            tuple(parsed_presentation.warnings),
+            parsed_presentation.metrics,
         )
-        return parsed
+        return parsed_presentation
 
     def iter_slides(
         self,
@@ -322,42 +333,47 @@ class PptxParser:
         contract.
         """
         warnings: list[ParseWarning] = []
-        with PackageReader(source, options) as pkg:
-            pkg.validate()
+        with PackageReader(source, options) as package_reader:
+            package_reader.validate()
             plan = PptxParsePlan.session()
-            context = self._build_context(pkg, warnings, plan)
-            sequence = _SlideSequence(pkg, context, warnings, plan)
-            comment_plan = _CommentAttachmentPlan(context.comments, sequence.refs)
-            for result in sequence.iter_results(start_slide=start_slide):
-                slide = result.slide
-                parsed = ParsedPresentation(
+            parse_context = self._build_parse_context(package_reader, warnings, plan)
+            slide_sequence = _SlideSequence(package_reader, parse_context, warnings, plan)
+            comment_plan = _CommentAttachmentPlan(parse_context.comments, slide_sequence.refs)
+            for parsed_slide in slide_sequence.iter_results(start_slide=start_slide):
+                slide = parsed_slide.slide
+                parsed_presentation = ParsedPresentation(
                     slides=[slide],
-                    slide_size=context.slide_size,
-                    assets=context.assets,
-                    charts=context.objects.loaded_charts,
-                    smartarts=context.objects.loaded_smartarts,
-                    theme=context.theme,
-                    comments=context.comments,
-                    sections=context.sections,
+                    slide_size=parse_context.slide_size,
+                    assets=parse_context.assets,
+                    charts=parse_context.objects.loaded_charts,
+                    smartarts=parse_context.objects.loaded_smartarts,
+                    theme=parse_context.theme,
+                    comments=parse_context.comments,
+                    sections=parse_context.sections,
                     warnings=warnings,
                 )
                 if options.ocr is not None:
-                    parsed.ocr_results = self._run_ocr(pkg, context.assets, [slide], options)
-                comment_plan.attach(slide, context.slide_size)
-                yield slide, parsed
+                    parsed_presentation.ocr_results = self._run_ocr(
+                        package_reader,
+                        parse_context.assets,
+                        [slide],
+                        options,
+                    )
+                comment_plan.attach(slide, parse_context.slide_size)
+                yield slide, parsed_presentation
 
-    def _build_context(
+    def _build_parse_context(
         self,
-        pkg: PackageReader,
+        package_reader: PackageReader,
         warnings: list[ParseWarning],
         plan: PptxParsePlan,
-    ) -> _ParseContext:
-        relationships = RelationshipIndex.from_records(pkg.read_all_relationships())
-        assets, asset_lookup = AssetExtractor(pkg, relationships, warnings).extract()
-        objects = EmbeddedObjectExtractor(pkg, relationships, warnings)
+    ) -> _PresentationParseContext:
+        relationships = RelationshipIndex.from_records(package_reader.read_all_relationships())
+        assets, asset_lookup = AssetExtractor(package_reader, relationships, warnings).extract()
+        objects = EmbeddedObjectExtractor(package_reader, relationships, warnings)
         chart_lookup = objects.lazy_charts()
         smartart_lookup, layout_lookup = objects.lazy_smartarts()
-        theme_parser = ThemeParser(pkg, relationships, warnings) if plan.needs(PptxFeature.THEME_AND_LAYOUT) else None
+        theme_parser = ThemeParser(package_reader, relationships, warnings) if plan.needs(PptxFeature.THEME_AND_LAYOUT) else None
         theme = theme_parser.parse() if theme_parser is not None else {}
         hyperlinks = {
             (record.source_part, record.id): record.resolved_target
@@ -365,9 +381,9 @@ class PptxParser:
             if record.type in {HYPERLINK_RELATIONSHIP_TYPE, _SLIDE_RELATIONSHIP_TYPE}
             if record.resolved_target is not None
         }
-        presentation_root = self._read_xml(pkg, PRESENTATION_PART)
+        presentation_root = self._read_xml_part(package_reader, PRESENTATION_PART)
         sections, section_by_slide_id = self._parse_sections(presentation_root)
-        return _ParseContext(
+        return _PresentationParseContext(
             relationships=relationships,
             assets=assets,
             asset_lookup=asset_lookup,
@@ -378,12 +394,12 @@ class PptxParser:
             theme=theme,
             hyperlinks=hyperlinks,
             resolver=(
-                LayoutMasterResolver(pkg, relationships, warnings, theme, theme_parser=theme_parser)
+                LayoutMasterResolver(package_reader, relationships, warnings, theme, theme_parser=theme_parser)
                 if plan.needs(PptxFeature.THEME_AND_LAYOUT)
                 else None
             ),
-            notes=NotesParser(pkg, relationships, warnings),
-            comments=CommentsParser(pkg, relationships, warnings).parse(),
+            notes=NotesParser(package_reader, relationships, warnings),
+            comments=CommentsParser(package_reader, relationships, warnings).parse(),
             presentation_root=presentation_root,
             slide_size=self._parse_slide_size(presentation_root, warnings),
             sections=sections,
@@ -433,7 +449,7 @@ class PptxParser:
 
     @staticmethod
     def _run_ocr(
-        pkg: PackageReader,
+        package_reader: PackageReader,
         assets: list[ImageAsset],
         slides: list[SlideBlock],
         options: ParseOptions,
@@ -483,8 +499,8 @@ class PptxParser:
                 max_workers=options.ocr_workers,
                 timeout=options.ocr_timeout,
             )
-            for primary_id, result in batch_results.items():
-                record = result.to_record()
+            for primary_id, ocr_result in batch_results.items():
+                record = ocr_result.to_record()
                 for asset_id in aliases[primary_id]:
                     results[asset_id] = cast(OcrStoredResult, dict(record))
             pending.clear()
@@ -493,7 +509,7 @@ class PptxParser:
 
         for zip_path, asset_ids in asset_ids_by_path.items():
             try:
-                with pkg.open_entry(zip_path) as stream:
+                with package_reader.open_entry(zip_path) as stream:
                     image_bytes = stream.read()
             except Exception as exc:
                 record = OcrResult.error("image_read_error", str(exc)).to_record()
@@ -511,8 +527,8 @@ class PptxParser:
         return results
 
     @staticmethod
-    def _read_xml(pkg: PackageReader, part: str) -> ET.Element:
-        return pkg.read_xml(part)
+    def _read_xml_part(package_reader: PackageReader, part: str) -> ET.Element:
+        return package_reader.read_xml(part)
 
     def _parse_slide_size(self, presentation_root: ET.Element, warnings: list[ParseWarning]) -> tuple[int, int] | None:
         node = first_child(presentation_root, "p", "sldSz")

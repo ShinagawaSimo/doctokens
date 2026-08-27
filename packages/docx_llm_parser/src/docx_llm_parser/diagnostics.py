@@ -6,33 +6,33 @@ from .core.metrics import MetricsRecorder
 from .core.models import Block, ParsedDocument
 
 
-def record_content_metrics(parsed: ParsedDocument, metrics: MetricsRecorder) -> None:
+def record_content_metrics(parsed_document: ParsedDocument, metrics: MetricsRecorder) -> None:
     """Record node counts used for output budgeting and performance checks."""
-    stats = _compute_block_stats(parsed.blocks)
-    metrics.set_counter("blockCount", len(parsed.blocks))
-    metrics.set_counter("paragraphCount", stats["paragraphCount"])
-    metrics.set_counter("headingCount", stats["headingCount"])
-    metrics.set_counter("tableCount", stats["tableCount"])
-    metrics.set_counter("tableCellCount", stats["tableCellCount"])
-    metrics.set_counter("runCount", stats["runCount"])
-    metrics.set_counter("maxTableRows", stats["maxTableRows"])
-    metrics.set_counter("maxTableCols", stats["maxTableCols"])
-    metrics.set_counter("relationshipCount", len(parsed.relationships))
-    metrics.set_counter("styleCount", len(parsed.styles))
-    metrics.set_counter("assetCount", len(parsed.assets))
-    metrics.set_counter("chartCount", len(parsed.charts))
-    metrics.set_counter("smartartCount", len(parsed.smartarts))
-    metrics.set_counter("ocrResultCount", len(parsed.ocr_results))
+    block_stats = _compute_block_stats(parsed_document.blocks)
+    metrics.set_counter("blockCount", len(parsed_document.blocks))
+    metrics.set_counter("paragraphCount", block_stats["paragraphCount"])
+    metrics.set_counter("headingCount", block_stats["headingCount"])
+    metrics.set_counter("tableCount", block_stats["tableCount"])
+    metrics.set_counter("tableCellCount", block_stats["tableCellCount"])
+    metrics.set_counter("runCount", block_stats["runCount"])
+    metrics.set_counter("maxTableRows", block_stats["maxTableRows"])
+    metrics.set_counter("maxTableCols", block_stats["maxTableCols"])
+    metrics.set_counter("relationshipCount", len(parsed_document.relationships))
+    metrics.set_counter("styleCount", len(parsed_document.styles))
+    metrics.set_counter("assetCount", len(parsed_document.assets))
+    metrics.set_counter("chartCount", len(parsed_document.charts))
+    metrics.set_counter("smartartCount", len(parsed_document.smartarts))
+    metrics.set_counter("ocrResultCount", len(parsed_document.ocr_results))
     metrics.set_counter(
         "ocrErrorCount",
-        sum(1 for value in parsed.ocr_results.values() if isinstance(value, dict) and value.get("status") == "error"),
+        sum(1 for value in parsed_document.ocr_results.values() if isinstance(value, dict) and value.get("status") == "error"),
     )
-    metrics.set_counter("headerCount", len(parsed.headers))
-    metrics.set_counter("footerCount", len(parsed.footers))
-    metrics.set_counter("footnoteCount", len(parsed.footnotes))
-    metrics.set_counter("endnoteCount", len(parsed.endnotes))
-    metrics.set_counter("commentCount", len(parsed.comments))
-    metrics.set_counter("warningCount", len(parsed.warnings))
+    metrics.set_counter("headerCount", len(parsed_document.headers))
+    metrics.set_counter("footerCount", len(parsed_document.footers))
+    metrics.set_counter("footnoteCount", len(parsed_document.footnotes))
+    metrics.set_counter("endnoteCount", len(parsed_document.endnotes))
+    metrics.set_counter("commentCount", len(parsed_document.comments))
+    metrics.set_counter("warningCount", len(parsed_document.warnings))
 
 
 def _compute_block_stats(blocks: list[Block]) -> dict[str, int]:

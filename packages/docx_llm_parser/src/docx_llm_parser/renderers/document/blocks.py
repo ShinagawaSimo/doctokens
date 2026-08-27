@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Set
-from html import escape
+from html import escape as escape_text
 
 from ...core.models import Block, ContentControl, OcrStoredResult
 from ..common.controls import control_attrs, wrap_control
@@ -46,7 +46,7 @@ def _anchor_attrs(block: Block, used_anchors: Set[str] | None) -> str:
     anchor = next((item for item in anchors if used_anchors is None or item in used_anchors), "")
     if not anchor:
         return ""
-    return f" anchor={escape(anchor, quote=True)}"
+    return f" anchor={escape_text(anchor, quote=True)}"
 
 
 def _semantic_block_attrs(block: Block, density: str) -> str:
@@ -55,12 +55,12 @@ def _semantic_block_attrs(block: Block, density: str) -> str:
         return ""
     attrs: list[str] = []
     if (alignment := block.get("alignment")) in {"center", "right", "distribute"}:
-        attrs.append(f"align={escape(alignment, quote=True)}")
+        attrs.append(f"align={escape_text(alignment, quote=True)}")
     for side, border in block.get("borders", {}).items():
         value = border.get("style", "single")
         if color := border.get("color"):
             value += f":{color}"
-        attrs.append(f"border-{side}={escape(value, quote=True)}")
+        attrs.append(f"border-{side}={escape_text(value, quote=True)}")
     if block.get("numbering"):
         attrs.append("numbering")
     return "".join(f" {item}" for item in attrs)

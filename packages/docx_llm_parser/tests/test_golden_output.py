@@ -30,6 +30,7 @@ class GoldenOutputTests(unittest.TestCase):
         actual = _render_density(Density.PLAIN)
         assert_text_matches_golden(actual, GOLDEN_DIR / "plain.txt")
 
+
 def _render_density(density: Density) -> Path:
     docx_path = source_path("docx", "golden-output", "rich.docx")
     output_name = {

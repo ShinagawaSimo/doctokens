@@ -2,44 +2,44 @@
 
 from __future__ import annotations
 
-from html import escape
+from html import escape as escape_text
 
 from ...core.models import InlineObject, SmartArt
 
 
-def smartart_to_html5(obj: InlineObject) -> str:
+def smartart_to_output(inline_object: InlineObject) -> str:
     """Output a SmartArt summary: show all node text; the full structure is available via get_resource."""
-    smartart_id = obj.get("id", "?")
-    smartart_type = obj.get("layoutType", "")
-    node_count = obj.get("nodeCount", 0)
-    link_count = obj.get("linkCount", 0)
+    smartart_id = inline_object.get("id", "?")
+    smartart_type = inline_object.get("layoutType", "")
+    node_count = inline_object.get("nodeCount", 0)
+    link_count = inline_object.get("linkCount", 0)
 
     attrs = f"id={smartart_id} type={smartart_type} nodes={node_count} links={link_count} truncated"
 
-    nodes = obj.get("nodes") or []
-    all_text = " ".join(n.get("text", "") for n in nodes)
-    return f"<smartart {attrs}>{escape(all_text)}\n"
+    nodes = inline_object.get("nodes") or []
+    all_text = " ".join(node.get("text", "") for node in nodes)
+    return f"<smartart {attrs}>{escape_text(all_text)}\n"
 
 
 def render_smartart_resource(s: SmartArt) -> str:
-    """Render SmartArt as an HTML string for get_resource."""
-    sa_id = s.get("id", "?")
-    attrs = f"id={sa_id}"
+    """Render SmartArt as a self-defined output string for get_resource."""
+    smartart_id = s.get("id", "?")
+    attrs = f"id={smartart_id}"
     if s.get("layoutType"):
         attrs += f" type={s['layoutType']}"
     attrs += f" nodes={s.get('nodeCount', 0)} links={s.get('linkCount', 0)}"
-    parts = [f"<smartart {attrs}>"]
+    output_parts = [f"<smartart {attrs}>"]
 
-    for i, n in enumerate(s.get("nodes") or [], start=1):
-        n_attrs = f"index={i} text={escape(n.get('text', ''), quote=True)}"
-        if n.get("kind"):
-            n_attrs += f" kind={n['kind']}"
-        parts.append(f"\n<node {n_attrs}/>")
+    for node_index, node in enumerate(s.get("nodes") or [], start=1):
+        node_attrs = f"index={node_index} text={escape_text(node.get('text', ''), quote=True)}"
+        if node.get("kind"):
+            node_attrs += f" kind={node['kind']}"
+        output_parts.append(f"\n<node {node_attrs}/>")
 
-    for link in s.get("links") or []:
-        l_attrs = f"from={link['from']} to={link['to']}"
-        if link.get("kind"):
-            l_attrs += f" kind={link['kind']}"
-        parts.append(f"\n<link {l_attrs}/>")
+    for connection in s.get("links") or []:
+        connection_attrs = f"from={connection['from']} to={connection['to']}"
+        if connection.get("kind"):
+            connection_attrs += f" kind={connection['kind']}"
+        output_parts.append(f"\n<link {connection_attrs}/>")
 
-    return "".join(parts)
+    return "".join(output_parts)

@@ -27,7 +27,7 @@ class HeadingStyleFileTests(unittest.TestCase):
         parsed = DocxParser().parse(FIXTURE, ParseOptions())
         self.assertEqual([block["level"] for block in parsed.blocks[5:9]], [6, 7, 8, 9])
 
-    def test_rendered_html_keeps_non_heading_styles_as_paragraphs(self) -> None:
+    def test_rendered_output_keeps_non_heading_styles_as_paragraphs(self) -> None:
         semantic = parse_docx(FIXTURE, density=Density.SEMANTIC)
         self.assertIn("<h6><b><color value=#2F5496>Title 6</color>", semantic)
         self.assertIn("<h7><b><color value=#595959>Title 7</color>", semantic)

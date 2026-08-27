@@ -1,4 +1,4 @@
-"""Metrics recording logic for the HTML5 renderers.
+"""Metrics recording logic for the output renderers.
 
 Per-stage timing and output size are recorded here to avoid duplication
 across rendering paths."""
@@ -11,14 +11,14 @@ from ...core.models import ParsedDocument
 
 
 def record_render_metrics(
-    parsed: ParsedDocument,
+    parsed_document: ParsedDocument,
     output_path: Path,
     output_chars: int,
     elapsed_ms: float,
     stage_name: str = "render",
 ) -> None:
-    """Append the final render stage metrics to parsed.metrics."""
-    metrics = parsed.metrics
+    """Append the final output stage metrics to parsed_document.metrics."""
+    metrics = parsed_document.metrics
     if "stagesMs" not in metrics:
         metrics["stagesMs"] = {}
     if "counters" not in metrics:

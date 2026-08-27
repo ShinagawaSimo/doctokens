@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from html import escape
+from html import escape as escape_text
 
 from .markup import AttributeBuilder
 
@@ -25,7 +25,7 @@ def render_ocr_result(asset_id: str, value: object) -> str | None:
         status = "error"
     attrs = AttributeBuilder().add("id", asset_id)
     if status == "success" and text:
-        return f"<ocr-text{attrs.render()}>{escape(text)}"
+        return f"<ocr-text{attrs.render()}>{escape_text(text)}"
     if status == "empty":
         return f"<ocr-text{attrs.flag('empty').render()}>"
     return f"<ocr-text{attrs.flag('error').render()}>"

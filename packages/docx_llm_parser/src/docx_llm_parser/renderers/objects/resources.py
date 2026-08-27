@@ -14,7 +14,7 @@ from .smartarts import render_smartart_resource
 
 
 def render_resource(
-    parsed: ParsedDocument,
+    parsed_document: ParsedDocument,
     resource_type: ResourceType | str,
     resource_id: str | None = None,
     *,
@@ -23,7 +23,7 @@ def render_resource(
     aggregate: str | None = None,
     aggregate_column: str | None = None,
 ) -> list[str]:
-    """Render a resource as an HTML string for LLM consumption."""
+    """Render a resource as self-defined output for LLM consumption."""
     resolved_type = ResourceType.parse(resource_type)
     if resolved_type.is_plural and resource_id is not None:
         raise ValueError("resource_id is only valid with a singular resource type")
@@ -31,21 +31,21 @@ def render_resource(
         raise ValueError("resource_id is required with a singular resource type")
 
     if resolved_type in {ResourceType.IMAGES, ResourceType.IMAGE}:
-        return _render_images(parsed, resource_id)
+        return _render_images(parsed_document, resource_id)
     if resolved_type in {ResourceType.CHARTS, ResourceType.CHART}:
-        return _render_charts(parsed, resource_id)
+        return _render_charts(parsed_document, resource_id)
     if resolved_type in {ResourceType.SMARTARTS, ResourceType.SMARTART}:
-        return _render_smartarts(parsed, resource_id)
+        return _render_smartarts(parsed_document, resource_id)
 
     if resolved_type is ResourceType.TABLES:
         return [
             _render_table_resource(table_id, segments, rows, columns, aggregate, aggregate_column)
-            for table_id, segments in table_groups(parsed).items()
+            for table_id, segments in table_groups(parsed_document).items()
         ]
 
     if resolved_type is ResourceType.TABLE:
         assert resource_id is not None
-        segments = table_groups(parsed).get(resource_id)
+        segments = table_groups(parsed_document).get(resource_id)
         if segments is None:
             return []
         return [
@@ -62,25 +62,25 @@ def render_resource(
     raise AssertionError("validated resource type was not handled")
 
 
-def table_groups(parsed: ParsedDocument) -> dict[str, list[TableBlock]]:
+def table_groups(parsed_document: ParsedDocument) -> dict[str, list[TableBlock]]:
     """Group top-level table segments by their stable logical table ID."""
     groups: dict[str, list[TableBlock]] = {}
-    for block in parsed.blocks:
+    for block in parsed_document.blocks:
         if block["type"] != "table":
             continue
         groups.setdefault(block["tableId"], []).append(block)
     return groups
 
 
-def _render_images(parsed: ParsedDocument, resource_id: str | None) -> list[str]:
-    source_path = parsed.metadata.get("sourcePath")
-    ocr_results = getattr(parsed, "ocr_results", None) or {}
+def _render_images(parsed_document: ParsedDocument, resource_id: str | None) -> list[str]:
+    source_path = parsed_document.metadata.get("sourcePath")
+    ocr_results = getattr(parsed_document, "ocr_results", None) or {}
     archive: zipfile.ZipFile | None = None
     if isinstance(source_path, str) and source_path:
         archive = zipfile.ZipFile(source_path, "r")
     resources: list[str] = []
     try:
-        for asset in parsed.assets:
+        for asset in parsed_document.assets:
             if resource_id and asset["id"] != resource_id:
                 continue
             attrs = f"id={asset['id']}"
@@ -88,36 +88,36 @@ def _render_images(parsed: ParsedDocument, resource_id: str | None) -> list[str]
                 attrs += f" href={asset['href']}"
             if asset.get("contentType"):
                 attrs += f" contentType={asset['contentType']}"
-            parts = [f"<image {attrs}>"]
+            output_parts = [f"<image {attrs}>"]
             zip_path = asset.get("zipPath")
             if zip_path and archive is not None:
-                parts.append(base64.b64encode(archive.read(zip_path)).decode())
+                output_parts.append(base64.b64encode(archive.read(zip_path)).decode())
             rendered_ocr = render_ocr_result(asset["id"], ocr_results.get(asset["id"]))
             if rendered_ocr is not None:
-                parts.append(f"\n{rendered_ocr}")
-            resources.append("".join(parts))
+                output_parts.append(f"\n{rendered_ocr}")
+            resources.append("".join(output_parts))
     finally:
         if archive is not None:
             archive.close()
     return resources
 
 
-def _render_charts(parsed: ParsedDocument, resource_id: str | None) -> list[str]:
-    result: list[str] = []
-    for chart in parsed.charts:
+def _render_charts(parsed_document: ParsedDocument, resource_id: str | None) -> list[str]:
+    rendered_resources: list[str] = []
+    for chart in parsed_document.charts:
         if resource_id and chart.get("id") != resource_id:
             continue
-        result.append(render_chart_resource(chart))
-    return result
+        rendered_resources.append(render_chart_resource(chart))
+    return rendered_resources
 
 
-def _render_smartarts(parsed: ParsedDocument, resource_id: str | None) -> list[str]:
-    result: list[str] = []
-    for smartart in parsed.smartarts:
+def _render_smartarts(parsed_document: ParsedDocument, resource_id: str | None) -> list[str]:
+    rendered_resources: list[str] = []
+    for smartart in parsed_document.smartarts:
         if resource_id and smartart.get("id") != resource_id:
             continue
-        result.append(render_smartart_resource(smartart))
-    return result
+        rendered_resources.append(render_smartart_resource(smartart))
+    return rendered_resources
 
 
 def _render_table_resource(
@@ -129,25 +129,25 @@ def _render_table_resource(
     aggregate_column: str | None,
 ) -> str:
     all_rows = [row for segment in segments for row in segment["rows"]]
-    column_count = max((seg["columnCount"] for seg in segments), default=0)
+    column_count = max((segment["columnCount"] for segment in segments), default=0)
     attrs = f"id={table_id} rows={len(all_rows)} cols={column_count}"
-    parts = [f"<table {attrs}>"]
+    output_parts = [f"<table {attrs}>"]
 
     if aggregate is not None:
         aggregate_result = _aggregate_rows(all_rows, aggregate, aggregate_column or "")
         op = aggregate_result.get("aggregate", "")
         col = aggregate_result.get("aggregate_column", "")
         val = aggregate_result.get("aggregate_value", "")
-        parts.append(f"\n<aggregate op={op} column={col}>{val}")
+        output_parts.append(f"\n<aggregate op={op} column={col}>{val}")
     else:
         filtered = _filter_and_slice_rows(all_rows, rows, columns)
         for row in filtered:
             cells = "|".join(cell.get("text", "") for cell in row["cells"])
             if row.get("isHeader"):
-                parts.append(f"\n<tr isHeader>{cells}")
+                output_parts.append(f"\n<tr isHeader>{cells}")
             else:
-                parts.append(f"\n<tr>{cells}")
-    return "".join(parts)
+                output_parts.append(f"\n<tr>{cells}")
+    return "".join(output_parts)
 
 
 def _filter_and_slice_rows(
@@ -187,14 +187,14 @@ def _filter_columns(rows: list[TableRow], column_names: list[str]) -> list[Table
                 break
     keep_indices.sort()
 
-    result: list[TableRow] = []
+    filtered_rows: list[TableRow] = []
     for row in rows:
-        filtered = [row["cells"][i] for i in keep_indices if i < len(row["cells"])]
-        filtered_row: TableRow = {"rowIndex": row["rowIndex"], "cells": filtered}
+        selected_cells = [row["cells"][index] for index in keep_indices if index < len(row["cells"])]
+        filtered_row: TableRow = {"rowIndex": row["rowIndex"], "cells": selected_cells}
         if row.get("isHeader"):
             filtered_row["isHeader"] = True
-        result.append(filtered_row)
-    return result
+        filtered_rows.append(filtered_row)
+    return filtered_rows
 
 
 _AGGREGATORS: dict[str, Callable[[list[float]], float | int]] = {

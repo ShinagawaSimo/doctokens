@@ -83,11 +83,11 @@ class MinimalParseTests(unittest.TestCase):
             },
         )
 
-        html = parse_xlsx(data)
-        self.assertIn("Widget", html)
-        self.assertIn("99", html)
-        self.assertIn("sheet name=Sheet1", html)
-        self.assertIn("<grid ref=A1:B2>", html)
+        output = parse_xlsx(data)
+        self.assertIn("Widget", output)
+        self.assertIn("99", output)
+        self.assertIn("sheet name=Sheet1", output)
+        self.assertIn("<grid ref=A1:B2>", output)
 
     def test_loaded_facade_accepts_package_options_and_exposes_report(self) -> None:
         data = _make_xlsx(
@@ -122,9 +122,9 @@ class MinimalParseTests(unittest.TestCase):
                 "xl/worksheets/sheet1.xml": _sheet_xml([]),
             },
         )
-        html = parse_xlsx(data)
-        self.assertIn("<sheet name=Empty>", html)
-        self.assertNotIn("<grid", html)
+        output = parse_xlsx(data)
+        self.assertIn("<sheet name=Empty>", output)
+        self.assertNotIn("<grid", output)
 
     def test_boolean_and_error_cells(self) -> None:
         """Boolean and error cell types."""
@@ -139,9 +139,9 @@ class MinimalParseTests(unittest.TestCase):
                 ),
             },
         )
-        html = parse_xlsx(data)
-        self.assertIn("true", html)
-        self.assertIn("#N/A", html)
+        output = parse_xlsx(data)
+        self.assertIn("true", output)
+        self.assertIn("#N/A", output)
 
 
 if __name__ == "__main__":

@@ -92,8 +92,8 @@ class ImageTests(unittest.TestCase):
                 ),
             },
         )
-        html = parse_xlsx(data, density="structural")
-        self.assertIn("<image id=image1 ref=A1/>", html)
+        output = parse_xlsx(data, density="structural")
+        self.assertIn("<image id=image1 ref=A1/>", output)
 
 
 class ChartTests(unittest.TestCase):
@@ -261,8 +261,8 @@ class PivotTableTests(unittest.TestCase):
                 ),
             },
         )
-        html = parse_xlsx(data, density="structural")
-        self.assertIn("<pivotTable id=pivot1", html)
+        output = parse_xlsx(data, density="structural")
+        self.assertIn("<pivotTable id=pivot1", output)
 
 
 if __name__ == "__main__":

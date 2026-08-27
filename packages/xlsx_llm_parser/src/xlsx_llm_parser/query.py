@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from html import escape
+from html import escape as escape_text
 from typing import TypedDict
 
 from ._utils import col_letter
@@ -40,7 +40,7 @@ _ORDER_DIRECTIONS = {"asc", "desc"}
 
 
 def query_data(
-    wb: ParsedWorkbook,
+    parsed_workbook: ParsedWorkbook,
     *,
     table_id: str | None = None,
     sheet: str | None = None,
@@ -53,44 +53,47 @@ def query_data(
     order_by: list[OrderSpec] | None = None,
     limit: int | None = None,
 ) -> str:
-    """Query a declared table or explicit range and return lightweight table HTML."""
-    source_sheet, columns, bounds, skip_rows_through = _resolve_query_source(
-        wb,
+    """Query a declared table or explicit range and return tabular output."""
+    query_sheet, query_columns, range_bounds, header_row_to_skip = _resolve_query_source(
+        parsed_workbook,
         table_id=table_id,
         sheet=sheet,
         range_spec=range_spec,
         header_row=header_row,
     )
-    start_col, start_row, end_col, end_row = bounds
-    source_rows = _rows_in_range(source_sheet, start_col, start_row, end_col, end_row)
-    columns = _columns_from_optional_header(source_rows, columns, header_row, start_col, end_col)
-    rows = _materialize_rows(source_rows, columns, start_col, end_col, skip_rows_through)
+    start_col, start_row, end_col, end_row = range_bounds
+    query_rows = _rows_in_range(query_sheet, start_col, start_row, end_col, end_row)
+    query_columns = _columns_from_optional_header(query_rows, query_columns, header_row, start_col, end_col)
+    result_rows = _materialize_rows(query_rows, query_columns, start_col, end_col, header_row_to_skip)
 
     if where:
-        rows = _apply_where(rows, _resolve_where_conditions(where, columns))
+        result_rows = _apply_where(result_rows, _resolve_where_conditions(where, query_columns))
 
     if group_by and aggregates:
-        resolved_group_by = [_resolve_column_key(item, columns) for item in group_by]
-        resolved_aggregates = _resolve_aggregates(aggregates, columns)
-        rows = _apply_aggregation(rows, resolved_group_by, resolved_aggregates)
-        columns = _aggregation_columns(resolved_group_by, resolved_aggregates, columns)
+        resolved_group_by = [_resolve_column_key(group_name, query_columns) for group_name in group_by]
+        resolved_aggregates = _resolve_aggregates(aggregates, query_columns)
+        result_rows = _apply_aggregation(result_rows, resolved_group_by, resolved_aggregates)
+        query_columns = _aggregation_columns(resolved_group_by, resolved_aggregates, query_columns)
 
-    if select and rows:
-        columns = _select_columns(select, columns)
-        keep_cols = [item["key"] for item in columns]
-        rows = [{col: row.get(col, "") for col in keep_cols if col in row} for row in rows]
+    if select and result_rows:
+        query_columns = _select_columns(select, query_columns)
+        selected_column_keys = [column["key"] for column in query_columns]
+        result_rows = [
+            {column_key: row.get(column_key, "") for column_key in selected_column_keys if column_key in row}
+            for row in result_rows
+        ]
 
     if order_by:
-        rows = _apply_order_by(rows, _resolve_order_specs(order_by, columns))
+        result_rows = _apply_order_by(result_rows, _resolve_order_specs(order_by, query_columns))
 
     if limit and limit > 0:
-        rows = rows[:limit]
+        result_rows = result_rows[:limit]
 
-    return _render_query_result(rows, columns)
+    return _render_query_result(result_rows, query_columns)
 
 
 def _resolve_query_source(
-    wb: ParsedWorkbook,
+    parsed_workbook: ParsedWorkbook,
     *,
     table_id: str | None,
     sheet: str | None,
@@ -98,19 +101,19 @@ def _resolve_query_source(
     header_row: int | None,
 ) -> tuple[SheetInfo, list[QueryColumn], tuple[int, int, int, int], int | None]:
     if table_id is not None:
-        for sheet_obj in wb["sheets"]:
-            for table in sheet_obj.get("tables", []):
+        for sheet_info in parsed_workbook["sheets"]:
+            for table in sheet_info.get("tables", []):
                 if table["id"] == table_id:
                     bounds = _parse_range(table["ref"])
                     start_col, _start_row, end_col, _end_row = bounds
                     table_columns = [str(item) for item in table.get("columns", [])]
                     columns = _columns_from_labels(table_columns, start_col, end_col)
-                    return sheet_obj, columns, bounds, bounds[1]
+                    return sheet_info, columns, bounds, bounds[1]
         raise ValueError(f"Table {table_id!r} not found")
 
     if sheet is not None and range_spec is not None and header_row is not None:
-        sheet_obj = _find_sheet(wb, sheet)
-        return sheet_obj, [], _parse_range(range_spec), header_row
+        sheet_info = _find_sheet(parsed_workbook, sheet)
+        return sheet_info, [], _parse_range(range_spec), header_row
 
     raise ValueError("Provide table_id or (sheet + range_spec + header_row)")
 
@@ -426,12 +429,12 @@ def _apply_order_by(
     rows: list[dict[str, object]],
     order_specs: list[OrderSpec],
 ) -> list[dict[str, object]]:
-    result = list(rows)
+    ordered_rows = list(rows)
     for order_spec in reversed(order_specs):
         col = str(order_spec.get("column", ""))
         desc = order_spec.get("direction") == "desc"
-        result.sort(key=lambda row: _order_key(row, col), reverse=desc)
-    return result
+        ordered_rows.sort(key=lambda row: _order_key(row, col), reverse=desc)
+    return ordered_rows
 
 
 def _order_key(row: dict[str, object], column: str) -> tuple[int, object]:
@@ -451,8 +454,8 @@ def _render_query_result(rows: list[dict[str, object]], columns: list[QueryColum
     else:
         all_cols = [col for col in columns if any(col["key"] in row for row in rows)]
     parts = ["<table>\n<tr>"]
-    parts.extend(f"<th>{escape(col['label'])}" for col in all_cols)
+    parts.extend(f"<th>{escape_text(column['label'])}" for column in all_cols)
     for row in rows:
         parts.append("<tr>")
-        parts.extend(f"<td>{escape(str(row.get(col['key'], '')))}" for col in all_cols)
+        parts.extend(f"<td>{escape_text(str(row.get(column['key'], '')))}" for column in all_cols)
     return "".join(parts) + "\n"

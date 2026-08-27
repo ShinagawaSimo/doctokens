@@ -112,8 +112,8 @@ class StreamingTests(unittest.TestCase):
         )
         for density in ("plain", "structural"):
             with self.subTest(density=density):
-                html = parse_xlsx(data, density=density)
-                self.assertTrue(html.startswith(f"density={density}"))
+                output = parse_xlsx(data, density=density)
+                self.assertTrue(output.startswith(f"density={density}"))
 
     def test_invalid_density_raises(self) -> None:
         data = _make_xlsx(
@@ -245,32 +245,32 @@ class TruncationTests(unittest.TestCase):
     def test_small_sheet_not_truncated(self) -> None:
         """10 rows within budget: no truncation."""
         data = self._make_sheet(10)
-        html = parse_xlsx(data)
-        self.assertNotIn("truncated", html)
+        output = parse_xlsx(data)
+        self.assertNotIn("truncated", output)
 
     def test_large_sheet_windowed(self) -> None:
         """600 rows exceeds cell budget: window plus truncated marker."""
         data = self._make_sheet(600)
-        html = parse_xlsx(data)
+        output = parse_xlsx(data)
         # Shows first rows (within budget) and marks the grid as truncated.
-        self.assertIn("<tr row=1>", html)
-        self.assertNotIn("<tr row=600>", html)
-        self.assertIn("truncated", html)
+        self.assertIn("<tr row=1>", output)
+        self.assertNotIn("<tr row=600>", output)
+        self.assertIn("truncated", output)
 
     def test_range_reading_not_truncated(self) -> None:
         """render_range always shows full results, no truncation."""
         data = self._make_sheet(50)
-        html = render_range(data, "Data", "A1:A5")
-        self.assertNotIn("truncated", html)
-        self.assertIn("Row1", html)
-        self.assertIn("Row5", html)
+        output = render_range(data, "Data", "A1:A5")
+        self.assertNotIn("truncated", output)
+        self.assertIn("Row1", output)
+        self.assertIn("Row5", output)
 
     def test_range_reading_beyond_cell_budget_is_exact(self) -> None:
         """render_range is exact even past the default-view cell budget."""
         data = self._make_sheet(600)
-        html = render_range(data, "Data", "A1:A600")
-        self.assertIn("Row600", html)
-        self.assertNotIn("truncated", html)
+        output = render_range(data, "Data", "A1:A600")
+        self.assertIn("Row600", output)
+        self.assertNotIn("truncated", output)
 
 
 class PlainDensityTests(unittest.TestCase):
@@ -322,13 +322,13 @@ class PlainDensityTests(unittest.TestCase):
                 ),
             },
         )
-        html = parse_xlsx(data, density="plain")
-        self.assertIn("density=plain", html)
-        self.assertNotIn("<tr", html)
-        self.assertNotIn("<td", html)
+        output = parse_xlsx(data, density="plain")
+        self.assertIn("density=plain", output)
+        self.assertNotIn("<tr", output)
+        self.assertNotIn("<td", output)
         # Tab-separated values
-        self.assertIn("A1\tB1", html)
-        self.assertIn("A2\tB2", html)
+        self.assertIn("A1\tB1", output)
+        self.assertIn("A2\tB2", output)
 
 
 if __name__ == "__main__":

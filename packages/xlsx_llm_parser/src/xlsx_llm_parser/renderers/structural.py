@@ -1,10 +1,10 @@
-"""HTML5 renderers for XLSX workbooks — all three densities."""
+"""Output renderers for XLSX workbooks at all three densities."""
 
 from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from html import escape
+from html import escape as escape_text
 
 from .._utils import col_letter, parse_ref
 from ..formats import FormatIndex
@@ -62,20 +62,25 @@ class _CommentCollector:
 # ── Public API ──
 
 
-def render_workbook(wb: ParsedWorkbook, *, density: Density = "structural") -> str:
-    """Render a parsed workbook at the given density."""
-    return "".join(iter_workbook(wb, density=density))
+def render_workbook(parsed_workbook: ParsedWorkbook, *, density: Density = "structural") -> str:
+    """Render a parsed workbook at the requested output density."""
+    return "".join(iter_workbook(parsed_workbook, density=density))
 
 
-def iter_workbook(wb: ParsedWorkbook, *, density: Density = "structural") -> Iterator[str]:
-    """Stream workbook rendering chunks — concatenation matches render_workbook."""
+def iter_workbook(parsed_workbook: ParsedWorkbook, *, density: Density = "structural") -> Iterator[str]:
+    """Yield workbook output chunks whose concatenation matches render_workbook."""
     yield f"density={density}\n"
-    for sheet_index, sheet in enumerate(wb["sheets"]):
-        yield from _render_sheet(sheet, density, wb, emit_globals=sheet_index == 0)
+    for sheet_index, worksheet_info in enumerate(parsed_workbook["sheets"]):
+        yield from _render_sheet(
+            worksheet_info,
+            density,
+            parsed_workbook,
+            emit_globals=sheet_index == 0,
+        )
 
 
 def render_range(
-    wb: ParsedWorkbook,
+    parsed_workbook: ParsedWorkbook,
     sheet: str,
     range_spec: str,
     *,
@@ -86,13 +91,13 @@ def render_range(
     Returns the ``<grid ref=...>`` block for the matching sheet.
     Raises ``ValueError`` if the sheet is not found or the range is invalid.
     """
-    sheet_info = _find_sheet(wb, sheet)
+    worksheet_info = _find_sheet(parsed_workbook, sheet)
     start_col, start_row, end_col, end_row = _parse_range(range_spec)
 
-    rows = sheet_info.get("rows", [])
-    filtered = _filter_rows(rows, start_col, start_row, end_col, end_row)
+    worksheet_rows = worksheet_info.get("rows", [])
+    selected_rows = _filter_rows(worksheet_rows, start_col, start_row, end_col, end_row)
     return _render_grid(
-        filtered,
+        selected_rows,
         density,
     )
 
@@ -101,53 +106,53 @@ def render_range(
 
 
 def _render_sheet(
-    sheet: SheetInfo,
+    worksheet_info: SheetInfo,
     density: Density,
-    wb: ParsedWorkbook | None = None,
+    parsed_workbook: ParsedWorkbook | None = None,
     start_row: int = 1,
     emit_globals: bool = True,
 ) -> Iterator[str]:
-    name = sheet["name"]
-    state = sheet.get("state", "visible")
-    kind = sheet.get("kind", "worksheet")
+    worksheet_name = worksheet_info["name"]
+    visibility_state = worksheet_info.get("state", "visible")
+    worksheet_kind = worksheet_info.get("kind", "worksheet")
 
-    if kind == "chartsheet":
-        yield f"<chartsheet name={escape(name, quote=True)}>\n"
+    if worksheet_kind == "chartsheet":
+        yield f"<chartsheet name={escape_text(worksheet_name, quote=True)}>\n"
         return
 
-    attrs = f"name={escape(name, quote=True)}"
-    if state == "hidden":
+    attrs = f"name={escape_text(worksheet_name, quote=True)}"
+    if visibility_state == "hidden":
         attrs += " hidden"
-    elif state == "veryHidden":
+    elif visibility_state == "veryHidden":
         attrs += " veryHidden"
     yield f"<sheet {attrs}>\n"
 
-    rows = sheet.get("rows", [])
+    worksheet_rows = worksheet_info.get("rows", [])
 
-    yield from _emit_hidden_cols(sheet, density)
-    yield from _emit_sheet_protection(sheet, density)
-    yield from _emit_defined_names(wb, density, name, emit_globals=emit_globals)
-    yield from _emit_autofilter(sheet, density)
-    yield from _emit_data_validations(sheet, density)
-    yield from _emit_conditional_formats(sheet, density)
-    yield from _emit_external_links(wb, density)
-    yield from _emit_pivot_context(wb, density, emit=emit_globals)
-    yield from _emit_images(sheet, density)
-    yield from _emit_charts(sheet, density)
-    yield from _emit_pivot_tables(sheet, density)
-    yield from _emit_tables(sheet, density)
+    yield from _emit_hidden_cols(worksheet_info, density)
+    yield from _emit_sheet_protection(worksheet_info, density)
+    yield from _emit_defined_names(parsed_workbook, density, worksheet_name, emit_globals=emit_globals)
+    yield from _emit_autofilter(worksheet_info, density)
+    yield from _emit_data_validations(worksheet_info, density)
+    yield from _emit_conditional_formats(worksheet_info, density)
+    yield from _emit_external_links(parsed_workbook, density)
+    yield from _emit_pivot_context(parsed_workbook, density, emit=emit_globals)
+    yield from _emit_images(worksheet_info, density)
+    yield from _emit_charts(worksheet_info, density)
+    yield from _emit_pivot_tables(worksheet_info, density)
+    yield from _emit_tables(worksheet_info, density)
 
     if density == "plain":
         yield from _render_plain(
-            rows,
+            worksheet_rows,
             start_row=start_row,
-            hidden_cols=sheet.get("hidden_cols", []),
+            hidden_cols=worksheet_info.get("hidden_cols", []),
         )
     else:
         yield _render_grid(
-            rows,
+            worksheet_rows,
             density,
-            wb,
+            parsed_workbook,
             start_row=start_row,
         )
 
@@ -170,7 +175,7 @@ def _emit_sheet_protection(sheet: SheetInfo, density: Density) -> Iterator[str]:
 
 
 def _emit_defined_names(
-    wb: ParsedWorkbook | None,
+    parsed_workbook: ParsedWorkbook | None,
     density: Density,
     sheet_name: str,
     *,
@@ -181,21 +186,21 @@ def _emit_defined_names(
     Global names are emitted once, with the first sheet's block, instead of
     repeating the same declaration on every sheet.
     """
-    if density not in {"structural", "semantic"} or wb is None:
+    if density not in {"structural", "semantic"} or parsed_workbook is None:
         return
-    defined_names = wb["metadata"].get("defined_names", [])
-    for dn in defined_names:
-        if dn.get("hidden"):
+    defined_names = parsed_workbook["metadata"].get("defined_names", [])
+    for defined_name in defined_names:
+        if defined_name.get("hidden"):
             continue
-        scope = dn.get("scopeSheet")
+        scope = defined_name.get("scopeSheet")
         if scope and scope != sheet_name:
             continue
         if scope is None and not emit_globals:
             continue
-        if dn["name"].startswith("_xlnm."):
+        if defined_name["name"].startswith("_xlnm."):
             continue
-        name_attr = escape(dn["name"], quote=True)
-        ref_attr = escape(dn["ref"], quote=True)
+        name_attr = escape_text(defined_name["name"], quote=True)
+        ref_attr = escape_text(defined_name["ref"], quote=True)
         yield f'<definedName name={name_attr} refersTo="{ref_attr}">\n'
 
 
@@ -211,11 +216,11 @@ def _emit_autofilter(sheet: SheetInfo, density: Density) -> Iterator[str]:
     for fc in sheet.get("filter_cols", []):
         attrs = [f"col={fc['col']}", f"type={fc['type']}"]
         if values := fc.get("values"):
-            attrs.append(f'values="{escape(",".join(values), quote=True)}"')
+            attrs.append(f'values="{escape_text(",".join(values), quote=True)}"')
         if fc.get("blank"):
             attrs.append("blank")
         attrs.extend(
-            f'{key}="{escape(str(value), quote=True)}"'
+            f'{key}="{escape_text(str(value), quote=True)}"'
             for key in ("calendarType", "operator", "value", "value2", "rank", "filterValue", "iconSet")
             if (value := fc.get(key))
         )
@@ -225,7 +230,7 @@ def _emit_autofilter(sheet: SheetInfo, density: Density) -> Iterator[str]:
         attrs.extend(f"{key}={value}" for key in ("dxfId", "iconId") if (value := fc.get(key)) is not None)
         if date_groups := fc.get("dateGroup"):
             groups = ";".join(":".join(f"{key}={value}" for key, value in sorted(group.items())) for group in date_groups)
-            attrs.append(f'groups="{escape(groups, quote=True)}"')
+            attrs.append(f'groups="{escape_text(groups, quote=True)}"')
         yield f"<condition {' '.join(attrs)}/>\n"
 
 
@@ -244,17 +249,17 @@ def _emit_conditional_formats(sheet: SheetInfo, density: Density) -> Iterator[st
         parts = [f"<rule type={cf['ruleType']} priority={cf.get('priority', 0)}"]
         formulas = cf.get("formulas") or []
         if len(formulas) == 1:
-            parts.append(f' formula="{escape(formulas[0], quote=True)}"')
+            parts.append(f' formula="{escape_text(formulas[0], quote=True)}"')
         elif formulas:
-            parts.append(f' formulas="{escape(" | ".join(formulas), quote=True)}"')
+            parts.append(f' formulas="{escape_text(" | ".join(formulas), quote=True)}"')
         if cf.get("operator"):
-            parts.append(f' operator="{escape(cf["operator"], quote=True)}"')
+            parts.append(f' operator="{escape_text(cf["operator"], quote=True)}"')
         if cf.get("text"):
-            parts.append(f' text="{escape(cf["text"], quote=True)}"')
+            parts.append(f' text="{escape_text(cf["text"], quote=True)}"')
         if cf.get("dxfId") is not None:
             parts.append(f" dxf={cf['dxfId']}")
         if cf.get("dxfStyle"):
-            parts.append(f' style="{escape(cf["dxfStyle"], quote=True)}"')
+            parts.append(f' style="{escape_text(cf["dxfStyle"], quote=True)}"')
         if cf.get("stopIfTrue"):
             parts.append(" stopIfTrue")
         if cf.get("rank") is not None:
@@ -266,7 +271,7 @@ def _emit_conditional_formats(sheet: SheetInfo, density: Density) -> Iterator[st
             if density == "semantic":
                 details = _format_conditional_details(cf.get("formatDetails"))
                 if details:
-                    parts.append(f' details="{escape(details, quote=True)}"')
+                    parts.append(f' details="{escape_text(details, quote=True)}"')
         parts.append("/>\n")
         yield "".join(parts)
 
@@ -299,23 +304,23 @@ def _format_conditional_details(details: object) -> str:
     return ";".join(values)
 
 
-def _emit_external_links(wb: ParsedWorkbook | None, density: Density) -> Iterator[str]:
-    if density not in {"structural", "semantic"} or wb is None:
+def _emit_external_links(parsed_workbook: ParsedWorkbook | None, density: Density) -> Iterator[str]:
+    if density not in {"structural", "semantic"} or parsed_workbook is None:
         return
-    for link in wb["metadata"].get("external_links", []):
-        yield f"<externalLink target={escape(link, quote=True)}/>\n"
+    for link in parsed_workbook["metadata"].get("external_links", []):
+        yield f"<externalLink target={escape_text(link, quote=True)}/>\n"
 
 
 def _emit_pivot_context(
-    wb: ParsedWorkbook | None,
+    parsed_workbook: ParsedWorkbook | None,
     density: Density,
     *,
     emit: bool,
 ) -> Iterator[str]:
     """Emit workbook-level pivot sources and interactive filters once."""
-    if wb is None or not emit:
+    if parsed_workbook is None or not emit:
         return
-    metadata = wb["metadata"]
+    metadata = parsed_workbook["metadata"]
     if density == "plain":
         for slicer in metadata.get("slicers", []):
             name = slicer.get("name") or slicer.get("sourceName")
@@ -327,29 +332,29 @@ def _emit_pivot_context(
     for cache in metadata.get("pivot_caches", []):
         attrs = [f"id={cache['id']}", f"cacheId={cache['cacheId']}"]
         if cache.get("sourceSheet"):
-            attrs.append(f'sheet="{escape(cache["sourceSheet"], quote=True)}"')
+            attrs.append(f'sheet="{escape_text(cache["sourceSheet"], quote=True)}"')
         if cache.get("sourceRef"):
             attrs.append(f"ref={cache['sourceRef']}")
         if cache.get("refreshOnLoad"):
             attrs.append("refreshOnLoad")
         if density == "semantic" and cache.get("fields"):
-            attrs.append(f'fields="{escape(",".join(cache["fields"]), quote=True)}"')
+            attrs.append(f'fields="{escape_text(",".join(cache["fields"]), quote=True)}"')
         yield f"<pivotCache {' '.join(attrs)}/>\n"
     for slicer in metadata.get("slicers", []):
         attrs = [f"id={slicer['id']}", "type=slicer"]
         if slicer.get("name"):
-            attrs.append(f'name="{escape(slicer["name"], quote=True)}"')
+            attrs.append(f'name="{escape_text(slicer["name"], quote=True)}"')
         if slicer.get("sourceName"):
-            attrs.append(f'source="{escape(slicer["sourceName"], quote=True)}"')
+            attrs.append(f'source="{escape_text(slicer["sourceName"], quote=True)}"')
         if slicer.get("cacheId") is not None:
             attrs.append(f"cacheId={slicer['cacheId']}")
         yield f"<slicer {' '.join(attrs)}/>\n"
     for timeline in metadata.get("timelines", []):
         attrs = [f"id={timeline['id']}"]
         if timeline.get("name"):
-            attrs.append(f'name="{escape(timeline["name"], quote=True)}"')
+            attrs.append(f'name="{escape_text(timeline["name"], quote=True)}"')
         if timeline.get("sourceName"):
-            attrs.append(f'source="{escape(timeline["sourceName"], quote=True)}"')
+            attrs.append(f'source="{escape_text(timeline["sourceName"], quote=True)}"')
         if timeline.get("level"):
             attrs.append(f"level={timeline['level']}")
         yield f"<timeline {' '.join(attrs)}/>\n"
@@ -378,13 +383,13 @@ def _emit_charts(sheet: SheetInfo, density: Density) -> Iterator[str]:
     for ch in charts:
         attrs = f"id={ch['id']} ref={ch['ref']} type={ch.get('type', '?')}"
         if ch.get("plotTypes"):
-            attrs += f" plots={escape(','.join(ch['plotTypes']), quote=True)}"
+            attrs += f" plots={escape_text(','.join(ch['plotTypes']), quote=True)}"
         attrs += f" series={ch.get('series_count', 0)}"
         names = _chart_series_names(ch)
         if names:
-            attrs += f" names={escape(','.join(names), quote=True)}"
+            attrs += f" names={escape_text(','.join(names), quote=True)}"
         if ch.get("title"):
-            attrs += f" title={escape(ch['title'], quote=True)}"
+            attrs += f" title={escape_text(ch['title'], quote=True)}"
         attrs += " truncated"
         yield f"<chart {attrs}/>\n"
 
@@ -412,23 +417,23 @@ def _emit_pivot_tables(sheet: SheetInfo, density: Density) -> Iterator[str]:
             yield f"[PivotTable{name_part}]\n"
         return
     for pv in sheet.get("pivot_tables", []):
-        attrs = [f"id={pv['id']}", f"name={escape(pv.get('name', ''), quote=True)}"]
+        attrs = [f"id={pv['id']}", f"name={escape_text(pv.get('name', ''), quote=True)}"]
         if pv.get("ref"):
             attrs.append(f"ref={pv['ref']}")
         if pv.get("sourceSheet"):
-            attrs.append(f'sourceSheet="{escape(pv["sourceSheet"], quote=True)}"')
+            attrs.append(f'sourceSheet="{escape_text(pv["sourceSheet"], quote=True)}"')
         if pv.get("sourceRef"):
             attrs.append(f"sourceRef={pv['sourceRef']}")
         if density == "semantic" and pv.get("rowFields"):
-            attrs.append(f'rows="{escape(",".join(pv["rowFields"]), quote=True)}"')
+            attrs.append(f'rows="{escape_text(",".join(pv["rowFields"]), quote=True)}"')
         if density == "semantic" and pv.get("columnFields"):
-            attrs.append(f'columns="{escape(",".join(pv["columnFields"]), quote=True)}"')
+            attrs.append(f'columns="{escape_text(",".join(pv["columnFields"]), quote=True)}"')
         if density == "semantic" and pv.get("pageFields"):
-            attrs.append(f'pages="{escape(",".join(pv["pageFields"]), quote=True)}"')
+            attrs.append(f'pages="{escape_text(",".join(pv["pageFields"]), quote=True)}"')
         if density == "semantic" and pv.get("dataFields"):
-            attrs.append(f'values="{escape(",".join(pv["dataFields"]), quote=True)}"')
+            attrs.append(f'values="{escape_text(",".join(pv["dataFields"]), quote=True)}"')
         if density == "semantic" and pv.get("filters"):
-            attrs.append(f'filters="{escape(",".join(pv["filters"]), quote=True)}"')
+            attrs.append(f'filters="{escape_text(",".join(pv["filters"]), quote=True)}"')
         yield f"<pivotTable {' '.join(attrs)}/>\n"
 
 
@@ -439,10 +444,10 @@ def _emit_tables(sheet: SheetInfo, density: Density) -> Iterator[str]:
             yield _plain_table_summary(t)
         return
     for t in sheet.get("tables", []):
-        attrs = f"id={t['id']} name={escape(t['name'], quote=True)} ref={t['ref']}"
+        attrs = f"id={t['id']} name={escape_text(t['name'], quote=True)} ref={t['ref']}"
         if density == "semantic" and t.get("columns"):
             cols = ",".join(t["columns"])
-            attrs += f' cols="{escape(cols, quote=True)}"'
+            attrs += f' cols="{escape_text(cols, quote=True)}"'
         if density == "semantic" and t.get("totalsRow"):
             attrs += " totalsRow"
         yield f"<table {attrs}>\n"
@@ -529,7 +534,7 @@ def _plain_cell_text(cell: Cell) -> str:
 def _render_grid(
     rows: list[list[Cell]],
     density: Density,
-    wb: ParsedWorkbook | None = None,
+    parsed_workbook: ParsedWorkbook | None = None,
     start_row: int = 1,
     cell_budget: int | None = _CELL_BUDGET,
 ) -> str:
@@ -551,10 +556,10 @@ def _render_grid(
     visible_rows = [row_cells for row_cells in rows if row_cells and row_cells[0]["row"] >= start_row]
 
     suppressed_styles: set[str] = set()
-    fmt_index = wb["fmt_index"] if wb is not None else None
+    format_index = parsed_workbook["fmt_index"] if parsed_workbook is not None else None
     style_parts: list[str] = []
-    if density == "semantic" and isinstance(fmt_index, FormatIndex):
-        style_ranges, suppressed_styles = _repeated_style_ranges(rows, fmt_index, start_row)
+    if density == "semantic" and isinstance(format_index, FormatIndex):
+        style_ranges, suppressed_styles = _repeated_style_ranges(rows, format_index, start_row)
         style_parts.extend(style_ranges)
 
     comments = _CommentCollector()
@@ -568,7 +573,7 @@ def _render_grid(
                 row_cells,
                 min_col,
                 density,
-                wb,
+                parsed_workbook,
                 comments,
                 suppressed_styles,
             )
@@ -581,10 +586,10 @@ def _render_grid(
     tag = f"<grid ref={ref}"
     if truncated:
         tag += " truncated"
-    parts = [tag + ">\n", *style_parts, *body_parts]
-    parts.extend(_render_comments(comments))
+    output_parts = [tag + ">\n", *style_parts, *body_parts]
+    output_parts.extend(_render_comments(comments))
 
-    return "".join(parts)
+    return "".join(output_parts)
 
 
 def _visible_grid_bounds(rows: list[list[Cell]], start_row: int) -> tuple[int, int, int, int] | None:
@@ -608,62 +613,62 @@ def _visible_grid_bounds(rows: list[list[Cell]], start_row: int) -> tuple[int, i
 def _render_comments(comments: _CommentCollector) -> Iterator[str]:
     for _coord, records in sorted(comments.by_cell.items(), key=lambda item: (item[0][1], item[0][0])):
         for comment in records:
-            attrs = f'id={escape(comment.id, quote=True)} cell="{escape(comment.ref, quote=True)}"'
+            attrs = f'id={escape_text(comment.id, quote=True)} cell="{escape_text(comment.ref, quote=True)}"'
             if comment.author:
-                attrs += f" author={escape(comment.author, quote=True)}"
+                attrs += f" author={escape_text(comment.author, quote=True)}"
             if comment.date:
-                attrs += f" date={escape(comment.date, quote=True)}"
+                attrs += f" date={escape_text(comment.date, quote=True)}"
             if comment.parent_id:
-                attrs += f" parent={escape(comment.parent_id, quote=True)}"
+                attrs += f" parent={escape_text(comment.parent_id, quote=True)}"
             if comment.resolved:
                 attrs += " resolved"
             if comment.mentions:
-                attrs += f' mentions="{escape(", ".join(comment.mentions), quote=True)}"'
-            yield f"<comment {attrs}>{escape(comment.text)}\n"
+                attrs += f' mentions="{escape_text(", ".join(comment.mentions), quote=True)}"'
+            yield f"<comment {attrs}>{escape_text(comment.text)}\n"
 
 
 def _render_row(
     row_cells: list[Cell],
     grid_min_col: int,
     density: Density,
-    wb: ParsedWorkbook | None = None,
+    parsed_workbook: ParsedWorkbook | None = None,
     comments: _CommentCollector | None = None,
     suppressed_styles: set[str] | None = None,
 ) -> str:
     actual_row = row_cells[0]["row"]
-    parts = [_row_start_tag(row_cells[0], actual_row, density)]
-    fmt_index = _workbook_format_index(wb)
+    output_parts = [_row_start_tag(row_cells[0], actual_row, density)]
+    format_index = _workbook_format_index(parsed_workbook)
     expected_col = grid_min_col
     for cell in row_cells:
         if cell.get("shadow"):
             expected_col = cell["col"] + cell.get("colspan", 1)
             continue
 
-        parts.append(f"<{_cell_tag_attrs(cell, expected_col, density, fmt_index, suppressed_styles)}>")
+        output_parts.append(f"<{_cell_tag_attrs(cell, expected_col, density, format_index, suppressed_styles)}>")
         body = _cell_body(cell, density)
         if comments is not None:
             body = _body_with_comment_reference(cell, body, comments)
-        parts.append(body)
+        output_parts.append(body)
         expected_col = cell["col"] + cell.get("colspan", 1)
 
-    parts.append("\n")
-    return "".join(parts)
+    output_parts.append("\n")
+    return "".join(output_parts)
 
 
 def _row_start_tag(first_cell: Cell, row_number: int, density: Density) -> str:
     row_hidden = " hidden" if first_cell.get("hidden") else ""
-    parts = [f"<tr row={row_number}{row_hidden}"]
+    output_parts = [f"<tr row={row_number}{row_hidden}"]
     if density in {"structural", "semantic"} and first_cell.get("outlineLevel"):
-        parts.append(f" outlineLevel={first_cell['outlineLevel']}")
+        output_parts.append(f" outlineLevel={first_cell['outlineLevel']}")
         if first_cell.get("collapsed"):
-            parts.append(" collapsed")
-    parts.append(">")
-    return "".join(parts)
+            output_parts.append(" collapsed")
+    output_parts.append(">")
+    return "".join(output_parts)
 
 
-def _workbook_format_index(wb: ParsedWorkbook | None) -> FormatIndex | None:
-    fmt_index = wb["fmt_index"] if wb is not None else None
-    return fmt_index if isinstance(fmt_index, FormatIndex) else None
+def _workbook_format_index(parsed_workbook: ParsedWorkbook | None) -> FormatIndex | None:
+    format_index = parsed_workbook["fmt_index"] if parsed_workbook is not None else None
+    return format_index if isinstance(format_index, FormatIndex) else None
 
 
 def _cell_tag_attrs(
@@ -685,24 +690,24 @@ def _cell_tag_attrs(
     return attrs
 
 
-def _structural_cell_attrs(cell: Cell, fmt_index: FormatIndex | None) -> str:
+def _structural_cell_attrs(cell: Cell, format_index: FormatIndex | None) -> str:
     attrs = ""
     if cell.get("colspan", 1) > 1:
         attrs += f" colspan={cell['colspan']}"
     if cell.get("rowspan", 1) > 1:
         attrs += f" rowspan={cell['rowspan']}"
     if cell.get("formula"):
-        attrs += f' formula="{escape(cell["formula"], quote=True)}"'
+        attrs += f' formula="{escape_text(cell["formula"], quote=True)}"'
     if cell.get("formulaType"):
-        attrs += f" formulaType={escape(cell['formulaType'], quote=True)}"
+        attrs += f" formulaType={escape_text(cell['formulaType'], quote=True)}"
     if cell.get("formulaRange"):
-        attrs += f" formulaRange={escape(cell['formulaRange'], quote=True)}"
+        attrs += f" formulaRange={escape_text(cell['formulaRange'], quote=True)}"
     if cell.get("spillRange"):
-        attrs += f" spillRange={escape(cell['spillRange'], quote=True)}"
+        attrs += f" spillRange={escape_text(cell['spillRange'], quote=True)}"
     if cell.get("spillFrom"):
-        attrs += f' spillFrom="{escape(cell["spillFrom"], quote=True)}"'
-    if fmt_index is not None and "style" in cell:
-        protection = fmt_index.protection_attrs(cell["style"])
+        attrs += f' spillFrom="{escape_text(cell["spillFrom"], quote=True)}"'
+    if format_index is not None and "style" in cell:
+        protection = format_index.protection_attrs(cell["style"])
         if protection:
             attrs += f" {protection}"
     if control := cell.get("cellControl"):
@@ -712,33 +717,34 @@ def _structural_cell_attrs(cell: Cell, fmt_index: FormatIndex | None) -> str:
         if control.get("default") is not None:
             attrs += f" default={control['default']}"
     if rich_value := cell.get("richValue"):
-        attrs += f' richType="{escape(rich_value.get("type", "rich"), quote=True)}"'
+        attrs += f' richType="{escape_text(rich_value.get("type", "rich"), quote=True)}"'
         if rich_value.get("imagePart") or rich_value.get("imageUrl"):
             attrs += " inCellImage"
             if rich_value.get("alt"):
-                attrs += f' alt="{escape(rich_value["alt"], quote=True)}"'
+                attrs += f' alt="{escape_text(rich_value["alt"], quote=True)}"'
     return attrs
 
 
 def _cell_body(cell: Cell, density: Density) -> str:
-    if (rich_value := cell.get("richValue")) and (density == "plain" or rich_value.get("display") or rich_value.get("fallback")):
+    rich_value = cell.get("richValue")
+    if rich_value and (density == "plain" or rich_value.get("display") or rich_value.get("fallback")):
         if rich_value.get("imagePart") or rich_value.get("imageUrl"):
-            body = escape(rich_value.get("alt") or rich_value.get("display") or "[Image]")
+            output_body = escape_text(rich_value.get("alt") or rich_value.get("display") or "[Image]")
         else:
-            body = escape(rich_value.get("display") or rich_value.get("fallback") or cell["text"])
+            output_body = escape_text(rich_value.get("display") or rich_value.get("fallback") or cell["text"])
     else:
-        body = _render_rich_text(cell["rich"]) if density == "semantic" and cell.get("rich") else escape(cell["text"])
-    if density == "semantic" and (rich_value := cell.get("richValue")) and rich_value.get("fields"):
+        output_body = _render_rich_text(cell["rich"]) if density == "semantic" and cell.get("rich") else escape_text(cell["text"])
+    if density == "semantic" and rich_value and rich_value.get("fields"):
         visible_fields = "; ".join(
             f"{key}={value}"
             for key, value in rich_value["fields"].items()
             if not key.startswith("_") and key not in {"CalcOrigin", "ImageSizing", "ImageWidth", "ImageHeight"}
         )
         if visible_fields:
-            body += f' <richValue fields="{escape(visible_fields, quote=True)}"/>'
+            output_body += f' <richValue fields="{escape_text(visible_fields, quote=True)}"/>'
     if cell.get("hyperlink"):
-        return f'<a href="{escape(cell["hyperlink"], quote=True)}">{body}</a>'
-    return body
+        return f'<a href="{escape_text(cell["hyperlink"], quote=True)}">{output_body}</a>'
+    return output_body
 
 
 def _body_with_comment_reference(
@@ -752,7 +758,7 @@ def _body_with_comment_reference(
     if len(records) == 1:
         return f"{body}<commentref id={records[0].id}/>"
     ids = " ".join(record.id for record in records)
-    return f'<commentref ids="{escape(ids, quote=True)}"/>'
+    return f'<commentref ids="{escape_text(ids, quote=True)}"/>'
 
 
 def _threaded_comment_record(ref: str, item: ThreadedComment) -> _CommentRecord:
@@ -796,7 +802,7 @@ def _repeated_style_ranges(
     for style in sorted(suppressed_styles):
         for start_col, first_row, end_col, last_row in _rectangular_ranges(cells_by_style[style]):
             ref = _range_ref(start_col, first_row, end_col, last_row)
-            lines.append(f'<styleRange ref={ref} attrs="{escape(style, quote=True)}"/>\n')
+        lines.append(f'<styleRange ref={ref} attrs="{escape_text(style, quote=True)}"/>\n')
     return lines, suppressed_styles
 
 
@@ -854,11 +860,11 @@ def _range_ref(start_col: int, start_row: int, end_col: int, end_row: int) -> st
 # ── Helpers ──
 
 
-def _find_sheet(wb: ParsedWorkbook, name: str) -> SheetInfo:
-    for s in wb["sheets"]:
-        if s["name"] == name:
-            return s
-    raise ValueError(f"Sheet {name!r} not found")
+def _find_sheet(parsed_workbook: ParsedWorkbook, worksheet_name: str) -> SheetInfo:
+    for worksheet_info in parsed_workbook["sheets"]:
+        if worksheet_info["name"] == worksheet_name:
+            return worksheet_info
+    raise ValueError(f"Sheet {worksheet_name!r} not found")
 
 
 def _parse_range(spec: str) -> tuple[int, int, int, int]:
@@ -879,26 +885,26 @@ def _filter_rows(
     end_row: int,
 ) -> list[list[Cell]]:
     """Keep only cells within the requested A1 range."""
-    result: list[list[Cell]] = []
+    selected_rows: list[list[Cell]] = []
     for row_cells in rows:
-        kept = [c for c in row_cells if start_col <= c["col"] <= end_col and start_row <= c["row"] <= end_row]
-        if kept:
-            result.append(kept)
-    return result
+        kept_cells = [cell for cell in row_cells if start_col <= cell["col"] <= end_col and start_row <= cell["row"] <= end_row]
+        if kept_cells:
+            selected_rows.append(kept_cells)
+    return selected_rows
 
 
 def _render_rich_text(runs: list[RichTextRun]) -> str:
-    """Render formatted text runs as inline HTML tags."""
-    parts: list[str] = []
-    for run in runs:
-        txt = escape(run.get("text", ""))
-        if run.get("bold"):
-            txt = f"<b>{txt}</b>"
-        if run.get("italic"):
-            txt = f"<i>{txt}</i>"
-        if run.get("underline"):
-            txt = f"<u>{txt}</u>"
-        if run.get("color"):
-            txt = f"<color value={run['color']}>{txt}</color>"
-        parts.append(txt)
-    return "".join(parts)
+    """Render formatted text runs as inline output tags."""
+    output_parts: list[str] = []
+    for text_run in runs:
+        run_output = escape_text(text_run.get("text", ""))
+        if text_run.get("bold"):
+            run_output = f"<b>{run_output}</b>"
+        if text_run.get("italic"):
+            run_output = f"<i>{run_output}</i>"
+        if text_run.get("underline"):
+            run_output = f"<u>{run_output}</u>"
+        if text_run.get("color"):
+            run_output = f"<color value={text_run['color']}>{run_output}</color>"
+        output_parts.append(run_output)
+    return "".join(output_parts)

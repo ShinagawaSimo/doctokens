@@ -17,57 +17,57 @@ RunSignature = tuple[
 
 
 def merge_text_runs(runs: list[Run]) -> list[Run]:
-    """Merge adjacent plain-text runs with the same output semantics, reducing fragmentation in the final output."""
-    merged: list[Run] = []
-    pending: Run | None = None
-    pending_key: RunSignature | None = None
+    """Merge adjacent runs with identical output semantics."""
+    merged_runs: list[Run] = []
+    pending_run: Run | None = None
+    pending_signature: RunSignature | None = None
 
     for run in runs:
         # Page-break sentinels are layout boundaries, never visible text.
         if run.get("pageBreak"):
-            if pending is not None:
-                merged.append(pending)
-                pending = None
-                pending_key = None
+            if pending_run is not None:
+                merged_runs.append(pending_run)
+                pending_run = None
+                pending_signature = None
             continue
         # Runs containing inline objects are not merged; they are added to the result directly.
         if "objects" in run:
-            if pending is not None:
-                merged.append(pending)
-                pending = None
-                pending_key = None
-            merged.append(run)
+            if pending_run is not None:
+                merged_runs.append(pending_run)
+                pending_run = None
+                pending_signature = None
+            merged_runs.append(run)
             continue
 
-        text = run["text"]
-        if not text:
+        run_text = run["text"]
+        if not run_text:
             continue
         signature = run_output_signature(run)
-        if pending is not None and pending_key == signature:
-            pending["text"] += text
+        if pending_run is not None and pending_signature == signature:
+            pending_run["text"] += run_text
             continue
-        if pending is not None:
-            merged.append(pending)
-        pending = {"text": text}
+        if pending_run is not None:
+            merged_runs.append(pending_run)
+        pending_run = {"text": run_text}
         if "revision" in run:
-            pending["revision"] = run["revision"]
+            pending_run["revision"] = run["revision"]
         if "revisionAuthor" in run:
-            pending["revisionAuthor"] = run["revisionAuthor"]
+            pending_run["revisionAuthor"] = run["revisionAuthor"]
         if "revisionDate" in run:
-            pending["revisionDate"] = run["revisionDate"]
+            pending_run["revisionDate"] = run["revisionDate"]
         if "link" in run:
-            pending["link"] = run["link"]
+            pending_run["link"] = run["link"]
         if "field" in run:
-            pending["field"] = run["field"]
+            pending_run["field"] = run["field"]
         if "contentControls" in run:
-            pending["contentControls"] = run["contentControls"]
+            pending_run["contentControls"] = run["contentControls"]
         if "format" in run:
-            pending["format"] = run["format"]
-        pending_key = signature
+            pending_run["format"] = run["format"]
+        pending_signature = signature
 
-    if pending is not None:
-        merged.append(pending)
-    return merged
+    if pending_run is not None:
+        merged_runs.append(pending_run)
+    return merged_runs
 
 
 def split_runs_at_page_breaks(runs: list[Run]) -> list[list[Run]]:
@@ -91,9 +91,9 @@ def run_output_signature(run: Run) -> RunSignature:
         if "anchor" in run["link"]:
             link_items.append(("anchor", run["link"]["anchor"]))
         link = tuple(sorted(link_items))
-    fmt = tuple(sorted((run.get("format") or {}).items()))
-    field = tuple(sorted((run.get("field") or {}).items()))
-    controls = tuple(
+    run_format = tuple(sorted((run.get("format") or {}).items()))
+    field_data = tuple(sorted((run.get("field") or {}).items()))
+    control_signature = tuple(
         (
             control.get("controlType", ""),
             control.get("id", ""),
@@ -102,15 +102,21 @@ def run_output_signature(run: Run) -> RunSignature:
         )
         for control in run.get("contentControls", [])
     )
-    return (run.get("revision"), link, fmt, field, (("contentControls", controls),) if controls else ())
+    return (
+        run.get("revision"),
+        link,
+        run_format,
+        field_data,
+        (("contentControls", control_signature),) if control_signature else (),
+    )
 
 
 def filter_format(run: Run) -> RunFormat:
     """Filter run formats, removing the default hyperlink style (blue + underline) to avoid output noise."""
-    fmt = dict(run.get("format") or {})
+    run_format = dict(run.get("format") or {})
     if run.get("link"):
-        if fmt.get("color") in {"#0563C1", "#0000FF"}:
-            fmt.pop("color", None)
-        if fmt.get("underline") is True:
-            fmt.pop("underline", None)
-    return fmt
+        if run_format.get("color") in {"#0563C1", "#0000FF"}:
+            run_format.pop("color", None)
+        if run_format.get("underline") is True:
+            run_format.pop("underline", None)
+    return run_format

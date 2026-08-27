@@ -3,64 +3,64 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from html import escape
+from html import escape as escape_text
 
 from ...core.models import InlineContainer, InlineObject, OcrStoredResult, RunFormat
 from ..common.controls import wrap_control
 from ..common.ocr import render_ocr_result
 from ..common.text import filter_format, merge_text_runs
-from ..objects import chart_to_html5, smartart_to_html5
+from ..objects import chart_to_output, smartart_to_output
 
 
 def inline_content(block: InlineContainer, density: str, ocr_results: dict[str, OcrStoredResult] | None = None) -> str:
-    """Combine run text, links, images, footnote references, etc. into inline HTML5."""
+    """Combine text runs, links, images, notes, and other inline content."""
     if "runs" not in block:
-        return escape(block["text"])
+        return escape_text(block["text"])
 
     runs = merge_text_runs(block["runs"])
     if not runs:
-        return escape(block["text"])
+        return escape_text(block["text"])
 
-    parts: list[str] = []
+    output_parts: list[str] = []
     for run in runs:
-        text = escape(run["text"])
-        fmt = filter_format(run)
-        text = apply_inline_format(text, fmt, density)
+        run_text = escape_text(run["text"])
+        run_format = filter_format(run)
+        run_text = apply_inline_format(run_text, run_format, density)
 
         if density == "semantic":
             if run.get("revision") == "inserted":
-                text = f"<ins{_revision_attrs(run)}>{text}</ins>"
+                run_text = f"<ins{_revision_attrs(run)}>{run_text}</ins>"
             elif run.get("revision") == "deleted":
-                text = f"<del{_revision_attrs(run)}>{text}</del>"
+                run_text = f"<del{_revision_attrs(run)}>{run_text}</del>"
 
         field = run.get("field")
-        if field and field.get("kind") == "citation" and text:
+        if field and field.get("kind") == "citation" and run_text:
             key = field.get("key", "")
             if key:
-                text = f"<cite key={escape(key, quote=True)}>{text}</cite>"
+                run_text = f"<cite key={escape_text(key, quote=True)}>{run_text}</cite>"
 
         link = run.get("link")
-        if link and text:
+        if link and run_text:
             href = link.get("href", "")
             anchor = link.get("anchor", "")
-            attrs = f"href={escape(href, quote=True)}"
+            attrs = f"href={escape_text(href, quote=True)}"
             if anchor:
-                attrs += f" anchor={escape(anchor, quote=True)}"
-            text = f"<a {attrs}>{text}</a>"
+                attrs += f" anchor={escape_text(anchor, quote=True)}"
+            run_text = f"<a {attrs}>{run_text}</a>"
         content_parts: list[str] = []
-        if text:
-            content_parts.append(text)
+        if run_text:
+            content_parts.append(run_text)
         if "objects" in run:
-            content_parts.extend(inline_object(obj, density, ocr_results) for obj in run["objects"])
-        content = "".join(content_parts)
+            content_parts.extend(render_inline_object(inline_object, density, ocr_results) for inline_object in run["objects"])
+        run_content = "".join(content_parts)
         controls = run.get("contentControls", [])
-        if controls and content:
-            content = wrap_control(content, controls, density)
-        if content:
-            parts.append(content)
+        if controls and run_content:
+            run_content = wrap_control(run_content, controls, density)
+        if run_content:
+            output_parts.append(run_content)
     # A tab immediately followed by a hard line/page break has no text-layout
     # meaning for an LLM, and would otherwise create trailing output whitespace.
-    return "".join(parts).replace("\t\n", "\n")
+    return "".join(output_parts).replace("\t\n", "\n")
 
 
 def _revision_attrs(run: Mapping[str, object]) -> str:
@@ -69,90 +69,98 @@ def _revision_attrs(run: Mapping[str, object]) -> str:
     author = run.get("revisionAuthor")
     date = run.get("revisionDate")
     if isinstance(author, str) and author:
-        attrs += f" author={escape(author, quote=True)}"
+        attrs += f" author={escape_text(author, quote=True)}"
     if isinstance(date, str) and date:
-        attrs += f" date={escape(date, quote=True)}"
+        attrs += f" date={escape_text(date, quote=True)}"
     return attrs
 
 
-def apply_inline_format(text: str, fmt: RunFormat, density: str) -> str:
-    """Wrap formatted text with HTML5 inline tags. structural does no format wrapping."""
+def apply_inline_format(text: str, run_format: RunFormat, density: str) -> str:
+    """Apply inline formatting when the selected density includes formatting."""
     if density == "structural":
         return text
-    if not text or not fmt:
+    if not text or not run_format:
         return text
-    if fmt.get("bg"):
-        text = f"<mark value={fmt['bg']}>{text}</mark>"
-    if fmt.get("highlight"):
-        text = f"<mark value={fmt['highlight']}>{text}</mark>"
-    if fmt.get("color"):
-        text = f"<color value={fmt['color']}>{text}</color>"
-    if fmt.get("strike"):
+    if run_format.get("bg"):
+        text = f"<mark value={run_format['bg']}>{text}</mark>"
+    if run_format.get("highlight"):
+        text = f"<mark value={run_format['highlight']}>{text}</mark>"
+    if run_format.get("color"):
+        text = f"<color value={run_format['color']}>{text}</color>"
+    if run_format.get("strike"):
         text = f"<s>{text}</s>"
-    if fmt.get("underline"):
+    if run_format.get("underline"):
         text = f"<u>{text}</u>"
-    if fmt.get("italic"):
+    if run_format.get("italic"):
         text = f"<i>{text}</i>"
-    if fmt.get("bold"):
+    if run_format.get("bold"):
         text = f"<b>{text}</b>"
-    if fmt.get("superscript"):
+    if run_format.get("superscript"):
         text = f"<sup>{text}</sup>"
-    if fmt.get("subscript"):
+    if run_format.get("subscript"):
         text = f"<sub>{text}</sub>"
-    if fmt.get("smallCaps"):
+    if run_format.get("smallCaps"):
         text = f"<smallcaps>{text}</smallcaps>"
     return text
 
 
-def inline_object(obj: InlineObject, density: str, ocr_results: dict[str, OcrStoredResult] | None = None) -> str:
+def render_inline_object(
+    inline_object: InlineObject,
+    density: str,
+    ocr_results: dict[str, OcrStoredResult] | None = None,
+) -> str:
     """Render non-plain-text object references inside a paragraph."""
-    obj_type = obj["type"]
+    object_type = inline_object["type"]
 
-    if obj_type == "image":
-        return image_object(obj, density, ocr_results)
+    if object_type == "image":
+        return render_image_object(inline_object, density, ocr_results)
 
-    if obj_type == "drawing":
-        return drawing_object(obj, density)
+    if object_type == "drawing":
+        return render_drawing_object(inline_object, density)
 
-    if obj_type == "textbox":
-        return textbox_object(obj, density)
+    if object_type == "textbox":
+        return render_textbox_object(inline_object, density)
 
-    if obj_type == "equation":
-        if obj["text"]:
-            return f"<equation>{escape(obj['text'])}</equation>"
+    if object_type == "equation":
+        if inline_object["text"]:
+            return f"<equation>{escape_text(inline_object['text'])}</equation>"
         return "<equation/>"
 
-    if obj_type == "chart":
-        return chart_object(obj, density)
+    if object_type == "chart":
+        return render_chart_object(inline_object, density)
 
-    if obj_type == "smartart":
-        return smartart_object(obj, density)
+    if object_type == "smartart":
+        return render_smartart_object(inline_object, density)
 
-    if obj_type == "footnoteRef":
-        return f"<footnoteref id={obj['id']}/>"
-    if obj_type == "endnoteRef":
-        return f"<endnoteref id={obj['id']}/>"
-    if obj_type == "commentRef":
-        return f"<commentref id={obj['id']}/>"
+    if object_type == "footnoteRef":
+        return f"<footnoteref id={inline_object['id']}/>"
+    if object_type == "endnoteRef":
+        return f"<endnoteref id={inline_object['id']}/>"
+    if object_type == "commentRef":
+        return f"<commentref id={inline_object['id']}/>"
 
-    if obj_type == "fieldInstruction":
-        return f"<field instruction={escape(obj['instruction'], quote=True)}/>"
+    if object_type == "fieldInstruction":
+        return f"<field instruction={escape_text(inline_object['instruction'], quote=True)}/>"
 
-    if obj_type == "embedded":
-        return embedded_object(obj, density)
+    if object_type == "embedded":
+        return render_embedded_object(inline_object, density)
 
-    return f"<unsupported type={escape(obj_type, quote=True)}/>"
+    return f"<unsupported type={escape_text(object_type, quote=True)}/>"
 
 
-def image_object(obj: InlineObject, density: str, ocr_results: dict[str, OcrStoredResult] | None = None) -> str:
+def render_image_object(
+    inline_object: InlineObject,
+    density: str,
+    ocr_results: dict[str, OcrStoredResult] | None = None,
+) -> str:
     """Render an embedded image reference with optional OCR text."""
-    asset_id = obj.get("assetId", "")
+    asset_id = inline_object.get("assetId", "")
     if density == "structural":
         img_tag = "<img>"
     else:
         attrs = f"id={asset_id}"
-        if obj.get("alt"):
-            attrs += f" alt={escape(obj['alt'], quote=True)}"
+        if inline_object.get("alt"):
+            attrs += f" alt={escape_text(inline_object['alt'], quote=True)}"
         img_tag = f"<img {attrs}>"
 
     rendered_ocr = render_ocr_result(asset_id, (ocr_results or {}).get(asset_id))
@@ -161,36 +169,36 @@ def image_object(obj: InlineObject, density: str, ocr_results: dict[str, OcrStor
     return f"{img_tag}\n{rendered_ocr}"
 
 
-def drawing_object(obj: InlineObject, density: str) -> str:
+def render_drawing_object(inline_object: InlineObject, density: str) -> str:
     """Render a drawing fallback when a concrete asset is unavailable."""
     if density == "structural":
         return "<img>"
-    alt = obj.get("alt") or obj.get("title") or obj.get("name") or ""
-    return f"<img alt={escape(alt, quote=True)}>" if alt else "<img>"
+    alt = inline_object.get("alt") or inline_object.get("title") or inline_object.get("name") or ""
+    return f"<img alt={escape_text(alt, quote=True)}>" if alt else "<img>"
 
 
-def embedded_object(obj: InlineObject, density: str) -> str:
+def render_embedded_object(inline_object: InlineObject, density: str) -> str:
     """Render an embedded OLE object with type hint."""
-    attrs = f"type={escape(obj.get('embeddedType', 'unknown'), quote=True)}"
-    if obj.get("name"):
-        attrs += f" name={escape(obj['name'], quote=True)}"
+    attrs = f"type={escape_text(inline_object.get('embeddedType', 'unknown'), quote=True)}"
+    if inline_object.get("name"):
+        attrs += f" name={escape_text(inline_object['name'], quote=True)}"
     return f"<embedded {attrs}>"
 
 
-def textbox_object(obj: InlineObject, density: str) -> str:
+def render_textbox_object(inline_object: InlineObject, density: str) -> str:
     """Render DrawingML/VML textbox content."""
     if density == "structural":
-        return f"<textbox>{escape(obj['text'])}</textbox>"
-    alt = obj.get("alt") or obj.get("title") or ""
-    attrs = f"alt={escape(alt, quote=True)}" if alt else ""
-    return f"<textbox {attrs}>{escape(obj['text'])}</textbox>"
+        return f"<textbox>{escape_text(inline_object['text'])}</textbox>"
+    alt = inline_object.get("alt") or inline_object.get("title") or ""
+    attrs = f"alt={escape_text(alt, quote=True)}" if alt else ""
+    return f"<textbox {attrs}>{escape_text(inline_object['text'])}</textbox>"
 
 
-def chart_object(obj: InlineObject, density: str) -> str:
+def render_chart_object(inline_object: InlineObject, density: str) -> str:
     """Render a chart reference. Full data via get_resource."""
-    return chart_to_html5(obj)
+    return chart_to_output(inline_object)
 
 
-def smartart_object(obj: InlineObject, density: str) -> str:
+def render_smartart_object(inline_object: InlineObject, density: str) -> str:
     """Render a SmartArt reference. Full structure via get_resource."""
-    return smartart_to_html5(obj)
+    return smartart_to_output(inline_object)

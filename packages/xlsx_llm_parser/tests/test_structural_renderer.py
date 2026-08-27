@@ -106,24 +106,24 @@ class StructuralRendererTests(unittest.TestCase):
         semantic = render_workbook(wb, density="semantic")
         plain = render_workbook(wb, density="plain")
 
-        for html in (structural, semantic):
-            self.assertIn("<columns ref=B:C hidden>", html)
-            self.assertIn("<sheetProtection/>", html)
-            self.assertIn('<definedName name=VisibleName refersTo="Data!$A$1">', html)
-            self.assertIn('<condition col=0 type=values values="Alice"/>', html)
-            self.assertIn("<dataValidation ref=B2:B4 type=whole/>", html)
-            self.assertIn('<rule type=cellIs priority=0 formula="B2&gt;0"/>', html)
-            self.assertIn("<externalLink target=other.xlsx/>", html)
-            self.assertIn("<image id=image1 ref=D4/>", html)
-            self.assertIn("names=Q1", html)
-            self.assertIn("<pivotTable id=pivot1 name=Pivot/>", html)
-            self.assertIn("<chartsheet name=ChartOnly>", html)
-            self.assertIn("colspan=2", html)
-            self.assertIn("rowspan=2", html)
-            self.assertIn('formula="SUM(B3:B4)"', html)
-            self.assertIn("formulaType=array", html)
-            self.assertIn("formulaRange=B2:B4", html)
-            self.assertIn("spillRange=B2:B4", html)
+        for output in (structural, semantic):
+            self.assertIn("<columns ref=B:C hidden>", output)
+            self.assertIn("<sheetProtection/>", output)
+            self.assertIn('<definedName name=VisibleName refersTo="Data!$A$1">', output)
+            self.assertIn('<condition col=0 type=values values="Alice"/>', output)
+            self.assertIn("<dataValidation ref=B2:B4 type=whole/>", output)
+            self.assertIn('<rule type=cellIs priority=0 formula="B2&gt;0"/>', output)
+            self.assertIn("<externalLink target=other.xlsx/>", output)
+            self.assertIn("<image id=image1 ref=D4/>", output)
+            self.assertIn("names=Q1", output)
+            self.assertIn("<pivotTable id=pivot1 name=Pivot/>", output)
+            self.assertIn("<chartsheet name=ChartOnly>", output)
+            self.assertIn("colspan=2", output)
+            self.assertIn("rowspan=2", output)
+            self.assertIn('formula="SUM(B3:B4)"', output)
+            self.assertIn("formulaType=array", output)
+            self.assertIn("formulaRange=B2:B4", output)
+            self.assertIn("spillRange=B2:B4", output)
 
         self.assertIn('<a href="https://example.test/a">Alice</a>', structural)
         self.assertIn("<commentref id=comment0/>", structural)
@@ -134,7 +134,7 @@ class StructuralRendererTests(unittest.TestCase):
         self.assertIn("[Table Sales: Name, Amount]", plain)
         self.assertNotIn("<table id=table1", plain)
 
-        # Plain density keeps declaration info as text summaries, never HTML tags.
+        # Plain density keeps declaration info as text summaries, never output tags.
         self.assertIn("[Filter A1:B2]", plain)
         self.assertIn("[Image image1 at D4]", plain)
         self.assertIn("[Chart Sales: Q1]", plain)
@@ -146,8 +146,8 @@ class StructuralRendererTests(unittest.TestCase):
 
     def test_render_range_and_missing_sheet(self) -> None:
         wb = cast(Any, _workbook())
-        html = render_range(wb, "Data", "A1:B2", density="structural")
-        self.assertIn("<grid ref=A1:B2>", html)
+        output = render_range(wb, "Data", "A1:B2", density="structural")
+        self.assertIn("<grid ref=A1:B2>", output)
         with self.assertRaises(ValueError):
             render_range(wb, "Missing", "A1:B2")
 
@@ -172,10 +172,10 @@ class StructuralRendererTests(unittest.TestCase):
             "metadata": {"source": "memory"},
             "fmt_index": FormatIndex(),
         }
-        html = render_workbook(cast(Any, workbook), density="structural")
-        self.assertIn("<image id=image1 ref=A1/>", html)
-        self.assertIn("<table id=table1", html)
-        self.assertNotIn("<grid", html)
+        output = render_workbook(cast(Any, workbook), density="structural")
+        self.assertIn("<image id=image1 ref=A1/>", output)
+        self.assertIn("<table id=table1", output)
+        self.assertNotIn("<grid", output)
 
     def test_semantic_repeated_styles_render_as_range(self) -> None:
         fmt_index = FormatIndex()
@@ -199,10 +199,10 @@ class StructuralRendererTests(unittest.TestCase):
             "fmt_index": fmt_index,
         }
 
-        html = render_workbook(cast(Any, workbook), density="semantic")
+        output = render_workbook(cast(Any, workbook), density="semantic")
 
-        self.assertIn('<styleRange ref=A1:C3 attrs="fill=#D9EAD3"/>', html)
-        self.assertEqual(html.count("fill=#D9EAD3"), 1)
+        self.assertIn('<styleRange ref=A1:C3 attrs="fill=#D9EAD3"/>', output)
+        self.assertEqual(output.count("fill=#D9EAD3"), 1)
 
 
 if __name__ == "__main__":

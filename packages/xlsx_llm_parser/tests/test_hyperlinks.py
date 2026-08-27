@@ -78,8 +78,8 @@ class HyperlinkTests(unittest.TestCase):
                 ),
             },
         )
-        html = parse_xlsx(data, density="structural")
-        self.assertIn('<a href="https://example.com">Click</a>', html)
+        output = parse_xlsx(data, density="structural")
+        self.assertIn('<a href="https://example.com">Click</a>', output)
         semantic = parse_xlsx(data, density="semantic")
         self.assertIn('<a href="https://example.com">Click</a>', semantic)
         matches = find_cells(data, "example.com", kind="hyperlink")
@@ -130,8 +130,8 @@ class HyperlinkTests(unittest.TestCase):
                 ),
             },
         )
-        html = parse_xlsx(data, density="structural")
-        self.assertIn('<a href="#Sheet2!B5">Go</a>', html)
+        output = parse_xlsx(data, density="structural")
+        self.assertIn('<a href="#Sheet2!B5">Go</a>', output)
 
 
 if __name__ == "__main__":

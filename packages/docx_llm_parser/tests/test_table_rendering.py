@@ -12,8 +12,8 @@ from docx_llm_parser.core.relationships import RelationshipIndex
 from docx_llm_parser.extractors.body import DocumentBodyParser
 from docx_llm_parser.ooxml.numbering import NumberingMap, NumberingState
 from docx_llm_parser.ooxml.styles import StyleMap
-from docx_llm_parser.renderers.html5 import manifest as _manifest
-from docx_llm_parser.renderers.html5 import render_resource as _render_resource
+from docx_llm_parser.renderers.output import build_manifest as _build_manifest
+from docx_llm_parser.renderers.output import render_resource as _render_resource
 from docx_llm_parser.renderers.plain.helpers import table_text_only
 from docx_llm_parser.renderers.tables.render import table_id
 
@@ -111,16 +111,16 @@ class TableIdentityTests(unittest.TestCase):
             warnings=[],
         )
 
-        tables_html = _render_resource(parsed, "tables")
-        self.assertEqual(len(tables_html), 1)
-        self.assertIn("id=t1", tables_html[0])
-        self.assertIn("rows=2", tables_html[0])
-        self.assertIn("cols=3", tables_html[0])
+        table_outputs = _render_resource(parsed, "tables")
+        self.assertEqual(len(table_outputs), 1)
+        self.assertIn("id=t1", table_outputs[0])
+        self.assertIn("rows=2", table_outputs[0])
+        self.assertIn("cols=3", table_outputs[0])
 
         results = _render_resource(parsed, "table", "t1")
         self.assertEqual(len(results), 1)
         self.assertIn("<table id=t1 rows=2 cols=3>", results[0])
-        self.assertEqual(_manifest(parsed)["tables"], 1)
+        self.assertEqual(_build_manifest(parsed)["tables"], 1)
 
     def _make_table(self, headers: list[str], data: list[list[str]], table_id: str = "t1") -> ParsedDocument:
         """Build a minimal ParsedDocument with one table."""
@@ -173,46 +173,46 @@ class TableIdentityTests(unittest.TestCase):
         parsed = self._make_table(["Name", "Value"], [["A", "1"], ["B", "2"], ["C", "3"]])
         results = _render_resource(parsed, "table", "t1", rows="3-4")
         self.assertEqual(len(results), 1)
-        html = results[0]
-        self.assertIn("<tr>B|", html)
-        self.assertIn("<tr>C|", html)
+        output = results[0]
+        self.assertIn("<tr>B|", output)
+        self.assertIn("<tr>C|", output)
 
     def test_table_column_filter(self) -> None:
         parsed = self._make_table(["Name", "Age", "City"], [["Alice", "30", "NYC"], ["Bob", "25", "LA"]])
         results = _render_resource(parsed, "table", "t1", columns=["Name", "City"])
         self.assertEqual(len(results), 1)
-        html = results[0]
-        self.assertIn("Name|City", html)
-        self.assertIn("Alice|NYC", html)
+        output = results[0]
+        self.assertIn("Name|City", output)
+        self.assertIn("Alice|NYC", output)
 
     def test_table_aggregate_sum(self) -> None:
         parsed = self._make_table(["Item", "Price"], [["A", "10"], ["B", "20"], ["C", "30"]])
         results = _render_resource(parsed, "table", "t1", aggregate="sum", aggregate_column="Price")
         self.assertEqual(len(results), 1)
-        html = results[0]
-        self.assertIn("<aggregate op=sum column=Price>60.0", html)
+        output = results[0]
+        self.assertIn("<aggregate op=sum column=Price>60.0", output)
 
     def test_table_aggregate_avg(self) -> None:
         parsed = self._make_table(["Item", "Score"], [["X", "100"], ["Y", "200"]])
         results = _render_resource(parsed, "table", "t1", aggregate="avg", aggregate_column="Score")
         self.assertEqual(len(results), 1)
-        html = results[0]
-        self.assertIn("<aggregate op=avg column=Score>150.0", html)
+        output = results[0]
+        self.assertIn("<aggregate op=avg column=Score>150.0", output)
 
     def test_table_aggregate_count(self) -> None:
         parsed = self._make_table(["Item", "Qty"], [["A", "5"], ["B", ""], ["C", "15"]])
         results = _render_resource(parsed, "table", "t1", aggregate="count", aggregate_column="Qty")
         self.assertEqual(len(results), 1)
-        html = results[0]
-        self.assertIn("<aggregate op=count column=Qty>2", html)
+        output = results[0]
+        self.assertIn("<aggregate op=count column=Qty>2", output)
 
     def test_table_rows_and_columns_combined(self) -> None:
         parsed = self._make_table(["Name", "Score", "Rank"], [["A", "100", "1"], ["B", "200", "2"], ["C", "300", "3"]])
         results = _render_resource(parsed, "table", "t1", rows="2-3", columns=["Name", "Score"])
         self.assertEqual(len(results), 1)
-        html = results[0]
-        self.assertIn("A|100", html)
-        self.assertIn("B|200", html)
+        output = results[0]
+        self.assertIn("A|100", output)
+        self.assertIn("B|200", output)
 
     def test_table_aggregate_unknown_column_raises(self) -> None:
         parsed = self._make_table(["A", "B"], [["1", "2"]])

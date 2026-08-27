@@ -91,9 +91,9 @@ class DateDecodingTests(unittest.TestCase):
             cell_xfs=['<xf numFmtId="14" xfId="0"/>'],
             sheet_rows=['<row r="1"><c r="A1" s="0"><v>44927</v></c></row>'],
         )
-        html = parse_xlsx(data)
+        output = parse_xlsx(data)
         # 44927 = 2023-01-01
-        self.assertIn("2023-01-01", html)
+        self.assertIn("2023-01-01", output)
 
     def test_builtin_date_format_22(self) -> None:
         """numFmtId 22 (m/d/yyyy h:mm) includes time."""
@@ -101,8 +101,8 @@ class DateDecodingTests(unittest.TestCase):
             cell_xfs=['<xf numFmtId="22" xfId="0"/>'],
             sheet_rows=['<row r="1"><c r="A1" s="0"><v>44927.5</v></c></row>'],
         )
-        html = parse_xlsx(data)
-        self.assertIn("2023-01-01", html)
+        output = parse_xlsx(data)
+        self.assertIn("2023-01-01", output)
 
     def test_date_1904_system(self) -> None:
         """Mac date system (1904-based) decodes differently."""
@@ -111,8 +111,8 @@ class DateDecodingTests(unittest.TestCase):
             sheet_rows=['<row r="1"><c r="A1" s="0"><v>1</v></c></row>'],
             date_1904=True,
         )
-        html = parse_xlsx(data)
-        self.assertIn("1904-01-02", html)
+        output = parse_xlsx(data)
+        self.assertIn("1904-01-02", output)
 
     def test_plain_number_not_formatted(self) -> None:
         """numFmtId 0 (General) leaves raw number unchanged."""
@@ -120,8 +120,8 @@ class DateDecodingTests(unittest.TestCase):
             cell_xfs=['<xf numFmtId="0" xfId="0"/>'],
             sheet_rows=['<row r="1"><c r="A1" s="0"><v>123.456</v></c></row>'],
         )
-        html = parse_xlsx(data)
-        self.assertIn("123.456", html)
+        output = parse_xlsx(data)
+        self.assertIn("123.456", output)
 
     def test_missing_styles_file(self) -> None:
         """Workbook without styles.xml falls back to raw values."""
@@ -163,8 +163,8 @@ class DateDecodingTests(unittest.TestCase):
                 ),
             },
         )
-        html = parse_xlsx(data)
-        self.assertIn("44927", html)
+        output = parse_xlsx(data)
+        self.assertIn("44927", output)
 
     def test_percentage_format(self) -> None:
         """numFmtId 9 (0%) is detected as percentage."""
@@ -172,8 +172,8 @@ class DateDecodingTests(unittest.TestCase):
             cell_xfs=['<xf numFmtId="9" xfId="0"/>'],
             sheet_rows=['<row r="1"><c r="A1" s="0"><v>0.125</v></c></row>'],
         )
-        html = parse_xlsx(data)
-        self.assertIn("12.5%", html)
+        output = parse_xlsx(data)
+        self.assertIn("12.5%", output)
 
     def test_custom_date_format(self) -> None:
         """Custom format containing 'yyyy' is detected as date."""
@@ -182,8 +182,8 @@ class DateDecodingTests(unittest.TestCase):
             sheet_rows=['<row r="1"><c r="A1" s="0"><v>44927</v></c></row>'],
             custom_fmts=['<numFmt numFmtId="164" formatCode="yyyy-mm-dd"/>'],
         )
-        html = parse_xlsx(data)
-        self.assertIn("2023-01-01", html)
+        output = parse_xlsx(data)
+        self.assertIn("2023-01-01", output)
 
     def test_quoted_literal_not_detected_as_date(self) -> None:
         """Quoted literal segments ('0 "pcs"') must not trigger date detection."""
@@ -192,9 +192,9 @@ class DateDecodingTests(unittest.TestCase):
             sheet_rows=['<row r="1"><c r="A1" s="0"><v>44927</v></c></row>'],
             custom_fmts=['<numFmt numFmtId="164" formatCode=\'0 "pcs"\'/>'],
         )
-        html = parse_xlsx(data)
-        self.assertIn("44927", html)
-        self.assertNotIn("2023-01-01", html)
+        output = parse_xlsx(data)
+        self.assertIn("44927", output)
+        self.assertNotIn("2023-01-01", output)
 
     def test_bracket_section_not_detected_as_date(self) -> None:
         """Non-elapsed bracket sections ('[DBNum1]') must not trigger date detection."""
@@ -203,9 +203,9 @@ class DateDecodingTests(unittest.TestCase):
             sheet_rows=['<row r="1"><c r="A1" s="0"><v>44927</v></c></row>'],
             custom_fmts=['<numFmt numFmtId="165" formatCode="[DBNum1]0"/>'],
         )
-        html = parse_xlsx(data)
-        self.assertIn("44927", html)
-        self.assertNotIn("2023-01-01", html)
+        output = parse_xlsx(data)
+        self.assertIn("44927", output)
+        self.assertNotIn("2023-01-01", output)
 
 
 if __name__ == "__main__":

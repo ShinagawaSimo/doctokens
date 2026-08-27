@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from html import escape
+from html import escape as escape_text
 
 from ...core.models import OcrStoredResult
 
@@ -24,10 +24,10 @@ def render_ocr_result(asset_id: str, value: OcrStoredResult | None) -> str | Non
         return None
     text = ocr_text(value)
     if text:
-        return f"<ocr-text id={escape(asset_id, quote=True)}>{escape(text)}"
+        return f"<ocr-text id={escape_text(asset_id, quote=True)}>{escape_text(text)}"
     if isinstance(value, Mapping) and value.get("status") == "empty":
-        return f"<ocr-text id={escape(asset_id, quote=True)} empty>"
-    return f"<ocr-text id={escape(asset_id, quote=True)} error>"
+        return f"<ocr-text id={escape_text(asset_id, quote=True)} empty>"
+    return f"<ocr-text id={escape_text(asset_id, quote=True)} error>"
 
 
 __all__ = ["ocr_text", "render_ocr_result"]

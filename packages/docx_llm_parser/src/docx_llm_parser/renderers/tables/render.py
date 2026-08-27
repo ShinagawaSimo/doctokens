@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from html import escape
+from html import escape as escape_text
 from typing import cast
 
 from ...core.models import InlineContainer, OcrStoredResult, TableBlock, TableCell, TableRow
@@ -17,7 +17,10 @@ def render_table(
     density: str,
     ocr_results: dict[str, OcrStoredResult] | None = None,
 ) -> Iterator[str]:
-    """Output an HTML5 table (for structural/semantic). Cells within a row have no newlines; only rows are newline-separated."""
+    """Output a table for structural or semantic density.
+
+    Cells within a row have no newlines; only rows are newline-separated.
+    """
     rows = block.get("rows", [])
 
     if len(rows) > _constants._TABLE_TRUNCATE_STRUCTURAL_SEMANTIC:
@@ -88,7 +91,7 @@ def cell_content(
     """Output the cell text."""
     blocks = cell.get("blocks", [])
     if not blocks:
-        return escape(cell["text"])
+        return escape_text(cell["text"])
     parts: list[str] = []
     for block in blocks:
         if block["type"] == "table":
@@ -106,7 +109,7 @@ def cell_content(
 
 
 def nested_table(block: TableBlock, ocr_results: dict[str, OcrStoredResult] | None = None) -> str:
-    """Render a nested table as lightweight HTML5."""
+    """Render a nested table as lightweight self-defined output."""
     rows = block["rows"]
     attrs = f"rows={len(rows)} cols={block['columnCount']}"
     table_id_value = block.get("tableId")

@@ -10,19 +10,19 @@ from xml.etree import ElementTree as ET
 from docx_llm_parser.core.models import ParseOptions, ParseWarning, RelationshipRecord
 from docx_llm_parser.core.package import PackageReader
 from docx_llm_parser.core.relationships import RelationshipIndex
-from docx_llm_parser.extractors.body import DocumentBodyParser
-from docx_llm_parser.extractors.inline import InlineParser
-from docx_llm_parser.extractors.objects import (
+from docx_llm_parser.ooxml.numbering import NumberingMap, NumberingState
+from docx_llm_parser.ooxml.styles import StyleMap
+from docx_llm_parser.parsing.modules.body.inline import InlineParser
+from docx_llm_parser.parsing.modules.body.scanner import DocumentBodyParser
+from docx_llm_parser.parsing.modules.resources.objects import (
     CHART_REL_TYPE,
     DIAGRAM_DATA_REL_TYPE,
     EmbeddedObjectExtractor,
     parse_chart_root,
     parse_smartart_root,
 )
-from docx_llm_parser.ooxml.numbering import NumberingMap, NumberingState
-from docx_llm_parser.ooxml.styles import StyleMap
-from docx_llm_parser.renderers.inline.content import inline_content as _inline_content
-from docx_llm_parser.renderers.tables.render import nested_table as _nested_table
+from docx_llm_parser.rendering.inline.content import inline_content as _inline_content
+from docx_llm_parser.rendering.tables.render import nested_table as _nested_table
 
 NS = (
     'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '

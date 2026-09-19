@@ -92,38 +92,37 @@ Excel 单元格的 `numFmt` 是数值的显示格式，不是段落或文本流�
 
 ## 范围读取
 
-`render_range(source, sheet, range_spec, *, density)` 解析源文件并按 A1 范围筛选单元格，返回 `<grid ref=...>` 块。不输出密度标记。
+`parse_xlsx(source, sheet=..., range_spec=..., density=...)` 解析源文件并按 A1 范围筛选单元格，返回包含 `<grid ref=...>` 的 `ParseResult`。session 可通过 `render(sheet=..., range_spec=...)` 重复执行相同读取。
 
 ```python
-from xlsx_llm_parser import render_range
+from xlsx_llm_parser import parse_xlsx
 
-html = render_range("workbook.xlsx", "Sheet1", "B2:D10")
+result = parse_xlsx("workbook.xlsx", sheet="Sheet1", range_spec="B2:D10")
 ```
 
 ## 公共 API
 
-所有函数直接接受源文件路径或 bytes，内部完成解析和渲染。内部 IR（`ParsedWorkbook`）不暴露为公开 API。
+`parse_xlsx()` 接受源文件路径或 bytes，并返回 `ParseResult`。内部 IR（`ParsedWorkbook`）不暴露为公开 API；需要连续读取时使用 context-managed session。
 
 ```python
-from xlsx_llm_parser import parse_xlsx, render_range, iter_workbook
+from xlsx_llm_parser import open_xlsx, parse_xlsx
 
 # 主入口：解析并渲染完整工作簿
-html = parse_xlsx("workbook.xlsx")  # structural（默认）
-html = parse_xlsx("workbook.xlsx", density="semantic")  # 语义级
-html = parse_xlsx("workbook.xlsx", density="plain")  # 纯文本
+result = parse_xlsx("workbook.xlsx")  # structural（默认）
+semantic = parse_xlsx("workbook.xlsx", density="semantic")
+window = parse_xlsx("workbook.xlsx", sheet="Sheet1", range_spec="A1:H30")
 
-# 流式迭代
-for chunk in iter_workbook("workbook.xlsx", density="structural"):
-    ...
-
-# 范围读取
-html = render_range("workbook.xlsx", "Sheet1", "A1:H30")  # structural（默认）
-html = render_range("workbook.xlsx", "Sheet1", "A1:H30", density="semantic")
+with open_xlsx("workbook.xlsx") as workbook:
+    grid = workbook.render(sheet="Sheet1", range_spec="A1:H30")
+    matches = workbook.find_cells("预算")
+    rows = workbook.query_data(table_id="Orders", limit=20)
+    image_bytes = workbook.read_resource("image", "image1")
 ```
 
-- `parse_xlsx(source, *, density)` — 解析并渲染完整工作簿
-- `render_range(source, sheet, range_spec, *, density)` — 解析并渲染指定 A1 范围
-- `iter_workbook(source, *, density)` — 解析并流式渲染
+- `parse_xlsx(source, *, density, sheet?, range_spec?, options?)` — 返回文本、report 和资源目录
+- `open_xlsx(source, *, options?)` — 打开 `XlsxReadSession`
+- `session.render(sheet?, range_spec?, density?)` — 渲染完整工作簿、单个工作表或指定 A1 区域
+- `session.iter_render(...)` — 迭代已解析 IR 的输出块
 
 ## 公式
 
@@ -235,16 +234,14 @@ definedName 中检测到的 `[Budget.xlsx]` 外部引用输出为 `<externalLink
 <pivotTable id=pivot1/>
 ```
 
-图片字节延迟读取，图表详情通过 `get_resource()` 按需获取。图表标签恒带 `truncated`——其语义是"这是摘要视图"，完整数据点通过 `get_resource(source, "chart", id)` 获取（与 DOCX 的 `<chart ... truncated>` 约定一致）。
+图片 bytes 通过 `session.read_resource("image", id)` 读取，图表详情通过 `session.render_resource("chart", id)` 按需获取。图表标签恒带 `truncated`——其语义是"这是摘要视图"。
 
 ## 专项工具
 
-- `find_cells(source, query, *, sheets, kind, limit)` — 跨 sheet 搜索值/公式/批注/Defined Name
-- `query_data(source, *, table_id, sheet, range_spec, header_row, ...)` — 投影筛选 + 分组聚合
-- `get_resource(source, type, id)` — 按 ID 提取 image/chart/pivot_table 原子资源
+`find_cells()` 和实验性的 `query_data()` 是 `XlsxReadSession` 方法。`read_resource("image", id)` 返回原始嵌入 bytes；`render_resource("chart", id)` 或 `render_resource("pivot_table", id)` 返回 `ParseResult`。未知工作表或资源 ID 分别抛出 `KeyError`；非法范围和参数抛出 `ValueError`。
 
 ## 架构边界
 
 XLSX parser 只负责读取 package、解析确定性 SpreadsheetML 结构、生成 workbook/cell IR 和密度输出。`query_data` 目前是实验性、有限能力的下游辅助查询，不执行完整 SQL、公式求值或外部刷新。源文件缓存、跨请求 loaded session、重复文件参数去重、分块、检索、向量化和模型调用属于下游消费者；parser 不设置隐式全局缓存，也不替下游维护文档生命周期。
 
-`stream=True` 只控制输出是否以迭代器返回；它不承诺流式解析。当前调用会先完成 XLSX 解析，再按工作表产生输出块。
+没有 `stream` 布尔参数。`iter_render()` 只迭代已解析 IR 的输出，不承诺流式解析或常量内存。

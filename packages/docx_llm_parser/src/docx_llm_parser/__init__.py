@@ -1,24 +1,18 @@
 """DOCX parser that produces LLM-readable self-defined output."""
 
-from ooxml_llm_core.models import ParseReport
+from ooxml_llm_core.models import ParseReport, ParseResult, ResourceDescriptor
 
 from ._version import __version__
-from .api import LoadedDocx, get_resource, load_docx, parse_docx, render_window
-from .core.enums import Density, ResourceType
+from .api import DocxReadSession, open_docx, parse_docx
 from .core.models import ParseOptions
-from .plan import DocxFeature, DocxParsePlan
 
 __all__ = [
-    "Density",
-    "DocxFeature",
-    "DocxParsePlan",
-    "LoadedDocx",
+    "DocxReadSession",
     "ParseOptions",
     "ParseReport",
-    "ResourceType",
+    "ParseResult",
+    "ResourceDescriptor",
     "__version__",
-    "get_resource",
-    "load_docx",
+    "open_docx",
     "parse_docx",
-    "render_window",
 ]

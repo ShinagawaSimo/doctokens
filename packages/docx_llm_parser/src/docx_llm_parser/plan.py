@@ -28,6 +28,7 @@ class DocxFeature(Flag):
     COMMENTS = auto()
     COMMENT_THREADING = auto()
     EMBEDDED_DETAILS = auto()
+    EMBEDDED_SUMMARY = auto()
     OCR = auto()
 
 
@@ -37,6 +38,7 @@ _RENDER_BASE = (
     | DocxFeature.FOOTNOTES
     | DocxFeature.ENDNOTES
     | DocxFeature.COMMENTS
+    | DocxFeature.EMBEDDED_SUMMARY
 )
 _FULL = (
     DocxFeature.CHARACTER_FORMATTING
@@ -53,6 +55,11 @@ _FULL = (
     | DocxFeature.OCR
 )
 
+# Raw hints are diagnostics for a reusable session, not part of semantic
+# render output.  Keeping this distinction lets a one-shot semantic render
+# avoid constructing an otherwise unused list on every paragraph.
+_SEMANTIC_RENDER = _FULL & ~DocxFeature.RAW_HINTS
+
 
 @dataclass(frozen=True, slots=True)
 class DocxParsePlan:
@@ -62,6 +69,35 @@ class DocxParsePlan:
     density: Density
     features: DocxFeature
 
+    @property
+    def module_keys(self) -> tuple[str, ...]:
+        """Independent parser modules selected for this operation."""
+        if self.purpose is ParsePurpose.RESOURCE:
+            return ("resources.assets", "resources.objects")
+        if self.purpose is ParsePurpose.SESSION:
+            return (
+                "body.semantic",
+                "ancillary.notes",
+                "ancillary.comments",
+                "ancillary.headers_footers",
+                "resources.assets",
+                "resources.objects.full",
+                "ocr",
+            )
+        if self.density is Density.PLAIN:
+            return ("body.plain", "ancillary.notes", "ancillary.comments", "resources.assets", "resources.objects.summary")
+        if self.density is Density.STRUCTURAL:
+            return ("body.structural", "ancillary.notes", "ancillary.comments", "resources.assets", "resources.objects.summary")
+        return (
+            "body.semantic",
+            "ancillary.notes",
+            "ancillary.comments",
+            "ancillary.headers_footers",
+            "resources.assets",
+            "resources.objects.full",
+            "ocr",
+        )
+
     def needs(self, feature: DocxFeature) -> bool:
         return bool(self.features & feature)
 
@@ -69,8 +105,8 @@ class DocxParsePlan:
     def render(cls, density: Density | str) -> DocxParsePlan:
         resolved = Density.parse(density)
         if resolved is Density.SEMANTIC:
-            return cls(ParsePurpose.RENDER, resolved, _FULL)
-        return cls(ParsePurpose.RENDER, resolved, _RENDER_BASE | DocxFeature.EMBEDDED_DETAILS)
+            return cls(ParsePurpose.RENDER, resolved, _SEMANTIC_RENDER)
+        return cls(ParsePurpose.RENDER, resolved, _RENDER_BASE | DocxFeature.EMBEDDED_SUMMARY)
 
     @classmethod
     def session(cls) -> DocxParsePlan:

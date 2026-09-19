@@ -211,10 +211,7 @@ class PackageReader:
             return cached
         with self.open_entry(normalized) as stream:
             data = stream.read()
-        if (
-            len(data) <= _PART_CACHE_ENTRY_BYTES
-            and self._part_cache_bytes + len(data) <= _PART_CACHE_TOTAL_BYTES
-        ):
+        if len(data) <= _PART_CACHE_ENTRY_BYTES and self._part_cache_bytes + len(data) <= _PART_CACHE_TOTAL_BYTES:
             self._part_cache[normalized] = data
             self._part_cache_bytes += len(data)
         return data

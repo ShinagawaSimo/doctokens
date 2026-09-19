@@ -8,9 +8,9 @@ from pathlib import Path
 from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.models import RelationshipRecord
 from ooxml_llm_core.package import PackageReader
-from xlsx_llm_parser import parse_xlsx
-from xlsx_llm_parser._sheet_post import parse_drawings
+from xlsx_llm_parser.parsing.modules.worksheets.post import parse_drawings
 
+from test_support.api_v2_text import parse_xlsx
 from test_support.file_contract import materialize_bytes
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"

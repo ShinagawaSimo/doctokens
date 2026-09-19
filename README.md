@@ -54,7 +54,7 @@
    * 标签及属性名基本上使用了 LLM 训练语料中常见的 HTML 语义（`<b>`、`<table>`、`<a href=...>`、`colspan`），避免大模型额外的理解成本；
 
    * 提供**三种信息密度**（plain / structural / semantic）供 LLM 按需选择粒度，以及**页码窗口读取**和**按需资源提取**，避免为一个简单问题加载全文。
-   * `stream=True` 只表示流式输出（未来也可扩展为流式输入），不表示流式解析；当前实现会先完成解析，再返回输出迭代器。
+   * `iter_render()` 只迭代已解析 IR 的输出块，不表示流式解析；需要重复读取时使用格式专属的 context-managed session。
 
 ---
 
@@ -124,10 +124,13 @@ doctokens/
 
 Python ≥ 3.10。
 
-**完整安装（所有包）：**
+仓库根目录是开发 workspace，不是用户发行包。完整安装使用各子包：
 
 ```bash
-pip install -e .
+pip install -e packages/ooxml_llm_core
+pip install -e packages/docx_llm_parser
+pip install -e packages/xlsx_llm_parser
+pip install -e packages/pptx_llm_parser
 ```
 
 **独立安装（按需选择）：**
@@ -144,11 +147,9 @@ pip install -e packages/ocr_llm_core      # OCR provider 核心
 
 OCR 引擎可选依赖（按需安装，不影响核心包）：
 ```bash
-pip install -e ".[ocr]"         # OCR provider 核心
-pip install -e ".[tesseract]"   # Tesseract adapter + Pillow
-pip install -e ".[easyocr]"     # EasyOCR + PyTorch + Pillow
-pip install -e ".[paddle]"      # 内置 PaddleOCR-VL 云 API adapter（无额外本地依赖）
-pip install -e ".[all]"         # OCR 核心及本地引擎依赖
+pip install -e packages/ocr_llm_core                    # OCR provider 核心
+pip install -e "packages/ocr_llm_core[tesseract]"       # Tesseract adapter + Pillow
+pip install -e "packages/ocr_llm_core[easyocr]"         # EasyOCR + PyTorch + Pillow
 ```
 
 ---
@@ -161,9 +162,9 @@ pip install -e ".[all]"         # OCR 核心及本地引擎依赖
 
 三种格式保留各自的导航单元和 IR；共享层只承载 OPC package、关系、XML、图表、限制和诊断等确实共用的基础设施，不为了表面统一引入空泛的 Office 文档基类。
 
-连续执行多个读取操作时，下游可以显式创建 loaded/session facade 复用一次解析结果：DOCX 使用 `load_docx()`，XLSX 使用 `load_xlsx()`，PPTX 使用 `open_pptx()` 上下文管理器。便利函数仍然是无状态入口，不会隐式缓存源文件。
+连续执行多个读取操作时，调用方可以显式创建格式专属的 context-managed read session：DOCX 使用 `open_docx()`，XLSX 使用 `open_xlsx()`，PPTX 使用 `open_pptx()`。一次性 `parse_*` 返回包含文本、report 和资源目录的 `ParseResult`。
 
-便利渲染入口会根据 `density` 创建格式专属的 `ParsePlan`，仅读取对应输出需要的 feature；例如 plain 不构造字符格式或语义样式，XLSX 的 `render_range()` 只选择目标工作表和 A1 窗口。loaded/session 入口始终使用完整计划，保证后续密度切换、检索和资源查询不因初始渲染粒度丢失数据。
+一次性入口按 `density` 和窗口创建格式专属的 `ParsePlan`；session 入口使用完整计划，保证后续密度切换、检索和资源读取不因初始渲染粒度丢失数据。二进制资源通过 session 的 `read_resource()` 返回原始 bytes，解释性资源通过 `render_resource()` 返回 `ParseResult`。
 
 ---
 
@@ -172,23 +173,19 @@ pip install -e ".[all]"         # OCR 核心及本地引擎依赖
 **DOCX：**
 
 ```python
-from docx_llm_parser import parse_docx, render_window, get_resource, Density
+from docx_llm_parser import open_docx, parse_docx
 
 # 解析渲染
-html = parse_docx("example.docx")
-html = parse_docx("example.docx", density=Density.STRUCTURAL)
+result = parse_docx("example.docx", density="semantic")
+print(result.text)
+print(result.report.to_dict())
 
-# 流式输出（大文档或网络传输场景）
-for chunk in parse_docx("large.docx", stream=True):
-    send(chunk)
-
-# 按页读取
-content = render_window("example.docx", page=3)
-last_page = render_window("example.docx", page=-1)  # 最后一页
-
-# 按需提取资源
-image = get_resource("example.docx", "image", "img3")
-table = get_resource("example.docx", "table", "t2")
+with open_docx("example.docx") as document:
+    page = document.render(page_hint=3)
+    image_bytes = document.read_resource("image", "img3")
+    table = document.render_resource("table", "t2")
+    for chunk in document.iter_render(density="plain"):
+        send(chunk)
 ```
 
 **XLSX：**
@@ -196,67 +193,47 @@ table = get_resource("example.docx", "table", "t2")
 `query_data` 当前是实验性能力。它支持有限的投影、筛选、分组、聚合和排序，不执行公式求值、外部刷新或完整 SQL 语义；不支持的操作会显式报错。
 
 ```python
-from xlsx_llm_parser import parse_xlsx, render_range, find_cells, query_data, get_resource
+from xlsx_llm_parser import open_xlsx, parse_xlsx
 
 # 解析渲染
-text = parse_xlsx("example.xlsx")
-text = parse_xlsx("example.xlsx", density="plain")
+result = parse_xlsx("example.xlsx", density="structural")
+print(result.text)
 
-# 流式输出
-for chunk in parse_xlsx("large.xlsx", stream=True):
-    send(chunk)
-
-# 按范围渲染
-html = render_range("example.xlsx", sheet="Sheet1", range_spec="A1:D20")
-
-# 全文搜索
-results = find_cells("example.xlsx", "预算", limit=50)
-
-# SQL-like 查询
-rows = query_data(
-    "sales.xlsx",
-    table_id="Orders",
-    select=["产品", "金额"],
-    where=[{"column": "金额", "op": "gt", "value": 10000}],
-    limit=20,
-)
-
-# 按需提取资源
-chart = get_resource("example.xlsx", "chart", "chart1")
+with open_xlsx("example.xlsx") as workbook:
+    grid = workbook.render(sheet="Sheet1", range_spec="A1:D20")
+    results = workbook.find_cells("预算", limit=50)
+    rows = workbook.query_data(table_id="Orders", select=["产品", "金额"], limit=20)
+    chart = workbook.render_resource("chart", "chart1")
 ```
 
 **PPTX：**
 
 ```python
-from pptx_llm_parser import parse_pptx, iter_slides, render_window, get_resource, Density
+from pptx_llm_parser import open_pptx, parse_pptx
 
-html = parse_pptx("deck.pptx")
-html = parse_pptx("deck.pptx", density=Density.STRUCTURAL)
+result = parse_pptx("deck.pptx", density="semantic")
+print(result.text)
 
-for chunk in iter_slides("deck.pptx", density=Density.PLAIN):
-    send(chunk)
-
-content = render_window("deck.pptx", slide=3, span=2)
-chart = get_resource("deck.pptx", "chart", "chart1")
+with open_pptx("deck.pptx") as presentation:
+    content = presentation.render(slide=3, span=2)
+    chart = presentation.render_resource("chart", "chart1")
+    for chunk in presentation.iter_render(density="plain"):
+        send(chunk)
 ```
 
 显式复用入口：
 
 ```python
-from docx_llm_parser import load_docx
-from xlsx_llm_parser import load_xlsx
-from pptx_llm_parser import open_pptx
+with open_docx("example.docx") as doc:
+    doc_html = doc.render()
+    doc_page = doc.render(page_hint=3)
 
-doc = load_docx("example.docx")
-doc_html = doc.render()
-doc_page = doc.render_window(page=3)
-
-workbook = load_xlsx("example.xlsx")
-sheet = workbook.render_range("Sheet1", "A1:D20")
-matches = workbook.find_cells("预算")
+with open_xlsx("example.xlsx") as workbook:
+    sheet = workbook.render(sheet="Sheet1", range_spec="A1:D20")
+    matches = workbook.find_cells("预算")
 
 with open_pptx("deck.pptx") as presentation:
-    slide = presentation.render_window(slide=2)
+    slide = presentation.render(slide=2)
     report = presentation.report.to_dict()
 ```
 
@@ -276,31 +253,28 @@ with open_pptx("deck.pptx") as presentation:
 
 | 函数 | 说明 |
 |------|------|
-| `parse_docx(source, *, density, stream?, options?)` | 解析 DOCX 并渲染为字符串或输出迭代器；stream 不表示流式解析 |
-| `render_window(source, *, page, span?, density?, options?)` | 返回指定页码范围的内容片段 |
-| `get_resource(source, resource_type, resource_id)` | 获取单个资源详情（图片/图表/表格等） |
-| `load_docx(source, *, options?)` | 显式加载一次，返回可重复 render/window/resource 的 `LoadedDocx` |
+| `parse_docx(source, *, density, page_hint?, span?, options?)` | 返回文本、report 和资源目录 |
+| `open_docx(source, *, options?)` | 打开 context-managed `DocxReadSession` |
+| `session.render(page_hint?, span?, density?)` | 渲染全文或分页提示窗口 |
+| `session.read_resource(kind, id)` | 读取嵌入二进制资源 bytes |
 
 **xlsx_llm_parser**
 
 | 函数 | 说明 |
 |------|------|
-| `parse_xlsx(source, *, density, start_row?, stream?, options?)` | 解析 XLSX 并渲染为字符串或输出迭代器；stream 不表示流式解析 |
-| `render_range(source, *, sheet, range_spec, density?)` | A1 风格区域渲染 |
-| `find_cells(source, query, *, sheets?, kind?, limit?)` | 搜索单元格值/公式/批注/超链接/定义名称 |
-| `query_data(source, *, table_id?, sheet?, range_spec?, select?, where?, group_by?, aggregates?, order_by?, limit?)` | 实验性 SQL-like 结构化查询 |
-| `get_resource(source, resource_type, resource_id)` | 获取资源元数据（image/chart/pivot_table/embedded_object） |
-| `load_xlsx(source, *, options?)` | 显式加载一次，返回可重复 render/range/search/query/resource 的 `LoadedWorkbook` |
+| `parse_xlsx(source, *, density, sheet?, range_spec?, options?)` | 返回文本、report 和资源目录 |
+| `open_xlsx(source, *, options?)` | 打开 context-managed `XlsxReadSession` |
+| `session.render(sheet?, range_spec?, density?)` | 渲染 workbook、工作表或 A1 区域 |
+| `session.find_cells(...)` / `session.query_data(...)` | 搜索和实验性 SQL-like 查询 |
 
 **pptx_llm_parser**
 
 | 函数 | 说明 |
 |------|------|
-| `parse_pptx(source, *, density, stream?, options?)` | 解析 PPTX 并渲染为字符串或逐幻灯片迭代器 |
-| `iter_slides(source, *, density, start_slide?, options?)` | 解析完成后逐幻灯片输出，批注作为尾部 supplemental 分块 |
-| `render_window(source, *, slide, span?, density?, options?)` | 返回指定幻灯片窗口 |
-| `get_resource(source, resource_type, resource_id, ...)` | 提取图片、媒体、图表、SmartArt 或表格资源 |
-| `open_pptx(source, *, options?)` | 打开 context-managed `PptxReadSession`，复用一次解析结果 |
+| `parse_pptx(source, *, density, slide?, span?, options?)` | 返回文本、report 和资源目录 |
+| `open_pptx(source, *, options?)` | 打开 context-managed `PptxReadSession` |
+| `session.render(slide?, span?, density?)` | 渲染全文或幻灯片窗口 |
+| `session.read_resource(kind, id)` / `render_resource(...)` | 读取媒体 bytes 或解释性资源 |
 
 ---
 

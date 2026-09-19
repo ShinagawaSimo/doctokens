@@ -7,7 +7,7 @@ from typing import TypedDict
 
 from ._utils import col_letter
 from .models import Cell, ParsedWorkbook, SheetInfo
-from .renderers.structural import _find_sheet, _parse_range
+from .rendering.structural import _find_sheet, _parse_range
 
 
 class WhereCondition(TypedDict, total=False):

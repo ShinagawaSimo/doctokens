@@ -5,8 +5,8 @@ from __future__ import annotations
 import unittest
 
 from _pptx_fixtures import rich_deck_pptx
-from pptx_llm_parser import Density, parse_pptx
 
+from test_support.api_v2_text import Density, parse_pptx
 from test_support.file_contract import output_path, write_text_result
 
 

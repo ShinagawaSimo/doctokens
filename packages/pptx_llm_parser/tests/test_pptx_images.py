@@ -17,9 +17,10 @@ from _pptx_fixtures import (
     slide_rels_xml,
     slide_xml_shapes,
 )
-from pptx_llm_parser import Density, parse_pptx
 from pptx_llm_parser.core.models import ParseOptions
-from pptx_llm_parser.parser import PptxParser
+from pptx_llm_parser.parsing.runner import PptxParser
+
+from test_support.api_v2_text import Density, parse_pptx
 
 
 def _image_deck(*, alt: str | None = None, external: bool = False) -> Path:

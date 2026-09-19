@@ -50,7 +50,7 @@ class RenderOcrTextTest(unittest.TestCase):
             ImageAsset,
             ParsedDocument,
         )
-        from docx_llm_parser.renderers.output import to_output
+        from docx_llm_parser.rendering.dispatch import to_output
 
         assets: list[ImageAsset] = [
             {
@@ -92,7 +92,7 @@ class RenderOcrTextTest(unittest.TestCase):
     def test_structured_ocr_results_escape_text_and_preserve_empty(self) -> None:
         from docx_llm_parser.core.enums import Density
         from docx_llm_parser.core.models import ContentTypes, ImageAsset, ParsedDocument
-        from docx_llm_parser.renderers.output import to_output
+        from docx_llm_parser.rendering.dispatch import to_output
 
         assets: list[ImageAsset] = [
             {"id": "img1", "type": "image", "source": "embedded", "zipPath": "media/1.png"},
@@ -125,7 +125,7 @@ class RenderOcrTextTest(unittest.TestCase):
             ImageAsset,
             ParsedDocument,
         )
-        from docx_llm_parser.renderers.output import to_output
+        from docx_llm_parser.rendering.dispatch import to_output
 
         assets: list[ImageAsset] = [
             {"id": "img1", "type": "image", "source": "embedded", "zipPath": "media/img1.png"},
@@ -152,7 +152,7 @@ class RenderOcrTextTest(unittest.TestCase):
             ImageAsset,
             ParsedDocument,
         )
-        from docx_llm_parser.renderers.output import to_output
+        from docx_llm_parser.rendering.dispatch import to_output
 
         assets: list[ImageAsset] = [
             {"id": "img7", "type": "image", "source": "embedded", "zipPath": "media/img7.png"},
@@ -186,7 +186,7 @@ class RenderOcrTextTest(unittest.TestCase):
     def test_nested_table_image_receives_ocr_in_semantic_and_plain_output(self) -> None:
         from docx_llm_parser.core.enums import Density
         from docx_llm_parser.core.models import ContentTypes, ImageAsset, ParsedDocument
-        from docx_llm_parser.renderers.output import to_output
+        from docx_llm_parser.rendering.dispatch import to_output
 
         image_paragraph = {
             "id": "p1",
@@ -249,7 +249,7 @@ class RenderOcrTextTest(unittest.TestCase):
     def test_supplemental_image_receives_ocr(self) -> None:
         from docx_llm_parser.core.enums import Density
         from docx_llm_parser.core.models import ContentTypes, ParsedDocument
-        from docx_llm_parser.renderers.output import to_output
+        from docx_llm_parser.rendering.dispatch import to_output
 
         header = {
             "id": "header1",
@@ -278,7 +278,7 @@ class EndToEndOcrTest(unittest.TestCase):
         from io import BytesIO
 
         from docx_llm_parser.core.models import ImageAsset, ParseOptions
-        from docx_llm_parser.parser import DocxParser
+        from docx_llm_parser.parsing.runner import DocxParser
         from ocr_llm_core import OcrProvider
 
         class Provider(OcrProvider):
@@ -332,16 +332,15 @@ class EndToEndOcrTest(unittest.TestCase):
             write_rich_docx(docx_path)
             opts = ParseOptions(ocr=MarkdownProvider(), ocr_workers=1)
             output = parse_docx(docx_path, options=opts)
-            self.assertIn("density=semantic", output)
-            self.assertIsInstance(output, str)
-            self.assertTrue(len(output) > 0)
+            self.assertIn("density=semantic", output.text)
+            self.assertTrue(output.text)
 
     def test_pipeline_preserves_provider_error_details_in_internal_model(self) -> None:
         from pathlib import Path
         from tempfile import TemporaryDirectory
 
         from _fixtures import write_rich_docx
-        from docx_llm_parser.parser import DocxParser
+        from docx_llm_parser.parsing.runner import DocxParser
         from ocr_llm_core import OcrProvider, OcrResult
 
         class FailingProvider(OcrProvider):
@@ -359,12 +358,12 @@ class EndToEndOcrTest(unittest.TestCase):
             self.assertEqual(value["status"], "error")
             self.assertEqual(value["error_message"], "private diagnostic")
 
-    def test_non_image_resource_query_does_not_trigger_ocr(self) -> None:
+    def test_session_with_ocr_provider_runs_ocr_before_resource_reads(self) -> None:
         from pathlib import Path
         from tempfile import TemporaryDirectory
 
         from _fixtures import write_rich_docx
-        from docx_llm_parser import get_resource
+        from docx_llm_parser import open_docx
         from ocr_llm_core import OcrProvider
 
         class CountingProvider(OcrProvider):
@@ -379,8 +378,9 @@ class EndToEndOcrTest(unittest.TestCase):
         with TemporaryDirectory() as temp_dir:
             docx_path = Path(temp_dir) / "test.docx"
             write_rich_docx(docx_path)
-            get_resource(docx_path, "chart", "chart1", options=ParseOptions(ocr=provider))
-        self.assertEqual(provider.calls, 0)
+            with open_docx(docx_path, options=ParseOptions(ocr=provider)) as document:
+                document.render_resource("chart", "chart1")
+        self.assertEqual(provider.calls, 1)
 
 
 if __name__ == "__main__":

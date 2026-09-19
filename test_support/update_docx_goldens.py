@@ -27,12 +27,13 @@ sys.path.insert(0, str(ROOT / "packages" / "docx_llm_parser" / "src"))
 sys.path.insert(0, str(ROOT / "packages" / "pptx_llm_parser" / "src"))
 sys.path.insert(0, str(ROOT / "packages" / "xlsx_llm_parser" / "src"))
 
-from docx_llm_parser import Density as DocxDensity  # noqa: E402
-from docx_llm_parser import parse_docx  # noqa: E402
-from pptx_llm_parser import Density as PptxDensity  # noqa: E402
-from pptx_llm_parser import parse_pptx  # noqa: E402
-from xlsx_llm_parser import parse_xlsx  # noqa: E402
-
+from test_support.api_v2_text import Density as DocxDensity  # noqa: E402
+from test_support.api_v2_text import Density as PptxDensity  # noqa: E402
+from test_support.api_v2_text import (  # noqa: E402
+    parse_docx,
+    parse_pptx,
+    parse_xlsx,
+)
 from test_support.file_contract import write_text_result  # noqa: E402
 
 TEST_SUPPORT = ROOT / "test_support"

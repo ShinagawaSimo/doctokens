@@ -5,8 +5,9 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from xlsx_llm_parser import ParseOptions, load_xlsx, parse_xlsx
+from xlsx_llm_parser import ParseOptions, open_xlsx
 
+from test_support.api_v2_text import parse_xlsx
 from test_support.file_contract import materialize_bytes
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -89,7 +90,7 @@ class MinimalParseTests(unittest.TestCase):
         self.assertIn("sheet name=Sheet1", output)
         self.assertIn("<grid ref=A1:B2>", output)
 
-    def test_loaded_facade_accepts_package_options_and_exposes_report(self) -> None:
+    def test_session_accepts_package_options_and_exposes_report(self) -> None:
         data = _make_xlsx(
             {
                 "[Content_Types].xml": _content_types(),
@@ -99,17 +100,17 @@ class MinimalParseTests(unittest.TestCase):
                 "xl/worksheets/sheet1.xml": _sheet_xml([]),
             }
         )
-        loaded = load_xlsx(data, options=ParseOptions(max_zip_entries=100))
-        self.assertEqual(loaded.report.format, "xlsx")
-        self.assertEqual(loaded.report.manifest["sheetCount"], 1)
-        self.assertEqual(loaded.render(), loaded.render())
-        self.assertTrue(list(loaded.iter_render(density="plain")))
-        self.assertEqual(loaded.render_range("Sheet1", "A1:A1"), "")
-        self.assertEqual(loaded.find_cells(""), "<matches>\n")
-        self.assertIsNone(loaded.get_resource("image", "missing"))
-        self.assertIsNone(loaded.get_resource("chart", "missing"))
-        with self.assertRaisesRegex(ValueError, "Invalid density"):
-            loaded.render(density="invalid")
+        with open_xlsx(data, options=ParseOptions(max_zip_entries=100)) as session:
+            self.assertEqual(session.report.format, "xlsx")
+            self.assertEqual(session.report.manifest["sheetCount"], 1)
+            self.assertEqual(session.render().text, session.render().text)
+            self.assertTrue(list(session.iter_render(density="plain")))
+            self.assertEqual(session.render(sheet="Sheet1", range_spec="A1:A1").text, "")
+            self.assertEqual(session.find_cells("").text, "<matches>\n")
+            with self.assertRaises(KeyError):
+                session.render_resource("chart", "missing")
+            with self.assertRaisesRegex(ValueError, "density"):
+                session.render(density="invalid")
 
     def test_empty_sheet(self) -> None:
         """Sheet with no rows produces a sheet tag without grid."""

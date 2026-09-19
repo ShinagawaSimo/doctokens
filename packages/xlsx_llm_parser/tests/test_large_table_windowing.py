@@ -5,8 +5,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from xlsx_llm_parser import parse_xlsx
-
+from test_support.api_v2_text import parse_xlsx
 from test_support.file_contract import materialize_bytes
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -25,7 +24,7 @@ def _make_xlsx(entries: dict[str, str]) -> Path:
 
 class WindowingTests(unittest.TestCase):
     def test_start_row_skips_early_rows(self) -> None:
-        """start_row=3 begins rendering from row 3."""
+        """An exact A1 range begins at the selected row."""
         data = _make_xlsx(
             {
                 "[Content_Types].xml": (
@@ -68,7 +67,7 @@ class WindowingTests(unittest.TestCase):
         self.assertIn("Row1", full)
         self.assertIn("Row3", full)
         # Window from row 3
-        win = parse_xlsx(data, density="structural", start_row=3)
+        win = parse_xlsx(data, density="structural", sheet="Data", range_spec="A3:A3")
         self.assertNotIn("Row1", win)
         self.assertNotIn("Row2", win)
         self.assertIn("Row3", win)

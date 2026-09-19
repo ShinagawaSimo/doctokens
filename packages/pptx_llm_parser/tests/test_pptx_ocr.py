@@ -7,11 +7,11 @@ from typing import Any, cast
 
 from _pptx_fixtures import PNG_BYTES
 from ocr_llm_core import OcrProvider, OcrResult
-from pptx_llm_parser import Density, parse_pptx
 from pptx_llm_parser.core.models import ParseOptions
-from pptx_llm_parser.parser import PptxParser
+from pptx_llm_parser.parsing.runner import PptxParser
 from test_pptx_images import _image_deck
 
+from test_support.api_v2_text import Density, parse_pptx
 from test_support.file_contract import materialize_bytes
 
 
@@ -53,13 +53,14 @@ class PptxOcrTests(unittest.TestCase):
         self.assertNotIn("<ocr-text", structural)
         self.assertNotIn("Slide <text>", plain)
 
-    def test_resource_query_does_not_trigger_ocr(self) -> None:
-        from pptx_llm_parser import get_resource
+    def test_session_with_ocr_provider_runs_ocr_before_resource_reads(self) -> None:
+        from pptx_llm_parser import open_pptx
 
         provider = _TextProvider()
-        result = get_resource(_image_deck(), "image", "img1", options=ParseOptions(ocr=provider))
-        self.assertIsNotNone(result)
-        self.assertEqual(provider.calls, 0)
+        with open_pptx(_image_deck(), options=ParseOptions(ocr=provider)) as presentation:
+            result = presentation.read_resource("image", "img1")
+        self.assertTrue(result)
+        self.assertEqual(provider.calls, 1)
 
     def test_external_picture_is_not_downloaded_or_ocrd(self) -> None:
         provider = _TextProvider()

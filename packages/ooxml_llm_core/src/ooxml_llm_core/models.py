@@ -8,7 +8,7 @@ their respective parser packages.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 
 class ZipEntryInfo(TypedDict):
@@ -50,6 +50,36 @@ class ParseWarning:
     code: str
     message: str
     locator: str | None = None
+
+
+ResourceSource = Literal["embedded", "external"]
+
+
+@dataclass(frozen=True, slots=True)
+class ResourceDescriptor:
+    """Stable metadata for a resource exposed by a parsed package."""
+
+    id: str
+    kind: str
+    source: ResourceSource
+    locator: str
+    content_type: str | None = None
+    part: str | None = None
+    external_target: str | None = None
+
+
+Density = Literal["plain", "structural", "semantic"]
+
+
+@dataclass(frozen=True, slots=True)
+class ParseResult:
+    """Public result for one parse or render operation."""
+
+    text: str
+    density: Density
+    selection: dict[str, object]
+    report: ParseReport
+    resources: tuple[ResourceDescriptor, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

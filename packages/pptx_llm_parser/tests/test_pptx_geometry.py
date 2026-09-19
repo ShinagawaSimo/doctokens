@@ -20,7 +20,7 @@ from _pptx_fixtures import (
     text_shape_xml,
 )
 from pptx_llm_parser.core.models import ParseOptions
-from pptx_llm_parser.parser import PptxParser
+from pptx_llm_parser.parsing.runner import PptxParser
 
 _SLIDE_LAYOUT_REL = (
     '<Relationship Id="rId10" '

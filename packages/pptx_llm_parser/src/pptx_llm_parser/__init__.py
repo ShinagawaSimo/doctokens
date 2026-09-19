@@ -1,25 +1,18 @@
 """PPTX parser that produces LLM-readable self-defined output."""
 
-from ooxml_llm_core.models import ParseReport
+from ooxml_llm_core.models import ParseReport, ParseResult, ResourceDescriptor
 
 from ._version import __version__
-from .api import PptxReadSession, get_resource, iter_slides, open_pptx, parse_pptx, render_window
-from .core.enums import Density, ResourceType
+from .api import PptxReadSession, open_pptx, parse_pptx
 from .core.models import ParseOptions
-from .plan import PptxFeature, PptxParsePlan
 
 __all__ = [
-    "Density",
     "ParseOptions",
     "ParseReport",
-    "PptxFeature",
-    "PptxParsePlan",
+    "ParseResult",
     "PptxReadSession",
-    "ResourceType",
+    "ResourceDescriptor",
     "__version__",
-    "get_resource",
-    "iter_slides",
     "open_pptx",
     "parse_pptx",
-    "render_window",
 ]

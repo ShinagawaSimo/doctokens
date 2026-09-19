@@ -7,12 +7,13 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from docx_llm_parser import Density, parse_docx, render_window
 from docx_llm_parser.core.enums import RevisionMode
 from docx_llm_parser.core.models import ParseOptions
-from docx_llm_parser.parser import DocxParser
-from docx_llm_parser.renderers.output import build_manifest, to_output
+from docx_llm_parser.parsing.runner import DocxParser
+from docx_llm_parser.rendering.dispatch import build_manifest, to_output
 
+from test_support.api_v2_text import Density, parse_docx
+from test_support.api_v2_text import render_docx_window as render_window
 from test_support.file_contract import materialize_bytes
 
 NS_W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"

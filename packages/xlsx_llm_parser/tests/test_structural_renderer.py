@@ -5,8 +5,8 @@ from __future__ import annotations
 import unittest
 from typing import Any, cast
 
-from xlsx_llm_parser.formats import FormatIndex
-from xlsx_llm_parser.renderers.structural import render_range, render_workbook
+from xlsx_llm_parser.parsing.modules.styles.index import FormatIndex
+from xlsx_llm_parser.rendering.structural import render_range, render_workbook
 
 
 def _workbook() -> dict[str, object]:

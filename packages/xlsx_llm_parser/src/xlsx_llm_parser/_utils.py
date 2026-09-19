@@ -3,9 +3,6 @@
 These are used across parser, renderer, and formula expansion modules.
 """
 
-
-
-
 _COORD_SHIFT = 15  # Excel's maximum column index (16,384) fits in 15 bits.
 
 

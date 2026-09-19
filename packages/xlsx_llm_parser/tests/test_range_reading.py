@@ -5,10 +5,10 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from xlsx_llm_parser import render_range
-from xlsx_llm_parser.parser import _parse_workbook
+from xlsx_llm_parser.parsing.runner import _parse_workbook
 from xlsx_llm_parser.plan import XlsxFeature, XlsxParsePlan
 
+from test_support.api_v2_text import render_xlsx_range as render_range
 from test_support.file_contract import materialize_bytes
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -31,6 +31,7 @@ class RangeReadingTests(unittest.TestCase):
         self.assertEqual(plan.cell_window, (1, 2, 3, 10))
         self.assertFalse(plan.needs(XlsxFeature.FORMULAS))
         self.assertTrue(plan.needs(XlsxFeature.DRAWINGS))
+        self.assertIn("worksheets.plain_cells", plan.module_keys)
 
     def test_range_filters_columns(self) -> None:
         """Cells outside the requested column range are excluded."""
@@ -176,7 +177,7 @@ class RangeReadingTests(unittest.TestCase):
         self.assertIn("<tr row=10>", output)
 
     def test_range_sheet_not_found(self) -> None:
-        """Unknown sheet name raises ValueError."""
+        """Unknown sheet name raises KeyError."""
         data = _make_xlsx(
             {
                 "[Content_Types].xml": (
@@ -208,7 +209,7 @@ class RangeReadingTests(unittest.TestCase):
                 "xl/worksheets/sheet1.xml": (f'<worksheet xmlns="{NS_S}"><sheetData/></worksheet>'),
             },
         )
-        with self.assertRaises(ValueError):
+        with self.assertRaises(KeyError):
             render_range(data, "NoSuch", "A1:B2")
 
     def test_invalid_range_raises(self) -> None:

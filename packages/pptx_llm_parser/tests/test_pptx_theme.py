@@ -14,7 +14,7 @@ from _pptx_fixtures import (
     theme_xml,
 )
 from pptx_llm_parser.core.models import ParseOptions
-from pptx_llm_parser.parser import PptxParser
+from pptx_llm_parser.parsing.runner import PptxParser
 from pptx_llm_parser.plan import PptxFeature, PptxParsePlan
 
 _THEME_REL = (
@@ -49,6 +49,7 @@ class ThemeParserTests(unittest.TestCase):
         plan = PptxParsePlan.render("plain")
         parsed = PptxParser().parse(_theme_deck(), ParseOptions(), plan=plan)
         self.assertFalse(plan.needs(PptxFeature.THEME_AND_LAYOUT))
+        self.assertEqual(plan.module_keys[1], "slides.plain")
         self.assertEqual(parsed.theme, {})
 
     def test_theme_colors_resolved(self) -> None:

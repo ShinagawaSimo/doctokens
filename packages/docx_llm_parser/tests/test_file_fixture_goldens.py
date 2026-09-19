@@ -5,8 +5,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from docx_llm_parser import Density, parse_docx
-
+from test_support.api_v2_text import Density, parse_docx
 from test_support.file_contract import fixture_root
 
 _TEST_SUPPORT_ROOT = fixture_root().parent

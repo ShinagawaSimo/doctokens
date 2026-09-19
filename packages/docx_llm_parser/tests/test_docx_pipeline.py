@@ -5,16 +5,13 @@ from __future__ import annotations
 import unittest
 
 from _fixtures import write_rich_docx
-from docx_llm_parser import (
-    Density,
-    get_resource,
-    parse_docx,
-    render_window,
-)
 from docx_llm_parser.core.enums import RevisionMode
 from docx_llm_parser.core.models import ParseOptions
-from docx_llm_parser.parser import DocxParser
+from docx_llm_parser.parsing.runner import DocxParser
 
+from test_support.api_v2_text import Density, parse_docx
+from test_support.api_v2_text import render_docx_resource as get_resource
+from test_support.api_v2_text import render_docx_window as render_window
 from test_support.file_contract import output_path, source_path, write_text_result
 
 

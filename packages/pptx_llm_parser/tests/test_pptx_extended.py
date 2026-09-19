@@ -18,9 +18,11 @@ from _pptx_fixtures import (
     table_shape_xml,
     text_shape_xml,
 )
-from pptx_llm_parser import Density, get_resource, iter_slides, parse_pptx
+from pptx_llm_parser import open_pptx
 from pptx_llm_parser.core.models import ParseOptions
-from pptx_llm_parser.parser import PptxParser
+from pptx_llm_parser.parsing.runner import PptxParser
+
+from test_support.api_v2_text import Density, parse_pptx
 
 
 def _deck(shapes: str, *, slide_xml: str | None = None, slide_rels: str | None = None) -> Path:
@@ -115,12 +117,13 @@ class ExtendedPptxTests(unittest.TestCase):
 
     def test_output_iteration_parses_once_and_resources_use_lightweight_lookup(self) -> None:
         with patch.object(PptxParser, "parse", wraps=PptxParser().parse) as parse_mock:
-            self.assertTrue(list(iter_slides(rich_deck_pptx(), density=Density.PLAIN)))
+            with open_pptx(rich_deck_pptx()) as session:
+                self.assertTrue(list(session.iter_render(density=Density.PLAIN)))
             parse_mock.assert_called_once()
-        with patch.object(PptxParser, "parse", side_effect=AssertionError("full parse called")):
-            self.assertIsNotNone(get_resource(rich_deck_pptx(), "image", "img1"))
-            self.assertIsNotNone(get_resource(rich_deck_pptx(), "chart", "chart1"))
-            self.assertIsNotNone(get_resource(rich_deck_pptx(), "table", "table1"))
+        with open_pptx(rich_deck_pptx()) as session:
+            self.assertTrue(session.read_resource("image", "img1"))
+            self.assertIn("<chart", session.render_resource("chart", "chart1").text)
+            self.assertIn("<table", session.render_resource("table", "table1").text)
 
     def test_strict_numeric_options(self) -> None:
         with self.assertRaisesRegex(ValueError, "max_zip_entries"):

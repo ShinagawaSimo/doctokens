@@ -1,285 +1,240 @@
-"""Public DOCX API for parsing, rendering, and resource extraction."""
+"""Public DOCX parsing and explicit read-session API."""
 
 from __future__ import annotations
 
-import dataclasses
 from collections.abc import Iterator
 from pathlib import Path
 
-from ooxml_llm_core.models import ParseReport
+from ooxml_llm_core.models import Density, ParseReport, ParseResult, ResourceDescriptor
 
-from .core.enums import Density, ResourceType
+from .core.enums import ResourceType
 from .core.models import ParsedDocument, ParseOptions
 from .core.package import PackageReader
-from .parser import DocxParser
+from .parsing import get_render_pipeline
+from .parsing.runner import DocxParser
 from .plan import DocxParsePlan
-from .renderers.output import iter_output as _iter_output
-from .renderers.output import render_page_window as _render_page_window
-from .renderers.output import render_resource as _render_resource
-from .renderers.output import to_output as _to_output
+from .rendering.dispatch import render_page_window, render_resource
+from .rendering.objects.resources import table_groups
+
+Source = str | Path | bytes
 
 
-class LoadedDocx:
-    """Reusable, already-parsed DOCX document facade.
+def _density(value: Density | str) -> Density:
+    if value not in {"plain", "structural", "semantic"}:
+        raise ValueError("density must be one of: 'plain', 'structural', 'semantic'")
+    return value
 
-    The document is parsed once by :func:`load_docx`.  The facade then supports
-    repeated output rendering and resource reads without reopening the source
-    document.  It owns the parsed in-memory representation, but it does not
-    cache application-level queries or coordinate downstream work.
-    """
 
-    def __init__(self, parsed_document: ParsedDocument, parse_options: ParseOptions) -> None:
-        self.parsed_document = parsed_document
-        self.parse_options = parse_options
+def _validate_window(page_hint: int | None, span: int) -> None:
+    if page_hint is not None and (
+        isinstance(page_hint, bool) or not isinstance(page_hint, int) or page_hint == 0 or page_hint < -1
+    ):
+        raise ValueError("page_hint must be -1 or a positive integer")
+    if isinstance(span, bool) or not isinstance(span, int) or span <= 0:
+        raise ValueError("span must be a positive integer")
+    if page_hint is None and span != 1:
+        raise ValueError("span requires page_hint")
+
+
+def _resource_descriptors(document: ParsedDocument) -> tuple[ResourceDescriptor, ...]:
+    descriptors: list[ResourceDescriptor] = []
+    for asset in document.assets:
+        source = "external" if asset.get("source") == "external" else "embedded"
+        descriptors.append(
+            ResourceDescriptor(
+                id=asset["id"],
+                kind=str(asset.get("type", "image")),
+                source=source,  # type: ignore[arg-type]
+                locator=asset.get("zipPath") or asset.get("href") or asset["id"],
+                content_type=asset.get("contentType"),
+                part=asset.get("zipPath"),
+                external_target=asset.get("href"),
+            )
+        )
+    descriptors.extend(
+        ResourceDescriptor(chart["id"], "chart", "embedded", chart.get("part", chart["id"]), part=chart.get("part"))
+        for chart in document.charts
+    )
+    descriptors.extend(
+        ResourceDescriptor(
+            smartart["id"],
+            "smartart",
+            "embedded",
+            smartart.get("part", smartart["id"]),
+            part=smartart.get("part"),
+        )
+        for smartart in document.smartarts
+    )
+    descriptors.extend(ResourceDescriptor(table_id, "table", "embedded", table_id) for table_id in table_groups(document))
+    return tuple(descriptors)
+
+
+def _result(document: ParsedDocument, text: str, density: Density, selection: dict[str, object]) -> ParseResult:
+    if document.report is None:  # pragma: no cover - parser always attaches a report
+        raise RuntimeError("parsed DOCX has no parse report")
+    return ParseResult(text, density, selection, document.report, _resource_descriptors(document))
+
+
+class DocxReadSession:
+    """Context-managed DOCX session with one package reader owner."""
+
+    def __init__(self, source: Source, options: ParseOptions) -> None:
+        self.source = source
+        self.options = options
+        self.parsed_document: ParsedDocument | None = None
+        self._package: PackageReader | None = None
+        self._state = "new"
+
+    def __enter__(self) -> DocxReadSession:
+        if self._state != "new":
+            raise RuntimeError("DOCX session cannot be entered twice")
+        self._package = PackageReader(self.source, self.options)
+        try:
+            self._package.__enter__()
+            self.parsed_document = DocxParser().parse(self._package, self.options, plan=DocxParsePlan.session())
+        except BaseException:
+            self.close()
+            raise
+        self._state = "open"
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        self.close()
+
+    def close(self) -> None:
+        if self._state == "closed":
+            return
+        if self._package is not None:
+            self._package.__exit__(None, None, None)
+            self._package = None
+        self.parsed_document = None
+        self._state = "closed"
+
+    def _require_open(self) -> ParsedDocument:
+        if self._state != "open" or self.parsed_document is None:
+            raise RuntimeError("DOCX session is not open")
+        return self.parsed_document
 
     @property
     def report(self) -> ParseReport:
-        """Return diagnostics collected while parsing this document."""
-        if self.parsed_document.report is None:  # pragma: no cover - parser always attaches reports
+        document = self._require_open()
+        if document.report is None:  # pragma: no cover
             raise RuntimeError("parsed DOCX has no parse report")
-        return self.parsed_document.report
+        return document.report
 
-    def render(self, *, density: Density | str = Density.SEMANTIC) -> str:
-        """Render the complete document at the requested text density.
+    @property
+    def resources(self) -> tuple[ResourceDescriptor, ...]:
+        return _resource_descriptors(self._require_open())
 
-        Args:
-            density: ``plain`` for text only, ``structural`` for document
-                structure, or ``semantic`` for structure plus formatting and
-                content details.  A :class:`Density` value may be supplied.
-
-        Returns:
-            The complete self-defined LLM output string.
-        """
-        return _to_output(self.parsed_document, density)
-
-    def iter_render(self, *, density: Density | str = Density.SEMANTIC) -> Iterator[str]:
-        """Yield complete-document output chunks at the requested density.
-
-        Args:
-            density: Output detail level.  Parsing has already completed; the
-                iterator controls output iteration only.
-
-        Returns:
-            An iterator whose chunks concatenate to the same value as
-            :meth:`render`.
-        """
-        return _iter_output(self.parsed_document, density)
-
-    def render_window(
+    def render(
         self,
         *,
-        page: int,
+        density: Density | str = "semantic",
+        page_hint: int | None = None,
         span: int = 1,
-        density: Density | str = Density.SEMANTIC,
-    ) -> str:
-        """Render a bounded page window from the loaded document.
+    ) -> ParseResult:
+        document = self._require_open()
+        resolved = _density(density)
+        _validate_window(page_hint, span)
+        if page_hint is None:
+            text = "".join(get_render_pipeline(resolved).render(document))
+            selection: dict[str, object] = {"kind": "all"}
+        else:
+            text = render_page_window(document, page_hint, span, resolved)
+            selection = {"kind": "page_hint", "start": page_hint, "span": span}
+        return _result(document, text, resolved, selection)
 
-        Args:
-            page: One-based page number.  ``-1`` selects the last page.
-            span: Number of consecutive pages to include; must be positive.
-            density: Output detail level.
-
-        Returns:
-            Output for the selected pages.  Missing pages produce an empty
-            selection rather than falling back to the whole document.
-
-        Raises:
-            ValueError: If ``page`` or ``span`` is invalid.
-        """
-        return _render_page_window(self.parsed_document, page, span, density)
-
-    def get_resource(
+    def iter_render(
         self,
-        resource_type: ResourceType | str,
+        *,
+        density: Density | str = "semantic",
+        page_hint: int | None = None,
+        span: int = 1,
+    ) -> Iterator[str]:
+        document = self._require_open()
+        resolved = _density(density)
+        _validate_window(page_hint, span)
+        if page_hint is None:
+            chunks = get_render_pipeline(resolved).render(document)
+        else:
+            chunks = iter((render_page_window(document, page_hint, span, resolved),))
+
+        def guarded() -> Iterator[str]:
+            for chunk in chunks:
+                self._require_open()
+                yield chunk
+
+        return guarded()
+
+    def read_resource(self, kind: str, resource_id: str) -> bytes:
+        document = self._require_open()
+        if kind != "image":
+            raise ValueError("DOCX binary resources currently support only 'image'")
+        descriptor = next(
+            (item for item in _resource_descriptors(document) if item.kind == kind and item.id == resource_id),
+            None,
+        )
+        if descriptor is None:
+            raise KeyError(f"resource {kind!r}/{resource_id!r} not found")
+        if descriptor.source == "external":
+            raise ValueError("external DOCX resources are not downloaded")
+        if descriptor.part is None or self._package is None:
+            raise RuntimeError("DOCX package reader is not open")
+        return self._package.read_part(descriptor.part)
+
+    def render_resource(
+        self,
+        kind: str,
         resource_id: str,
         *,
         rows: str | None = None,
         columns: list[str] | None = None,
         aggregate: str | None = None,
         aggregate_column: str | None = None,
-    ) -> str | None:
-        """Return one resource from the loaded document.
-
-        Args:
-            resource_type: Singular resource kind, such as ``image``,
-                ``chart``, ``smartart``, or ``table``.
-            resource_id: Resource identifier recorded in the parsed document.
-            rows: Optional inclusive, one-based row range such as ``10-25``
-                for table resources.
-            columns: Optional table header names to keep.
-            aggregate: Optional table operation: ``sum``, ``count``, ``avg``,
-                ``min``, or ``max``.
-            aggregate_column: Header name used by ``aggregate``.
-
-        Returns:
-            The resource output, or ``None`` when the identifier is absent.
-
-        Raises:
-            ValueError: If a plural resource type is supplied.
-        """
-        resolved_type = ResourceType.parse(resource_type)
-        if resolved_type.is_plural:
-            raise ValueError("resource_type must be singular when getting one resource")
-        items = _render_resource(
-            self.parsed_document,
-            resolved_type,
+    ) -> ParseResult:
+        document = self._require_open()
+        resource_type = ResourceType.parse(kind)
+        if resource_type.is_plural:
+            raise ValueError("resource kind must be singular")
+        if resource_type is ResourceType.IMAGE:
+            raise ValueError("use read_resource() for DOCX image bytes")
+        rendered = render_resource(
+            document,
+            resource_type,
             resource_id,
             rows=rows,
             columns=columns,
             aggregate=aggregate,
             aggregate_column=aggregate_column,
         )
-        return items[0] if items else None
+        if not rendered:
+            raise KeyError(f"resource {kind!r}/{resource_id!r} not found")
+        return _result(document, rendered[0], "semantic", {"kind": "resource", "resource_kind": kind, "id": resource_id})
+
+
+def open_docx(source: Source, *, options: ParseOptions | None = None) -> DocxReadSession:
+    return DocxReadSession(source, options or ParseOptions())
 
 
 def parse_docx(
-    source: str | Path | bytes,
+    source: Source,
     *,
-    density: Density | str = Density.SEMANTIC,
-    stream: bool = False,
-    options: ParseOptions | None = None,
-) -> str | Iterator[str]:
-    """Parse a DOCX source and return its LLM-oriented output.
-
-    Args:
-        source: A filesystem path, path-like string, or DOCX bytes.
-        density: ``plain``, ``structural``, or ``semantic`` output detail.
-        stream: When true, return an iterator of output chunks.  Parsing is
-            still completed before the iterator is returned; this flag affects
-            output iteration only.
-        options: Optional parser limits, feature, and OCR configuration.
-
-    Returns:
-        A complete output string by default, or an iterator when ``stream`` is
-        true.
-    """
-    parse_options = options or ParseOptions()
-    parsed_document = DocxParser().parse(
-        source,
-        parse_options,
-        plan=DocxParsePlan.render(density),
-    )
-    if stream:
-        return _iter_output(parsed_document, density)
-    return _to_output(parsed_document, density)
-
-
-def load_docx(source: str | Path | bytes, *, options: ParseOptions | None = None) -> LoadedDocx:
-    """Parse a DOCX source once and return a reusable document facade.
-
-    Args:
-        source: A filesystem path, path-like string, or DOCX bytes.
-        options: Optional parser limits, feature, and OCR configuration.
-
-    Returns:
-        A :class:`LoadedDocx` that can render output and read resources
-        repeatedly from the parsed representation.
-    """
-    parse_options = options or ParseOptions()
-    parsed_document = DocxParser().parse(source, parse_options, plan=DocxParsePlan.session())
-    return LoadedDocx(parsed_document, parse_options)
-
-
-def render_window(
-    source: str | Path | bytes,
-    *,
-    page: int,
+    density: Density | str = "semantic",
+    page_hint: int | None = None,
     span: int = 1,
-    density: Density | str = Density.SEMANTIC,
     options: ParseOptions | None = None,
-) -> str:
-    """Parse a DOCX source and render a bounded page window.
-
-    Args:
-        source: A filesystem path, path-like string, or DOCX bytes.
-        page: One-based page number.  ``-1`` selects the last page.
-        span: Number of consecutive pages to include; must be positive.
-        density: ``plain``, ``structural``, or ``semantic`` output detail.
-        options: Optional parser limits, feature, and OCR configuration.
-
-    Returns:
-        Output for the selected pages.
-
-    Raises:
-        ValueError: If ``page`` or ``span`` is invalid.
-    """
-    parse_options = options or ParseOptions()
-    parsed_document = DocxParser().parse(
-        source,
-        parse_options,
-        plan=DocxParsePlan.render(density),
-    )
-    return _render_page_window(parsed_document, page, span, density)
+) -> ParseResult:
+    resolved = _density(density)
+    _validate_window(page_hint, span)
+    plan = get_render_pipeline(resolved).plan
+    document = DocxParser().parse(source, options or ParseOptions(), plan=plan)
+    if page_hint is None:
+        text = "".join(get_render_pipeline(resolved).render(document))
+        selection: dict[str, object] = {"kind": "all"}
+    else:
+        text = render_page_window(document, page_hint, span, resolved)
+        selection = {"kind": "page_hint", "start": page_hint, "span": span}
+    return _result(document, text, resolved, selection)
 
 
-def get_resource(
-    source: str | Path | bytes,
-    resource_type: ResourceType | str,
-    resource_id: str,
-    *,
-    rows: str | None = None,
-    columns: list[str] | None = None,
-    aggregate: str | None = None,
-    aggregate_column: str | None = None,
-    options: ParseOptions | None = None,
-) -> str | None:
-    """Parse a DOCX source and return one resource by identifier.
-
-    Args:
-        source: A filesystem path, path-like string, or DOCX bytes.
-        resource_type: Singular resource kind, such as ``image``, ``chart``,
-            ``smartart``, or ``table``.
-        resource_id: Resource identifier recorded in the parsed document.
-        rows: Optional inclusive, one-based row range such as ``10-25``.
-        columns: Optional table header names to keep.
-        aggregate: Optional table operation: ``sum``, ``count``, ``avg``,
-            ``min``, or ``max``.
-        aggregate_column: Header name used by ``aggregate``.
-        options: Optional parser limits, feature, and OCR configuration.
-
-    Returns:
-        The resource output, or ``None`` when the identifier is absent.
-
-    Raises:
-        ValueError: If a plural resource type is supplied.
-    """
-    resolved_type = ResourceType.parse(resource_type)
-    if resolved_type.is_plural:
-        raise ValueError("resource_type must be singular when getting one resource")
-    parse_options = options or ParseOptions()
-    if parse_options.ocr is None:
-        parsed_document = DocxParser().parse(
-            source,
-            parse_options,
-            plan=DocxParsePlan.resource(resolved_type),
-        )
-        items = _render_resource(
-            parsed_document,
-            resolved_type,
-            resource_id,
-            rows=rows,
-            columns=columns,
-            aggregate=aggregate,
-            aggregate_column=aggregate_column,
-        )
-        return items[0] if items else None
-    parsed_document = DocxParser().parse(
-        source,
-        dataclasses.replace(parse_options, ocr=None),
-        plan=DocxParsePlan.resource(resolved_type),
-    )
-    if resolved_type is ResourceType.IMAGE and parse_options.ocr is not None:
-        asset = next((item for item in parsed_document.assets if item["id"] == resource_id), None)
-        if asset is not None:
-            with PackageReader(source, parse_options) as package:
-                parsed_document.ocr_results = DocxParser._run_ocr(package, [asset], parse_options)
-    items = _render_resource(
-        parsed_document,
-        resolved_type,
-        resource_id,
-        rows=rows,
-        columns=columns,
-        aggregate=aggregate,
-        aggregate_column=aggregate_column,
-    )
-    return items[0] if items else None
+__all__ = ["DocxReadSession", "open_docx", "parse_docx"]

@@ -9,13 +9,13 @@ from xml.etree import ElementTree as ET
 from docx_llm_parser.core.models import ParsedDocument, ParseOptions, ParseWarning
 from docx_llm_parser.core.package import PackageReader
 from docx_llm_parser.core.relationships import RelationshipIndex
-from docx_llm_parser.extractors.body import DocumentBodyParser
 from docx_llm_parser.ooxml.numbering import NumberingMap, NumberingState
 from docx_llm_parser.ooxml.styles import StyleMap
-from docx_llm_parser.renderers.output import build_manifest as _build_manifest
-from docx_llm_parser.renderers.output import render_resource as _render_resource
-from docx_llm_parser.renderers.plain.helpers import table_text_only
-from docx_llm_parser.renderers.tables.render import table_id
+from docx_llm_parser.parsing.modules.body.scanner import DocumentBodyParser
+from docx_llm_parser.rendering.dispatch import build_manifest as _build_manifest
+from docx_llm_parser.rendering.dispatch import render_resource as _render_resource
+from docx_llm_parser.rendering.plain.helpers import table_text_only
+from docx_llm_parser.rendering.tables.render import table_id
 
 WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 

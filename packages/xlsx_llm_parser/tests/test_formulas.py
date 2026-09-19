@@ -5,8 +5,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from xlsx_llm_parser import parse_xlsx
-from xlsx_llm_parser.share_formulas import (
+from xlsx_llm_parser.parsing.modules.worksheets.formulas import (
     _col_row,
     _offset_formula,
     _offset_one_ref,
@@ -15,6 +14,7 @@ from xlsx_llm_parser.share_formulas import (
     expand_shared_formulas,
 )
 
+from test_support.api_v2_text import parse_xlsx
 from test_support.file_contract import materialize_bytes
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"

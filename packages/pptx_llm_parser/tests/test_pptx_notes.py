@@ -16,9 +16,10 @@ from _pptx_fixtures import (
     slide_xml_shapes,
     text_shape_xml,
 )
-from pptx_llm_parser import Density, parse_pptx
 from pptx_llm_parser.core.models import ParseOptions
-from pptx_llm_parser.parser import PptxParser
+from pptx_llm_parser.parsing.runner import PptxParser
+
+from test_support.api_v2_text import Density, parse_pptx
 
 _NOTES_REL = (
     '<Relationship Id="rId20" '

@@ -5,8 +5,8 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from xlsx_llm_parser import find_cells, get_resource, query_data
-from xlsx_llm_parser.api import _get_resource_from_workbook, _render_chart_resource
+from xlsx_llm_parser import open_xlsx
+from xlsx_llm_parser.api import _render_chart_resource
 
 from test_support.file_contract import materialize_bytes
 
@@ -14,6 +14,23 @@ NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 NS_RP = "http://schemas.openxmlformats.org/package/2006/relationships"
+
+
+def find_cells(source: Path, query: str, **kwargs: object) -> str:
+    with open_xlsx(source) as workbook:
+        return workbook.find_cells(query, **kwargs).text  # type: ignore[arg-type]
+
+
+def query_data(source: Path, **kwargs: object) -> str:
+    with open_xlsx(source) as workbook:
+        return workbook.query_data(**kwargs).text  # type: ignore[arg-type]
+
+
+def get_resource(source: Path, kind: str, resource_id: str) -> str | bytes:
+    with open_xlsx(source) as workbook:
+        if kind == "image":
+            return workbook.read_resource(kind, resource_id)
+        return workbook.render_resource(kind, resource_id).text
 
 
 def _make_xlsx(entries: dict[str, str]) -> Path:
@@ -289,6 +306,7 @@ class GetResourceTests(unittest.TestCase):
                     "</twoCellAnchor>"
                     "</wsDr>"
                 ),
+                "xl/media/image1.png": b"image-bytes",
                 "xl/worksheets/sheet1.xml": (
                     f'<worksheet xmlns="{NS_S}"><sheetData>'
                     '<row r="1"><c r="A1" t="inlineStr"><is><t>X</t></is></c></row>'
@@ -299,9 +317,7 @@ class GetResourceTests(unittest.TestCase):
         r = get_resource(data, "image", "image1")
         self.assertIsNotNone(r)
         assert r is not None
-        self.assertIsInstance(r, str)
-        self.assertIn("id=image1", r)
-        self.assertIn("ref=A1", r)
+        self.assertIsInstance(r, bytes)
 
     def test_render_chart_resource_details(self) -> None:
         output = _render_chart_resource(
@@ -330,7 +346,7 @@ class GetResourceTests(unittest.TestCase):
         self.assertIn("<series index=1 name=Q1 min=1.0 max=2.0>", output)
         self.assertIn("<point category=A value=1/>", output)
 
-    def test_render_chart_optional_fields_and_workbook_resource_dispatch(self) -> None:
+    def test_render_chart_optional_fields(self) -> None:
         output = _render_chart_resource(
             {
                 "id": "chart2",
@@ -357,19 +373,6 @@ class GetResourceTests(unittest.TestCase):
         self.assertIn("x=1", output)
         self.assertIn("y=2", output)
         self.assertIn("bubbleSize=3", output)
-        workbook = {
-            "sheets": [
-                {
-                    "charts": [{"id": "chart2", "ref": "D4", "type": "bar", "series": []}],
-                    "pivot_tables": [{"id": "pivot1", "name": "Pivot"}],
-                }
-            ],
-            "metadata": {},
-            "fmt_index": object(),
-            "report": object(),
-        }
-        self.assertIn("<chart", _get_resource_from_workbook(workbook, "chart", "chart2") or "")
-        self.assertIn("name=Pivot", _get_resource_from_workbook(workbook, "pivot_table", "pivot1") or "")
 
 
 if __name__ == "__main__":

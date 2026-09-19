@@ -93,6 +93,7 @@ class NumberingMap:
                 pending.append(linked_num_id)
         return None
 
+
 class NumberingParser:
     """Read Word's numbering part and resolve level-local overrides."""
 

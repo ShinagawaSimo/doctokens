@@ -5,8 +5,8 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from xlsx_llm_parser import find_cells, parse_xlsx
-
+from test_support.api_v2_text import find_xlsx_cells as find_cells
+from test_support.api_v2_text import parse_xlsx
 from test_support.file_contract import materialize_bytes
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"

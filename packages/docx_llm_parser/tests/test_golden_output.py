@@ -4,8 +4,8 @@ import unittest
 from pathlib import Path
 
 from _fixtures import write_rich_docx
-from docx_llm_parser import Density, parse_docx
 
+from test_support.api_v2_text import Density, parse_docx
 from test_support.file_contract import (
     assert_text_matches_golden,
     golden_root,

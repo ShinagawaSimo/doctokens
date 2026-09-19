@@ -12,6 +12,7 @@ class XlsxFeature(Flag):
     """Optional workbook capabilities, grouped by their source parts."""
 
     RICH_TEXT = auto()
+    STYLE_INDEX = auto()
     SEMANTIC_STYLES = auto()
     FORMULAS = auto()
     HYPERLINKS = auto()
@@ -47,8 +48,8 @@ _STRUCTURAL_BASE = (
     | XlsxFeature.DRAWINGS
     | XlsxFeature.PIVOTS
 )
-_STRUCTURAL = _STRUCTURAL_BASE | XlsxFeature.FORMULAS | XlsxFeature.SEMANTIC_STYLES
-_SEMANTIC = _STRUCTURAL | XlsxFeature.RICH_TEXT
+_STRUCTURAL = _STRUCTURAL_BASE | XlsxFeature.FORMULAS | XlsxFeature.STYLE_INDEX
+_SEMANTIC = _STRUCTURAL | XlsxFeature.RICH_TEXT | XlsxFeature.SEMANTIC_STYLES
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +61,34 @@ class XlsxParsePlan:
     features: XlsxFeature
     sheet_names: frozenset[str] | None = None
     cell_window: tuple[int, int, int, int] | None = None
+
+    @property
+    def module_keys(self) -> tuple[str, ...]:
+        """Independent parser modules selected for this operation."""
+        if self.purpose is ParsePurpose.RESOURCE:
+            return ("workbook.index", "workbook.resources")
+        if self.purpose is ParsePurpose.SESSION:
+            return (
+                "workbook.index",
+                "workbook.names",
+                "workbook.external_links",
+                "workbook.pivots",
+                "workbook.rich_values",
+                "styles.semantic",
+                "worksheets.semantic_cells",
+            )
+        cell_module = f"worksheets.{self.density}_cells"
+        style_module = f"styles.{self.style_detail}"
+        return ("workbook.index", style_module, cell_module, "worksheets.rules", "worksheets.resources")
+
+    @property
+    def style_detail(self) -> str:
+        """Style layer required by this density's cell projection."""
+        if self.density == "semantic":
+            return "semantic"
+        if self.density == "structural":
+            return "structural"
+        return "display"
 
     def needs(self, feature: XlsxFeature) -> bool:
         return bool(self.features & feature)
@@ -89,6 +118,11 @@ class XlsxParsePlan:
     ) -> XlsxParsePlan:
         base = cls.render(density)
         return cls(base.purpose, base.density, base.features, frozenset((sheet_name,)), cell_window)
+
+    @classmethod
+    def sheet(cls, density: str, sheet_name: str) -> XlsxParsePlan:
+        base = cls.render(density)
+        return cls(base.purpose, base.density, base.features, frozenset((sheet_name,)))
 
     @classmethod
     def resource(cls, resource_type: str) -> XlsxParsePlan:

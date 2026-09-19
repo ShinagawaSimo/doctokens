@@ -11,8 +11,6 @@ from xml.etree import ElementTree as ET
 from docx_llm_parser.core.models import ContentTypes, ParseOptions, ParseWarning, RelationshipRecord
 from docx_llm_parser.core.package import PackageReader
 from docx_llm_parser.core.relationships import RelationshipIndex
-from docx_llm_parser.extractors.assets import IMAGE_REL_TYPE, AssetExtractor
-from docx_llm_parser.extractors.objects import EmbeddedObjectExtractor
 from docx_llm_parser.ooxml.formatting import (
     is_default_text_color,
     merge_run_formats,
@@ -27,12 +25,14 @@ from docx_llm_parser.ooxml.numbering import (
     NumberingState,
 )
 from docx_llm_parser.ooxml.omml_latex import omath_to_latex
-from docx_llm_parser.renderers.objects.charts import chart_to_output, render_chart_resource
-from docx_llm_parser.renderers.objects.smartarts import (
+from docx_llm_parser.parsing.modules.resources.assets import IMAGE_REL_TYPE, AssetExtractor
+from docx_llm_parser.parsing.modules.resources.objects import EmbeddedObjectExtractor
+from docx_llm_parser.rendering.objects.charts import chart_to_output, render_chart_resource
+from docx_llm_parser.rendering.objects.smartarts import (
     render_smartart_resource,
     smartart_to_output,
 )
-from docx_llm_parser.renderers.tables.render import render_table, table_id
+from docx_llm_parser.rendering.tables.render import render_table, table_id
 
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"

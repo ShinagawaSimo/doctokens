@@ -16,7 +16,8 @@ from _pptx_fixtures import (
     slide_xml_shapes,
     text_shape_xml,
 )
-from pptx_llm_parser import parse_pptx
+
+from test_support.api_v2_text import parse_pptx
 
 
 class NavigationAndSectionsTests(unittest.TestCase):

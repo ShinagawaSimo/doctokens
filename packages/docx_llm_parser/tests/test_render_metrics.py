@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from docx_llm_parser.core.models import ParsedDocument
-from docx_llm_parser.renderers.common.metrics import record_render_metrics
+from docx_llm_parser.rendering.common.metrics import record_render_metrics
 
 
 class RenderMetricsTests(unittest.TestCase):

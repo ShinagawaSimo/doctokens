@@ -157,6 +157,7 @@ class DrawingImage(TypedDict, total=False):
     id: str
     ref: str
     alt: str
+    part: str
 
 
 class ChartPoint(TypedDict, total=False):

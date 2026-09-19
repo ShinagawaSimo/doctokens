@@ -102,7 +102,7 @@ density=plain
 - `id`：形状序号（幻灯片内）
 - `rows` / `cols`：总行数 / 总列数（截断时仍显示完整行数）
 - 大表格（>30 行）标记 `truncated`，仅输出前 30 行；plain 以 `\t` 分隔单元格、>10 行截断并附加 `[Table truncated: R rows, C cols]`
-- 完整表格（含行切片、列筛选、聚合）经 `get_resource(source, "table", "table1")` 获取；表格资源 id 为包级 `tableN`
+- 完整表格（含行切片、列筛选、聚合）经 `session.render_resource("table", "table1")` 获取；表格资源 id 为包级 `tableN`
 
 ### 图表 `<chart>`
 
@@ -212,35 +212,41 @@ density=plain
 ## 公共 API
 
 ```python
-from pptx_llm_parser import parse_pptx, iter_slides, render_window, get_resource, Density
+from pptx_llm_parser import open_pptx, parse_pptx
 
-html = parse_pptx("deck.pptx")  # semantic（默认）
-html = parse_pptx("deck.pptx", density=Density.STRUCTURAL)
+result = parse_pptx("deck.pptx")
+window = parse_pptx("deck.pptx", slide=3, span=2, density="structural")
+
+with open_pptx("deck.pptx") as presentation:
+    for chunk in presentation.iter_render(density="plain"):
+        ...
+    image_bytes = presentation.read_resource("image", "img1")
+    chart = presentation.render_resource("chart", "chart1")
 ```
 
-| 函数 | 语义 |
+| 入口 | 语义 |
 |---|---|
-| `parse_pptx(source, *, density, stream, options)` | 解析为指定密度的完整输出；`stream=True` 时返回逐幻灯片的分块迭代器（同 `iter_slides`） |
-| `iter_slides(source, *, density, start_slide, options)` | 每张幻灯片一个分块；首个分块含密度标记行；批注为尾部独立分块 |
-| `render_window(source, *, slide, span, density, options)` | 渲染指定幻灯片窗口；`slide` 从 1 开始，`slide=-1` 表示最后一页，`span` 越界时截断 |
-| `get_resource(source, resource_type, resource_id, *, rows, columns, aggregate, aggregate_column, options)` | 按需提取单个资源（见下表） |
+| `parse_pptx(source, *, density, slide?, span?, options?)` | 返回文本、report 和资源目录的 `ParseResult` |
+| `open_pptx(source, *, options?)` | 打开 context-managed `PptxReadSession` |
+| `session.render(slide?, span?, density?)` | 渲染全文或幻灯片窗口；`slide=-1` 表示最后一页，越界返回空选择 |
+| `session.iter_render(...)` | 迭代已解析 IR 的输出块 |
 
 ## 资源提取 API
 
-正文中被截断的资源（`<table truncated>`、`<chart ... truncated>`、`<smartart ... truncated>`）可通过 `get_resource` 按需获取完整数据：
+正文中被截断的资源（`<table truncated>`、`<chart ... truncated>`、`<smartart ... truncated>`）通过 session 按需获取完整数据：
 
 | 调用 | 返回 |
 |---|---|
-| `get_resource(source, "image", "img1")` | 图片内容（base64） |
-| `get_resource(source, "media", "media1")` | 媒体内容（base64） |
-| `get_resource(source, "chart", "chart1")` | 完整图表数据（每个系列的类目、数值、最小/最大值） |
-| `get_resource(source, "smartart", "smartart1")` | 完整节点列表和连接关系 |
-| `get_resource(source, "table", "table1")` | 完整表格（不受截断限制） |
-| `get_resource(source, "table", "table1", rows="2-5")` | 指定行范围（1-based，含起止行） |
-| `get_resource(source, "table", "table1", columns=[0, 2])` | 仅指定列（0-based 序号） |
-| `get_resource(source, "table", "table1", aggregate="sum", aggregate_column=1)` | 聚合值，支持 sum/count/avg/min/max |
+| `session.read_resource("image", "img1")` | 图片原始 bytes |
+| `session.read_resource("media", "media1")` | 媒体原始 bytes |
+| `session.render_resource("chart", "chart1")` | 包含完整图表数据的 `ParseResult` |
+| `session.render_resource("smartart", "smartart1")` | 包含完整节点和连接关系的 `ParseResult` |
+| `session.render_resource("table", "table1")` | 完整表格（不受截断限制） |
+| `session.render_resource("table", "table1", rows="2-5")` | 指定行范围（1-based，含起止行） |
+| `session.render_resource("table", "table1", columns=[0, 2])` | 仅指定列（0-based 序号） |
+| `session.render_resource("table", "table1", aggregate="sum", aggregate_column=1)` | 聚合值，支持 sum/count/avg/min/max |
 
-`rows` 和 `columns` 可组合使用。`aggregate` 基于表格文本中的数值计算，不做公式重算。`resource_type` 接受字符串或 `ResourceType` 枚举；复数形式（如 `"images"`）报错，请使用单数。
+`rows` 和 `columns` 可组合使用。`aggregate` 基于表格文本中的数值计算，不做公式重算。资源不存在抛出 `KeyError`；资源类型或参数非法抛出 `ValueError`；外部资源不下载。
 
 ## 特殊约定
 
@@ -249,11 +255,11 @@ html = parse_pptx("deck.pptx", density=Density.STRUCTURAL)
 - 资源 id（`imgN`、`mediaN`、`chartN`、`smartartN`、`tableN`）在同篇文档多次解析中保持一致
 - 幻灯片模板中的占位提示文字（如"单击此处添加标题"）不会出现在输出中
 - 主题色输出解析后的实际色值；接近默认黑色的颜色不输出
-- `truncated` 标记的语义：正文是摘要视图，完整数据通过 `get_resource` 按需获取
+- `truncated` 标记的语义：正文是摘要视图，完整数据通过 session 资源方法按需获取
 - 外部链接的资源（图片、媒体）只记录、不下载，也不在输出中展开内容
 
 ## 架构边界
 
 PPTX parser 只负责读取 package、解析确定性 PresentationML/DrawingML 结构、生成 slide/shape IR 和三种密度输出。源文件缓存、跨请求 read session、重复文件参数去重、分块、检索、向量化和模型调用属于下游消费者；parser 不设置隐式全局缓存，也不替下游维护文档生命周期。
 
-`stream=True` 只控制输出是否以迭代器返回；它不承诺流式解析。当前调用会先完成 PPTX 解析，再按幻灯片产生输出块。
+没有 `stream` 布尔参数。`iter_render()` 只迭代已解析 IR 的输出，不承诺流式解析或常量内存。

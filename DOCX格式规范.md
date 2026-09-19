@@ -128,7 +128,7 @@ supplemental 区（资产索引）：
 - `categories`：X 轴标签（逗号分隔，最多 8 个；饼图为扇区名称）
 - `names`：系列名称（逗号分隔）
 - `points`：总数据点数（散点图/气泡图）
-- 所有图表均标记 `truncated`，完整数据点通过 `get_resource(parsed, "chart", "chart1")` 获取
+- 所有图表均标记 `truncated`，完整数据点通过 `session.render_resource("chart", "chart1")` 获取
 
 ### SmartArt `<smartart>`
 
@@ -142,7 +142,7 @@ supplemental 区（资产索引）：
 - `nodes`：节点数
 - `links`：边数
 - 正文显示全部节点文本（空格分隔）
-- 总是标记 `truncated`，完整结构通过 `get_resource(parsed, "smartart", "smartart1")` 获取（含节点类型和边关系）
+- 总是标记 `truncated`，完整结构通过 `session.render_resource("smartart", "smartart1")` 获取（含节点类型和边关系）
 
 ### 文本框 `<textbox>`
 
@@ -267,23 +267,25 @@ supplemental 区（资产索引）：
 | 页眉/页脚     | supplemental 区                  | 不输出                            | 不输出                     |
 | 批注        | `<commentref/>` + supplemental  | `<commentref/>` + supplemental | 拼接到文末 `[cmtN: content]` |
 
-## 资源提取 API
+## 公共 API 与资源读取
 
-正文中被截断的资源（`<table truncated>`、`<chart ... truncated>`、`<smartart ... truncated>`）可通过 `get_resource` 按需获取完整数据：
+`parse_docx()` 返回 `ParseResult`，其中包含 `text`、`density`、`selection`、`report` 和本次输出涉及的 `resources`。`page_hint` 是 OOXML 的分页提示索引，不承诺 Word 的真实排版页码；`-1` 表示最后一个提示页，越界返回空选择。
 
-### 单资源详情
+```python
+from docx_llm_parser import open_docx, parse_docx
 
-| 调用                                                                                       | 返回                           |
-| ---------------------------------------------------------------------------------------- | ---------------------------- |
-| `get_resource(parsed, ResourceType.TABLE, "t1")`                                         | 完整表格（合并分页片段，含 rows 数组）       |
-| `get_resource(parsed, ResourceType.TABLE, "t1", rows="10-25")`                           | 指定行范围（1-based，含起止行）          |
-| `get_resource(parsed, ResourceType.TABLE, "t1", columns=["金额","日期"])`                    | 仅指定列（按表头名称匹配）                |
-| `get_resource(parsed, ResourceType.TABLE, "t1", aggregate="sum", aggregate_column="金额")` | 聚合值。支持 sum/count/avg/min/max |
-| `get_resource(parsed, ResourceType.CHART, "chart1")`                                     | 完整图表数据点（缓存数据）                |
-| `get_resource(parsed, ResourceType.SMARTART, "smartart1")`                               | 完整节点和连接列表                    |
-| `get_resource(parsed, ResourceType.IMAGE, "img1")`                                       | 图片 bytes（含 contentType）      |
+result = parse_docx("report.docx", page_hint=3)
+print(result.text)
+print(result.report.to_dict())
 
-`rows` 和 `columns` 可组合使用。`aggregate` 基于表格文本中的数值计算，不做公式重算。Chart 和 SmartArt 也可通过 structural/semantic 输出的 `get_resource` 入口获取完整数据，无需先读全文。
+with open_docx("report.docx") as document:
+    image_bytes = document.read_resource("image", "img1")
+    table = document.render_resource("table", "t1", rows="10-25")
+```
+
+`open_docx()` 返回 context-managed `DocxReadSession`。会话打开期间可重复调用 `render()`、`iter_render()`、`read_resource()` 和 `render_resource()`；关闭后这些读取方法均抛出 `RuntimeError`。`read_resource("image", id)` 返回原始嵌入 bytes；表格、图表和 SmartArt 使用 `render_resource()` 返回 `ParseResult`。外部资源只记录关系，不下载。
+
+`rows` 和 `columns` 可组合使用。`aggregate` 基于表格文本中的数值计算，不做公式重算。资源不存在抛出 `KeyError`；资源类型或参数非法抛出 `ValueError`。
 
 ## 特殊约定
 

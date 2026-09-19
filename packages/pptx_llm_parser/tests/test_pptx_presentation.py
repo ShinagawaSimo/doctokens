@@ -14,7 +14,7 @@ from _pptx_fixtures import (
     slide_xml,
 )
 from pptx_llm_parser.core.models import ParseOptions
-from pptx_llm_parser.parser import PptxParser
+from pptx_llm_parser.parsing.runner import PptxParser
 
 
 def _deck(slide_count: int = 2, *, hidden: set[int] | None = None, drop_slide_parts: bool = False) -> Path:

@@ -5,9 +5,10 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from docx_llm_parser import Density, parse_docx
 from docx_llm_parser.core.models import ParseOptions
-from docx_llm_parser.parser import DocxParser
+from docx_llm_parser.parsing.runner import DocxParser
+
+from test_support.api_v2_text import Density, parse_docx
 
 FIXTURE = Path(__file__).resolve().parents[3] / "test_support" / "fixtures" / "docx" / "docx-heading-style.docx"
 

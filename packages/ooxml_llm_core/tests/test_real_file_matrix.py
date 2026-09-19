@@ -8,12 +8,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from docx_llm_parser import Density as DocxDensity
-from docx_llm_parser import parse_docx
-from pptx_llm_parser import Density as PptxDensity
-from pptx_llm_parser import parse_pptx
-from xlsx_llm_parser import parse_xlsx
 
+from test_support.api_v2_text import Density as DocxDensity
+from test_support.api_v2_text import Density as PptxDensity
+from test_support.api_v2_text import parse_docx, parse_pptx, parse_xlsx
 from test_support.file_contract import assert_text_matches_golden, output_path, write_text_result
 
 ROOT = Path(__file__).resolve().parents[3]

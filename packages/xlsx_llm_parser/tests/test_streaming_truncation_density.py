@@ -5,8 +5,10 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from xlsx_llm_parser import iter_workbook, parse_xlsx, render_range
+from xlsx_llm_parser import open_xlsx
 
+from test_support.api_v2_text import parse_xlsx
+from test_support.api_v2_text import render_xlsx_range as render_range
 from test_support.file_contract import materialize_bytes, output_path, write_text_result
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -23,7 +25,7 @@ def _make_xlsx(entries: dict[str, str]) -> Path:
 
 
 class StreamingTests(unittest.TestCase):
-    """parse_xlsx stream=True chunk concatenation matches full render."""
+    """Session output chunks concatenate to the one-shot render."""
 
     def test_iter_concat_matches_render(self) -> None:
         data = _make_xlsx(
@@ -73,9 +75,9 @@ class StreamingTests(unittest.TestCase):
             },
         )
         full = parse_xlsx(data)
-        streamed = "".join(parse_xlsx(data, stream=True))
+        with open_xlsx(data) as workbook:
+            streamed = "".join(workbook.iter_render())
         self.assertEqual(full, streamed)
-        self.assertEqual(full, "".join(iter_workbook(data)))
         self.assertIn("density=structural", full)
 
     def test_density_marker_emitted(self) -> None:

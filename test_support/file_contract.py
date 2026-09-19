@@ -86,7 +86,7 @@ def golden_root(package: str | None = None) -> Path:
     return root
 
 
-def write_text_result(result: str | Iterable[str], target: Path) -> Path:
+def write_text_result(result: object, target: Path) -> Path:
     """Write a complete or streaming renderer result as UTF-8 text."""
 
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -101,11 +101,14 @@ def write_text_result(result: str | Iterable[str], target: Path) -> Path:
     ) as stream:
         temporary = Path(stream.name)
         try:
-            if isinstance(result, str):
-                stream.write(result)
-            else:
-                for chunk in result:
+            text = getattr(result, "text", result)
+            if isinstance(text, str):
+                stream.write(text)
+            elif isinstance(text, Iterable):
+                for chunk in text:
                     stream.write(chunk)
+            else:
+                raise TypeError("result must be text, an iterable of text chunks, or expose .text")
             stream.flush()
             os.fsync(stream.fileno())
         except BaseException:

@@ -17,7 +17,7 @@ from _pptx_fixtures import (
     theme_xml,
 )
 from pptx_llm_parser.core.models import ParseOptions
-from pptx_llm_parser.parser import PptxParser
+from pptx_llm_parser.parsing.runner import PptxParser
 
 _A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 _R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"

@@ -4,6 +4,7 @@ import io
 import unittest
 import zipfile
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from xlsx_llm_parser import open_xlsx
 
@@ -78,7 +79,7 @@ class StreamingTests(unittest.TestCase):
         with open_xlsx(data) as workbook:
             streamed = "".join(workbook.iter_render())
         self.assertEqual(full, streamed)
-        self.assertIn("density=structural", full)
+        self.assertEqual(ET.fromstring(full).get("density"), "structural")
 
     def test_density_marker_emitted(self) -> None:
         data = _make_xlsx(
@@ -115,7 +116,10 @@ class StreamingTests(unittest.TestCase):
         for density in ("plain", "structural"):
             with self.subTest(density=density):
                 output = parse_xlsx(data, density=density)
-                self.assertTrue(output.startswith(f"density={density}"))
+                if density == "plain":
+                    self.assertTrue(output.startswith("density=plain"))
+                else:
+                    self.assertEqual(ET.fromstring(output).get("density"), density)
 
     def test_invalid_density_raises(self) -> None:
         data = _make_xlsx(
@@ -197,9 +201,9 @@ class TestOutputMaterializationTests(unittest.TestCase):
                 ),
             },
         )
-        output_dir = output_path("xlsx", "write-document", "parsed.html").parent
-        path = write_text_result(parse_xlsx(data), output_dir / "parsed.html")
-        self.assertEqual(path.name, "parsed.html")
+        output_dir = output_path("xlsx", "write-document", "parsed.xml").parent
+        path = write_text_result(parse_xlsx(data), output_dir / "parsed.xml")
+        self.assertEqual(path.name, "parsed.xml")
         self.assertEqual(path.read_text(encoding="utf-8"), parse_xlsx(data))
         self.assertEqual(list(output_dir.glob(".*.tmp")), [])
 
@@ -255,8 +259,8 @@ class TruncationTests(unittest.TestCase):
         data = self._make_sheet(600)
         output = parse_xlsx(data)
         # Shows first rows (within budget) and marks the grid as truncated.
-        self.assertIn("<tr row=1>", output)
-        self.assertNotIn("<tr row=600>", output)
+        self.assertIn('<tr number="1">', output)
+        self.assertNotIn('<tr number="600">', output)
         self.assertIn("truncated", output)
 
     def test_range_reading_not_truncated(self) -> None:

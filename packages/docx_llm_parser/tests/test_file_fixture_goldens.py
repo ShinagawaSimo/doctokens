@@ -11,8 +11,8 @@ from test_support.file_contract import fixture_root
 _TEST_SUPPORT_ROOT = fixture_root().parent
 _MATRIX_PATH = _TEST_SUPPORT_ROOT / "fixture_matrix.json"
 _DENSITIES = {
-    "semantic.html": Density.SEMANTIC,
-    "structural.html": Density.STRUCTURAL,
+    "semantic.xml": Density.SEMANTIC,
+    "structural.xml": Density.STRUCTURAL,
     "plain.txt": Density.PLAIN,
 }
 

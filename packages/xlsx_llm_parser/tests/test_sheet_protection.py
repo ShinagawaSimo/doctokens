@@ -4,6 +4,7 @@ import io
 import unittest
 import zipfile
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from test_support.api_v2_text import parse_xlsx
 from test_support.file_contract import materialize_bytes
@@ -67,8 +68,8 @@ class SheetProtectionTests(unittest.TestCase):
         semantic = parse_xlsx(data, density="semantic")
         structural = parse_xlsx(data, density="structural")
 
-        self.assertIn("<sheetProtection/>", semantic)
-        self.assertIn("<sheetProtection/>", structural)
+        self.assertIn("<sheet-protection />", semantic)
+        self.assertIn("<sheet-protection />", structural)
 
     def test_unlocked_cell_in_structural_and_semantic(self) -> None:
         """Cell with locked='0' outputs unlocked in structural and semantic."""
@@ -125,8 +126,8 @@ class SheetProtectionTests(unittest.TestCase):
         semantic = parse_xlsx(data, density="semantic")
         structural = parse_xlsx(data, density="structural")
 
-        self.assertIn("unlocked", semantic)
-        self.assertIn("unlocked", structural)
+        self.assertEqual(ET.fromstring(semantic).find(".//cell").get("locked"), "false")
+        self.assertEqual(ET.fromstring(structural).find(".//cell").get("locked"), "false")
 
     def test_formula_hidden_cell_in_structural_and_semantic(self) -> None:
         """Cell with hidden='1' outputs formulaHidden."""
@@ -181,8 +182,8 @@ class SheetProtectionTests(unittest.TestCase):
         )
         semantic = parse_xlsx(data, density="semantic")
         structural = parse_xlsx(data, density="structural")
-        self.assertIn("formulaHidden", semantic)
-        self.assertIn("formulaHidden", structural)
+        self.assertIn('formula-hidden="true"', semantic)
+        self.assertIn('formula-hidden="true"', structural)
 
 
 if __name__ == "__main__":

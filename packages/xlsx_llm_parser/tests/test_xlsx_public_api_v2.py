@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import unittest
 import zipfile
+from xml.etree import ElementTree as ET
 
 from xlsx_llm_parser import ParseResult, open_xlsx, parse_xlsx
 
@@ -56,6 +57,9 @@ class PublicApiV2Tests(unittest.TestCase):
         self.assertIsInstance(result, ParseResult)
         self.assertEqual(result.report.format, "xlsx")
         self.assertIn("Hello", result.text)
+        self.assertEqual(result.syntax_version, "doctokens-xml/1.0")
+        self.assertEqual(result.media_type, "application/xml")
+        self.assertEqual(ET.fromstring(result.text).tag, "workbook")
         with open_xlsx(source) as session:
             self.assertEqual(session.render(sheet="Sheet1").selection["kind"], "sheet")
         with self.assertRaisesRegex(RuntimeError, "not open"):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 from typing import Any, cast
+from xml.etree import ElementTree as ET
 
 from _pptx_fixtures import PNG_BYTES
 from ocr_llm_core import OcrProvider, OcrResult
@@ -48,9 +49,10 @@ class PptxOcrTests(unittest.TestCase):
         structural = parse_pptx(_image_deck(), density=Density.STRUCTURAL, options=options)
         plain = parse_pptx(_image_deck(), density=Density.PLAIN, options=options)
         self.assertEqual(options.ocr.calls, 1)
-        self.assertIn("<img id=img1", semantic)
-        self.assertIn("<ocr-text id=img1>Slide &lt;text&gt;", semantic)
-        self.assertNotIn("<ocr-text", structural)
+        semantic_root = ET.fromstring(semantic)
+        self.assertEqual(semantic_root.find(".//img").get("id"), "img1")
+        self.assertEqual(semantic_root.findtext(".//ocr-text"), "Slide <text>")
+        self.assertEqual(ET.fromstring(structural).findall(".//ocr-text"), [])
         self.assertNotIn("Slide <text>", plain)
 
     def test_session_with_ocr_provider_runs_ocr_before_resource_reads(self) -> None:
@@ -97,7 +99,11 @@ class PptxOcrTests(unittest.TestCase):
         parsed = PptxParser().parse(_image_deck(), options)
         self.assertEqual(parsed.ocr_results["img1"]["error_message"], "private diagnostic")
         rendered = parse_pptx(_image_deck(), density=Density.SEMANTIC, options=options)
-        self.assertIn("<ocr-text id=img1 error>", rendered)
+        root = ET.fromstring(rendered)
+        marker = root.find(".//ocr-text")
+        self.assertIsNotNone(marker)
+        assert marker is not None
+        self.assertEqual((marker.get("id"), marker.get("error")), ("img1", "true"))
         self.assertNotIn("private diagnostic", rendered)
 
     def test_media_read_error_is_isolated(self) -> None:

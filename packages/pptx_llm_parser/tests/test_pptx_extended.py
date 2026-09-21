@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from xml.etree import ElementTree as ET
 
 from _pptx_fixtures import (
     content_types_xml,
@@ -88,8 +89,9 @@ class ExtendedPptxTests(unittest.TestCase):
         self.assertEqual(parsed.slides[0]["background"], {"color": "#112233"})
         self.assertEqual(table_shape["tableCells"][0][0]["colSpan"], 2)
         rendered = parse_pptx(deck, density=Density.SEMANTIC)
-        self.assertIn("<equation>\\frac{a}{b}</equation>", rendered)
-        self.assertIn("<td colspan=2>A</td>", rendered)
+        root = ET.fromstring(rendered)
+        self.assertEqual(root.findtext(".//equation"), "\\frac{a}{b}")
+        self.assertEqual(root.find(".//table/tr/td").get("colspan"), "2")
 
     def test_drawingml_autonumber_schemes_use_shared_formatters(self) -> None:
         paragraphs = [

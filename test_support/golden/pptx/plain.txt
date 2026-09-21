@@ -1,4 +1,4 @@
-density=plain
+density=plain format=pptx syntax=doctokens-plain/1.0
 === Slide 1 ===
 Title
 

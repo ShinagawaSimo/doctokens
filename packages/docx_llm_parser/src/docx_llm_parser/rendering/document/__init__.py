@@ -1,12 +1,7 @@
-"""Document-level density orchestration and block dispatch."""
+"""DOCX plain-text output primitives."""
 
-from .blocks import render_block
-from .pipeline import iter_plain, iter_semantic, iter_structural, supplemental_to_output
+from .pipeline import iter_plain
 
 __all__ = [
     "iter_plain",
-    "iter_semantic",
-    "iter_structural",
-    "render_block",
-    "supplemental_to_output",
 ]

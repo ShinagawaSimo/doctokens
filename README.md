@@ -63,9 +63,9 @@
 ```
 doctokens/
   ooxml_llm_core/     # 共享基础设施：ZIP 包读取、关系索引、XML 工具、metrics
-  docx_llm_parser/    # DOCX → 语义 HTML5（标题、表格、编号、脚注、修订、公式、图表、SmartArt）
-  xlsx_llm_parser/    # XLSX → 结构化 HTML5（合并单元格、公式、数据表、透视表、实验性 SQL-like 查询）
-  pptx_llm_parser/    # PPTX → 幻灯片结构化 HTML5（备注、批注、主题、母版、图表、SmartArt）
+  docx_llm_parser/    # DOCX → DTP / DTX（标题、表格、编号、脚注、修订、公式、图表、SmartArt）
+  xlsx_llm_parser/    # XLSX → DTP / DTX（合并单元格、公式、数据表、透视表、实验性 SQL-like 查询）
+  pptx_llm_parser/    # PPTX → DTP / DTX（备注、批注、主题、母版、图表、SmartArt）
   ocr_llm_core/       # OCR 可选适配层（Tesseract / EasyOCR / PaddleVL），为 PDF 解析做准备
 ```
 
@@ -225,7 +225,7 @@ with open_pptx("deck.pptx") as presentation:
 
 ```python
 with open_docx("example.docx") as doc:
-    doc_html = doc.render()
+    doc_output = doc.render()
     doc_page = doc.render(page_hint=3)
 
 with open_xlsx("example.xlsx") as workbook:
@@ -242,8 +242,8 @@ with open_pptx("deck.pptx") as presentation:
 | 密度 | 输出 | 典型场景 |
 |------|------|----------|
 | **plain** | 纯文本，段落间 `\n\n` 分隔 | 概括全文、分类、提取关键词 |
-| **structural** | 块级 HTML5（无粗体/斜体/颜色等格式） | 定位段落、对比段落、读取表格 |
-| **semantic** | 完整语义 HTML5（含所有格式 + 链接 + 公式） | 理解格式语义、链接目标、公式结构 |
+| **structural** | DTX XML（主动省略低价值视觉细节） | 定位段落、对比段落、读取表格 |
+| **semantic** | DTX XML（完整阅读语义、强调、状态和对象关系） | 理解格式语义、链接目标、公式结构 |
 
 每种密度下脚注、尾注、页码、表格的处理策略不同。plain 将脚注文本拼接到引用段落末尾、尾注拼接到文档末尾、表格退化为 `\t` 分隔文本；structural 和 semantic 保留引用标记并将完整内容放在独立区域。
 
@@ -300,7 +300,7 @@ text = provider.extract(open("scan.jpg", "rb").read())
 ### 路线图
 
 - [x] DOCX 解析器（semantic / structural / plain）
-- [x] XLSX 解析器（structural HTML5 + 实验性 SQL-like 查询）
+- [x] XLSX 解析器（structural DTX XML + 实验性 SQL-like 查询）
 - [x] PPTX 解析器（幻灯片结构、备注、批注、主题、母版、图表、SmartArt）
 - [x] OCR 适配层（Tesseract / EasyOCR / PaddleVL）
 - [ ] **PDF 解析器**——基于 `ocr_llm_core` 的扫描件 OCR + 原生文本层混合解析

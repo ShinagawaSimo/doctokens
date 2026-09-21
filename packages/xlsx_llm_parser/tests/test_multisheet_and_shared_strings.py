@@ -120,7 +120,7 @@ class MultiSheetTests(unittest.TestCase):
             },
         )
         output = parse_xlsx(data)
-        self.assertIn("sheet name=Hidden hidden>", output)
+        self.assertIn('<sheet name="Hidden" visibility="hidden" />', output)
         self.assertNotIn("hidden", output.split("Hidden")[0])  # Visible has no hidden
 
 
@@ -214,7 +214,7 @@ class SharedStringsTests(unittest.TestCase):
         )
         output = parse_xlsx(data)
         # Cell with out-of-range SST index: empty text
-        self.assertIn("<td>", output)
+        self.assertIn("<cell />", output)
 
     def test_missing_shared_strings_file(self) -> None:
         """Workbook without sharedStrings.xml should not crash on t='s' cells."""
@@ -241,7 +241,7 @@ class SharedStringsTests(unittest.TestCase):
             },
         )
         output = parse_xlsx(data)
-        self.assertIn("<td>", output)
+        self.assertIn("<cell />", output)
 
     def test_formula_string_cell(self) -> None:
         """t='str' cells use the cached formula result string from <v>."""
@@ -383,7 +383,7 @@ class MissingReferenceTests(unittest.TestCase):
             },
         )
         output = parse_xlsx(data)
-        self.assertIn("<tr row=1><td>first<td>second", output)
+        self.assertIn('<tr number="1"><cell>first</cell><cell>second</cell>', output)
 
 
 if __name__ == "__main__":

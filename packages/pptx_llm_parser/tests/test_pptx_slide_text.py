@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from _pptx_fixtures import (
     content_types_xml,
@@ -91,8 +92,27 @@ class SlideTextParsingTests(unittest.TestCase):
         self.assertEqual(shapes[2]["title"], "Flow connection")
         semantic = parse_pptx(self._deck(shape_xml(2, "Start") + shape_xml(3, "End") + connector), density="semantic")
         structural = parse_pptx(self._deck(shape_xml(2, "Start") + shape_xml(3, "End") + connector), density="structural")
-        self.assertIn('<shape kind=connector geometry=line title="Flow connection" from=s1 to=s2', semantic)
-        self.assertIn('<shape id=s3 kind=connector title="Flow connection" from=s1 to=s2>', structural)
+        semantic_root = ET.fromstring(semantic)
+        connector_node = semantic_root.find(".//shape[@kind='connector']")
+        self.assertIsNotNone(connector_node)
+        assert connector_node is not None
+        self.assertEqual(
+            (
+                connector_node.get("geometry"),
+                connector_node.get("title"),
+                connector_node.get("from-shape"),
+                connector_node.get("to-shape"),
+            ),
+            (None, "Flow connection", "s1", "s2"),
+        )
+        structural_root = ET.fromstring(structural)
+        connector_node = structural_root.find(".//shape[@kind='connector']")
+        self.assertIsNotNone(connector_node)
+        assert connector_node is not None
+        self.assertEqual(
+            (connector_node.get("id"), connector_node.get("from-shape"), connector_node.get("to-shape")),
+            ("s3", "s1", "s2"),
+        )
 
 
 if __name__ == "__main__":

@@ -322,10 +322,10 @@ class ArrayFormulaTests(unittest.TestCase):
         )
         semantic = parse_xlsx(data, density="semantic")
         structural = parse_xlsx(data, density="structural")
-        self.assertIn("formulaType=array", semantic)
-        self.assertIn("formulaRange=A1:C3", semantic)
-        self.assertIn("formulaType=array", structural)
-        self.assertIn("formulaRange=A1:C3", structural)
+        self.assertIn('formula-type="array"', semantic)
+        self.assertIn('formula-range="A1:C3"', semantic)
+        self.assertIn('formula-type="array"', structural)
+        self.assertIn('formula-range="A1:C3"', structural)
         # Classic CSE arrays do not spill: no spillRange/spillFrom markers.
         self.assertNotIn("spillRange", semantic)
         self.assertNotIn("spillFrom", semantic)
@@ -383,10 +383,10 @@ class ArrayFormulaTests(unittest.TestCase):
         structural = parse_xlsx(data, density="structural")
 
         # Source cell has both formulaRange and spillRange
-        self.assertIn("spillRange=B1:B3", semantic)
-        self.assertIn("spillRange=B1:B3", structural)
-        self.assertIn('spillFrom="B1"', semantic)
-        self.assertIn('spillFrom="B1"', structural)
+        self.assertIn('spill-range="B1:B3"', semantic)
+        self.assertIn('spill-range="B1:B3"', structural)
+        self.assertIn('spill-from="B1"', semantic)
+        self.assertIn('spill-from="B1"', structural)
 
 
 if __name__ == "__main__":

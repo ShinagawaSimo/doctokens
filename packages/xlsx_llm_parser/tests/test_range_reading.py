@@ -4,6 +4,7 @@ import io
 import unittest
 import zipfile
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from xlsx_llm_parser.parsing.runner import _parse_workbook
 from xlsx_llm_parser.plan import XlsxFeature, XlsxParsePlan
@@ -173,8 +174,8 @@ class RangeReadingTests(unittest.TestCase):
             },
         )
         output = render_range(data, "Data", "A5:A10")
-        self.assertIn("<tr row=5>", output)
-        self.assertIn("<tr row=10>", output)
+        root = ET.fromstring(output)
+        self.assertEqual([row.get("number") for row in root.findall(".//tr")], ["5", "10"])
 
     def test_range_sheet_not_found(self) -> None:
         """Unknown sheet name raises KeyError."""

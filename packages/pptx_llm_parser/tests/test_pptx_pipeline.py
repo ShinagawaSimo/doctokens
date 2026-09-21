@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from _pptx_fixtures import (
     content_types_xml,
@@ -38,7 +39,7 @@ def _two_slide_deck() -> Path:
 class PlainPipelineTests(unittest.TestCase):
     def test_plain_starts_with_density_marker(self) -> None:
         text = parse_pptx(_two_slide_deck(), density=Density.PLAIN)
-        self.assertTrue(text.startswith("density=plain\n"))
+        self.assertEqual(text.splitlines()[0], "density=plain format=pptx syntax=doctokens-plain/1.0")
 
     def test_plain_separates_slides(self) -> None:
         text = parse_pptx(_two_slide_deck(), density=Density.PLAIN)
@@ -52,8 +53,8 @@ class PlainPipelineTests(unittest.TestCase):
     def test_plain_shape_layout(self) -> None:
         text = parse_pptx(_two_slide_deck(), density=Density.PLAIN)
         self.assertEqual(
-            text,
-            "density=plain\n=== Slide 1 ===\nTitle\n\nPoint one\nPoint two\n=== Slide 2 ===\nSecret",
+            "\n".join(text.splitlines()[1:]),
+            "=== Slide 1 ===\nTitle\n\nPoint one\nPoint two\n=== Slide 2 ===\nSecret",
         )
 
     def test_unknown_density_rejected(self) -> None:
@@ -62,15 +63,17 @@ class PlainPipelineTests(unittest.TestCase):
 
     def test_structural_density_renders_slides(self) -> None:
         text = parse_pptx(_two_slide_deck(), density=Density.STRUCTURAL)
-        self.assertTrue(text.startswith("density=structural\n"))
-        self.assertIn("<slide n=1>", text)
-        self.assertIn("<slide n=2 hidden>", text)
+        root = ET.fromstring(text)
+        self.assertEqual(root.get("density"), "structural")
+        slides = [(item.get("number"), item.get("hidden")) for item in root.findall("slide")]
+        self.assertEqual(slides, [("1", None), ("2", "true")])
 
     def test_semantic_density_renders_slides(self) -> None:
         text = parse_pptx(_two_slide_deck(), density=Density.SEMANTIC)
-        self.assertTrue(text.startswith("density=semantic\n"))
-        self.assertIn("<slide n=1>", text)
-        self.assertIn("<slide n=2 hidden>", text)
+        root = ET.fromstring(text)
+        self.assertEqual(root.get("density"), "semantic")
+        slides = [(item.get("number"), item.get("hidden")) for item in root.findall("slide")]
+        self.assertEqual(slides, [("1", None), ("2", "true")])
 
 
 if __name__ == "__main__":

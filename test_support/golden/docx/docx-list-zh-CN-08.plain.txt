@@ -1,4 +1,6 @@
-density=plain
+density=plain format=docx pagination=last-rendered-hints revision_view=final syntax=doctokens-plain/1.0
+<page=1>
+
 // w:numFmt = iroha
 
 // lang=zh-CN

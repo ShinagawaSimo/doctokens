@@ -6,9 +6,11 @@ import re
 from collections.abc import Iterator
 from html import escape as escape_text
 from pathlib import Path
+from typing import cast
 
+from ooxml_llm_core.doctokens_plain import render_plain
 from ooxml_llm_core.limits import PackageLimits
-from ooxml_llm_core.models import ParseReport, ParseResult, ResourceDescriptor
+from ooxml_llm_core.models import Density, ParseReport, ParseResult, ResourceDescriptor
 from ooxml_llm_core.package import PackageReader
 
 from .models import Cell, DrawingChart, ParsedWorkbook, ParseOptions, SheetInfo
@@ -17,7 +19,9 @@ from .parsing.runner import _parse_workbook
 from .plan import XlsxParsePlan
 from .query import AggregateSpec, OrderSpec, WhereCondition
 from .query import query_data as _query_data
-from .rendering.structural import _filter_rows, _find_sheet, _parse_range, _render_grid
+from .rendering.dtx import render_sheet_dtx
+from .rendering.plain import iter_plain_rows
+from .rendering.selection import filter_rows, find_sheet, parse_range
 
 Source = str | Path | bytes
 _DENSITIES = {"plain", "structural", "semantic"}
@@ -73,13 +77,36 @@ def _resource_descriptors(workbook: ParsedWorkbook) -> tuple[ResourceDescriptor,
     return tuple(descriptors)
 
 
-def _result(workbook: ParsedWorkbook, text: str, density: str, selection: dict[str, object]) -> ParseResult:
-    return ParseResult(text, density, selection, workbook["report"], _resource_descriptors(workbook))  # type: ignore[arg-type]
+def _result(
+    workbook: ParsedWorkbook,
+    text: str,
+    density: str,
+    selection: dict[str, object],
+    *,
+    syntax_version: str | None = None,
+    media_type: str | None = None,
+) -> ParseResult:
+    resolved_syntax, resolved_media_type = _output_metadata(density)
+    return ParseResult(
+        text,
+        cast(Density, density),
+        selection,
+        workbook["report"],
+        _resource_descriptors(workbook),
+        syntax_version or resolved_syntax,
+        media_type or resolved_media_type,
+    )
+
+
+def _output_metadata(density: str) -> tuple[str, str]:
+    if density == "plain":
+        return "doctokens-plain/1.0", "text/plain"
+    return "doctokens-xml/1.0", "application/xml"
 
 
 def _sheet(workbook: ParsedWorkbook, name: str) -> SheetInfo:
     try:
-        return _find_sheet(workbook, name)
+        return find_sheet(workbook, name)
     except ValueError as exc:
         raise KeyError(name) from exc
 
@@ -153,13 +180,22 @@ class XlsxReadSession:
             selection: dict[str, object] = {"kind": "all"}
         elif range_spec is None:
             sheet_info = _sheet(workbook, sheet)
-            text = _render_grid(sheet_info.get("rows", []), resolved, workbook, cell_budget=None)
+            text = _render_selected_plain(sheet_info) if resolved == "plain" else render_sheet_dtx(workbook, sheet_info, resolved)
             selection = {"kind": "sheet", "sheet": sheet}
         else:
             sheet_info = _sheet(workbook, sheet)
-            start_col, start_row, end_col, end_row = _parse_range(range_spec)
-            rows = _filter_rows(sheet_info.get("rows", []), start_col, start_row, end_col, end_row)
-            text = _render_grid(rows, resolved, workbook, cell_budget=None)
+            start_col, start_row, end_col, end_row = parse_range(range_spec)
+            rows = filter_rows(sheet_info.get("rows", []), start_col, start_row, end_col, end_row)
+            text = (
+                _render_selected_plain(sheet_info, rows)
+                if resolved == "plain"
+                else render_sheet_dtx(
+                    workbook,
+                    sheet_info,
+                    resolved,
+                    rows,
+                )
+            )
             selection = {"kind": "range", "sheet": sheet, "ref": range_spec}
         return _result(workbook, text, resolved, selection)
 
@@ -196,7 +232,14 @@ class XlsxReadSession:
     ) -> ParseResult:
         workbook = self._require_open()
         text = _find_cells(workbook, query, sheets=sheets, kind=kind, limit=limit)
-        return _result(workbook, text, "structural", {"kind": "search"})
+        return _result(
+            workbook,
+            text,
+            "structural",
+            {"kind": "search"},
+            syntax_version="legacy-markup/0",
+            media_type="text/plain",
+        )
 
     def query_data(
         self,
@@ -226,7 +269,14 @@ class XlsxReadSession:
             order_by=order_by,
             limit=limit,
         )
-        return _result(workbook, text, "structural", {"kind": "query"})
+        return _result(
+            workbook,
+            text,
+            "structural",
+            {"kind": "query"},
+            syntax_version="legacy-markup/0",
+            media_type="text/plain",
+        )
 
     def read_resource(self, kind: str, resource_id: str) -> bytes:
         workbook = self._require_open()
@@ -253,13 +303,22 @@ class XlsxReadSession:
                             _render_chart_resource(chart),
                             "semantic",
                             _resource_selection(kind, resource_id),
+                            syntax_version="legacy-markup/0",
+                            media_type="text/plain",
                         )
         if kind == "pivot_table":
             for sheet in workbook["sheets"]:
                 for pivot in sheet.get("pivot_tables", []):
                     if pivot["id"] == resource_id:
                         text = f"<pivotTable id={resource_id} name={pivot.get('name', '')}/>"
-                        return _result(workbook, text, "semantic", _resource_selection(kind, resource_id))
+                        return _result(
+                            workbook,
+                            text,
+                            "semantic",
+                            _resource_selection(kind, resource_id),
+                            syntax_version="legacy-markup/0",
+                            media_type="text/plain",
+                        )
         raise KeyError(f"resource {kind!r}/{resource_id!r} not found")
 
 
@@ -287,7 +346,7 @@ def parse_xlsx(
     elif range_spec is None:
         plan = XlsxParsePlan.sheet(resolved, sheet)
     else:
-        start_col, start_row, end_col, end_row = _parse_range(range_spec)
+        start_col, start_row, end_col, end_row = parse_range(range_spec)
         plan = XlsxParsePlan.range(resolved, sheet, (start_col, start_row, end_col, end_row))
     workbook = _parse_workbook(source, options or ParseOptions(), plan=plan)
     if sheet is None:
@@ -295,13 +354,26 @@ def parse_xlsx(
         selection: dict[str, object] = {"kind": "all"}
     elif range_spec is None:
         sheet_info = _sheet(workbook, sheet)
-        text = _render_grid(sheet_info.get("rows", []), resolved, workbook, cell_budget=None)
+        text = _render_selected_plain(sheet_info) if resolved == "plain" else render_sheet_dtx(workbook, sheet_info, resolved)
         selection = {"kind": "sheet", "sheet": sheet}
     else:
         sheet_info = _sheet(workbook, sheet)
-        text = _render_grid(sheet_info.get("rows", []), resolved, workbook, cell_budget=None)
+        start_col, start_row, end_col, end_row = parse_range(range_spec)
+        rows = filter_rows(sheet_info.get("rows", []), start_col, start_row, end_col, end_row)
+        if resolved == "plain":
+            text = _render_selected_plain(sheet_info, rows)
+        else:
+            text = render_sheet_dtx(workbook, sheet_info, resolved, rows)
         selection = {"kind": "range", "sheet": sheet, "ref": range_spec}
     return _result(workbook, text, resolved, selection)
+
+
+def _render_selected_plain(sheet: SheetInfo, rows: list[list[Cell]] | None = None) -> str:
+    selected = sheet.get("rows", []) if rows is None else rows
+    return render_plain(
+        "density=plain\n" + "".join(iter_plain_rows(selected, hidden_cols=sheet.get("hidden_cols", []))),
+        format_name="xlsx",
+    )
 
 
 def _find_cells(

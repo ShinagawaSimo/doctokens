@@ -74,7 +74,7 @@ class StyleTests(unittest.TestCase):
         semantic = parse_xlsx(data, density="semantic")
         self.assertNotIn("bold", structural)
         self.assertIn("bold", semantic)
-        self.assertIn("color=#FF0000", semantic)
+        self.assertIn('color="#FF0000"', semantic)
 
     def test_fill_detected(self) -> None:
         data = _make_xlsx(
@@ -125,7 +125,7 @@ class StyleTests(unittest.TestCase):
             },
         )
         semantic = parse_xlsx(data, density="semantic")
-        self.assertIn("fill=#FFFF00", semantic)
+        self.assertIn('fill="#FFFF00"', semantic)
 
     def test_no_styles_file(self) -> None:
         """Missing styles.xml should not crash style output."""
@@ -243,7 +243,7 @@ class StyleTests(unittest.TestCase):
             },
         )
         semantic = parse_xlsx(data, density="semantic")
-        self.assertIn("color=#ED7D31", semantic)
+        self.assertIn('color="#ED7D31"', semantic)
 
     def test_default_theme_text_color_omitted(self) -> None:
         """theme=1 is default dark text in SpreadsheetML and should not add noise."""
@@ -353,7 +353,7 @@ class StyleTests(unittest.TestCase):
         # R: 0xFF=255 → 255*0.2 + 255*0.8 = 51+204 = 255=FF
         # G: 0xC0=192 → 192*0.2 + 255*0.8 = 38.4+204 = 242.4 → F2
         # B: 0x00=0 → 0*0.2 + 255*0.8 = 0+204 = 204=CC
-        self.assertIn("fill=#FFF2CC", semantic)
+        self.assertIn('fill="#FFF2CC"', semantic)
 
 
 if __name__ == "__main__":

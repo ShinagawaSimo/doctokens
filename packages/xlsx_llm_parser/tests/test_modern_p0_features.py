@@ -4,6 +4,7 @@ import io
 import unittest
 import zipfile
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from test_support.api_v2_text import parse_xlsx
 from test_support.file_contract import materialize_bytes
@@ -127,14 +128,17 @@ class ModernP0FeatureTests(unittest.TestCase):
 
         self.assertIn("Logo", plain)
         self.assertIn("[Checkbox true]", plain)
-        self.assertIn("inCellImage", structural)
-        self.assertIn("control=checkbox", structural)
-        self.assertIn("<pivotCache id=cache1 cacheId=7", semantic)
-        self.assertIn('<slicer id=slicer1 type=slicer name="RegionFilter" source="Region" cacheId=7/>', semantic)
-        self.assertIn('<timeline id=timeline1 name="DateFilter" source="Date" level=months/>', semantic)
-        self.assertIn("<pivotTable id=pivot1 name=SalesPivot ref=D1:E5", semantic)
-        self.assertIn('rows="Region"', semantic)
-        self.assertIn('values="Sum of Amount"', semantic)
+        structural_root = ET.fromstring(structural)
+        semantic_root = ET.fromstring(semantic)
+        self.assertEqual(structural_root.find(".//cell").get("in-cell-image"), "true")
+        self.assertEqual(structural_root.find(".//cell[@control]").get("control"), "checkbox")
+        self.assertEqual(semantic_root.find("pivot-cache").get("id"), "cache1")
+        self.assertEqual(semantic_root.find("slicer").get("name"), "RegionFilter")
+        self.assertEqual(semantic_root.find("timeline").get("level"), "months")
+        pivot = semantic_root.find(".//pivot-table")
+        self.assertEqual(pivot.get("id"), "pivot1")
+        self.assertEqual(pivot.get("rows"), "Region")
+        self.assertEqual(pivot.get("values"), "Sum of Amount")
 
 
 if __name__ == "__main__":

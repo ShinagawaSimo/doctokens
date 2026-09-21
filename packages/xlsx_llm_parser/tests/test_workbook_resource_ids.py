@@ -160,14 +160,14 @@ class WorkbookResourceIdTests(unittest.TestCase):
 
         structural = parse_xlsx(data, density="structural")
 
-        self.assertIn("<table id=table-0 name=Sales1 ref=A1:B2>", structural)
-        self.assertIn("<table id=table-1 name=Sales2 ref=A1:B2>", structural)
-        self.assertIn("<image id=image1 ref=A1/>", structural)
-        self.assertIn("<image id=image2 ref=A1/>", structural)
-        self.assertIn("<chart id=chart1 ref=A1", structural)
-        self.assertIn("<chart id=chart2 ref=A1", structural)
-        self.assertIn("<pivotTable id=pivot1", structural)
-        self.assertIn("<pivotTable id=pivot2", structural)
+        self.assertIn('<table-summary id="table-0" name="Sales1" ref="A1:B2" />', structural)
+        self.assertIn('<table-summary id="table-1" name="Sales2" ref="A1:B2" />', structural)
+        self.assertIn('<img id="image1" ref="A1" />', structural)
+        self.assertIn('<img id="image2" ref="A1" />', structural)
+        self.assertIn('<chart id="chart1" ref="A1"', structural)
+        self.assertIn('<chart id="chart2" ref="A1"', structural)
+        self.assertIn('<pivot-table id="pivot1"', structural)
+        self.assertIn('<pivot-table id="pivot2"', structural)
 
 
 if __name__ == "__main__":

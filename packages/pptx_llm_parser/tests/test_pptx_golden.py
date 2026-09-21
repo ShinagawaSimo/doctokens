@@ -12,8 +12,8 @@ from test_support.file_contract import assert_text_matches_golden, golden_root, 
 GOLDEN_DIR = golden_root("pptx")
 
 _DENSITY_FILES = {
-    Density.SEMANTIC: "parsed.html",
-    Density.STRUCTURAL: "structural.html",
+    Density.SEMANTIC: "parsed.xml",
+    Density.STRUCTURAL: "structural.xml",
     Density.PLAIN: "plain.txt",
 }
 
@@ -26,10 +26,10 @@ class GoldenOutputTests(unittest.TestCase):
         assert_text_matches_golden(actual, golden_path)
 
     def test_semantic_golden(self) -> None:
-        self._check(Density.SEMANTIC, "parsed.html")
+        self._check(Density.SEMANTIC, "parsed.xml")
 
     def test_structural_golden(self) -> None:
-        self._check(Density.STRUCTURAL, "structural.html")
+        self._check(Density.STRUCTURAL, "structural.xml")
 
     def test_plain_golden(self) -> None:
         self._check(Density.PLAIN, "plain.txt")

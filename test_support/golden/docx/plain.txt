@@ -1,5 +1,9 @@
-density=plain
+density=plain format=docx pagination=last-rendered-hints revision_view=final syntax=doctokens-plain/1.0
+<page=1>
+
 Document Title
+
+<page=2>
 
 1. Hellolink	
 after break[fn2][ed3][cmt4] insertedx [fn2: Footnote text]
@@ -14,6 +18,8 @@ Box text
 
 Head
 Body
+
+<page=3>
 
 Last page
 

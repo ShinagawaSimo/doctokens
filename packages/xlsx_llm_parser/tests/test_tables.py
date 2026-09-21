@@ -4,6 +4,7 @@ import io
 import unittest
 import zipfile
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from test_support.api_v2_text import parse_xlsx
 from test_support.file_contract import materialize_bytes
@@ -85,11 +86,14 @@ class TableTests(unittest.TestCase):
         semantic = parse_xlsx(data, density="semantic")
 
         # structural: basic table locator
-        self.assertIn("<table id=table-0 name=Sales ref=A1:D5>", structural)
-        self.assertNotIn("cols=", structural)
+        structural_root = ET.fromstring(structural)
+        semantic_root = ET.fromstring(semantic)
+        structural_table = structural_root.find(".//table-summary")
+        semantic_table = semantic_root.find(".//table-summary")
+        self.assertEqual(structural_table.get("id"), "table-0")
+        self.assertNotIn("columns", structural_table.attrib)
         # semantic: adds column names
-        self.assertIn("cols=", semantic)
-        self.assertIn("Product", semantic)
+        self.assertEqual(semantic_table.get("columns"), "Product,Q1,Q2")
 
 
 if __name__ == "__main__":

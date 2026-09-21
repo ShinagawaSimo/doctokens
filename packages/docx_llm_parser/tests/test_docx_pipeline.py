@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from xml.etree import ElementTree as ET
 
 from _fixtures import write_rich_docx
 from docx_llm_parser.core.enums import RevisionMode
@@ -18,7 +19,7 @@ from test_support.file_contract import output_path, source_path, write_text_resu
 class DocxPipelineTests(unittest.TestCase):
     def test_parse_render_query_write_and_batch_paths(self) -> None:
         docx_path = source_path("docx", "pipeline", "rich.docx")
-        output_dir = output_path("docx", "pipeline", "parsed.html").parent
+        output_dir = output_path("docx", "pipeline", "parsed.xml").parent
         write_rich_docx(docx_path)
 
         # Internal parse for structure assertions
@@ -44,24 +45,26 @@ class DocxPipelineTests(unittest.TestCase):
 
         # Public API: render
         output = parse_docx(docx_path, density=Density.SEMANTIC)
-        self.assertIn("<h1><b><color value=#FF0000>Document Title</color>", output)
-        self.assertIn("<a href=https://example.test>link</a>", output)
-        self.assertIn("<chart id=chart1 type=bar", output)
-        self.assertIn("<smartart id=smartart1 type=process nodes=2 links=1 truncated>", output)
-        self.assertIn("<img id=img1", output)
-        self.assertIn("<!-- supplemental -->", output)
+        root = ET.fromstring(output)
+        self.assertEqual(root.find(".//h1/color/b").text, "Document Title")
+        self.assertEqual(root.find(".//a").get("href"), "https://example.test")
+        self.assertEqual(root.find(".//chart").get("id"), "chart1")
+        self.assertEqual(root.find(".//smartart").get("type"), "process")
+        self.assertEqual(root.find(".//assets/img").get("id"), "img1")
+        self.assertIsNotNone(root.find("supplemental"))
 
         structural_output = parse_docx(docx_path, density=Density.STRUCTURAL)
         plain_text = parse_docx(docx_path, density=Density.PLAIN)
-        self.assertIn("<chart id=chart1 type=bar", structural_output)
+        structural_root = ET.fromstring(structural_output)
+        self.assertEqual(structural_root.find(".//chart").get("id"), "chart1")
         self.assertIn("Footnote text", plain_text)
         self.assertIn("Last page", render_window(docx_path, page=-1))
 
         # structural: no headers/footers; notes and comments remain.
         self.assertNotIn("Header text", structural_output)
         self.assertNotIn("Footer text", structural_output)
-        self.assertIn("<footnote id=", structural_output)
-        self.assertIn("<comment id=", structural_output)
+        self.assertIsNotNone(structural_root.find(".//footnotes/footnote"))
+        self.assertIsNotNone(structural_root.find(".//comments/comment"))
 
         # Plain density: headers/footers excluded, comments retained.
         self.assertNotIn("[Headers]", plain_text)
@@ -83,9 +86,9 @@ class DocxPipelineTests(unittest.TestCase):
         # Test-side atomic write; production APIs return text/iterators only.
         stale = output_dir / "readable.md"
         stale.write_text("keep", encoding="utf-8")
-        output_path_result = write_text_result(output, output_path("docx", "pipeline", "parsed.html"))
+        output_path_result = write_text_result(output, output_path("docx", "pipeline", "parsed.xml"))
         text_path = write_text_result(plain_text, output_path("docx", "pipeline", "plain.txt"))
-        self.assertEqual(output_path_result.name, "parsed.html")
+        self.assertEqual(output_path_result.name, "parsed.xml")
         self.assertEqual(text_path.name, "plain.txt")
         self.assertEqual(stale.read_text(encoding="utf-8"), "keep")
         self.assertEqual(list(output_dir.glob(".*.tmp")), [])

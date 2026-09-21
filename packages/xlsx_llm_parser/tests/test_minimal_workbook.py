@@ -4,6 +4,7 @@ import io
 import unittest
 import zipfile
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from xlsx_llm_parser import ParseOptions, open_xlsx
 
@@ -87,8 +88,8 @@ class MinimalParseTests(unittest.TestCase):
         output = parse_xlsx(data)
         self.assertIn("Widget", output)
         self.assertIn("99", output)
-        self.assertIn("sheet name=Sheet1", output)
-        self.assertIn("<grid ref=A1:B2>", output)
+        self.assertIn('<sheet name="Sheet1">', output)
+        self.assertIn('<grid ref="A1:B2">', output)
 
     def test_session_accepts_package_options_and_exposes_report(self) -> None:
         data = _make_xlsx(
@@ -105,7 +106,9 @@ class MinimalParseTests(unittest.TestCase):
             self.assertEqual(session.report.manifest["sheetCount"], 1)
             self.assertEqual(session.render().text, session.render().text)
             self.assertTrue(list(session.iter_render(density="plain")))
-            self.assertEqual(session.render(sheet="Sheet1", range_spec="A1:A1").text, "")
+            selected = session.render(sheet="Sheet1", range_spec="A1:A1")
+            self.assertEqual(ET.fromstring(selected.text).tag, "workbook")
+            self.assertIsNone(ET.fromstring(selected.text).find(".//grid"))
             self.assertEqual(session.find_cells("").text, "<matches>\n")
             with self.assertRaises(KeyError):
                 session.render_resource("chart", "missing")
@@ -124,7 +127,7 @@ class MinimalParseTests(unittest.TestCase):
             },
         )
         output = parse_xlsx(data)
-        self.assertIn("<sheet name=Empty>", output)
+        self.assertIn('<sheet name="Empty"', output)
         self.assertNotIn("<grid", output)
 
     def test_boolean_and_error_cells(self) -> None:

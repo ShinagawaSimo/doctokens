@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from docx_llm_parser.core.models import ParseOptions
 from docx_llm_parser.parsing.runner import DocxParser
@@ -30,16 +31,14 @@ class HeadingStyleFileTests(unittest.TestCase):
 
     def test_rendered_output_keeps_non_heading_styles_as_paragraphs(self) -> None:
         semantic = parse_docx(FIXTURE, density=Density.SEMANTIC)
-        self.assertIn("<h6><b><color value=#2F5496>Title 6</color>", semantic)
-        self.assertIn("<h7><b><color value=#595959>Title 7</color>", semantic)
-        self.assertIn("<h9><color value=#595959>Title 9</color>", semantic)
-        self.assertIn("<p align=center>Title\n", semantic)
-        self.assertIn(
-            "<p align=center border-top=single:#2F5496 border-bottom=single:#2F5496>"
-            "<i><color value=#2F5496>Conspicuously citation</color>",
-            semantic,
-        )
-        self.assertIn("<smallcaps><color value=#5A5A5A>Inconspicuously reference</color></smallcaps>", semantic)
+        root = ET.fromstring(semantic)
+        self.assertEqual(root.findtext(".//h6/color/b"), "Title 6")
+        self.assertEqual(root.findtext(".//h7/color/b"), "Title 7")
+        self.assertEqual(root.findtext(".//h9/color"), "Title 9")
+        self.assertEqual(root.find(".//p[@align='center']").text, "Title")
+        citation = root.find(".//p[@border-top='single:#2F5496']/color/i")
+        self.assertEqual(citation.text if citation is not None else None, "Conspicuously citation")
+        self.assertEqual(root.findtext(".//small-caps"), "Inconspicuously reference")
 
 
 if __name__ == "__main__":

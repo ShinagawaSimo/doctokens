@@ -20,11 +20,11 @@ GOLDEN_DIR = golden_root("docx")
 class GoldenOutputTests(unittest.TestCase):
     def test_semantic_output_matches_golden(self) -> None:
         actual = _render_density(Density.SEMANTIC)
-        assert_text_matches_golden(actual, GOLDEN_DIR / "parsed.html")
+        assert_text_matches_golden(actual, GOLDEN_DIR / "parsed.xml")
 
     def test_structural_output_matches_golden(self) -> None:
         actual = _render_density(Density.STRUCTURAL)
-        assert_text_matches_golden(actual, GOLDEN_DIR / "structural.html")
+        assert_text_matches_golden(actual, GOLDEN_DIR / "structural.xml")
 
     def test_plain_output_matches_golden(self) -> None:
         actual = _render_density(Density.PLAIN)
@@ -34,8 +34,8 @@ class GoldenOutputTests(unittest.TestCase):
 def _render_density(density: Density) -> Path:
     docx_path = source_path("docx", "golden-output", "rich.docx")
     output_name = {
-        Density.SEMANTIC: "parsed.html",
-        Density.STRUCTURAL: "structural.html",
+        Density.SEMANTIC: "parsed.xml",
+        Density.STRUCTURAL: "structural.xml",
         Density.PLAIN: "plain.txt",
     }[density]
     actual = output_path("docx", "golden-output", output_name)

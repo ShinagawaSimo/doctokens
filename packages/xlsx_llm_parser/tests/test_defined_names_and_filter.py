@@ -77,10 +77,10 @@ class DefinedNameTests(unittest.TestCase):
         structural = parse_xlsx(data, density="structural")
 
         # User names visible in structural and semantic
-        self.assertIn("<definedName name=DiscountRate", semantic)
-        self.assertIn("<definedName name=TaxRate", semantic)
-        self.assertIn("<definedName name=DiscountRate", structural)
-        self.assertIn("<definedName name=TaxRate", structural)
+        self.assertIn('<defined-name name="DiscountRate">', semantic)
+        self.assertIn('<defined-name name="TaxRate">', semantic)
+        self.assertIn('<defined-name name="DiscountRate">', structural)
+        self.assertIn('<defined-name name="TaxRate">', structural)
         # Built-in _xlnm names skipped
         self.assertNotIn("Print_Area", semantic)
         self.assertNotIn("Print_Area", structural)
@@ -130,8 +130,8 @@ class DefinedNameTests(unittest.TestCase):
             },
         )
         structural = parse_xlsx(data, density="structural")
-        self.assertEqual(structural.count("<definedName name=DiscountRate"), 1)
-        self.assertEqual(structural.count("<definedName name=TaxRate"), 1)
+        self.assertEqual(structural.count('<defined-name name="DiscountRate">'), 1)
+        self.assertEqual(structural.count('<defined-name name="TaxRate">'), 1)
 
         matches = find_cells(data, "DiscountRate", kind="definedName")
         self.assertEqual(matches.count("<match "), 1)
@@ -199,26 +199,26 @@ class FilterTests(unittest.TestCase):
         semantic = parse_xlsx(data, density="semantic")
 
         # Both densities show filter range and conditions
-        self.assertIn("<filter ref=A1:K50>", structural)
-        self.assertIn("<filter ref=A1:K50>", semantic)
+        self.assertIn('<filter ref="A1:K50">', structural)
+        self.assertIn('<filter ref="A1:K50">', semantic)
         self.assertIn("<condition", semantic)
         self.assertIn("<condition", structural)
         self.assertIn(
-            '<condition col=1 type=custom operator="greaterThan" value="10" and/>',
+            '<condition and="true" column="1" operator="greaterThan" type="custom" value="10" />',
             semantic,
         )
         self.assertIn(
-            '<condition col=2 type=dynamic operator="thisMonth" value="45123"/>',
+            '<condition column="2" operator="thisMonth" type="dynamic" value="45123" />',
             semantic,
         )
-        self.assertIn('<condition col=3 type=top10 rank="10" top percent/>', semantic)
-        self.assertIn("<condition col=4 type=color cellColor=0 dxfId=2/>", semantic)
+        self.assertIn('<condition column="3" percent="true" rank="10" top="true" type="top10" />', semantic)
+        self.assertIn('<condition cell-color="false" column="4" dxf-id="2" type="color" />', semantic)
         self.assertIn(
-            '<condition col=5 type=icon iconSet="3TrafficLights1" iconId=1/>',
+            '<condition column="5" icon-id="1" icon-set="3TrafficLights1" type="icon" />',
             semantic,
         )
-        self.assertIn('type=dateGroup groups="dateTimeGrouping=month:month=8:year=2026"', semantic)
-        self.assertNotIn("<condition col=6 type=values/>", semantic)
+        self.assertIn('groups="dateTimeGrouping=month:month=8:year=2026" type="dateGroup"', semantic)
+        self.assertNotIn('<condition column="6" type="values" />', semantic)
 
 
 if __name__ == "__main__":

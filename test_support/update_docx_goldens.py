@@ -40,7 +40,7 @@ TEST_SUPPORT = ROOT / "test_support"
 MATRIX_PATH = TEST_SUPPORT / "fixture_matrix.json"
 _PACKAGE_EXTENSIONS = {"docx": ".docx", "pptx": ".pptx", "xlsx": ".xlsx"}
 _DENSITIES = ("semantic", "structural", "plain")
-_GOLDEN_SUFFIXES = (".semantic.html", ".structural.html", ".plain.txt")
+_GOLDEN_SUFFIXES = (".semantic.xml", ".structural.xml", ".plain.txt")
 
 
 def _arguments() -> argparse.Namespace:
@@ -65,8 +65,8 @@ def _case(package: str, fixture: Path) -> dict[str, Any]:
         "id": _case_id(package, fixture),
         "fixture": f"fixtures/{package}/{fixture.name}",
         "golden": [
-            f"golden/{package}/{stem}.semantic.html",
-            f"golden/{package}/{stem}.structural.html",
+            f"golden/{package}/{stem}.semantic.xml",
+            f"golden/{package}/{stem}.structural.xml",
             f"golden/{package}/{stem}.plain.txt",
         ],
     }

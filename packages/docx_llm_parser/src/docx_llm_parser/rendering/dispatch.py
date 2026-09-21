@@ -8,7 +8,6 @@ from collections.abc import Iterator
 from ..core.enums import Density
 from ..core.models import DocumentManifest, ParsedDocument
 from .common.pages import iter_page_blocks
-from .document.pipeline import iter_plain, iter_semantic, iter_structural
 from .objects.resources import render_resource, table_groups
 
 __all__ = [
@@ -27,12 +26,9 @@ def to_output(parsed_document: ParsedDocument, density: Density | str = Density.
 
 def iter_output(parsed_document: ParsedDocument, density: Density | str = Density.SEMANTIC) -> Iterator[str]:
     """Yield self-defined output chunks at the requested density."""
-    renderer = {
-        Density.PLAIN: iter_plain,
-        Density.STRUCTURAL: iter_structural,
-        Density.SEMANTIC: iter_semantic,
-    }[Density.parse(density)]
-    yield from renderer(parsed_document)
+    from ..parsing import get_render_pipeline
+
+    yield from get_render_pipeline(Density.parse(density)).render(parsed_document)
 
 
 def render_page_window(

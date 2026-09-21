@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import unittest
 from typing import Any, cast
+from xml.etree import ElementTree as ET
 
 from xlsx_llm_parser.parsing.modules.styles.index import FormatIndex
-from xlsx_llm_parser.rendering.structural import render_range, render_workbook
+from xlsx_llm_parser.rendering.dtx import iter_dtx, render_sheet_dtx
+from xlsx_llm_parser.rendering.plain import iter_plain
+from xlsx_llm_parser.rendering.selection import filter_rows, find_sheet, parse_range
 
 
 def _workbook() -> dict[str, object]:
@@ -102,34 +105,36 @@ def _workbook() -> dict[str, object]:
 class StructuralRendererTests(unittest.TestCase):
     def test_workbook_renders_metadata_and_inline_features(self) -> None:
         wb = cast(Any, _workbook())
-        structural = render_workbook(wb, density="structural")
-        semantic = render_workbook(wb, density="semantic")
-        plain = render_workbook(wb, density="plain")
+        structural = ET.fromstring("".join(iter_dtx(wb, "structural")))
+        semantic = ET.fromstring("".join(iter_dtx(wb, "semantic")))
+        plain = "".join(iter_plain(wb))
 
-        for output in (structural, semantic):
-            self.assertIn("<columns ref=B:C hidden>", output)
-            self.assertIn("<sheetProtection/>", output)
-            self.assertIn('<definedName name=VisibleName refersTo="Data!$A$1">', output)
-            self.assertIn('<condition col=0 type=values values="Alice"/>', output)
-            self.assertIn("<dataValidation ref=B2:B4 type=whole/>", output)
-            self.assertIn('<rule type=cellIs priority=0 formula="B2&gt;0"/>', output)
-            self.assertIn("<externalLink target=other.xlsx/>", output)
-            self.assertIn("<image id=image1 ref=D4/>", output)
-            self.assertIn("names=Q1", output)
-            self.assertIn("<pivotTable id=pivot1 name=Pivot/>", output)
-            self.assertIn("<chartsheet name=ChartOnly>", output)
-            self.assertIn("colspan=2", output)
-            self.assertIn("rowspan=2", output)
-            self.assertIn('formula="SUM(B3:B4)"', output)
-            self.assertIn("formulaType=array", output)
-            self.assertIn("formulaRange=B2:B4", output)
-            self.assertIn("spillRange=B2:B4", output)
+        for root in (structural, semantic):
+            self.assertEqual(root.find(".//columns").get("ref"), "B:C")
+            self.assertEqual(root.find(".//columns").get("hidden"), "true")
+            self.assertIsNotNone(root.find(".//sheet-protection"))
+            self.assertEqual(root.find(".//defined-name").get("name"), "VisibleName")
+            self.assertEqual(root.find(".//condition").get("values"), "Alice")
+            self.assertEqual(root.find(".//data-validation").get("ref"), "B2:B4")
+            self.assertEqual(root.find(".//conditional-format/rule").get("formula"), "B2>0")
+            self.assertEqual(root.find(".//external-link").get("target"), "other.xlsx")
+            self.assertEqual(root.find(".//img").get("id"), "image1")
+            self.assertEqual(root.find(".//chart").get("names"), "Q1")
+            self.assertEqual(root.find(".//pivot-table").get("id"), "pivot1")
+            self.assertEqual(root.find("chart-sheet").get("name"), "ChartOnly")
+            formula_cell = root.find(".//cell[@formula]")
+            self.assertEqual(formula_cell.get("colspan"), "2")
+            self.assertEqual(formula_cell.get("rowspan"), "2")
+            self.assertEqual(formula_cell.get("formula"), "SUM(B3:B4)")
+            self.assertEqual(formula_cell.get("formula-type"), "array")
+            self.assertEqual(formula_cell.get("formula-range"), "B2:B4")
+            self.assertEqual(formula_cell.get("spill-range"), "B2:B4")
 
-        self.assertIn('<a href="https://example.test/a">Alice</a>', structural)
-        self.assertIn("<commentref id=comment0/>", structural)
-        self.assertIn('<a href="https://example.test/a"><b>Ali</b>ce</a>', semantic)
-        self.assertIn("<comment id=comment0", structural)
-        self.assertIn("<comment id=comment0", semantic)
+        self.assertEqual(structural.find(".//cell/a").get("href"), "https://example.test/a")
+        self.assertEqual(structural.find(".//comment-ref").get("id"), "comment0")
+        self.assertEqual(semantic.find(".//cell/a/b").text, "Ali")
+        self.assertIsNotNone(structural.find(".//comment[@id='comment0']"))
+        self.assertIsNotNone(semantic.find(".//comment[@id='comment0']"))
 
         self.assertIn("[Table Sales: Name, Amount]", plain)
         self.assertNotIn("<table id=table1", plain)
@@ -146,10 +151,11 @@ class StructuralRendererTests(unittest.TestCase):
 
     def test_render_range_and_missing_sheet(self) -> None:
         wb = cast(Any, _workbook())
-        output = render_range(wb, "Data", "A1:B2", density="structural")
-        self.assertIn("<grid ref=A1:B2>", output)
+        sheet = find_sheet(wb, "Data")
+        output = render_sheet_dtx(wb, sheet, "structural", filter_rows(sheet["rows"], *parse_range("A1:B2")))
+        self.assertEqual(ET.fromstring(output).find(".//grid").get("ref"), "A1:B2")
         with self.assertRaises(ValueError):
-            render_range(wb, "Missing", "A1:B2")
+            find_sheet(wb, "Missing")
 
     def test_empty_sheet_keeps_resource_declarations(self) -> None:
         workbook = {
@@ -172,10 +178,10 @@ class StructuralRendererTests(unittest.TestCase):
             "metadata": {"source": "memory"},
             "fmt_index": FormatIndex(),
         }
-        output = render_workbook(cast(Any, workbook), density="structural")
-        self.assertIn("<image id=image1 ref=A1/>", output)
-        self.assertIn("<table id=table1", output)
-        self.assertNotIn("<grid", output)
+        root = ET.fromstring("".join(iter_dtx(cast(Any, workbook), "structural")))
+        self.assertEqual(root.find(".//img").get("id"), "image1")
+        self.assertEqual(root.find(".//table-summary").get("id"), "table1")
+        self.assertIsNone(root.find(".//grid"))
 
     def test_semantic_repeated_styles_render_as_range(self) -> None:
         fmt_index = FormatIndex()
@@ -199,10 +205,10 @@ class StructuralRendererTests(unittest.TestCase):
             "fmt_index": fmt_index,
         }
 
-        output = render_workbook(cast(Any, workbook), density="semantic")
+        output = "".join(iter_dtx(cast(Any, workbook), "semantic"))
 
-        self.assertIn('<styleRange ref=A1:C3 attrs="fill=#D9EAD3"/>', output)
-        self.assertEqual(output.count("fill=#D9EAD3"), 1)
+        self.assertIn('<style-range fill="#D9EAD3" ref="A1:C3" />', output)
+        self.assertEqual(output.count("#D9EAD3"), 1)
 
 
 if __name__ == "__main__":

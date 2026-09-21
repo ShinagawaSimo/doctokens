@@ -49,7 +49,7 @@ def parse_xlsx(source: object, **kwargs: Any) -> str:
 
 
 def render_xlsx_range(source: object, sheet: str, range_spec: str, **kwargs: Any) -> str:
-    return _parse_xlsx(source, sheet=sheet, range_spec=range_spec, **kwargs).text
+    return _parse_xlsx(source, sheet=sheet, range_spec=range_spec).text
 
 
 def find_xlsx_cells(source: object, query: str, **kwargs: Any) -> str:

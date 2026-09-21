@@ -93,7 +93,7 @@ class ImageTests(unittest.TestCase):
             },
         )
         output = parse_xlsx(data, density="structural")
-        self.assertIn("<image id=image1 ref=A1/>", output)
+        self.assertIn('<img id="image1" ref="A1" />', output)
 
 
 class ChartTests(unittest.TestCase):
@@ -171,7 +171,7 @@ class ChartTests(unittest.TestCase):
         self.assertNotIn("<chart ", plain)
         self.assertNotIn("series=", plain)
         self.assertNotIn("truncated", plain)
-        self.assertIn("<chart id=chart1", structural)
+        self.assertIn('<chart id="chart1"', structural)
 
     def test_chart_ex_drawing_relationship_is_parsed(self) -> None:
         """ChartEx uses a different relation and graphicData namespace than ChartML."""
@@ -262,7 +262,7 @@ class PivotTableTests(unittest.TestCase):
             },
         )
         output = parse_xlsx(data, density="structural")
-        self.assertIn("<pivotTable id=pivot1", output)
+        self.assertIn('<pivot-table id="pivot1"', output)
 
 
 if __name__ == "__main__":

@@ -76,10 +76,10 @@ class MergeCellTests(unittest.TestCase):
         )
         semantic = parse_xlsx(data, density="semantic")
         structural = parse_xlsx(data, density="structural")
-        self.assertIn("colspan=2", semantic)
-        self.assertIn("rowspan=2", semantic)
-        self.assertIn("colspan=2", structural)
-        self.assertIn("rowspan=2", structural)
+        self.assertIn('colspan="2"', semantic)
+        self.assertIn('rowspan="2"', semantic)
+        self.assertIn('colspan="2"', structural)
+        self.assertIn('rowspan="2"', structural)
         # Shadow cells excluded
         self.assertNotIn("Shadow", semantic)
         self.assertNotIn("Shadow", structural)
@@ -100,7 +100,7 @@ class MergeCellTests(unittest.TestCase):
         self.assertNotIn("Hidden", output)
         self.assertIn("Next", output)
         # C1 should use col=C since B1 is shadow (col= expects A1:C1 range)
-        self.assertIn("<grid ref=A1:C1>", output)
+        self.assertIn('<grid ref="A1:C1">', output)
 
     def test_no_merge_cells_no_effect(self) -> None:
         data = self._make_merged(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from xml.etree import ElementTree as ET
 
 from _pptx_fixtures import (
     P14_NS,
@@ -50,9 +51,12 @@ class NavigationAndSectionsTests(unittest.TestCase):
             }
         )
         structural = parse_pptx(data, density="structural")
-        self.assertIn("<slide n=1 section=Intro>", structural)
-        self.assertIn("<slide n=2 section=Details>", structural)
-        self.assertIn("link=#slide2", structural)
+        root = ET.fromstring(structural)
+        self.assertEqual(
+            [(item.get("number"), item.get("section")) for item in root.findall("slide")],
+            [("1", "Intro"), ("2", "Details")],
+        )
+        self.assertEqual(root.find(".//slide/p").get("link"), "#slide2")
 
         plain = parse_pptx(data, density="plain")
         self.assertIn("=== Slide 1 (Section: Intro) ===", plain)

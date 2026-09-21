@@ -14,7 +14,7 @@ class RenderMetricsTests(unittest.TestCase):
     def test_record_metrics_in_memory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            output = root / "parsed.html"
+            output = root / "parsed.xml"
             output.write_text("abcd", encoding="utf-8")
             parsed = ParsedDocument(
                 metadata={},

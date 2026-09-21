@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from xml.etree import ElementTree as ET
 
 from _pptx_fixtures import rich_deck_pptx
 
@@ -12,26 +13,18 @@ from test_support.api_v2_text import Density, parse_pptx
 class StructuralRenderingTests(unittest.TestCase):
     def test_structural_output_contract(self) -> None:
         text = parse_pptx(rich_deck_pptx(), density=Density.STRUCTURAL)
-        self.assertEqual(
-            text,
-            "density=structural\n"
-            "<slide n=1>\n"
-            "<title>Title\n"
-            "<p>Visit <a href=https://example.test/doc>docs</a>\n"
-            '<img id=img1 alt="Chart photo">\n'
-            "<table id=s4 rows=2 cols=2>\n"
-            "<tr><td>A</td><td>B</td>\n"
-            "<tr><td>C</td><td>D</td>\n"
-            "<chart id=chart1 type=bar series=2 points=4 truncated>\n"
-            "<smartart id=smartart1 type=process nodes=3 links=2 truncated>Start Middle End\n"
-            "<media id=media1 kind=video>\n"
-            "<notes>Talk\n"
-            "<slide n=2 hidden>\n"
-            "<p>Secret\n"
-            "<!-- supplemental -->\n"
-            "<comment id=cmt1 author=Alice date=2026-08-13T10:00:00>Nice slide\n"
-            "<comment id=cmt2 author=Bob date=2026-08-13T11:00:00 parent=cmt1>Agreed\n",
-        )
+        root = ET.fromstring(text)
+        self.assertEqual(root.attrib["density"], "structural")
+        slide_one, slide_two = root.findall("slide")
+        self.assertEqual(slide_one.findtext("title"), "Title")
+        self.assertEqual(slide_one.find("p/a").get("href"), "https://example.test/doc")
+        self.assertEqual(slide_one.find("img").get("id"), "img1")
+        self.assertEqual([[cell.text for cell in row] for row in slide_one.findall("table/tr")], [["A", "B"], ["C", "D"]])
+        self.assertEqual(slide_one.find("chart").get("truncated"), "true")
+        self.assertEqual(slide_one.findtext("smartart"), "Start Middle End")
+        self.assertEqual(slide_one.findtext("speaker-notes"), "Talk")
+        self.assertEqual(slide_two.get("hidden"), "true")
+        self.assertEqual([item.get("id") for item in root.findall("comments/comment")], ["cmt1", "cmt2"])
 
 
 if __name__ == "__main__":

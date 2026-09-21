@@ -8,13 +8,15 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from functools import partial
+
+from ooxml_llm_core.doctokens_plain import render_plain
 
 from ..core.enums import Density
 from ..core.models import ParsedDocument
 from ..plan import DocxParsePlan
+from ..rendering.dtx import iter_dtx
 from ..rendering.plain.pipeline import iter_plain
-from ..rendering.semantic import iter_semantic
-from ..rendering.structural import iter_structural
 
 Renderer = Callable[[ParsedDocument], Iterator[str]]
 
@@ -28,6 +30,19 @@ class DocxRenderPipeline:
     renderer: Renderer
 
     def render(self, parsed: ParsedDocument) -> Iterator[str]:
+        if self.density is Density.PLAIN:
+            legacy_text = "".join(self.renderer(parsed))
+            revision_view = parsed.metadata.get("revisionView")
+            return iter(
+                (
+                    render_plain(
+                        legacy_text,
+                        format_name="docx",
+                        revision_view=revision_view if isinstance(revision_view, str) else None,
+                        pagination="last-rendered-hints",
+                    ),
+                )
+            )
         return self.renderer(parsed)
 
 
@@ -36,9 +51,13 @@ _PIPELINES = {
     Density.STRUCTURAL: DocxRenderPipeline(
         Density.STRUCTURAL,
         DocxParsePlan.render(Density.STRUCTURAL),
-        iter_structural,
+        partial(iter_dtx, density="structural"),
     ),
-    Density.SEMANTIC: DocxRenderPipeline(Density.SEMANTIC, DocxParsePlan.render(Density.SEMANTIC), iter_semantic),
+    Density.SEMANTIC: DocxRenderPipeline(
+        Density.SEMANTIC,
+        DocxParsePlan.render(Density.SEMANTIC),
+        partial(iter_dtx, density="semantic"),
+    ),
 }
 
 

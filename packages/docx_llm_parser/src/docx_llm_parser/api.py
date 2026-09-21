@@ -69,10 +69,33 @@ def _resource_descriptors(document: ParsedDocument) -> tuple[ResourceDescriptor,
     return tuple(descriptors)
 
 
-def _result(document: ParsedDocument, text: str, density: Density, selection: dict[str, object]) -> ParseResult:
+def _result(
+    document: ParsedDocument,
+    text: str,
+    density: Density,
+    selection: dict[str, object],
+    *,
+    syntax_version: str | None = None,
+    media_type: str | None = None,
+) -> ParseResult:
     if document.report is None:  # pragma: no cover - parser always attaches a report
         raise RuntimeError("parsed DOCX has no parse report")
-    return ParseResult(text, density, selection, document.report, _resource_descriptors(document))
+    resolved_syntax, resolved_media_type = _output_metadata(density)
+    return ParseResult(
+        text,
+        density,
+        selection,
+        document.report,
+        _resource_descriptors(document),
+        syntax_version or resolved_syntax,
+        media_type or resolved_media_type,
+    )
+
+
+def _output_metadata(density: Density) -> tuple[str, str]:
+    if density == "plain":
+        return "doctokens-plain/1.0", "text/plain"
+    return "doctokens-xml/1.0", "application/xml"
 
 
 class DocxReadSession:
@@ -209,7 +232,14 @@ class DocxReadSession:
         )
         if not rendered:
             raise KeyError(f"resource {kind!r}/{resource_id!r} not found")
-        return _result(document, rendered[0], "semantic", {"kind": "resource", "resource_kind": kind, "id": resource_id})
+        return _result(
+            document,
+            rendered[0],
+            "semantic",
+            {"kind": "resource", "resource_kind": kind, "id": resource_id},
+            syntax_version="legacy-markup/0",
+            media_type="text/plain",
+        )
 
 
 def open_docx(source: Source, *, options: ParseOptions | None = None) -> DocxReadSession:

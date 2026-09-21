@@ -7,7 +7,7 @@ from typing import TypedDict
 
 from ._utils import col_letter
 from .models import Cell, ParsedWorkbook, SheetInfo
-from .rendering.structural import _find_sheet, _parse_range
+from .rendering.selection import find_sheet, parse_range
 
 
 class WhereCondition(TypedDict, total=False):
@@ -104,7 +104,7 @@ def _resolve_query_source(
         for sheet_info in parsed_workbook["sheets"]:
             for table in sheet_info.get("tables", []):
                 if table["id"] == table_id:
-                    bounds = _parse_range(table["ref"])
+                    bounds = parse_range(table["ref"])
                     start_col, _start_row, end_col, _end_row = bounds
                     table_columns = [str(item) for item in table.get("columns", [])]
                     columns = _columns_from_labels(table_columns, start_col, end_col)
@@ -112,8 +112,8 @@ def _resolve_query_source(
         raise ValueError(f"Table {table_id!r} not found")
 
     if sheet is not None and range_spec is not None and header_row is not None:
-        sheet_info = _find_sheet(parsed_workbook, sheet)
-        return sheet_info, [], _parse_range(range_spec), header_row
+        sheet_info = find_sheet(parsed_workbook, sheet)
+        return sheet_info, [], parse_range(range_spec), header_row
 
     raise ValueError("Provide table_id or (sheet + range_spec + header_row)")
 

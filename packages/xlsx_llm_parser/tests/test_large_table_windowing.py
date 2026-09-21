@@ -110,10 +110,10 @@ class WindowingTests(unittest.TestCase):
         )
         output = parse_xlsx(data, density="structural")
         # Shows data rows within the budget and marks the grid as truncated.
-        self.assertIn("<tr row=1>", output)
+        self.assertIn('<tr number="1">', output)
         self.assertIn("truncated", output)
         # Stops at cell budget; the last row is not shown.
-        self.assertNotIn("<tr row=599>", output)
+        self.assertNotIn('<tr number="599">', output)
 
 
 if __name__ == "__main__":

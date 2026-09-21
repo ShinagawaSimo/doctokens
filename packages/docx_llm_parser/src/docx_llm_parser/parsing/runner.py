@@ -58,6 +58,7 @@ class _DocumentParseResult:
     blocks: list[Block]
     ancillary: AncillaryResult
     ocr_results: dict[str, OcrStoredResult]
+    revision_view: str
 
 
 class DocxParser:
@@ -146,6 +147,7 @@ class DocxParser:
             blocks=blocks,
             ancillary=ancillary,
             ocr_results=ocr_results,
+            revision_view=str(parse_options.revision_mode),
         )
         return self._build_document(parse_result, warnings, metrics)
 
@@ -372,6 +374,7 @@ class DocxParser:
             "format": "docx",
             "parser": "docx_llm_parser",
             "parserVersion": __version__,
+            "revisionView": parse_result.revision_view,
         }
 
         parsed_document = ParsedDocument(

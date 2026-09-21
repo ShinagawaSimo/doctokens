@@ -15,25 +15,25 @@ class TestOutputMaterializationTests(unittest.TestCase):
         deck = rich_deck_pptx()
         semantic = write_text_result(
             parse_pptx(deck, density=Density.SEMANTIC),
-            output_path("pptx", "write-document", "parsed.html"),
+            output_path("pptx", "write-document", "parsed.xml"),
         )
         structural = write_text_result(
             parse_pptx(deck, density=Density.STRUCTURAL),
-            output_path("pptx", "write-document", "structural.html"),
+            output_path("pptx", "write-document", "structural.xml"),
         )
         plain = write_text_result(
             parse_pptx(deck, density=Density.PLAIN),
             output_path("pptx", "write-document", "plain.txt"),
         )
-        self.assertEqual(semantic.name, "parsed.html")
-        self.assertEqual(structural.name, "structural.html")
+        self.assertEqual(semantic.name, "parsed.xml")
+        self.assertEqual(structural.name, "structural.xml")
         self.assertEqual(plain.name, "plain.txt")
 
     def test_content_matches_parse_pptx(self) -> None:
         deck = rich_deck_pptx()
         path = write_text_result(
             parse_pptx(deck, density=Density.STRUCTURAL),
-            output_path("pptx", "write-document", "structural.html"),
+            output_path("pptx", "write-document", "structural.xml"),
         )
         content = path.read_text(encoding="utf-8")
         self.assertEqual(content, parse_pptx(deck, density=Density.STRUCTURAL))

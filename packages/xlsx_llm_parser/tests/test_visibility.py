@@ -67,9 +67,9 @@ class HiddenRowTests(unittest.TestCase):
         semantic = parse_xlsx(data, density="semantic")
 
         # Both densities mark the hidden row
-        self.assertIn("<tr row=1>", structural)
-        self.assertIn("<tr row=2 hidden>", structural)
-        self.assertIn("<tr row=2 hidden>", semantic)
+        self.assertIn('<tr number="1">', structural)
+        self.assertIn('<tr hidden="true" number="2">', structural)
+        self.assertIn('<tr hidden="true" number="2">', semantic)
         # plain omits tags entirely
         plain = parse_xlsx(data, density="plain")
         self.assertIn("Secret", plain)
@@ -123,7 +123,7 @@ class HiddenColumnTests(unittest.TestCase):
         )
         structural = parse_xlsx(data, density="structural")
         # Columns annotation appears before grid
-        self.assertIn("<columns ref=B:C hidden>", structural)
+        self.assertIn('<columns hidden="true" ref="B:C" />', structural)
 
         plain = parse_xlsx(data, density="plain")
         self.assertIn("\nA\n", plain)
@@ -177,9 +177,9 @@ class OutlineTests(unittest.TestCase):
         structural = parse_xlsx(data, density="structural")
 
         # Both structural and semantic output outline info
-        self.assertIn("outlineLevel=1", semantic)
+        self.assertIn('outline-level="1"', semantic)
         self.assertIn("collapsed", semantic)
-        self.assertIn("outlineLevel=1", structural)
+        self.assertIn('outline-level="1"', structural)
         self.assertIn("collapsed", structural)
 
 

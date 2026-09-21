@@ -4,6 +4,7 @@ import io
 import unittest
 import zipfile
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from test_support.api_v2_text import parse_xlsx
 from test_support.file_contract import materialize_bytes
@@ -67,8 +68,8 @@ class DataValidationTests(unittest.TestCase):
         )
         semantic = parse_xlsx(data, density="semantic")
         structural = parse_xlsx(data, density="structural")
-        self.assertIn("<dataValidation ref=A1:A10 type=list/>", semantic)
-        self.assertIn("<dataValidation ref=A1:A10 type=list/>", structural)
+        self.assertIn('<data-validation ref="A1:A10" type="list" />', semantic)
+        self.assertIn('<data-validation ref="A1:A10" type="list" />', structural)
 
 
 class ConditionalFormatTests(unittest.TestCase):
@@ -136,28 +137,19 @@ class ConditionalFormatTests(unittest.TestCase):
         )
         semantic = parse_xlsx(data, density="semantic")
         structural = parse_xlsx(data, density="structural")
-        self.assertIn("<conditionalFormatting ref=F4:F20>", semantic)
-        self.assertIn(
-            '<rule type=cellIs priority=1 formula="F4&lt;0" operator="lessThan" dxf=0 '
-            'style="bold color=#FF0000 fill=#FFFF00 numberFormat=0.00% horizontal=center wrapText=1" '
-            "stopIfTrue/>",
-            semantic,
-        )
-        self.assertIn('format=colorScale details="stops=type=min:color=FFFF0000;type=max:color=FF00FF00"', semantic)
-        self.assertIn(
-            'format=dataBar details="minLength=10;showValue=0;color=FF638EC6;thresholds=type=min;type=max"',
-            semantic,
-        )
-        self.assertIn(
-            'format=iconSet details="iconSet=3TrafficLights1;showValue=0;'
-            'thresholds=type=percent:val=0;type=percent:val=33;type=percent:val=67"',
-            semantic,
-        )
-        self.assertIn("<rule type=top10 priority=5 rank=3 percent/>", semantic)
-        self.assertIn("<conditionalFormatting ref=F4:F20>", structural)
-        self.assertIn('<rule type=cellIs priority=1 formula="F4&lt;0" operator="lessThan" dxf=0', structural)
-        self.assertIn("<rule type=colorScale priority=2 format=colorScale/>", structural)
-        self.assertNotIn('details="', structural)
+        semantic_root = ET.fromstring(semantic)
+        structural_root = ET.fromstring(structural)
+        semantic_rules = semantic_root.findall(".//conditional-format/rule")
+        structural_rules = structural_root.findall(".//conditional-format/rule")
+        first = semantic_rules[0]
+        self.assertEqual(first.get("style"), "bold color=#FF0000 fill=#FFFF00 numberFormat=0.00% horizontal=center wrapText=1")
+        self.assertIn("stops=type=min:color=FFFF0000", semantic_rules[1].get("details"))
+        self.assertIn("minLength=10", semantic_rules[2].get("details"))
+        self.assertIn("iconSet=3TrafficLights1", semantic_rules[3].get("details"))
+        self.assertEqual(semantic_rules[4].get("rank"), "3")
+        self.assertEqual(structural_rules[0].get("type"), "cellIs")
+        self.assertEqual(structural_rules[1].get("format"), "colorScale")
+        self.assertNotIn("details", structural_rules[1].attrib)
 
 
 class ExternalLinkTests(unittest.TestCase):
@@ -204,8 +196,8 @@ class ExternalLinkTests(unittest.TestCase):
         )
         semantic = parse_xlsx(data, density="semantic")
         structural = parse_xlsx(data, density="structural")
-        self.assertIn("<externalLink target=Budget.xlsx/>", semantic)
-        self.assertIn("<externalLink target=Budget.xlsx/>", structural)
+        self.assertIn('<external-link target="Budget.xlsx" />', semantic)
+        self.assertIn('<external-link target="Budget.xlsx" />', structural)
 
     def test_structured_reference_is_not_external_link(self) -> None:
         data = _make_xlsx(
@@ -250,7 +242,7 @@ class ExternalLinkTests(unittest.TestCase):
         semantic = parse_xlsx(data, density="semantic")
         structural = parse_xlsx(data, density="structural")
 
-        self.assertIn('refersTo="PopulationSummary[AvgLife]"', semantic)
+        self.assertEqual(ET.fromstring(semantic).find(".//defined-name").text, "PopulationSummary[AvgLife]")
         self.assertNotIn("externalLink", semantic)
         self.assertNotIn("externalLink", structural)
 

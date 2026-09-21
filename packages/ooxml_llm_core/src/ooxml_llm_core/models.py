@@ -80,6 +80,8 @@ class ParseResult:
     selection: dict[str, object]
     report: ParseReport
     resources: tuple[ResourceDescriptor, ...] = ()
+    syntax_version: str = "legacy-markup/0"
+    media_type: str = "text/plain"
 
 
 @dataclass(frozen=True, slots=True)

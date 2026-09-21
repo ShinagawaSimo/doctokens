@@ -81,8 +81,8 @@ class CommentTests(unittest.TestCase):
             },
         )
         output = parse_xlsx(data, density="structural")
-        self.assertIn("<commentref id=comment0/>", output)
-        self.assertIn('<comment id=comment0 cell="A1" author=Alice>', output)
+        self.assertIn('<comment-ref id="comment0" />', output)
+        self.assertIn('<comment author="Alice" cell="A1" id="comment0">', output)
         self.assertIn("Approved by auditor", output)
         # plain omits comments
         plain = parse_xlsx(data, density="plain")
@@ -139,8 +139,8 @@ class CommentTests(unittest.TestCase):
         output = parse_xlsx(data, density="structural")
         self.assertIn("thread-A2-1", output)
         self.assertIn("thread-A2-2", output)
-        self.assertIn("author=Alice", output)
-        self.assertIn("parent=thread-A2-1 resolved", output)
+        self.assertIn('author="Alice"', output)
+        self.assertIn('parent="thread-A2-1" resolved="true"', output)
         self.assertIn('cell="A2"', output)
 
         plain = parse_xlsx(data, density="plain")

@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from functools import partial
+
+from ooxml_llm_core.doctokens_plain import render_plain
 
 from ..core.enums import Density
 from ..core.models import ParsedPresentation
 from ..plan import PptxParsePlan
+from ..rendering.dtx import iter_dtx
 from ..rendering.plain import iter_plain
-from ..rendering.semantic import iter_semantic
-from ..rendering.structural import iter_structural
 
 Renderer = Callable[[ParsedPresentation], Iterator[str]]
 
@@ -24,6 +26,9 @@ class PptxRenderPipeline:
     renderer: Renderer
 
     def render(self, parsed: ParsedPresentation) -> Iterator[str]:
+        if self.density is Density.PLAIN:
+            legacy_text = "".join(self.renderer(parsed))
+            return iter((render_plain(legacy_text, format_name="pptx"),))
         return self.renderer(parsed)
 
 
@@ -32,9 +37,13 @@ _PIPELINES = {
     Density.STRUCTURAL: PptxRenderPipeline(
         Density.STRUCTURAL,
         PptxParsePlan.render(Density.STRUCTURAL),
-        iter_structural,
+        partial(iter_dtx, density="structural"),
     ),
-    Density.SEMANTIC: PptxRenderPipeline(Density.SEMANTIC, PptxParsePlan.render(Density.SEMANTIC), iter_semantic),
+    Density.SEMANTIC: PptxRenderPipeline(
+        Density.SEMANTIC,
+        PptxParsePlan.render(Density.SEMANTIC),
+        partial(iter_dtx, density="semantic"),
+    ),
 }
 
 

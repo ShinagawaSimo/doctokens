@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 from typing import Any, cast
+from xml.etree import ElementTree as ET
 
 from docx_llm_parser.core.models import ParseOptions
 
@@ -78,16 +79,14 @@ class RenderOcrTextTest(unittest.TestCase):
             content_types=ContentTypes(defaults={}, overrides={}),
             ocr_results={"img1": "## Detected text\n\nSome content", "img2": ""},
         )
-        output = to_output(parsed, Density.SEMANTIC)
-        # img1 has OCR text
-        self.assertIn("<img id=img1>", output)
-        self.assertIn("<ocr-text id=img1>## Detected text", output)
-        # img2 has empty OCR — error marker
-        self.assertIn("<ocr-text id=img2 error>", output)
-        # Order: img before ocr-text
-        pos_img = output.index("<img id=img1>")
-        pos_ocr = output.index("<ocr-text id=img1>")
-        self.assertGreater(pos_ocr, pos_img)
+        root = ET.fromstring(to_output(parsed, Density.SEMANTIC))
+        assets = root.find("assets")
+        self.assertIsNotNone(assets)
+        assert assets is not None
+        self.assertEqual([item.tag for item in assets], ["img", "ocr-text", "img", "ocr-text"])
+        self.assertEqual(assets[0].get("id"), "img1")
+        self.assertTrue((assets[1].text or "").startswith("## Detected text"))
+        self.assertEqual((assets[3].get("id"), assets[3].get("error")), ("img2", "true"))
 
     def test_structured_ocr_results_escape_text_and_preserve_empty(self) -> None:
         from docx_llm_parser.core.enums import Density
@@ -112,10 +111,10 @@ class RenderOcrTextTest(unittest.TestCase):
                 "img2": {"status": "empty", "text": ""},
             },
         )
-        output = to_output(parsed, Density.SEMANTIC)
-        self.assertIn("<ocr-text id=img1>A &lt; B", output)
-        self.assertIn("<ocr-text id=img2 empty>", output)
-        self.assertNotIn("A < B", output)
+        root = ET.fromstring(to_output(parsed, Density.SEMANTIC))
+        first, second = root.findall(".//assets/ocr-text")
+        self.assertEqual((first.get("id"), first.text), ("img1", "A < B"))
+        self.assertEqual((second.get("id"), second.get("empty")), ("img2", "true"))
 
     def test_ocr_disabled_no_ocr_text_output(self) -> None:
         """Without ocr_results, no <ocr-text> elements appear."""
@@ -140,9 +139,9 @@ class RenderOcrTextTest(unittest.TestCase):
             assets=assets,
             content_types=ContentTypes(defaults={}, overrides={}),
         )
-        output = to_output(parsed, Density.SEMANTIC)
-        self.assertIn("<img id=img1>", output)
-        self.assertNotIn("<ocr-text", output)
+        root = ET.fromstring(to_output(parsed, Density.SEMANTIC))
+        self.assertEqual(root.find(".//assets/img").get("id"), "img1")
+        self.assertEqual(root.findall(".//ocr-text"), [])
 
     def test_inline_image_with_ocr_text(self) -> None:
         """Inline <img> inside a paragraph gets <ocr-text> sibling."""
@@ -178,10 +177,12 @@ class RenderOcrTextTest(unittest.TestCase):
             content_types=ContentTypes(defaults={}, overrides={}),
             ocr_results={"img7": "Diagram text"},
         )
-        output = to_output(parsed, Density.SEMANTIC)
-        # Inline image rendered inside paragraph block
-        self.assertIn("img id=img7", output)
-        self.assertIn("ocr-text id=img7>Diagram text", output)
+        root = ET.fromstring(to_output(parsed, Density.SEMANTIC))
+        paragraph = root.find(".//body/p")
+        self.assertIsNotNone(paragraph)
+        assert paragraph is not None
+        self.assertEqual([item.tag for item in paragraph], ["img", "ocr-text"])
+        self.assertEqual((paragraph[0].get("id"), paragraph[1].text), ("img7", "Diagram text"))
 
     def test_nested_table_image_receives_ocr_in_semantic_and_plain_output(self) -> None:
         from docx_llm_parser.core.enums import Density
@@ -243,7 +244,8 @@ class RenderOcrTextTest(unittest.TestCase):
         )
         semantic = to_output(parsed, Density.SEMANTIC)
         plain = to_output(parsed, Density.PLAIN)
-        self.assertIn("<ocr-text id=img-table>Cell OCR", semantic)
+        semantic_root = ET.fromstring(semantic)
+        self.assertTrue(any(item.text == "Cell OCR" for item in semantic_root.findall(".//ocr-text")))
         self.assertIn("OCR: Cell OCR", plain)
 
     def test_supplemental_image_receives_ocr(self) -> None:
@@ -270,7 +272,8 @@ class RenderOcrTextTest(unittest.TestCase):
             ocr_results={"img-header": {"status": "success", "text": "Header OCR"}},
         )
         semantic = to_output(parsed, Density.SEMANTIC)
-        self.assertIn("<ocr-text id=img-header>Header OCR", semantic)
+        semantic_root = ET.fromstring(semantic)
+        self.assertEqual(semantic_root.findtext(".//headers/header/ocr-text"), "Header OCR")
 
 
 class EndToEndOcrTest(unittest.TestCase):
@@ -332,7 +335,7 @@ class EndToEndOcrTest(unittest.TestCase):
             write_rich_docx(docx_path)
             opts = ParseOptions(ocr=MarkdownProvider(), ocr_workers=1)
             output = parse_docx(docx_path, options=opts)
-            self.assertIn("density=semantic", output.text)
+            self.assertEqual(ET.fromstring(output.text).get("density"), "semantic")
             self.assertTrue(output.text)
 
     def test_pipeline_preserves_provider_error_details_in_internal_model(self) -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from xml.etree import ElementTree as ET
 
 from _pptx_fixtures import rich_deck_pptx
 from pptx_llm_parser import open_pptx, parse_pptx
@@ -14,8 +15,11 @@ class PptxSessionApiTests(unittest.TestCase):
         source = rich_deck_pptx()
         with open_pptx(source) as session:
             selected = session.render(slide=2, density="structural")
-            self.assertIn("<slide n=2 hidden>", selected.text)
-            self.assertNotIn("<slide n=1>", selected.text)
+            root = ET.fromstring(selected.text)
+            self.assertEqual(
+                [(item.get("number"), item.get("hidden")) for item in root.findall("slide")],
+                [("2", "true")],
+            )
             self.assertEqual("".join(session.iter_render(slide=2, density="structural")), selected.text)
             self.assertTrue(session.read_resource("image", "img1"))
             self.assertIn("<chart", session.render_resource("chart", "chart1").text)

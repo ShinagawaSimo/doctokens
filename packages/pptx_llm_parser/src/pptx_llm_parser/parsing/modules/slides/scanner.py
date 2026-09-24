@@ -66,7 +66,7 @@ def _minimal_layout_context() -> LayoutContext:
 
 
 class SlideParser:
-    """Extract shapes once, retaining XML z-order while rendering geometrically."""
+    """Extract shapes in source order unless a geometry-enabled plan requests sorting."""
 
     def __init__(
         self,

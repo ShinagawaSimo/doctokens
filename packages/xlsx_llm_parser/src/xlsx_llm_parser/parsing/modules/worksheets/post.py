@@ -12,7 +12,7 @@ from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.annotations import AnnotationMention, valid_parent_links
 from ooxml_llm_core.chart_ml import CHART_RELATIONSHIP_TYPES, parse_chart_xml
-from ooxml_llm_core.models import RelationshipRecord
+from ooxml_llm_core.models import ParseWarning, RelationshipRecord
 from ooxml_llm_core.package import PackageReader
 from ooxml_llm_core.xml import local_name
 
@@ -39,6 +39,11 @@ _REL_DRAWING = f"{NS_R}/drawing"
 NS_XDR = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
 NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 NS_C = "http://schemas.openxmlformats.org/drawingml/2006/chart"
+
+
+def _warn(warnings: list[ParseWarning] | None, code: str, message: str, locator: str) -> None:
+    if warnings is not None:
+        warnings.append(ParseWarning(code, message, locator))
 
 
 # ── Merge cells ──
@@ -146,23 +151,29 @@ def apply_comments(
     rows: list[list[Cell]] | None = None,
     rows_by_number: dict[int, list[Cell]] | None = None,
     threaded_comment_people: Mapping[str, str] | None = None,
+    warnings: list[ParseWarning] | None = None,
 ) -> None:
     """Parse legacy and threaded comments, keeping each collaboration thread on its cell."""
     # Find comments part via pre-read sheet relationships
-    comments_part: str | None = None
-    for rel in sheet_rels:
-        if rel.type == _REL_COMMENTS and rel.resolved_target:
-            comments_part = rel.resolved_target
-            break
+    comments_rel = next((rel for rel in sheet_rels if rel.type == _REL_COMMENTS), None)
+    comments_part = comments_rel.resolved_target if comments_rel is not None else None
+    if comments_rel is not None and (not comments_part or not pkg.exists(comments_part)):
+        _warn(
+            warnings,
+            "COMMENTS_PART_MISSING",
+            "Referenced comments part is missing",
+            f"{comments_rel.source_part}#{comments_rel.id}",
+        )
     if comments_part is not None and pkg.exists(comments_part):
         try:
             root = pkg.read_xml(comments_part)
-        except ET.ParseError:
+        except ET.ParseError as exc:
+            _warn(warnings, "COMMENTS_XML_INVALID", f"Invalid comments XML: {exc}", comments_part)
             root = None
         if root is not None:
             _apply_legacy_comments(root, cell_map, rows, rows_by_number)
 
-    _apply_threaded_comments(cell_map, pkg, sheet_rels, rows, rows_by_number, threaded_comment_people or {})
+    _apply_threaded_comments(cell_map, pkg, sheet_rels, rows, rows_by_number, threaded_comment_people or {}, warnings)
 
 
 def _apply_legacy_comments(
@@ -201,14 +212,15 @@ def _apply_legacy_comments(
             cell["comment"] = "".join(text_elem.itertext())
 
 
-def parse_threaded_comment_people(pkg: PackageReader) -> dict[str, str]:
+def parse_threaded_comment_people(pkg: PackageReader, warnings: list[ParseWarning] | None = None) -> dict[str, str]:
     """Read the workbook-wide people catalog once for modern comment authors and mentions."""
     part = "xl/persons/person.xml"
     if not pkg.exists(part):
         return {}
     try:
         root = pkg.read_xml(part)
-    except ET.ParseError:
+    except ET.ParseError as exc:
+        _warn(warnings, "COMMENT_PEOPLE_XML_INVALID", f"Invalid comment people XML: {exc}", part)
         return {}
     people: dict[str, str] = {}
     for element in root.iter():
@@ -228,21 +240,25 @@ def _apply_threaded_comments(
     rows: list[list[Cell]] | None,
     rows_by_number: dict[int, list[Cell]] | None,
     people: Mapping[str, str],
+    warnings: list[ParseWarning] | None = None,
 ) -> None:
     """Attach one modern comment conversation to its target cell without a package-wide scan."""
-    part = next(
-        (
-            rel.resolved_target
-            for rel in sheet_rels
-            if rel.type == _REL_THREADED_COMMENTS and rel.resolved_target and pkg.exists(rel.resolved_target)
-        ),
-        None,
-    )
-    if part is None:
+    rel = next((rel for rel in sheet_rels if rel.type == _REL_THREADED_COMMENTS), None)
+    if rel is None:
+        return
+    part = rel.resolved_target
+    if not part or not pkg.exists(part):
+        _warn(
+            warnings,
+            "THREADED_COMMENTS_PART_MISSING",
+            "Referenced threaded comments part is missing",
+            f"{rel.source_part}#{rel.id}",
+        )
         return
     try:
         root = pkg.read_xml(part)
-    except ET.ParseError:
+    except ET.ParseError as exc:
+        _warn(warnings, "THREADED_COMMENTS_XML_INVALID", f"Invalid threaded comments XML: {exc}", part)
         return
 
     pending: list[tuple[ThreadedComment, str, str | None]] = []
@@ -355,6 +371,7 @@ def parse_tables(
     pkg: PackageReader,
     *,
     start_index: int = 0,
+    warnings: list[ParseWarning] | None = None,
 ) -> list[TableInfo]:
     """Parse ListObject tables from pre-read *sheet_rels*."""
     tables: list[TableInfo] = []
@@ -363,8 +380,13 @@ def parse_tables(
             continue
         table_part = rel.resolved_target or ""
         if not table_part or not pkg.exists(table_part):
+            _warn(warnings, "TABLE_PART_MISSING", "Referenced table part is missing", f"{rel.source_part}#{rel.id}")
             continue
-        root = pkg.read_xml(table_part)
+        try:
+            root = pkg.read_xml(table_part)
+        except ET.ParseError as exc:
+            _warn(warnings, "TABLE_XML_INVALID", f"Invalid table XML: {exc}", table_part)
+            continue
 
         name = root.get("displayName", root.get("name", ""))
         ref = root.get("ref", "")
@@ -401,24 +423,34 @@ def parse_drawings(
     *,
     image_start: int = 1,
     chart_start: int = 1,
+    warnings: list[ParseWarning] | None = None,
 ) -> tuple[list[DrawingImage], list[DrawingChart]]:
     """Parse drawing anchors for images and chart references from pre-read *sheet_rels*."""
     images: list[DrawingImage] = []
     charts: list[DrawingChart] = []
-    drawing_part: str | None = None
-    for rel in sheet_rels:
-        if rel.type == _REL_DRAWING:
-            drawing_part = rel.resolved_target
-            break
+    drawing_rel = next((rel for rel in sheet_rels if rel.type == _REL_DRAWING), None)
+    if drawing_rel is None:
+        return images, charts
+    drawing_part = drawing_rel.resolved_target
     if not drawing_part or not pkg.exists(drawing_part):
+        _warn(
+            warnings, "DRAWING_PART_MISSING", "Referenced drawing part is missing", f"{drawing_rel.source_part}#{drawing_rel.id}"
+        )
         return images, charts
 
     # Drawing relationships for image/chart media
     drawing_rels: dict[str, RelationshipRecord] = {}
-    for rel in pkg.read_relationships_for_part(drawing_part):
-        drawing_rels[rel.id] = rel
+    try:
+        for rel in pkg.read_relationships_for_part(drawing_part):
+            drawing_rels[rel.id] = rel
+    except ET.ParseError as exc:
+        _warn(warnings, "DRAWING_RELS_XML_INVALID", f"Invalid drawing relationships XML: {exc}", drawing_part)
 
-    root = pkg.read_xml(drawing_part)
+    try:
+        root = pkg.read_xml(drawing_part)
+    except ET.ParseError as exc:
+        _warn(warnings, "DRAWING_XML_INVALID", f"Invalid drawing XML: {exc}", drawing_part)
+        return images, charts
 
     for anchor_name in ("twoCellAnchor", "oneCellAnchor", "absoluteAnchor"):
         for anchor in root.iter(f"{{{NS_XDR}}}{anchor_name}"):
@@ -427,7 +459,7 @@ def parse_drawings(
     # Parse chart parts for richer metadata
     for chart in charts:
         if chart.get("part"):
-            chart_data = _parse_chart_part(pkg, chart["part"])
+            chart_data = _parse_chart_part(pkg, chart["part"], warnings)
             if chart_data.get("type"):
                 chart["type"] = chart_data["type"]
             if chart_data.get("title"):
@@ -492,12 +524,16 @@ def _parse_drawing_anchor(
 # ── Chart part parsing ──
 
 
-def _parse_chart_part(pkg: PackageReader, chart_part: str) -> DrawingChart:
+def _parse_chart_part(pkg: PackageReader, chart_part: str, warnings: list[ParseWarning] | None = None) -> DrawingChart:
     """Parse a chart XML part via shared ChartML parser; return structured dict."""
+    if not chart_part or not pkg.exists(chart_part):
+        _warn(warnings, "CHART_PART_MISSING", "Referenced chart part is missing", chart_part)
+        return {"type": "", "title": "", "series_count": 0}
     try:
         root = pkg.read_xml(chart_part)
         chart_info = parse_chart_xml(root)
-    except Exception:
+    except Exception as exc:
+        _warn(warnings, "CHART_XML_INVALID", f"Invalid chart XML: {exc}", chart_part)
         return {"type": "", "title": "", "series_count": 0}
 
     series_list: list[DrawingChartSeries] = []

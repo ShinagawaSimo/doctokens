@@ -25,7 +25,7 @@ class PptxFeature(Flag):
 
 
 _BASE = PptxFeature.NOTES | PptxFeature.COMMENTS | PptxFeature.OBJECT_DETAILS | PptxFeature.ASSET_INDEX | PptxFeature.NAVIGATION
-_FULL = _BASE | PptxFeature.TEXT_FORMATTING | PptxFeature.THEME_AND_LAYOUT | PptxFeature.GEOMETRY | PptxFeature.OCR
+_FULL = _BASE | PptxFeature.TEXT_FORMATTING | PptxFeature.THEME_AND_LAYOUT | PptxFeature.OCR
 
 
 @dataclass(frozen=True, slots=True)

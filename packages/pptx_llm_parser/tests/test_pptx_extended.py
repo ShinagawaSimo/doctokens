@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 from xml.etree import ElementTree as ET
@@ -22,6 +23,7 @@ from _pptx_fixtures import (
 from pptx_llm_parser import open_pptx
 from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parsing.runner import PptxParser
+from pptx_llm_parser.plan import PptxFeature, PptxParsePlan
 
 from test_support.api_v2_text import Density, parse_pptx
 
@@ -59,7 +61,9 @@ class ExtendedPptxTests(unittest.TestCase):
             '<a:chOff x="0" y="0"/><a:chExt cx="100" cy="200"/>'
             f"</a:xfrm></p:grpSpPr>{child}</p:grpSp>"
         )
-        shape = PptxParser().parse(_deck(group), ParseOptions()).slides[0]["shapes"][0]
+        plan = PptxParsePlan.session()
+        geometry_plan = replace(plan, features=plan.features | PptxFeature.GEOMETRY)
+        shape = PptxParser().parse(_deck(group), ParseOptions(), plan=geometry_plan).slides[0]["shapes"][0]
         self.assertEqual(shape["text"], "Grouped")
         self.assertEqual(shape["x"], round(200 / 12192000 * 1000))
         self.assertEqual(shape["y"], round(400 / 6858000 * 1000))
@@ -82,7 +86,9 @@ class ExtendedPptxTests(unittest.TestCase):
             '<p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="112233"/></a:solidFill></p:bgPr></p:bg>',
         )
         deck = _deck("", slide_xml=slide)
-        parsed = PptxParser().parse(deck, ParseOptions())
+        plan = PptxParsePlan.session()
+        geometry_plan = replace(plan, features=plan.features | PptxFeature.GEOMETRY)
+        parsed = PptxParser().parse(deck, ParseOptions(), plan=geometry_plan)
         text_shape, table_shape = parsed.slides[0]["shapes"]
         self.assertEqual(text_shape["text"], "3. One\n4. Two\n\\frac{a}{b}")
         self.assertEqual(text_shape["paragraphs"][0]["startAt"], 3)

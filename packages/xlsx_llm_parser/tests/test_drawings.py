@@ -8,6 +8,7 @@ from pathlib import Path
 from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.models import RelationshipRecord
 from ooxml_llm_core.package import PackageReader
+from xlsx_llm_parser import parse_xlsx as parse_xlsx_result
 from xlsx_llm_parser.parsing.modules.worksheets.post import parse_drawings
 
 from test_support.api_v2_text import parse_xlsx
@@ -28,6 +29,85 @@ def _make_xlsx(entries: dict[str, str]) -> Path:
         for name, data in entries.items():
             zf.writestr(name, data)
     return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="drawings")
+
+
+def _workbook_with_broken_part(rel_type: str, part_path: str, part_xml: str, extra: dict[str, str] | None = None) -> Path:
+    entries = {
+        "[Content_Types].xml": (
+            f'<Types xmlns="{NS_CT}"><Default Extension="xml" ContentType="application/xml"/>'
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            '<Override PartName="/xl/workbook.xml" '
+            'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/></Types>'
+        ),
+        "_rels/.rels": (
+            f'<Relationships xmlns="{NS_RP}"><Relationship Id="r1" Type="{NS_O}/officeDocument" '
+            'Target="xl/workbook.xml"/></Relationships>'
+        ),
+        "xl/workbook.xml": (
+            f'<workbook xmlns="{NS_S}" xmlns:r="{NS_O}"><sheets>'
+            '<sheet name="Data" sheetId="1" r:id="rSheet"/></sheets></workbook>'
+        ),
+        "xl/_rels/workbook.xml.rels": (
+            f'<Relationships xmlns="{NS_RP}"><Relationship Id="rSheet" Type="{NS_O}/worksheet" '
+            'Target="worksheets/sheet1.xml"/></Relationships>'
+        ),
+        "xl/worksheets/sheet1.xml": (
+            f'<worksheet xmlns="{NS_S}"><sheetData><row r="1">'
+            '<c r="A1" t="inlineStr"><is><t>Kept</t></is></c>'
+            "</row></sheetData></worksheet>"
+        ),
+        "xl/worksheets/_rels/sheet1.xml.rels": (
+            f'<Relationships xmlns="{NS_RP}"><Relationship Id="rPart" Type="{NS_O}/{rel_type}" '
+            f'Target="../{part_path}"/></Relationships>'
+        ),
+        f"xl/{part_path}": part_xml,
+    }
+    entries.update(extra or {})
+    return _make_xlsx(entries)
+
+
+class BrokenPartWarningTests(unittest.TestCase):
+    def test_broken_sheet_relationships_keep_cells(self) -> None:
+        path = _workbook_with_broken_part(
+            "drawing", "drawings/drawing1.xml", "<unused", {"xl/worksheets/_rels/sheet1.xml.rels": "<broken"}
+        )
+        result = parse_xlsx_result(path, density="structural")
+        self.assertIn("Kept", result.text)
+        self.assertTrue(
+            any(w.code == "SHEET_RELS_INVALID" and w.locator == "xl/worksheets/sheet1.xml" for w in result.report.warnings)
+        )
+
+    def test_broken_table_and_drawing_keep_cells_with_located_warning(self) -> None:
+        for rel_type, part, code in (
+            ("table", "tables/table1.xml", "TABLE_XML_INVALID"),
+            ("drawing", "drawings/drawing1.xml", "DRAWING_XML_INVALID"),
+        ):
+            with self.subTest(rel_type=rel_type):
+                result = parse_xlsx_result(_workbook_with_broken_part(rel_type, part, "<broken"), density="structural")
+                self.assertIn("Kept", result.text)
+                self.assertTrue(any(w.code == code and w.locator == f"xl/{part}" for w in result.report.warnings))
+
+    def test_broken_chart_keeps_reference_and_warns(self) -> None:
+        drawing = (
+            f'<wsDr xmlns="{NS_XDR}" xmlns:c="{NS_C}" xmlns:r="{NS_O}">'
+            "<oneCellAnchor><from><col>0</col><row>0</row></from>"
+            '<graphicFrame><graphic><graphicData><c:chart r:id="rChart"/>'
+            "</graphicData></graphic></graphicFrame></oneCellAnchor></wsDr>"
+        )
+        extra = {
+            "xl/drawings/_rels/drawing1.xml.rels": (
+                f'<Relationships xmlns="{NS_RP}"><Relationship Id="rChart" Type="{NS_O}/chart" '
+                'Target="../charts/chart1.xml"/></Relationships>'
+            ),
+            "xl/charts/chart1.xml": "<broken",
+        }
+        result = parse_xlsx_result(
+            _workbook_with_broken_part("drawing", "drawings/drawing1.xml", drawing, extra), density="structural"
+        )
+        self.assertIn("Kept", result.text)
+        self.assertTrue(
+            any(w.code == "CHART_XML_INVALID" and w.locator == "xl/charts/chart1.xml" for w in result.report.warnings)
+        )
 
 
 class ImageTests(unittest.TestCase):

@@ -37,6 +37,12 @@ class DoctokensXmlTests(unittest.TestCase):
         validate_xml(output)
         self.assertEqual(ET.fromstring(output).findtext("p"), "A < B")
 
+    def test_validator_rejects_wrong_root_and_format(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_xml('<wrong schema="doctokens-xml" version="1.0" format="docx"/>')
+        with self.assertRaises(ValueError):
+            validate_xml('<document schema="doctokens-xml" version="1.0" format="xlsx"/>')
+
 
 if __name__ == "__main__":
     unittest.main()

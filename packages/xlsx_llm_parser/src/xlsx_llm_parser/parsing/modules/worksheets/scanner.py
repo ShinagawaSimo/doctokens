@@ -9,8 +9,8 @@ from functools import partial
 from typing import NamedTuple, cast
 from xml.etree import ElementTree as ET
 
-from ooxml_llm_core.models import RelationshipRecord
-from ooxml_llm_core.package import PackageReader
+from ooxml_llm_core.models import ParseWarning, RelationshipRecord
+from ooxml_llm_core.package import PackageError, PackageReader
 from ooxml_llm_core.xml import iterparse, local_name
 
 from ...._utils import col_letter, coord_key, parse_ref
@@ -62,6 +62,7 @@ class SheetParseResult(NamedTuple):
     filter_cols: list[FilterColumn]
     data_validations: list[DataValidation]
     conditional_formats: list[ConditionalFormat]
+    warnings: list[ParseWarning]
 
 
 class RowAttrs(NamedTuple):
@@ -181,6 +182,7 @@ class SheetWorkingSet:
         format_index: FormatIndex | None,
         *,
         allow_annotation_cells: bool,
+        warnings: list[ParseWarning],
     ) -> SheetParseResult:
         if self.flags.formulas:
             expand_shared_formula_groups(self.shared_formula_groups)
@@ -204,6 +206,7 @@ class SheetWorkingSet:
                 annotation_rows,
                 self.rows_by_number if allow_annotation_cells else None,
                 threaded_comment_people,
+                warnings,
             )
         if allow_annotation_cells:
             self.rows.sort(key=lambda row_cells: row_cells[0]["row"] if row_cells else 0)
@@ -217,6 +220,7 @@ class SheetWorkingSet:
             post.filter_cols,
             post.data_validations,
             post.conditional_formats,
+            warnings,
         )
         self.cells_by_coord.clear()
         self.rows_by_number.clear()
@@ -259,10 +263,11 @@ class WorksheetScanner:
             include_cell_controls=self.flags.cell_controls,
         )
         self.cell_window = cell_window
+        self.warnings: list[ParseWarning] = []
 
     def parse(self) -> SheetParseResult:
         if not self.package.exists(self.sheet_part):
-            return SheetParseResult([], [], False, "", [], [], [])
+            raise PackageError(f"Missing worksheet part: {self.sheet_part}")
 
         working = SheetWorkingSet(self.flags)
         saw_root = False
@@ -308,7 +313,7 @@ class WorksheetScanner:
                     current_cells = None
                 post.collect(element, format_index=self.format_index)
         if not saw_root:
-            return SheetParseResult([], [], False, "", [], [], [])
+            raise PackageError(f"Empty worksheet part: {self.sheet_part}")
         return working.finalize(
             post,
             self.package,
@@ -316,6 +321,7 @@ class WorksheetScanner:
             self.threaded_comment_people,
             self.format_index,
             allow_annotation_cells=self.cell_window is None,
+            warnings=self.warnings,
         )
 
     def _includes_row(self, row: int) -> bool:

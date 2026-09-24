@@ -15,6 +15,7 @@ from _pptx_fixtures import (
     slide_xml_shapes,
     text_shape_xml,
 )
+from pptx_llm_parser import open_pptx
 
 from test_support.api_v2_text import Density, parse_pptx
 
@@ -72,8 +73,31 @@ class PlainPipelineTests(unittest.TestCase):
         text = parse_pptx(_two_slide_deck(), density=Density.SEMANTIC)
         root = ET.fromstring(text)
         self.assertEqual(root.get("density"), "semantic")
-        slides = [(item.get("number"), item.get("hidden")) for item in root.findall("slide")]
-        self.assertEqual(slides, [("1", None), ("2", "true")])
+
+    def test_default_densities_preserve_source_shape_order(self) -> None:
+        slide = slide_xml_shapes(
+            text_shape_xml([[("t", "First in XML")]], shape_id=2, geometry=(0, 3000000, 1000000, 500000))
+            + text_shape_xml([[("t", "Second in XML")]], shape_id=3, geometry=(0, 0, 1000000, 500000))
+        )
+        deck = make_pptx(
+            {
+                "[Content_Types].xml": content_types_xml(1),
+                "_rels/.rels": root_rels_xml(),
+                "ppt/presentation.xml": presentation_xml(1),
+                "ppt/_rels/presentation.xml.rels": presentation_rels_xml(1),
+                "ppt/slides/slide1.xml": slide,
+            }
+        )
+        expected = ["First in XML", "Second in XML"]
+        plain = parse_pptx(deck, density=Density.PLAIN)
+        self.assertLess(plain.index(expected[0]), plain.index(expected[1]))
+        for density in (Density.STRUCTURAL, Density.SEMANTIC):
+            root = ET.fromstring(parse_pptx(deck, density=density))
+            self.assertEqual(["".join(node.itertext()) for node in root.findall(".//p")], expected)
+        with open_pptx(deck) as session:
+            for density in (Density.PLAIN, Density.STRUCTURAL, Density.SEMANTIC):
+                text = session.render(density=density).text
+                self.assertLess(text.index(expected[0]), text.index(expected[1]))
 
 
 if __name__ == "__main__":

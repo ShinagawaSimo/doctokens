@@ -43,6 +43,11 @@ def serialize(root: ET.Element) -> str:
 def validate_xml(value: str) -> None:
     """Validate well-formed DTX and its mandatory root metadata."""
     root = ET.fromstring(value)
+    if root.tag not in {"document", "presentation", "workbook"}:
+        raise ValueError(f"DTX root {root.tag!r} is not a supported document root")
+    expected_format = {"document": "docx", "presentation": "pptx", "workbook": "xlsx"}[root.tag]
+    if root.get("format") != expected_format:
+        raise ValueError(f"DTX root {root.tag!r} must declare format={expected_format!r}")
     if root.get("schema") != "doctokens-xml" or root.get("version") != "1.0":
         raise ValueError("DTX root must declare doctokens-xml version 1.0")
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from _pptx_fixtures import (
@@ -21,6 +22,7 @@ from _pptx_fixtures import (
 )
 from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parsing.runner import PptxParser
+from pptx_llm_parser.plan import PptxFeature, PptxParsePlan
 
 _SLIDE_LAYOUT_REL = (
     '<Relationship Id="rId10" '
@@ -32,6 +34,11 @@ _LAYOUT_MASTER_REL = (
     'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" '
     'Target="../slideMasters/slideMaster1.xml"/>'
 )
+
+
+def _parse_with_geometry(deck: Path):
+    plan = PptxParsePlan.session()
+    return PptxParser().parse(deck, ParseOptions(), plan=replace(plan, features=plan.features | PptxFeature.GEOMETRY))
 
 
 def _deck(shapes_xml: str, *, layout_shapes: str = "", master_shapes: str = "") -> Path:
@@ -61,7 +68,7 @@ class GeometryTests(unittest.TestCase):
     def test_own_geometry_converts_to_per_mille(self) -> None:
         # sldSz 12192000×6858000; off (1219200, 685800) = 10%, ext (2438400, 1371600) = 20%.
         deck = _deck(text_shape_xml([[("t", "A")]], geometry=(1219200, 685800, 2438400, 1371600)))
-        parsed = PptxParser().parse(deck, ParseOptions())
+        parsed = _parse_with_geometry(deck)
         shape = parsed.slides[0]["shapes"][0]
         self.assertEqual((shape["x"], shape["y"], shape["w"], shape["h"]), (100, 100, 200, 200))
 
@@ -70,7 +77,7 @@ class GeometryTests(unittest.TestCase):
             text_shape_xml([[("t", "Title")]], ph="title"),
             layout_shapes=ph_shape_xml(idx="0", ph_type="title", geometry=(1219200, 685800, 2438400, 1371600)),
         )
-        parsed = PptxParser().parse(deck, ParseOptions())
+        parsed = _parse_with_geometry(deck)
         shape = parsed.slides[0]["shapes"][0]
         self.assertEqual(shape["placeholderType"], "title")
         self.assertEqual((shape["x"], shape["y"], shape["w"], shape["h"]), (100, 100, 200, 200))
@@ -80,7 +87,7 @@ class GeometryTests(unittest.TestCase):
             text_shape_xml([[("t", "Body")]], ph="body"),
             layout_shapes=ph_shape_xml(idx="0", ph_type="body"),
         )
-        parsed = PptxParser().parse(deck, ParseOptions())
+        parsed = _parse_with_geometry(deck)
         self.assertEqual(parsed.slides[0]["shapes"][0]["placeholderType"], "body")
 
     def test_shapes_without_geometry_sort_last_keeping_xml_order(self) -> None:
@@ -88,7 +95,7 @@ class GeometryTests(unittest.TestCase):
             text_shape_xml([[("t", "Late")]], name="A", shape_id=2)
             + text_shape_xml([[("t", "Early")]], name="B", shape_id=3, geometry=(0, 0, 1000, 1000))
         )
-        parsed = PptxParser().parse(deck, ParseOptions())
+        parsed = _parse_with_geometry(deck)
         self.assertEqual([shape["name"] for shape in parsed.slides[0]["shapes"]], ["B", "A"])
 
     def test_geometric_sort_by_top_then_left(self) -> None:
@@ -97,7 +104,7 @@ class GeometryTests(unittest.TestCase):
             + text_shape_xml([[("t", "Second")]], name="B", shape_id=3, geometry=(0, 1000, 10, 10))
             + text_shape_xml([[("t", "Third")]], name="C", shape_id=4, geometry=(3000, 1000, 10, 10))
         )
-        parsed = PptxParser().parse(deck, ParseOptions())
+        parsed = _parse_with_geometry(deck)
         self.assertEqual([shape["name"] for shape in parsed.slides[0]["shapes"]], ["B", "C", "A"])
 
     def test_stable_sort_keeps_xml_order_for_identical_coordinates(self) -> None:
@@ -105,7 +112,7 @@ class GeometryTests(unittest.TestCase):
             text_shape_xml([[("t", "One")]], name="A", shape_id=2, geometry=(0, 0, 10, 10))
             + text_shape_xml([[("t", "Two")]], name="B", shape_id=3, geometry=(0, 0, 10, 10))
         )
-        parsed = PptxParser().parse(deck, ParseOptions())
+        parsed = _parse_with_geometry(deck)
         self.assertEqual([shape["name"] for shape in parsed.slides[0]["shapes"]], ["A", "B"])
 
 

@@ -6,6 +6,7 @@ import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.metrics import MetricsRecorder
@@ -87,7 +88,9 @@ def _parse_workbook(
         )
         format_index.set_cell_controls(cell_controls.by_style)
         format_index.set_date_system(date_1904)
-        threaded_comment_people = parse_threaded_comment_people(package_reader) if parse_plan.needs(XlsxFeature.COMMENTS) else {}
+        threaded_comment_people = (
+            parse_threaded_comment_people(package_reader, warnings) if parse_plan.needs(XlsxFeature.COMMENTS) else {}
+        )
         next_table_index = 0
         next_image_index = 1
         next_chart_index = 1
@@ -96,7 +99,12 @@ def _parse_workbook(
         for sheet_info in worksheet_infos:
             if sheet_info.get("kind") != "chartsheet":
                 # Read sheet relationships once — shared across all helpers.
-                sheet_relationships = list(package_reader.read_relationships_for_part(sheet_info["part"]))
+                try:
+                    sheet_relationships = list(package_reader.read_relationships_for_part(sheet_info["part"]))
+                except (ET.ParseError, KeyError, ValueError) as exc:
+                    part = sheet_info["part"]
+                    warnings.append(ParseWarning("SHEET_RELS_INVALID", f"Invalid worksheet relationships: {exc}", part))
+                    sheet_relationships = []
 
                 sheet_result = parse_sheet(
                     package_reader,
@@ -123,10 +131,11 @@ def _parse_workbook(
                     sheet_info["data_validations"] = sheet_result.data_validations
                 if sheet_result.conditional_formats:
                     sheet_info["conditional_formats"] = sheet_result.conditional_formats
+                warnings.extend(sheet_result.warnings)
 
                 # Parse tables (ListObject) associated with this sheet
                 tables = (
-                    parse_tables(sheet_relationships, package_reader, start_index=next_table_index)
+                    parse_tables(sheet_relationships, package_reader, start_index=next_table_index, warnings=warnings)
                     if parse_plan.needs(XlsxFeature.TABLES)
                     else []
                 )
@@ -140,6 +149,7 @@ def _parse_workbook(
                         package_reader,
                         image_start=next_image_index,
                         chart_start=next_chart_index,
+                        warnings=warnings,
                     )
                     if parse_plan.needs(XlsxFeature.DRAWINGS)
                     else ([], [])

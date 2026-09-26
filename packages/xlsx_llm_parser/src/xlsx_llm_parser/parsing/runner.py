@@ -74,14 +74,20 @@ def _parse_workbook(
             include_rich_text=parse_plan.needs(XlsxFeature.RICH_TEXT),
         )
         rich_values = (
-            RichValueCatalog.from_package(package_reader) if parse_plan.needs(XlsxFeature.RICH_VALUES) else RichValueCatalog()
+            RichValueCatalog.from_package(package_reader, warnings=warnings)
+            if parse_plan.needs(XlsxFeature.RICH_VALUES)
+            else RichValueCatalog()
         )
         cell_controls = (
-            CellControlCatalog.from_package(package_reader)
+            CellControlCatalog.from_package(package_reader, warnings=warnings)
             if parse_plan.needs(XlsxFeature.CELL_CONTROLS)
             else CellControlCatalog()
         )
-        pivot_catalog = PivotCatalog.from_package(package_reader) if parse_plan.needs(XlsxFeature.PIVOTS) else PivotCatalog()
+        pivot_catalog = (
+            PivotCatalog.from_package(package_reader, warnings=warnings)
+            if parse_plan.needs(XlsxFeature.PIVOTS)
+            else PivotCatalog()
+        )
         format_index = parse_styles(
             package_reader,
             detail=parse_plan.style_detail,  # type: ignore[arg-type]

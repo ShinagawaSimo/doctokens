@@ -3,22 +3,20 @@
 import io
 import unittest
 import zipfile
-from pathlib import Path
 
-from test_support.api_v2_text import parse_xlsx
-from test_support.file_contract import materialize_bytes
+from xlsx_llm_parser import parse_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 
 
-def _make_xlsx(entries: dict[str, str]) -> Path:
+def _make_xlsx(entries: dict[str, str]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="styles")
+    return buf.getvalue()
 
 
 class StyleTests(unittest.TestCase):
@@ -70,8 +68,8 @@ class StyleTests(unittest.TestCase):
                 ),
             },
         )
-        structural = parse_xlsx(data, density="structural")
-        semantic = parse_xlsx(data, density="semantic")
+        structural = parse_xlsx(data, density="structural").text
+        semantic = parse_xlsx(data, density="semantic").text
         self.assertNotIn("bold", structural)
         self.assertIn("bold", semantic)
         self.assertIn('color="#FF0000"', semantic)
@@ -124,7 +122,7 @@ class StyleTests(unittest.TestCase):
                 ),
             },
         )
-        semantic = parse_xlsx(data, density="semantic")
+        semantic = parse_xlsx(data, density="semantic").text
         self.assertIn('fill="#FFFF00"', semantic)
 
     def test_no_styles_file(self) -> None:
@@ -167,7 +165,7 @@ class StyleTests(unittest.TestCase):
                 ),
             },
         )
-        semantic = parse_xlsx(data, density="semantic")
+        semantic = parse_xlsx(data, density="semantic").text
         self.assertIn("Hi", semantic)
         self.assertNotIn("bold", semantic)
 
@@ -242,7 +240,7 @@ class StyleTests(unittest.TestCase):
                 ),
             },
         )
-        semantic = parse_xlsx(data, density="semantic")
+        semantic = parse_xlsx(data, density="semantic").text
         self.assertIn('color="#ED7D31"', semantic)
 
     def test_default_theme_text_color_omitted(self) -> None:
@@ -292,7 +290,7 @@ class StyleTests(unittest.TestCase):
                 ),
             },
         )
-        semantic = parse_xlsx(data, density="semantic")
+        semantic = parse_xlsx(data, density="semantic").text
         self.assertIn("Default black", semantic)
         self.assertNotIn("color=", semantic)
         self.assertNotIn("#FFFFFF", semantic)
@@ -347,7 +345,7 @@ class StyleTests(unittest.TestCase):
                 ),
             },
         )
-        semantic = parse_xlsx(data, density="semantic")
+        semantic = parse_xlsx(data, density="semantic").text
         # accent4=FFC000 (gold), tint=0.8 lightens toward white
         # Expected: each channel: c' = c*(1-0.8) + 255*0.8
         # R: 0xFF=255 → 255*0.2 + 255*0.8 = 51+204 = 255=FF

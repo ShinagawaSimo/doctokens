@@ -22,6 +22,7 @@ packages = []
 
 [tool.pytest.ini_options]
 testpaths = [
+    "tests",
     "packages/ooxml_llm_core/tests",
     "packages/docx_llm_parser/tests",
     "packages/xlsx_llm_parser/tests",

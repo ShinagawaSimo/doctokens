@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from _pptx_fixtures import (
@@ -15,14 +14,13 @@ from _pptx_fixtures import (
     slide_xml_shapes,
     text_shape_xml,
 )
+from pptx_llm_parser import parse_pptx
 from pptx_llm_parser.core.models import ParseOptions, ShapeBlock
 from pptx_llm_parser.parsing.runner import PptxParser
 
-from test_support.api_v2_text import parse_pptx
-
 
 class SlideTextParsingTests(unittest.TestCase):
-    def _deck(self, shapes_xml: str) -> Path:
+    def _deck(self, shapes_xml: str) -> bytes:
         entries = {
             "[Content_Types].xml": content_types_xml(1),
             "_rels/.rels": root_rels_xml(),
@@ -90,8 +88,8 @@ class SlideTextParsingTests(unittest.TestCase):
         self.assertEqual(shapes[2]["fromShape"], shapes[0]["id"])
         self.assertEqual(shapes[2]["toShape"], shapes[1]["id"])
         self.assertEqual(shapes[2]["title"], "Flow connection")
-        semantic = parse_pptx(self._deck(shape_xml(2, "Start") + shape_xml(3, "End") + connector), density="semantic")
-        structural = parse_pptx(self._deck(shape_xml(2, "Start") + shape_xml(3, "End") + connector), density="structural")
+        semantic = parse_pptx(self._deck(shape_xml(2, "Start") + shape_xml(3, "End") + connector), density="semantic").text
+        structural = parse_pptx(self._deck(shape_xml(2, "Start") + shape_xml(3, "End") + connector), density="structural").text
         semantic_root = ET.fromstring(semantic)
         connector_node = semantic_root.find(".//shape[@kind='connector']")
         self.assertIsNotNone(connector_node)

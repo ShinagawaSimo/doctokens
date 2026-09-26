@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 
 from _pptx_fixtures import (
     chart_shape_xml,
@@ -16,13 +15,13 @@ from _pptx_fixtures import (
     slide_rels_xml,
     slide_xml_shapes,
 )
+from pptx_llm_parser import parse_pptx
+from pptx_llm_parser.core.enums import Density
 from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parsing.runner import PptxParser
 
-from test_support.api_v2_text import Density, parse_pptx
 
-
-def _chart_deck(*, with_part: bool = True) -> Path:
+def _chart_deck(*, with_part: bool = True) -> bytes:
     rel = (
         '<Relationship Id="rId2" '
         'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" '
@@ -45,7 +44,7 @@ def _chart_deck(*, with_part: bool = True) -> Path:
     return make_pptx(entries)
 
 
-def _chart_ex_deck() -> Path:
+def _chart_ex_deck() -> bytes:
     """One Office 2016+ ChartEx waterfall graphic frame."""
     chart_ex_rel = "http://schemas.microsoft.com/office/2014/relationships/chartEx"
     chart_ex_uri = "http://schemas.microsoft.com/office/drawing/2014/chartex"
@@ -101,7 +100,7 @@ class ChartShapeTests(unittest.TestCase):
         self.assertEqual(chart["series"][0]["values"], ["10", "20"])
 
     def test_plain_chart_placeholder(self) -> None:
-        text = parse_pptx(_chart_deck(), density=Density.PLAIN)
+        text = parse_pptx(_chart_deck(), density=Density.PLAIN).text
         self.assertIn("[Chart: bar, 2 series]", text)
 
     def test_chart_ex_shape_uses_the_shared_chart_parser(self) -> None:
@@ -119,7 +118,7 @@ class ChartShapeTests(unittest.TestCase):
         self.assertEqual(shape["type"], "chart")
         self.assertNotIn("chartId", shape)
         self.assertTrue(any(w.code == "CHART_PART_MISSING" for w in parsed.warnings))
-        text = parse_pptx(_chart_deck(with_part=False), density=Density.PLAIN)
+        text = parse_pptx(_chart_deck(with_part=False), density=Density.PLAIN).text
         self.assertIn("[Chart]", text)
 
 

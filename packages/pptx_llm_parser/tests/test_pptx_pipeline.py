@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from _pptx_fixtures import (
@@ -15,12 +14,11 @@ from _pptx_fixtures import (
     slide_xml_shapes,
     text_shape_xml,
 )
-from pptx_llm_parser import open_pptx
+from pptx_llm_parser import open_pptx, parse_pptx
+from pptx_llm_parser.core.enums import Density
 
-from test_support.api_v2_text import Density, parse_pptx
 
-
-def _two_slide_deck() -> Path:
+def _two_slide_deck() -> bytes:
     slide1 = slide_xml_shapes(
         text_shape_xml([[("t", "Title")]], name="Title 1")
         + text_shape_xml([[("t", "Point one")], [("t", "Point two")]], name="Body 2")
@@ -39,20 +37,20 @@ def _two_slide_deck() -> Path:
 
 class PlainPipelineTests(unittest.TestCase):
     def test_plain_starts_with_density_marker(self) -> None:
-        text = parse_pptx(_two_slide_deck(), density=Density.PLAIN)
+        text = parse_pptx(_two_slide_deck(), density=Density.PLAIN).text
         self.assertEqual(text.splitlines()[0], "density=plain format=pptx syntax=doctokens-plain/1.0")
 
     def test_plain_separates_slides(self) -> None:
-        text = parse_pptx(_two_slide_deck(), density=Density.PLAIN)
+        text = parse_pptx(_two_slide_deck(), density=Density.PLAIN).text
         self.assertIn("=== Slide 1 ===", text)
         self.assertIn("=== Slide 2 ===", text)
 
     def test_plain_includes_hidden_slide_text(self) -> None:
-        text = parse_pptx(_two_slide_deck(), density=Density.PLAIN)
+        text = parse_pptx(_two_slide_deck(), density=Density.PLAIN).text
         self.assertIn("Secret", text)
 
     def test_plain_shape_layout(self) -> None:
-        text = parse_pptx(_two_slide_deck(), density=Density.PLAIN)
+        text = parse_pptx(_two_slide_deck(), density=Density.PLAIN).text
         self.assertEqual(
             "\n".join(text.splitlines()[1:]),
             "=== Slide 1 ===\nTitle\n\nPoint one\nPoint two\n=== Slide 2 ===\nSecret",
@@ -63,14 +61,14 @@ class PlainPipelineTests(unittest.TestCase):
             parse_pptx(_two_slide_deck(), density="typo")  # type: ignore[arg-type]
 
     def test_structural_density_renders_slides(self) -> None:
-        text = parse_pptx(_two_slide_deck(), density=Density.STRUCTURAL)
+        text = parse_pptx(_two_slide_deck(), density=Density.STRUCTURAL).text
         root = ET.fromstring(text)
         self.assertEqual(root.get("density"), "structural")
         slides = [(item.get("number"), item.get("hidden")) for item in root.findall("slide")]
         self.assertEqual(slides, [("1", None), ("2", "true")])
 
     def test_semantic_density_renders_slides(self) -> None:
-        text = parse_pptx(_two_slide_deck(), density=Density.SEMANTIC)
+        text = parse_pptx(_two_slide_deck(), density=Density.SEMANTIC).text
         root = ET.fromstring(text)
         self.assertEqual(root.get("density"), "semantic")
 
@@ -89,10 +87,10 @@ class PlainPipelineTests(unittest.TestCase):
             }
         )
         expected = ["First in XML", "Second in XML"]
-        plain = parse_pptx(deck, density=Density.PLAIN)
+        plain = parse_pptx(deck, density=Density.PLAIN).text
         self.assertLess(plain.index(expected[0]), plain.index(expected[1]))
         for density in (Density.STRUCTURAL, Density.SEMANTIC):
-            root = ET.fromstring(parse_pptx(deck, density=density))
+            root = ET.fromstring(parse_pptx(deck, density=density).text)
             self.assertEqual(["".join(node.itertext()) for node in root.findall(".//p")], expected)
         with open_pptx(deck) as session:
             for density in (Density.PLAIN, Density.STRUCTURAL, Density.SEMANTIC):

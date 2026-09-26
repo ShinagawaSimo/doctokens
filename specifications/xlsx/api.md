@@ -6,7 +6,7 @@ parse_xlsx/open_xlsx use [common sessions](../common/session.md) and return [Par
 
 ## Processing
 
-One-shot sheet/range selection narrows parsing. A shared-formula master outside a selected range is therefore unavailable for slave expansion; a session parses all sheets first. Window parsing does not create missing annotation cells. The resource directory reflects the parsed scope, not only emitted grid rows.
+One-shot sheet/range selection narrows cell materialization while retaining minimal shared-formula master declarations from the same worksheet when formulas are requested. Session rendering selects from an already parsed workbook. Window parsing does not create missing annotation cells. The resource directory reflects the parsed scope, not only emitted grid rows.
 
 ## Fields
 
@@ -65,6 +65,7 @@ One-shot sheet/range selection narrows parsing. A shared-formula master outside 
 
 - **Parsing**
   - Requires sheet. Must contain colon and two parseable A1 references; single cell can be written A1:A1. Keep cells whose coordinates are inside inclusive bounds; no blank filling. Reversed bounds are not normalized.
+  - In structural and semantic output, shared-formula dependents inside the range can resolve a master outside it; that master does not enter the selected grid. See [shared formulas](cells/shared-formula.md).
 
 ### `options`
 

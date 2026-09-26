@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import unittest
-from pathlib import Path
 
 from _pptx_fixtures import (
     PNG_BYTES,
@@ -17,13 +16,13 @@ from _pptx_fixtures import (
     slide_rels_xml,
     slide_xml_shapes,
 )
+from pptx_llm_parser import parse_pptx
+from pptx_llm_parser.core.enums import Density
 from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parsing.runner import PptxParser
 
-from test_support.api_v2_text import Density, parse_pptx
 
-
-def _image_deck(*, alt: str | None = None, external: bool = False) -> Path:
+def _image_deck(*, alt: str | None = None, external: bool = False) -> bytes:
     if external:
         rel = (
             '<Relationship Id="rId2" '
@@ -67,11 +66,11 @@ class ImageShapeTests(unittest.TestCase):
         self.assertEqual(asset["contentType"], "image/png")
 
     def test_plain_image_placeholder_with_alt(self) -> None:
-        text = parse_pptx(_image_deck(alt="Chart photo"), density=Density.PLAIN)
+        text = parse_pptx(_image_deck(alt="Chart photo"), density=Density.PLAIN).text
         self.assertIn("[Image: Chart photo]", text)
 
     def test_plain_image_placeholder_without_alt(self) -> None:
-        text = parse_pptx(_image_deck(), density=Density.PLAIN)
+        text = parse_pptx(_image_deck(), density=Density.PLAIN).text
         self.assertIn("[Image]", text)
 
     def test_external_image_records_href_only(self) -> None:

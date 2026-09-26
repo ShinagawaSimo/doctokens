@@ -3,10 +3,8 @@
 import io
 import unittest
 import zipfile
-from pathlib import Path
 
-from test_support.api_v2_text import parse_xlsx
-from test_support.file_contract import materialize_bytes
+from xlsx_llm_parser import parse_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -17,12 +15,12 @@ NS_XDR = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
 NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
 
-def _make_xlsx(entries: dict[str, str | bytes]) -> Path:
+def _make_xlsx(entries: dict[str, str | bytes]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="resource-ids")
+    return buf.getvalue()
 
 
 def _content_types() -> str:
@@ -158,7 +156,7 @@ class WorkbookResourceIdTests(unittest.TestCase):
             },
         )
 
-        structural = parse_xlsx(data, density="structural")
+        structural = parse_xlsx(data, density="structural").text
 
         self.assertIn('<table-summary id="table-0" name="Sales1" ref="A1:B2" />', structural)
         self.assertIn('<table-summary id="table-1" name="Sales2" ref="A1:B2" />', structural)

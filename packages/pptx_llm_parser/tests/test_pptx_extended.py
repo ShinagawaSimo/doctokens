@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import unittest
 from dataclasses import replace
-from pathlib import Path
 from unittest.mock import patch
 from xml.etree import ElementTree as ET
 
@@ -20,15 +19,14 @@ from _pptx_fixtures import (
     table_shape_xml,
     text_shape_xml,
 )
-from pptx_llm_parser import open_pptx
+from pptx_llm_parser import open_pptx, parse_pptx
+from pptx_llm_parser.core.enums import Density
 from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parsing.runner import PptxParser
 from pptx_llm_parser.plan import PptxFeature, PptxParsePlan
 
-from test_support.api_v2_text import Density, parse_pptx
 
-
-def _deck(shapes: str, *, slide_xml: str | None = None, slide_rels: str | None = None) -> Path:
+def _deck(shapes: str, *, slide_xml: str | None = None, slide_rels: str | None = None) -> bytes:
     entries: dict[str, str | bytes] = {
         "[Content_Types].xml": content_types_xml(1),
         "_rels/.rels": root_rels_xml(),
@@ -94,7 +92,7 @@ class ExtendedPptxTests(unittest.TestCase):
         self.assertEqual(text_shape["paragraphs"][0]["startAt"], 3)
         self.assertEqual(parsed.slides[0]["background"], {"color": "#112233"})
         self.assertEqual(table_shape["tableCells"][0][0]["colSpan"], 2)
-        rendered = parse_pptx(deck, density=Density.SEMANTIC)
+        rendered = parse_pptx(deck, density=Density.SEMANTIC).text
         root = ET.fromstring(rendered)
         self.assertEqual(root.findtext(".//equation"), "\\frac{a}{b}")
         self.assertEqual(root.find(".//table/tr/td").get("colspan"), "2")
@@ -120,7 +118,7 @@ class ExtendedPptxTests(unittest.TestCase):
             'Target="https://example.test/a?x=one%20two&amp;y=&quot;q&quot;" TargetMode="External"/>'
             "</Relationships>"
         )
-        rendered = parse_pptx(_deck(rich_text_shape_xml([run]), slide_rels=rels), density=Density.SEMANTIC)
+        rendered = parse_pptx(_deck(rich_text_shape_xml([run]), slide_rels=rels), density=Density.SEMANTIC).text
         self.assertIn('href="https://example.test/a?x=one%20two&amp;y=&quot;q&quot;"', rendered)
 
     def test_output_iteration_parses_once_and_resources_use_lightweight_lookup(self) -> None:

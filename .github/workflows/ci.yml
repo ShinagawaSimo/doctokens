@@ -45,7 +45,7 @@ jobs:
       - name: Type check
         run: python -m mypy
       - name: Verify wheels
-        run: python test_support/verify_wheels.py
+        run: python scripts/verify_wheels.py
       - name: Test
         run: >-
           python -m pytest

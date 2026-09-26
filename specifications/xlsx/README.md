@@ -15,6 +15,7 @@ SpreadsheetML retains stored cell values, formula text, and worksheet structure.
 - [Sheets](workbook/sheet.md)
 - [Defined names](workbook/defined-name.md)
 - [External workbook references](workbook/external-link.md)
+- [Optional catalog diagnostics](workbook/catalog-diagnostics.md)
 
 ## Cell grid
 

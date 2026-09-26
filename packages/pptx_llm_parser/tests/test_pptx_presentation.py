@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 
 from _pptx_fixtures import (
     content_types_xml,
@@ -17,7 +16,7 @@ from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parsing.runner import PptxParser
 
 
-def _deck(slide_count: int = 2, *, hidden: set[int] | None = None, drop_slide_parts: bool = False) -> Path:
+def _deck(slide_count: int = 2, *, hidden: set[int] | None = None, drop_slide_parts: bool = False) -> bytes:
     entries = {
         "[Content_Types].xml": content_types_xml(slide_count),
         "_rels/.rels": root_rels_xml(),

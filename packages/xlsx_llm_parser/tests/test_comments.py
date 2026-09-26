@@ -3,12 +3,9 @@
 import io
 import unittest
 import zipfile
-from pathlib import Path
 
+from xlsx_llm_parser import parse_xlsx
 from xlsx_llm_parser import parse_xlsx as parse_xlsx_result
-
-from test_support.api_v2_text import parse_xlsx
-from test_support.file_contract import materialize_bytes
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -16,12 +13,12 @@ NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 NS_RP = "http://schemas.openxmlformats.org/package/2006/relationships"
 
 
-def _make_xlsx(entries: dict[str, str]) -> Path:
+def _make_xlsx(entries: dict[str, str]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="comments")
+    return buf.getvalue()
 
 
 class CommentTests(unittest.TestCase):
@@ -121,12 +118,12 @@ class CommentTests(unittest.TestCase):
                 ),
             },
         )
-        output = parse_xlsx(data, density="structural")
+        output = parse_xlsx(data, density="structural").text
         self.assertIn('<comment-ref id="comment0" />', output)
         self.assertIn('<comment author="Alice" cell="A1" id="comment0">', output)
         self.assertIn("Approved by auditor", output)
         # plain omits comments
-        plain = parse_xlsx(data, density="plain")
+        plain = parse_xlsx(data, density="plain").text
         self.assertNotIn("comment", plain)
 
     def test_threaded_comments_materialize_empty_cell_and_keep_thread(self) -> None:
@@ -177,14 +174,14 @@ class CommentTests(unittest.TestCase):
                 ),
             }
         )
-        output = parse_xlsx(data, density="structural")
+        output = parse_xlsx(data, density="structural").text
         self.assertIn("thread-A2-1", output)
         self.assertIn("thread-A2-2", output)
         self.assertIn('author="Alice"', output)
         self.assertIn('parent="thread-A2-1" resolved="true"', output)
         self.assertIn('cell="A2"', output)
 
-        plain = parse_xlsx(data, density="plain")
+        plain = parse_xlsx(data, density="plain").text
         self.assertIn("[Comment (Bob, reply, resolved): Done]", plain)
 
 

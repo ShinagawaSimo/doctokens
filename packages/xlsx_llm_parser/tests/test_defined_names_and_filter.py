@@ -3,11 +3,8 @@
 import io
 import unittest
 import zipfile
-from pathlib import Path
 
-from test_support.api_v2_text import find_xlsx_cells as find_cells
-from test_support.api_v2_text import parse_xlsx
-from test_support.file_contract import materialize_bytes
+from xlsx_llm_parser import open_xlsx, parse_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -15,12 +12,12 @@ NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 NS_RP = "http://schemas.openxmlformats.org/package/2006/relationships"
 
 
-def _make_xlsx(entries: dict[str, str]) -> Path:
+def _make_xlsx(entries: dict[str, str]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="defined-names")
+    return buf.getvalue()
 
 
 class DefinedNameTests(unittest.TestCase):
@@ -73,8 +70,8 @@ class DefinedNameTests(unittest.TestCase):
                 ),
             },
         )
-        semantic = parse_xlsx(data, density="semantic")
-        structural = parse_xlsx(data, density="structural")
+        semantic = parse_xlsx(data, density="semantic").text
+        structural = parse_xlsx(data, density="structural").text
 
         # User names visible in structural and semantic
         self.assertIn('<defined-name name="DiscountRate">', semantic)
@@ -129,11 +126,12 @@ class DefinedNameTests(unittest.TestCase):
                 "xl/worksheets/sheet2.xml": (f'<worksheet xmlns="{NS_S}"><sheetData/></worksheet>'),
             },
         )
-        structural = parse_xlsx(data, density="structural")
+        structural = parse_xlsx(data, density="structural").text
         self.assertEqual(structural.count('<defined-name name="DiscountRate">'), 1)
         self.assertEqual(structural.count('<defined-name name="TaxRate">'), 1)
 
-        matches = find_cells(data, "DiscountRate", kind="definedName")
+        with open_xlsx(data) as workbook:
+            matches = workbook.find_cells("DiscountRate", kind="definedName").text
         self.assertEqual(matches.count("<match "), 1)
 
 
@@ -195,8 +193,8 @@ class FilterTests(unittest.TestCase):
                 ),
             },
         )
-        structural = parse_xlsx(data, density="structural")
-        semantic = parse_xlsx(data, density="semantic")
+        structural = parse_xlsx(data, density="structural").text
+        semantic = parse_xlsx(data, density="semantic").text
 
         # Both densities show filter range and conditions
         self.assertIn('<filter ref="A1:K50">', structural)

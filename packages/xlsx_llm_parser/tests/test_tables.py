@@ -3,11 +3,9 @@
 import io
 import unittest
 import zipfile
-from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from test_support.api_v2_text import parse_xlsx
-from test_support.file_contract import materialize_bytes
+from xlsx_llm_parser import parse_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -15,12 +13,12 @@ NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 NS_RP = "http://schemas.openxmlformats.org/package/2006/relationships"
 
 
-def _make_xlsx(entries: dict[str, str]) -> Path:
+def _make_xlsx(entries: dict[str, str]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="tables")
+    return buf.getvalue()
 
 
 class TableTests(unittest.TestCase):
@@ -82,8 +80,8 @@ class TableTests(unittest.TestCase):
                 ),
             },
         )
-        structural = parse_xlsx(data, density="structural")
-        semantic = parse_xlsx(data, density="semantic")
+        structural = parse_xlsx(data, density="structural").text
+        semantic = parse_xlsx(data, density="semantic").text
 
         # structural: basic table locator
         structural_root = ET.fromstring(structural)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 
 from _pptx_fixtures import (
     content_types_xml,
@@ -16,10 +15,10 @@ from _pptx_fixtures import (
     slide_xml_shapes,
     text_shape_xml,
 )
+from pptx_llm_parser import parse_pptx
+from pptx_llm_parser.core.enums import Density
 from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parsing.runner import PptxParser
-
-from test_support.api_v2_text import Density, parse_pptx
 
 _NOTES_REL = (
     '<Relationship Id="rId20" '
@@ -32,7 +31,7 @@ _NOTES_OVERRIDE = (
 )
 
 
-def _notes_deck(*, with_notes: bool = True, with_part: bool = True) -> Path:
+def _notes_deck(*, with_notes: bool = True, with_part: bool = True) -> bytes:
     entries: dict[str, str | bytes] = {
         "[Content_Types].xml": content_types_xml(1, extra_defaults=_NOTES_OVERRIDE),
         "_rels/.rels": root_rels_xml(),
@@ -61,11 +60,11 @@ class NotesTests(unittest.TestCase):
         self.assertTrue(any(w.code == "NOTES_PART_MISSING" for w in parsed.warnings))
 
     def test_plain_renders_notes_after_slide_text(self) -> None:
-        text = parse_pptx(_notes_deck(), density=Density.PLAIN)
+        text = parse_pptx(_notes_deck(), density=Density.PLAIN).text
         self.assertIn("Slide text\n\n[Notes: Talk about this\nAnd that]", text)
 
     def test_plain_without_notes_omits_section(self) -> None:
-        text = parse_pptx(_notes_deck(with_notes=False), density=Density.PLAIN)
+        text = parse_pptx(_notes_deck(with_notes=False), density=Density.PLAIN).text
         self.assertNotIn("[Notes:", text)
 
 

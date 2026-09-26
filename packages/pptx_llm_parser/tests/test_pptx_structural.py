@@ -6,13 +6,13 @@ import unittest
 from xml.etree import ElementTree as ET
 
 from _pptx_fixtures import rich_deck_pptx
-
-from test_support.api_v2_text import Density, parse_pptx
+from pptx_llm_parser import parse_pptx
+from pptx_llm_parser.core.enums import Density
 
 
 class StructuralRenderingTests(unittest.TestCase):
     def test_structural_output_contract(self) -> None:
-        text = parse_pptx(rich_deck_pptx(), density=Density.STRUCTURAL)
+        text = parse_pptx(rich_deck_pptx(), density=Density.STRUCTURAL).text
         root = ET.fromstring(text)
         self.assertEqual(root.attrib["density"], "structural")
         slide_one, slide_two = root.findall("slide")

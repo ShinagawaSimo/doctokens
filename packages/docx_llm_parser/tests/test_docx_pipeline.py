@@ -3,23 +3,22 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from xml.etree import ElementTree as ET
 
 from _fixtures import write_rich_docx
-from docx_llm_parser.core.enums import RevisionMode
+from docx_llm_parser import open_docx, parse_docx
+from docx_llm_parser.core.enums import Density, RevisionMode
 from docx_llm_parser.core.models import ParseOptions
 from docx_llm_parser.parsing.runner import DocxParser
 
-from test_support.api_v2_text import Density, parse_docx
-from test_support.api_v2_text import render_docx_resource as get_resource
-from test_support.api_v2_text import render_docx_window as render_window
-from test_support.file_contract import output_path, source_path, write_text_result
-
 
 class DocxPipelineTests(unittest.TestCase):
-    def test_parse_render_query_write_and_batch_paths(self) -> None:
-        docx_path = source_path("docx", "pipeline", "rich.docx")
-        output_dir = output_path("docx", "pipeline", "parsed.xml").parent
+    def test_parse_render_and_resource_paths(self) -> None:
+        temporary = TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        docx_path = Path(temporary.name) / "rich.docx"
         write_rich_docx(docx_path)
 
         # Internal parse for structure assertions
@@ -44,7 +43,7 @@ class DocxPipelineTests(unittest.TestCase):
         self.assertIn("paragraphCount", parsed.metrics["counters"])
 
         # Public API: render
-        output = parse_docx(docx_path, density=Density.SEMANTIC)
+        output = parse_docx(docx_path, density=Density.SEMANTIC).text
         root = ET.fromstring(output)
         self.assertEqual(root.find(".//h1/color/b").text, "Document Title")
         self.assertEqual(root.find(".//a").get("href"), "https://example.test")
@@ -53,12 +52,12 @@ class DocxPipelineTests(unittest.TestCase):
         self.assertEqual(root.find(".//assets/img").get("id"), "img1")
         self.assertIsNotNone(root.find("supplemental"))
 
-        structural_output = parse_docx(docx_path, density=Density.STRUCTURAL)
-        plain_text = parse_docx(docx_path, density=Density.PLAIN)
+        structural_output = parse_docx(docx_path, density=Density.STRUCTURAL).text
+        plain_text = parse_docx(docx_path, density=Density.PLAIN).text
         structural_root = ET.fromstring(structural_output)
         self.assertEqual(structural_root.find(".//chart").get("id"), "chart1")
         self.assertIn("Footnote text", plain_text)
-        self.assertIn("Last page", render_window(docx_path, page=-1))
+        self.assertIn("Last page", parse_docx(docx_path, page_hint=-1).text)
 
         # structural: no headers/footers; notes and comments remain.
         self.assertNotIn("Header text", structural_output)
@@ -74,24 +73,15 @@ class DocxPipelineTests(unittest.TestCase):
         self.assertIn("Comment text", plain_text)
 
         # Public API: resource extraction
-        chart_output = get_resource(docx_path, "chart", "chart1")
+        with open_docx(docx_path) as document:
+            chart_output = document.render_resource("chart", "chart1").text
+            table_output = document.render_resource("table", "t1").text
         self.assertIsNotNone(chart_output)
         assert chart_output is not None
         self.assertIn("type=bar", chart_output)
-        table_output = get_resource(docx_path, "table", "t1")
         self.assertIsNotNone(table_output)
         assert table_output is not None
         self.assertIn("rows=2", table_output)
-
-        # Test-side atomic write; production APIs return text/iterators only.
-        stale = output_dir / "readable.md"
-        stale.write_text("keep", encoding="utf-8")
-        output_path_result = write_text_result(output, output_path("docx", "pipeline", "parsed.xml"))
-        text_path = write_text_result(plain_text, output_path("docx", "pipeline", "plain.txt"))
-        self.assertEqual(output_path_result.name, "parsed.xml")
-        self.assertEqual(text_path.name, "plain.txt")
-        self.assertEqual(stale.read_text(encoding="utf-8"), "keep")
-        self.assertEqual(list(output_dir.glob(".*.tmp")), [])
 
 
 if __name__ == "__main__":

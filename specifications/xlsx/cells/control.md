@@ -6,7 +6,7 @@ The supported control is a saved checkbox state.
 
 ## Processing
 
-Discover bags in styles.xml and paths containing featurepropertybag; use bag/featurePropertyBag local names. Parse failure caught by _parse_part yields no catalog warning. Plain checkbox rendering returns before appending ordinary cell comments.
+Discover XML bags in styles.xml and paths containing featurepropertybag; use bag/featurePropertyBag local names. Plain checkbox rendering returns before appending ordinary cell comments.
 
 ## Fields
 
@@ -23,6 +23,8 @@ Discover bags in styles.xml and paths containing featurepropertybag; use bag/fea
 
 - **Parsing**
   - Resolve cell style through xfComplement → XFComplements mapping → XFComplement → XFControls → CellControl → Checkbox.
+- **Diagnostics**
+  - Malformed optional bag XML yields `XLSX_CATALOG_XML_INVALID`; the saved boolean cell value remains. A readable style with an `xfComplement` that cannot resolve to a bag yields `XLSX_CATALOG_REFERENCE_UNRESOLVED` when the bag catalog is absent. See [optional catalog diagnostics](../workbook/catalog-diagnostics.md).
 
 ### `default`
 

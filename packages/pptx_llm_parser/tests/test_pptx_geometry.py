@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import unittest
 from dataclasses import replace
-from pathlib import Path
 
 from _pptx_fixtures import (
     clr_map_xml,
@@ -36,12 +35,12 @@ _LAYOUT_MASTER_REL = (
 )
 
 
-def _parse_with_geometry(deck: Path):
+def _parse_with_geometry(deck: bytes):
     plan = PptxParsePlan.session()
     return PptxParser().parse(deck, ParseOptions(), plan=replace(plan, features=plan.features | PptxFeature.GEOMETRY))
 
 
-def _deck(shapes_xml: str, *, layout_shapes: str = "", master_shapes: str = "") -> Path:
+def _deck(shapes_xml: str, *, layout_shapes: str = "", master_shapes: str = "") -> bytes:
     entries: dict[str, str | bytes] = {
         "[Content_Types].xml": content_types_xml(
             1,

@@ -3,11 +3,8 @@
 import io
 import unittest
 import zipfile
-from pathlib import Path
 
-from test_support.api_v2_text import find_xlsx_cells as find_cells
-from test_support.api_v2_text import parse_xlsx
-from test_support.file_contract import materialize_bytes
+from xlsx_llm_parser import open_xlsx, parse_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -17,12 +14,12 @@ NS_RP = "http://schemas.openxmlformats.org/package/2006/relationships"
 REL_HYPERLINK = f"{NS_O}/hyperlink"
 
 
-def _make_xlsx(entries: dict[str, str]) -> Path:
+def _make_xlsx(entries: dict[str, str]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="hyperlinks")
+    return buf.getvalue()
 
 
 class HyperlinkTests(unittest.TestCase):
@@ -78,11 +75,12 @@ class HyperlinkTests(unittest.TestCase):
                 ),
             },
         )
-        output = parse_xlsx(data, density="structural")
+        output = parse_xlsx(data, density="structural").text
         self.assertIn('<a href="https://example.com">Click</a>', output)
-        semantic = parse_xlsx(data, density="semantic")
+        semantic = parse_xlsx(data, density="semantic").text
         self.assertIn('<a href="https://example.com">Click</a>', semantic)
-        matches = find_cells(data, "example.com", kind="hyperlink")
+        with open_xlsx(data) as workbook:
+            matches = workbook.find_cells("example.com", kind="hyperlink").text
         self.assertIn("field=hyperlink", matches)
         self.assertIn("https://example.com", matches)
 
@@ -130,7 +128,7 @@ class HyperlinkTests(unittest.TestCase):
                 ),
             },
         )
-        output = parse_xlsx(data, density="structural")
+        output = parse_xlsx(data, density="structural").text
         self.assertIn('<a href="#Sheet2!B5">Go</a>', output)
 
 

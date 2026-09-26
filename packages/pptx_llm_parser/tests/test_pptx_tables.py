@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 
 from _pptx_fixtures import (
     content_types_xml,
@@ -14,13 +13,13 @@ from _pptx_fixtures import (
     slide_xml_shapes,
     table_shape_xml,
 )
+from pptx_llm_parser import parse_pptx
+from pptx_llm_parser.core.enums import Density
 from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parsing.runner import PptxParser
 
-from test_support.api_v2_text import Density, parse_pptx
 
-
-def _table_deck(rows: list[list[str]]) -> Path:
+def _table_deck(rows: list[list[str]]) -> bytes:
     entries = {
         "[Content_Types].xml": content_types_xml(1),
         "_rels/.rels": root_rels_xml(),
@@ -41,12 +40,12 @@ class TableShapeTests(unittest.TestCase):
         self.assertEqual(shapes[0]["rows"], [["A", "B"], ["C", "D"]])
 
     def test_plain_table_tab_separated(self) -> None:
-        text = parse_pptx(_table_deck([["A", "B"], ["C", "D"]]), density=Density.PLAIN)
+        text = parse_pptx(_table_deck([["A", "B"], ["C", "D"]]), density=Density.PLAIN).text
         self.assertIn("A\tB\nC\tD", text)
 
     def test_plain_table_truncates_over_ten_rows(self) -> None:
         rows = [[f"r{i}", f"v{i}"] for i in range(12)]
-        text = parse_pptx(_table_deck(rows), density=Density.PLAIN)
+        text = parse_pptx(_table_deck(rows), density=Density.PLAIN).text
         self.assertIn("r0\tv0", text)
         self.assertIn("r9\tv9", text)
         self.assertNotIn("r10\tv10", text)

@@ -3,8 +3,8 @@
 import io
 import unittest
 import zipfile
-from pathlib import Path
 
+from xlsx_llm_parser import parse_xlsx
 from xlsx_llm_parser.parsing.modules.worksheets.formulas import (
     _col_row,
     _offset_formula,
@@ -14,20 +14,17 @@ from xlsx_llm_parser.parsing.modules.worksheets.formulas import (
     expand_shared_formulas,
 )
 
-from test_support.api_v2_text import parse_xlsx
-from test_support.file_contract import materialize_bytes
-
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 
 
-def _make_xlsx(entries: dict[str, str]) -> Path:
+def _make_xlsx(entries: dict[str, str]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="formulas")
+    return buf.getvalue()
 
 
 class SharedFormulaTests(unittest.TestCase):
@@ -80,8 +77,8 @@ class SharedFormulaTests(unittest.TestCase):
                 ),
             },
         )
-        semantic = parse_xlsx(data, density="semantic")
-        structural = parse_xlsx(data, density="structural")
+        semantic = parse_xlsx(data, density="semantic").text
+        structural = parse_xlsx(data, density="structural").text
         # Master formula unchanged
         self.assertIn('formula="B2+C2"', semantic)
         self.assertIn('formula="B2+C2"', structural)
@@ -135,8 +132,8 @@ class SharedFormulaTests(unittest.TestCase):
                 ),
             },
         )
-        semantic = parse_xlsx(data, density="semantic")
-        structural = parse_xlsx(data, density="structural")
+        semantic = parse_xlsx(data, density="semantic").text
+        structural = parse_xlsx(data, density="structural").text
         # $B$1 stays absolute
         self.assertIn('formula="A2*$B$1"', semantic)
         self.assertIn('formula="A3*$B$1"', semantic)
@@ -188,8 +185,8 @@ class SharedFormulaTests(unittest.TestCase):
                 ),
             },
         )
-        semantic = parse_xlsx(data, density="semantic")
-        structural = parse_xlsx(data, density="structural")
+        semantic = parse_xlsx(data, density="semantic").text
+        structural = parse_xlsx(data, density="structural").text
         # Cross-sheet refs preserved verbatim
         self.assertIn('formula="Sheet2!A1+Sheet2!B1"', semantic)
         self.assertIn('formula="Sheet2!A1+Sheet2!B1"', structural)
@@ -244,7 +241,7 @@ class SharedFormulaTests(unittest.TestCase):
                 ),
             },
         )
-        semantic = parse_xlsx(data, density="semantic")
+        semantic = parse_xlsx(data, density="semantic").text
         # Function name intact, only A1 offsets to A2.
         self.assertIn('formula="LOG10(A2)"', semantic)
         # Scientific notation intact.
@@ -320,8 +317,8 @@ class ArrayFormulaTests(unittest.TestCase):
                 ),
             },
         )
-        semantic = parse_xlsx(data, density="semantic")
-        structural = parse_xlsx(data, density="structural")
+        semantic = parse_xlsx(data, density="semantic").text
+        structural = parse_xlsx(data, density="structural").text
         self.assertIn('formula-type="array"', semantic)
         self.assertIn('formula-range="A1:C3"', semantic)
         self.assertIn('formula-type="array"', structural)
@@ -379,8 +376,8 @@ class ArrayFormulaTests(unittest.TestCase):
                 ),
             },
         )
-        semantic = parse_xlsx(data, density="semantic")
-        structural = parse_xlsx(data, density="structural")
+        semantic = parse_xlsx(data, density="semantic").text
+        structural = parse_xlsx(data, density="structural").text
 
         # Source cell has both formulaRange and spillRange
         self.assertIn('spill-range="B1:B3"', semantic)

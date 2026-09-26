@@ -25,7 +25,7 @@ from ....models import (
 from ....plan import XlsxFeature, XlsxParsePlan
 from ..styles.index import FormatIndex
 from ..workbook.features import RichValueCatalog
-from .formulas import expand_shared_formula_groups
+from .formulas import SharedFormulaMaster, expand_selected_shared_formulas
 from .post import (
     apply_comments,
     apply_hyperlink_specs,
@@ -157,6 +157,7 @@ class SheetWorkingSet:
     rows_by_number: dict[int, list[Cell]] = field(default_factory=dict)
     cells_by_coord: dict[int, Cell] = field(default_factory=dict)
     shared_formula_groups: dict[str, list[Cell]] = field(default_factory=dict)
+    shared_formula_masters: dict[str, list[SharedFormulaMaster]] = field(default_factory=dict)
     spill_sources: list[Cell] = field(default_factory=list)
 
     def add_row(self, row_number: int, cells: list[Cell]) -> None:
@@ -173,6 +174,11 @@ class SheetWorkingSet:
         if self.flags.formulas and cell.get("formulaRange") and cell.get("dynamicArray"):
             self.spill_sources.append(cell)
 
+    def add_shared_master(self, master: SharedFormulaMaster) -> None:
+        candidates = self.shared_formula_masters.setdefault(master.si, [])
+        if master not in candidates and len(candidates) < 2:
+            candidates.append(master)
+
     def finalize(
         self,
         post: SheetPostIndex,
@@ -180,12 +186,13 @@ class SheetWorkingSet:
         sheet_relationships: list[RelationshipRecord],
         threaded_comment_people: Mapping[str, str],
         format_index: FormatIndex | None,
+        sheet_part: str,
         *,
         allow_annotation_cells: bool,
         warnings: list[ParseWarning],
     ) -> SheetParseResult:
         if self.flags.formulas:
-            expand_shared_formula_groups(self.shared_formula_groups)
+            expand_selected_shared_formulas(self.shared_formula_groups, self.shared_formula_masters, warnings, sheet_part)
         apply_merge_refs(post.merge_refs, self.cells_by_coord)
         if self.flags.formulas:
             apply_spill_sources(self.spill_sources, self.cells_by_coord)
@@ -225,6 +232,7 @@ class SheetWorkingSet:
         self.cells_by_coord.clear()
         self.rows_by_number.clear()
         self.shared_formula_groups.clear()
+        self.shared_formula_masters.clear()
         self.spill_sources.clear()
         return result
 
@@ -288,26 +296,32 @@ class WorksheetScanner:
                         current_cells = [] if self._includes_row(effective_row) else None
                         previous_col = 0
                     continue
-                if element.tag == f"{{{NS_S}}}c" and current_attrs is not None and current_cells is not None:
+                if element.tag == f"{{{NS_S}}}c" and current_attrs is not None:
                     ref = element.get("r", "") or f"{col_letter(previous_col + 1)}{current_attrs.number}"
                     col, row = parse_ref(ref)
-                    if not self._includes_cell(col, row):
-                        previous_col = col
-                        continue
-                    cell = self._parse_cell(
-                        element,
-                        current_attrs,
-                        self.shared_strings,
-                        self.rich_text_map,
-                        self.format_index,
-                        ref,
-                        self.rich_values,
-                    )
-                    previous_col = cell["col"]
-                    current_cells.append(cell)
-                    working.add_cell(cell)
-                elif element.tag == f"{{{NS_S}}}row" and current_attrs is not None and current_cells is not None:
-                    working.add_row(current_attrs.number, current_cells)
+                    previous_col = col
+                    if self.flags.formulas:
+                        formula = element.find(f"{{{NS_S}}}f")
+                        if formula is not None and formula.get("t") == "shared":
+                            si = formula.get("si")
+                            shared_ref = formula.get("ref")
+                            if si is not None and shared_ref is not None:
+                                working.add_shared_master(SharedFormulaMaster(si, ref, shared_ref, formula.text or ""))
+                    if current_cells is not None and self._includes_cell(col, row):
+                        cell = self._parse_cell(
+                            element,
+                            current_attrs,
+                            self.shared_strings,
+                            self.rich_text_map,
+                            self.format_index,
+                            ref,
+                            self.rich_values,
+                        )
+                        current_cells.append(cell)
+                        working.add_cell(cell)
+                elif element.tag == f"{{{NS_S}}}row" and current_attrs is not None:
+                    if current_cells is not None:
+                        working.add_row(current_attrs.number, current_cells)
                     element.clear()
                     current_attrs = None
                     current_cells = None
@@ -320,6 +334,7 @@ class WorksheetScanner:
             self.sheet_relationships,
             self.threaded_comment_people,
             self.format_index,
+            self.sheet_part,
             allow_annotation_cells=self.cell_window is None,
             warnings=self.warnings,
         )

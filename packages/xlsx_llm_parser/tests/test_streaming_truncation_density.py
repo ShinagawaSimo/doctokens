@@ -3,26 +3,21 @@
 import io
 import unittest
 import zipfile
-from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from xlsx_llm_parser import open_xlsx
-
-from test_support.api_v2_text import parse_xlsx
-from test_support.api_v2_text import render_xlsx_range as render_range
-from test_support.file_contract import materialize_bytes, output_path, write_text_result
+from xlsx_llm_parser import open_xlsx, parse_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 
 
-def _make_xlsx(entries: dict[str, str]) -> Path:
+def _make_xlsx(entries: dict[str, str]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="streaming")
+    return buf.getvalue()
 
 
 class StreamingTests(unittest.TestCase):
@@ -75,7 +70,7 @@ class StreamingTests(unittest.TestCase):
                 ),
             },
         )
-        full = parse_xlsx(data)
+        full = parse_xlsx(data).text
         with open_xlsx(data) as workbook:
             streamed = "".join(workbook.iter_render())
         self.assertEqual(full, streamed)
@@ -115,7 +110,7 @@ class StreamingTests(unittest.TestCase):
         )
         for density in ("plain", "structural"):
             with self.subTest(density=density):
-                output = parse_xlsx(data, density=density)
+                output = parse_xlsx(data, density=density).text
                 if density == "plain":
                     self.assertTrue(output.startswith("density=plain"))
                 else:
@@ -160,58 +155,10 @@ class StreamingTests(unittest.TestCase):
             parse_xlsx(data, density="semntic")
 
 
-class TestOutputMaterializationTests(unittest.TestCase):
-    def test_test_adapter_writes_full_render_atomically(self) -> None:
-        """The test adapter writes parsed output without a production file API."""
-        data = _make_xlsx(
-            {
-                "[Content_Types].xml": (
-                    f'<Types xmlns="{NS_CT}">'
-                    '<Default Extension="xml" ContentType="application/xml"/>'
-                    '<Default Extension="rels" ContentType='
-                    '"application/vnd.openxmlformats-package.relationships+xml"/>'
-                    '<Override PartName="/xl/workbook.xml" '
-                    'ContentType="application/vnd.openxmlformats-officedocument.'
-                    'spreadsheetml.sheet.main+xml"/>'
-                    "</Types>"
-                ),
-                "_rels/.rels": (
-                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                    f'<Relationship Id="r1" Type="{NS_O}/officeDocument" Target="xl/workbook.xml"/>'
-                    "</Relationships>"
-                ),
-                "xl/workbook.xml": (
-                    f'<workbook xmlns="{NS_S}" '
-                    'xmlns:r="http://schemas.openxmlformats.org/package/2006/relationships">'
-                    "<sheets>"
-                    '<sheet name="S" sheetId="1" r:id="rSheet1"/>'
-                    "</sheets>"
-                    "</workbook>"
-                ),
-                "xl/_rels/workbook.xml.rels": (
-                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                    f'<Relationship Id="rSheet1" Type="{NS_O}/worksheet" '
-                    'Target="worksheets/sheet1.xml"/>'
-                    "</Relationships>"
-                ),
-                "xl/worksheets/sheet1.xml": (
-                    f'<worksheet xmlns="{NS_S}"><sheetData>'
-                    '<row r="1"><c r="A1" t="inlineStr"><is><t>X</t></is></c></row>'
-                    "</sheetData></worksheet>"
-                ),
-            },
-        )
-        output_dir = output_path("xlsx", "write-document", "parsed.xml").parent
-        path = write_text_result(parse_xlsx(data), output_dir / "parsed.xml")
-        self.assertEqual(path.name, "parsed.xml")
-        self.assertEqual(path.read_text(encoding="utf-8"), parse_xlsx(data))
-        self.assertEqual(list(output_dir.glob(".*.tmp")), [])
-
-
 class TruncationTests(unittest.TestCase):
     """Large sheets produce head+tail with truncated attribute."""
 
-    def _make_sheet(self, num_rows: int) -> Path:
+    def _make_sheet(self, num_rows: int) -> bytes:
         rows_xml = [f'<row r="{r}"><c r="A{r}" t="inlineStr"><is><t>Row{r}</t></is></c></row>' for r in range(1, num_rows + 1)]
         return _make_xlsx(
             {
@@ -251,13 +198,13 @@ class TruncationTests(unittest.TestCase):
     def test_small_sheet_not_truncated(self) -> None:
         """10 rows within budget: no truncation."""
         data = self._make_sheet(10)
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertNotIn("truncated", output)
 
     def test_large_sheet_windowed(self) -> None:
         """600 rows exceeds cell budget: window plus truncated marker."""
         data = self._make_sheet(600)
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         # Shows first rows (within budget) and marks the grid as truncated.
         self.assertIn('<tr number="1">', output)
         self.assertNotIn('<tr number="600">', output)
@@ -266,7 +213,7 @@ class TruncationTests(unittest.TestCase):
     def test_range_reading_not_truncated(self) -> None:
         """render_range always shows full results, no truncation."""
         data = self._make_sheet(50)
-        output = render_range(data, "Data", "A1:A5")
+        output = parse_xlsx(data, sheet="Data", range_spec="A1:A5").text
         self.assertNotIn("truncated", output)
         self.assertIn("Row1", output)
         self.assertIn("Row5", output)
@@ -274,7 +221,7 @@ class TruncationTests(unittest.TestCase):
     def test_range_reading_beyond_cell_budget_is_exact(self) -> None:
         """render_range is exact even past the default-view cell budget."""
         data = self._make_sheet(600)
-        output = render_range(data, "Data", "A1:A600")
+        output = parse_xlsx(data, sheet="Data", range_spec="A1:A600").text
         self.assertIn("Row600", output)
         self.assertNotIn("truncated", output)
 
@@ -328,7 +275,7 @@ class PlainDensityTests(unittest.TestCase):
                 ),
             },
         )
-        output = parse_xlsx(data, density="plain")
+        output = parse_xlsx(data, density="plain").text
         self.assertIn("density=plain", output)
         self.assertNotIn("<tr", output)
         self.assertNotIn("<td", output)

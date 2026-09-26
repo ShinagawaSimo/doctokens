@@ -14,8 +14,7 @@ def parse_docx(
     page_hint: int | None = None,
     span: int = 1,
     options: ParseOptions | None = None,
-) -> ParseResult:
-    ...
+) -> ParseResult: ...
 ```
 
 ## Fields

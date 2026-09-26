@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 
 from _pptx_fixtures import (
     content_types_xml,
@@ -15,13 +14,13 @@ from _pptx_fixtures import (
     slide_rels_xml,
     slide_xml_shapes,
 )
+from pptx_llm_parser import parse_pptx
+from pptx_llm_parser.core.enums import Density
 from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parsing.runner import PptxParser
 
-from test_support.api_v2_text import Density, parse_pptx
 
-
-def _media_deck(kind: str = "video") -> Path:
+def _media_deck(kind: str = "video") -> bytes:
     rel = (
         '<Relationship Id="rId2" '
         'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/media" '
@@ -56,11 +55,11 @@ class MediaShapeTests(unittest.TestCase):
         self.assertEqual(parsed.slides[0]["shapes"][0]["kind"], "audio")
 
     def test_plain_video_placeholder(self) -> None:
-        text = parse_pptx(_media_deck(), density=Density.PLAIN)
+        text = parse_pptx(_media_deck(), density=Density.PLAIN).text
         self.assertIn("[Video]", text)
 
     def test_plain_audio_placeholder(self) -> None:
-        text = parse_pptx(_media_deck(kind="audio"), density=Density.PLAIN)
+        text = parse_pptx(_media_deck(kind="audio"), density=Density.PLAIN).text
         self.assertIn("[Audio]", text)
 
 

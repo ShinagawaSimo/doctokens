@@ -8,12 +8,11 @@ from xml.etree import ElementTree as ET
 
 from _pptx_fixtures import PNG_BYTES
 from ocr_llm_core import OcrProvider, OcrResult
+from pptx_llm_parser import parse_pptx
+from pptx_llm_parser.core.enums import Density
 from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parsing.runner import PptxParser
 from test_pptx_images import _image_deck
-
-from test_support.api_v2_text import Density, parse_pptx
-from test_support.file_contract import materialize_bytes
 
 
 class _TextProvider(OcrProvider):
@@ -45,9 +44,9 @@ class PptxOcrTests(unittest.TestCase):
 
     def test_semantic_emits_escaped_ocr_sibling_only(self) -> None:
         options = ParseOptions(ocr=_TextProvider())
-        semantic = parse_pptx(_image_deck(), density=Density.SEMANTIC, options=options)
-        structural = parse_pptx(_image_deck(), density=Density.STRUCTURAL, options=options)
-        plain = parse_pptx(_image_deck(), density=Density.PLAIN, options=options)
+        semantic = parse_pptx(_image_deck(), density=Density.SEMANTIC, options=options).text
+        structural = parse_pptx(_image_deck(), density=Density.STRUCTURAL, options=options).text
+        plain = parse_pptx(_image_deck(), density=Density.PLAIN, options=options).text
         self.assertEqual(options.ocr.calls, 1)
         semantic_root = ET.fromstring(semantic)
         self.assertEqual(semantic_root.find(".//img").get("id"), "img1")
@@ -75,7 +74,7 @@ class PptxOcrTests(unittest.TestCase):
         from io import BytesIO
 
         source = _image_deck()
-        input_zip = zipfile.ZipFile(source)
+        input_zip = zipfile.ZipFile(BytesIO(source))
         output = BytesIO()
         with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
             for name in input_zip.namelist():
@@ -83,7 +82,7 @@ class PptxOcrTests(unittest.TestCase):
             archive.writestr("ppt/media/unreferenced.png", b"not sent to provider")
         input_zip.close()
         provider = _TextProvider()
-        fixture = materialize_bytes(output.getvalue(), suffix=".pptx", package="pptx", name="ocr-unreferenced-image")
+        fixture = output.getvalue()
         PptxParser().parse(fixture, ParseOptions(ocr=provider))
         self.assertEqual(provider.calls, 1)
 
@@ -98,7 +97,7 @@ class PptxOcrTests(unittest.TestCase):
         options = ParseOptions(ocr=ErrorProvider())
         parsed = PptxParser().parse(_image_deck(), options)
         self.assertEqual(parsed.ocr_results["img1"]["error_message"], "private diagnostic")
-        rendered = parse_pptx(_image_deck(), density=Density.SEMANTIC, options=options)
+        rendered = parse_pptx(_image_deck(), density=Density.SEMANTIC, options=options).text
         root = ET.fromstring(rendered)
         marker = root.find(".//ocr-text")
         self.assertIsNotNone(marker)

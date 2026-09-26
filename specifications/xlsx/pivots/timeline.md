@@ -6,7 +6,7 @@ Interactive-filter metadata is read without executing filters.
 
 ## Processing
 
-Scan XML paths containing timeline; first timelineCacheDefinition/timeline descendant, fallback root. Multiple matching parts can produce multiple records. Catalog XML failures caught by _parse_part are skipped without an added diagnostic.
+Scan XML paths containing timeline; first timelineCacheDefinition/timeline descendant, fallback root. Multiple matching parts can produce multiple records.
 
 ## Fields
 
@@ -23,6 +23,8 @@ Scan XML paths containing timeline; first timelineCacheDefinition/timeline desce
 
 - **Parsing**
   - timeline1,timeline2,...
+- **Diagnostics**
+  - Malformed timeline XML yields `XLSX_CATALOG_XML_INVALID` at the part and contributes no timeline record. Other catalog content remains available. See [optional catalog diagnostics](../workbook/catalog-diagnostics.md).
 
 ### `name`
 

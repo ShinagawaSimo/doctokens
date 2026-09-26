@@ -19,6 +19,8 @@ Pivot output describes declared layout and source fields.
 
 - **Parsing**
   - pivot1,pivot2,...; unresolved catalog still produces an ID-only placeholder.
+- **Diagnostics**
+  - A declared missing table target yields `XLSX_CATALOG_PART_MISSING`; malformed table XML yields `XLSX_CATALOG_XML_INVALID`. The relationship-based ID placeholder remains. See [optional catalog diagnostics](../workbook/catalog-diagnostics.md).
 
 ### `name`
 
@@ -117,6 +119,8 @@ Pivot output describes declared layout and source fields.
 
 - **Parsing**
   - Resolve int index against fieldNames; out-of-range/default-1 → decimal index string.
+- **Diagnostics**
+  - If the referenced cache XML is unreadable, fallback index strings remain and `XLSX_CATALOG_XML_INVALID` identifies that cache part.
 
 ### `columnFields`
 

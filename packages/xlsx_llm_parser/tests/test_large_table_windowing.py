@@ -3,10 +3,8 @@
 import io
 import unittest
 import zipfile
-from pathlib import Path
 
-from test_support.api_v2_text import parse_xlsx
-from test_support.file_contract import materialize_bytes
+from xlsx_llm_parser import parse_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -14,12 +12,12 @@ NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 NS_RP = "http://schemas.openxmlformats.org/package/2006/relationships"
 
 
-def _make_xlsx(entries: dict[str, str]) -> Path:
+def _make_xlsx(entries: dict[str, str]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="large-table")
+    return buf.getvalue()
 
 
 class WindowingTests(unittest.TestCase):
@@ -63,11 +61,11 @@ class WindowingTests(unittest.TestCase):
             },
         )
         # Full read
-        full = parse_xlsx(data, density="structural")
+        full = parse_xlsx(data, density="structural").text
         self.assertIn("Row1", full)
         self.assertIn("Row3", full)
         # Window from row 3
-        win = parse_xlsx(data, density="structural", sheet="Data", range_spec="A3:A3")
+        win = parse_xlsx(data, density="structural", sheet="Data", range_spec="A3:A3").text
         self.assertNotIn("Row1", win)
         self.assertNotIn("Row2", win)
         self.assertIn("Row3", win)
@@ -108,7 +106,7 @@ class WindowingTests(unittest.TestCase):
                 "xl/worksheets/sheet1.xml": (f'<worksheet xmlns="{NS_S}"><sheetData>{rows_xml}</sheetData></worksheet>'),
             },
         )
-        output = parse_xlsx(data, density="structural")
+        output = parse_xlsx(data, density="structural").text
         # Shows data rows within the budget and marks the grid as truncated.
         self.assertIn('<tr number="1">', output)
         self.assertIn("truncated", output)

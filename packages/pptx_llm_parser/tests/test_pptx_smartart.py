@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 
 from _pptx_fixtures import (
     content_types_xml,
@@ -17,13 +16,13 @@ from _pptx_fixtures import (
     slide_xml_shapes,
     smartart_shape_xml,
 )
+from pptx_llm_parser import parse_pptx
+from pptx_llm_parser.core.enums import Density
 from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parsing.runner import PptxParser
 
-from test_support.api_v2_text import Density, parse_pptx
 
-
-def _smartart_deck(*, with_data: bool = True) -> Path:
+def _smartart_deck(*, with_data: bool = True) -> bytes:
     rels = (
         '<Relationship Id="rId2" '
         'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData" '
@@ -69,7 +68,7 @@ class SmartArtShapeTests(unittest.TestCase):
         self.assertEqual(smartart["links"], [{"from": 1, "to": 2}, {"from": 2, "to": 3}])
 
     def test_plain_smartart_placeholder(self) -> None:
-        text = parse_pptx(_smartart_deck(), density=Density.PLAIN)
+        text = parse_pptx(_smartart_deck(), density=Density.PLAIN).text
         self.assertIn("[SmartArt: process, 3 nodes]", text)
 
     def test_missing_data_part_degrades_with_warning(self) -> None:
@@ -78,7 +77,7 @@ class SmartArtShapeTests(unittest.TestCase):
         self.assertEqual(shape["type"], "smartart")
         self.assertNotIn("smartartId", shape)
         self.assertTrue(any(w.code == "SMARTART_PART_MISSING" for w in parsed.warnings))
-        text = parse_pptx(_smartart_deck(with_data=False), density=Density.PLAIN)
+        text = parse_pptx(_smartart_deck(with_data=False), density=Density.PLAIN).text
         self.assertIn("[SmartArt]", text)
 
 

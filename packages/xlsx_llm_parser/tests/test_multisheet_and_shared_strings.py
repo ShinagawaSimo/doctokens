@@ -3,22 +3,20 @@
 import io
 import unittest
 import zipfile
-from pathlib import Path
 
-from test_support.api_v2_text import parse_xlsx
-from test_support.file_contract import materialize_bytes
+from xlsx_llm_parser import parse_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 
 
-def _make_xlsx(entries: dict[str, str | bytes]) -> Path:
+def _make_xlsx(entries: dict[str, str | bytes]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="multisheet")
+    return buf.getvalue()
 
 
 def _wb_xml(sheets: list[tuple[str, int]]) -> str:
@@ -79,7 +77,7 @@ class MultiSheetTests(unittest.TestCase):
                 "xl/worksheets/sheet3.xml": _sheet_xml([]),
             },
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         # Verify order
         first_idx = output.index("First")
         second_idx = output.index("Second")
@@ -119,7 +117,7 @@ class MultiSheetTests(unittest.TestCase):
                 "xl/worksheets/sheet2.xml": _sheet_xml([]),
             },
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn('<sheet name="Hidden" visibility="hidden" />', output)
         self.assertNotIn("hidden", output.split("Hidden")[0])  # Visible has no hidden
 
@@ -155,7 +153,7 @@ class SharedStringsTests(unittest.TestCase):
                 ),
             },
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn("Product", output)
         self.assertIn("Price", output)
 
@@ -184,7 +182,7 @@ class SharedStringsTests(unittest.TestCase):
                 "xl/worksheets/sheet1.xml": _sheet_xml(['<row r="1"><c r="A1" t="s"><v>0</v></c></row>']),
             },
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn("BoldNormal", output)
 
     def test_shared_string_index_out_of_range(self) -> None:
@@ -212,7 +210,7 @@ class SharedStringsTests(unittest.TestCase):
                 "xl/worksheets/sheet1.xml": _sheet_xml(['<row r="1"><c r="A1" t="s"><v>99</v></c></row>']),
             },
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         # Cell with out-of-range SST index: empty text
         self.assertIn("<cell />", output)
 
@@ -240,7 +238,7 @@ class SharedStringsTests(unittest.TestCase):
                 "xl/worksheets/sheet1.xml": _sheet_xml(['<row r="1"><c r="A1" t="s"><v>0</v></c></row>']),
             },
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn("<cell />", output)
 
     def test_formula_string_cell(self) -> None:
@@ -269,7 +267,7 @@ class SharedStringsTests(unittest.TestCase):
                 ),
             },
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn("Total: 42", output)
 
     def test_formula_text_in_semantic(self) -> None:
@@ -314,8 +312,8 @@ class SharedStringsTests(unittest.TestCase):
                 ),
             },
         )
-        structural = parse_xlsx(data, density="structural")
-        semantic = parse_xlsx(data, density="semantic")
+        structural = parse_xlsx(data, density="structural").text
+        semantic = parse_xlsx(data, density="semantic").text
         # Both structural and semantic show formula
         self.assertIn('formula="SUM(B1:B10)"', structural)
         self.assertIn("42", structural)
@@ -345,7 +343,7 @@ class SharedStringsTests(unittest.TestCase):
                 "xl/worksheets/sheet1.xml": _sheet_xml(['<row r="1"><c r="A1" t="d"><v>2024-01-15</v></c></row>']),
             },
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn("2024-01-15", output)
 
 
@@ -382,7 +380,7 @@ class MissingReferenceTests(unittest.TestCase):
                 ),
             },
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn('<tr number="1"><cell>first</cell><cell>second</cell>', output)
 
 

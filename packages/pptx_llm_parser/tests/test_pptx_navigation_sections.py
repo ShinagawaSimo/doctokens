@@ -17,8 +17,7 @@ from _pptx_fixtures import (
     slide_xml_shapes,
     text_shape_xml,
 )
-
-from test_support.api_v2_text import parse_pptx
+from pptx_llm_parser import parse_pptx
 
 
 class NavigationAndSectionsTests(unittest.TestCase):
@@ -50,7 +49,7 @@ class NavigationAndSectionsTests(unittest.TestCase):
                 "ppt/slides/slide2.xml": slide_xml_shapes(text_shape_xml([[("t", "Target")]], shape_id=2)),
             }
         )
-        structural = parse_pptx(data, density="structural")
+        structural = parse_pptx(data, density="structural").text
         root = ET.fromstring(structural)
         self.assertEqual(
             [(item.get("number"), item.get("section")) for item in root.findall("slide")],
@@ -58,7 +57,7 @@ class NavigationAndSectionsTests(unittest.TestCase):
         )
         self.assertEqual(root.find(".//slide/p").get("link"), "#slide2")
 
-        plain = parse_pptx(data, density="plain")
+        plain = parse_pptx(data, density="plain").text
         self.assertIn("=== Slide 1 (Section: Intro) ===", plain)
 
 

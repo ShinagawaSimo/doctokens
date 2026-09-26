@@ -30,13 +30,14 @@ Only the comments relationship URI handled by CommentsParser participates. Missi
   - Comment character data.
 
 - **OOXML**
-  - Descendant local-name t.
+  - Classic PresentationML `p:cm/p:text`; modern comment's direct `text` child with descendant `t` text nodes.
 
 - **IR**
   - `str`
 
 - **Parsing**
-  - Concatenate. Classic p:text is not a t element and therefore can yield empty text in this implementation.
+  - For classic `p:cm`, concatenate text content of its direct `p:text` child, preserving XML-decoded leading/trailing whitespace and line breaks. For modern comments, concatenate descendant `t` nodes inside the direct `text` child in document order.
+  - A missing body child and an empty body child both serialize as empty comment character data. Neither removes the comment or its slide association. Character data is XML-escaped during serialization.
 
 ### `author`
 

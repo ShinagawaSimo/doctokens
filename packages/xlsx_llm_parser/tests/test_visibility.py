@@ -3,22 +3,20 @@
 import io
 import unittest
 import zipfile
-from pathlib import Path
 
-from test_support.api_v2_text import parse_xlsx
-from test_support.file_contract import materialize_bytes
+from xlsx_llm_parser import parse_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 
 
-def _make_xlsx(entries: dict[str, str]) -> Path:
+def _make_xlsx(entries: dict[str, str]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="visibility")
+    return buf.getvalue()
 
 
 class HiddenRowTests(unittest.TestCase):
@@ -63,15 +61,15 @@ class HiddenRowTests(unittest.TestCase):
                 ),
             },
         )
-        structural = parse_xlsx(data, density="structural")
-        semantic = parse_xlsx(data, density="semantic")
+        structural = parse_xlsx(data, density="structural").text
+        semantic = parse_xlsx(data, density="semantic").text
 
         # Both densities mark the hidden row
         self.assertIn('<tr number="1">', structural)
         self.assertIn('<tr hidden="true" number="2">', structural)
         self.assertIn('<tr hidden="true" number="2">', semantic)
         # plain omits tags entirely
-        plain = parse_xlsx(data, density="plain")
+        plain = parse_xlsx(data, density="plain").text
         self.assertIn("Secret", plain)
 
 
@@ -121,11 +119,11 @@ class HiddenColumnTests(unittest.TestCase):
                 ),
             },
         )
-        structural = parse_xlsx(data, density="structural")
+        structural = parse_xlsx(data, density="structural").text
         # Columns annotation appears before grid
         self.assertIn('<columns hidden="true" ref="B:C" />', structural)
 
-        plain = parse_xlsx(data, density="plain")
+        plain = parse_xlsx(data, density="plain").text
         self.assertIn("\nA\n", plain)
         self.assertNotIn("B", plain)
         self.assertNotIn("C", plain)
@@ -173,8 +171,8 @@ class OutlineTests(unittest.TestCase):
                 ),
             },
         )
-        semantic = parse_xlsx(data, density="semantic")
-        structural = parse_xlsx(data, density="structural")
+        semantic = parse_xlsx(data, density="semantic").text
+        structural = parse_xlsx(data, density="structural").text
 
         # Both structural and semantic output outline info
         self.assertIn('outline-level="1"', semantic)

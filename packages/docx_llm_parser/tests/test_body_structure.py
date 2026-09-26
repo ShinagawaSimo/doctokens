@@ -5,17 +5,13 @@ from __future__ import annotations
 import io
 import unittest
 import zipfile
-from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from docx_llm_parser.core.enums import RevisionMode
+from docx_llm_parser import parse_docx
+from docx_llm_parser.core.enums import Density, RevisionMode
 from docx_llm_parser.core.models import ParseOptions
 from docx_llm_parser.parsing.runner import DocxParser
 from docx_llm_parser.rendering.dispatch import build_manifest, to_output
-
-from test_support.api_v2_text import Density, parse_docx
-from test_support.api_v2_text import render_docx_window as render_window
-from test_support.file_contract import materialize_bytes
 
 NS_W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -32,8 +28,8 @@ _NUMBERING_XML = f"""<w:numbering xmlns:w="{NS_W}">
 </w:numbering>"""
 
 
-def _make_docx(body_xml: str, extra_entries: dict[str, str] | None = None) -> Path:
-    """Build a minimal DOCX on disk whose body contains *body_xml*."""
+def _make_docx(body_xml: str, extra_entries: dict[str, str] | None = None) -> bytes:
+    """Build synthetic DOCX bytes whose body contains *body_xml*."""
     entries: dict[str, str] = {
         "[Content_Types].xml": (
             f'<Types xmlns="{NS_CT}">'
@@ -59,7 +55,7 @@ def _make_docx(body_xml: str, extra_entries: dict[str, str] | None = None) -> Pa
     with zipfile.ZipFile(buffer, "w") as archive:
         for name, data in entries.items():
             archive.writestr(name, data)
-    return materialize_bytes(buffer.getvalue(), suffix=".docx", package="docx", name="body-structure")
+    return buffer.getvalue()
 
 
 class BodyStructureTests(unittest.TestCase):
@@ -228,10 +224,10 @@ class BodyStructureTests(unittest.TestCase):
             "<w:p><w:r><w:t>Only page</w:t></w:r></w:p>"
             "<w:p><w:r><w:lastRenderedPageBreak/><w:lastRenderedPageBreak/><w:t>Page three</w:t></w:r></w:p>"
         )
-        hole_window = render_window(data, page=2)
+        hole_window = parse_docx(data, page_hint=2).text
         self.assertNotIn("Only page", hole_window)
         self.assertNotIn("Page three", hole_window)
-        last_window = render_window(data, page=-1)
+        last_window = parse_docx(data, page_hint=-1).text
         self.assertIn("Page three", last_window)
 
     def test_inline_rendered_page_break_splits_paragraph_and_windows(self) -> None:
@@ -248,8 +244,8 @@ class BodyStructureTests(unittest.TestCase):
         rendered = ET.fromstring(to_output(parsed, Density.SEMANTIC))
         self.assertEqual([item.get("number") for item in rendered.findall(".//body/page")], ["1", "2", "3"])
         self.assertEqual([item.text for item in rendered.findall(".//body/p")], ["A", "B", "C", "D"])
-        self.assertEqual(_body_text_for_page(render_window(data, page=2)), ["B"])
-        self.assertEqual(_body_text_for_page(render_window(data, page=3)), ["C", "D"])
+        self.assertEqual(_body_text_for_page(parse_docx(data, page_hint=2).text), ["B"])
+        self.assertEqual(_body_text_for_page(parse_docx(data, page_hint=3).text), ["C", "D"])
 
     def test_inline_rendered_page_breaks_without_runs(self) -> None:
         """The compact parse mode retains text page segments without run metadata."""
@@ -327,7 +323,7 @@ class BodyStructureTests(unittest.TestCase):
         self.assertEqual(parsed.blocks[2]["runs"][0]["field"], {"kind": "citation", "key": "Smith2024"})
         self.assertEqual(parsed.blocks[3]["runs"][0]["revisionAuthor"], "Editor")
 
-        rendered = parse_docx(data, density=Density.SEMANTIC, options=ParseOptions(revision_mode=RevisionMode.REVIEW))
+        rendered = parse_docx(data, density=Density.SEMANTIC, options=ParseOptions(revision_mode=RevisionMode.REVIEW)).text
         root = ET.fromstring(rendered)
         citation = root.find(".//p[@anchor='target']/cite")
         self.assertIsNotNone(citation)

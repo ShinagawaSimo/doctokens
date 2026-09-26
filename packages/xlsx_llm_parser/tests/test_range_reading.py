@@ -3,26 +3,23 @@
 import io
 import unittest
 import zipfile
-from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from xlsx_llm_parser import parse_xlsx
 from xlsx_llm_parser.parsing.runner import _parse_workbook
 from xlsx_llm_parser.plan import XlsxFeature, XlsxParsePlan
-
-from test_support.api_v2_text import render_xlsx_range as render_range
-from test_support.file_contract import materialize_bytes
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 
 
-def _make_xlsx(entries: dict[str, str]) -> Path:
+def _make_xlsx(entries: dict[str, str]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="range-reading")
+    return buf.getvalue()
 
 
 class RangeReadingTests(unittest.TestCase):
@@ -78,7 +75,7 @@ class RangeReadingTests(unittest.TestCase):
                 ),
             },
         )
-        output = render_range(data, "Data", "A1:A1")
+        output = parse_xlsx(data, sheet="Data", range_spec="A1:A1").text
         self.assertIn("Name", output)
         self.assertNotIn("Age", output)
         self.assertNotIn("City", output)
@@ -127,7 +124,7 @@ class RangeReadingTests(unittest.TestCase):
                 ),
             },
         )
-        output = render_range(data, "Data", "A2:A3")
+        output = parse_xlsx(data, sheet="Data", range_spec="A2:A3").text
         self.assertNotIn("H1", output)
         self.assertIn("D1", output)
         self.assertIn("D2", output)
@@ -173,7 +170,7 @@ class RangeReadingTests(unittest.TestCase):
                 ),
             },
         )
-        output = render_range(data, "Data", "A5:A10")
+        output = parse_xlsx(data, sheet="Data", range_spec="A5:A10").text
         root = ET.fromstring(output)
         self.assertEqual([row.get("number") for row in root.findall(".//tr")], ["5", "10"])
 
@@ -211,7 +208,7 @@ class RangeReadingTests(unittest.TestCase):
             },
         )
         with self.assertRaises(KeyError):
-            render_range(data, "NoSuch", "A1:B2")
+            parse_xlsx(data, sheet="NoSuch", range_spec="A1:B2")
 
     def test_invalid_range_raises(self) -> None:
         data = _make_xlsx(
@@ -246,7 +243,7 @@ class RangeReadingTests(unittest.TestCase):
             },
         )
         with self.assertRaises(ValueError):
-            render_range(data, "S", "A1")  # no colon
+            parse_xlsx(data, sheet="S", range_spec="A1")  # no colon
 
 
 if __name__ == "__main__":

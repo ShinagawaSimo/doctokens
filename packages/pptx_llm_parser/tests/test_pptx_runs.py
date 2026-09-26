@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 
 from _pptx_fixtures import (
     content_types_xml,
@@ -32,7 +31,7 @@ _THEME_OVERRIDE = (
 )
 
 
-def _runs_deck(shape_xml: str, *, slide_rels: str = "", with_theme: bool = True) -> Path:
+def _runs_deck(shape_xml: str, *, slide_rels: str = "", with_theme: bool = True) -> bytes:
     entries: dict[str, str | bytes] = {
         "[Content_Types].xml": content_types_xml(1, extra_defaults=_THEME_OVERRIDE),
         "_rels/.rels": root_rels_xml(),

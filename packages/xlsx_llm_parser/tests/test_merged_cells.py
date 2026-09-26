@@ -3,26 +3,25 @@
 import io
 import unittest
 import zipfile
-from pathlib import Path
+from xml.etree import ElementTree as ET
 
-from test_support.api_v2_text import parse_xlsx
-from test_support.file_contract import materialize_bytes
+from xlsx_llm_parser import parse_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 
 
-def _make_xlsx(entries: dict[str, str]) -> Path:
+def _make_xlsx(entries: dict[str, str]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="merged-cells")
+    return buf.getvalue()
 
 
 class MergeCellTests(unittest.TestCase):
-    def _make_merged(self, merge_cells: str, sheet_rows: list[str]) -> Path:
+    def _make_merged(self, merge_cells: str, sheet_rows: list[str]) -> bytes:
         return _make_xlsx(
             {
                 "[Content_Types].xml": (
@@ -74,8 +73,8 @@ class MergeCellTests(unittest.TestCase):
                 "</row>",
             ],
         )
-        semantic = parse_xlsx(data, density="semantic")
-        structural = parse_xlsx(data, density="structural")
+        semantic = parse_xlsx(data, density="semantic").text
+        structural = parse_xlsx(data, density="structural").text
         self.assertIn('colspan="2"', semantic)
         self.assertIn('rowspan="2"', semantic)
         self.assertIn('colspan="2"', structural)
@@ -95,12 +94,28 @@ class MergeCellTests(unittest.TestCase):
                 "</row>",
             ],
         )
-        output = parse_xlsx(data, density="structural")
+        output = parse_xlsx(data, density="structural").text
         self.assertIn("Wide", output)
         self.assertNotIn("Hidden", output)
         self.assertIn("Next", output)
         # C1 should use col=C since B1 is shadow (col= expects A1:C1 range)
         self.assertIn('<grid ref="A1:C1">', output)
+
+    def test_rowspan_shadow_does_not_hide_following_cell_position(self) -> None:
+        data = self._make_merged(
+            '<mergeCells count="1"><mergeCell ref="A1:A2"/></mergeCells>',
+            [
+                '<row r="1"><c r="A1" t="inlineStr"><is><t>Merged</t></is></c></row>',
+                '<row r="2"><c r="A2"/><c r="B2" t="inlineStr"><is><t>Next</t></is></c></row>',
+            ],
+        )
+        output = parse_xlsx(data, density="structural").text
+        self.assertIn('column="B"', output)
+        grid = ET.fromstring(output).find("./sheet/grid")
+        self.assertEqual(grid.find("./tr[@number='1']/cell").attrib, {"rowspan": "2"})
+        self.assertEqual(grid.findtext("./tr[@number='1']/cell"), "Merged")
+        following = grid.find("./tr[@number='2']/cell")
+        self.assertEqual((following.get("column"), following.text), ("B", "Next"))
 
     def test_no_merge_cells_no_effect(self) -> None:
         data = self._make_merged(
@@ -109,7 +124,7 @@ class MergeCellTests(unittest.TestCase):
                 '<row r="1"><c r="A1" t="inlineStr"><is><t>Normal</t></is></c></row>',
             ],
         )
-        output = parse_xlsx(data, density="semantic")
+        output = parse_xlsx(data, density="semantic").text
         self.assertIn("Normal", output)
         self.assertNotIn("colspan", output)
 

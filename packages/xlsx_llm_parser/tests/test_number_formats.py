@@ -3,22 +3,20 @@
 import io
 import unittest
 import zipfile
-from pathlib import Path
 
-from test_support.api_v2_text import parse_xlsx
-from test_support.file_contract import materialize_bytes
+from xlsx_llm_parser import parse_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 
 
-def _make_xlsx(entries: dict[str, str]) -> Path:
+def _make_xlsx(entries: dict[str, str]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="number-formats")
+    return buf.getvalue()
 
 
 class DateDecodingTests(unittest.TestCase):
@@ -90,7 +88,7 @@ class DateDecodingTests(unittest.TestCase):
             cell_xfs=['<xf numFmtId="14" xfId="0"/>'],
             sheet_rows=['<row r="1"><c r="A1" s="0"><v>44927</v></c></row>'],
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         # 44927 = 2023-01-01
         self.assertIn("2023-01-01", output)
 
@@ -100,7 +98,7 @@ class DateDecodingTests(unittest.TestCase):
             cell_xfs=['<xf numFmtId="22" xfId="0"/>'],
             sheet_rows=['<row r="1"><c r="A1" s="0"><v>44927.5</v></c></row>'],
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn("2023-01-01", output)
 
     def test_date_1904_system(self) -> None:
@@ -110,7 +108,7 @@ class DateDecodingTests(unittest.TestCase):
             sheet_rows=['<row r="1"><c r="A1" s="0"><v>1</v></c></row>'],
             date_1904=True,
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn("1904-01-02", output)
 
     def test_plain_number_not_formatted(self) -> None:
@@ -119,7 +117,7 @@ class DateDecodingTests(unittest.TestCase):
             cell_xfs=['<xf numFmtId="0" xfId="0"/>'],
             sheet_rows=['<row r="1"><c r="A1" s="0"><v>123.456</v></c></row>'],
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn("123.456", output)
 
     def test_missing_styles_file(self) -> None:
@@ -162,7 +160,7 @@ class DateDecodingTests(unittest.TestCase):
                 ),
             },
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn("44927", output)
 
     def test_percentage_format(self) -> None:
@@ -171,7 +169,7 @@ class DateDecodingTests(unittest.TestCase):
             cell_xfs=['<xf numFmtId="9" xfId="0"/>'],
             sheet_rows=['<row r="1"><c r="A1" s="0"><v>0.125</v></c></row>'],
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn("12.5%", output)
 
     def test_custom_date_format(self) -> None:
@@ -181,7 +179,7 @@ class DateDecodingTests(unittest.TestCase):
             sheet_rows=['<row r="1"><c r="A1" s="0"><v>44927</v></c></row>'],
             custom_fmts=['<numFmt numFmtId="164" formatCode="yyyy-mm-dd"/>'],
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn("2023-01-01", output)
 
     def test_quoted_literal_not_detected_as_date(self) -> None:
@@ -191,7 +189,7 @@ class DateDecodingTests(unittest.TestCase):
             sheet_rows=['<row r="1"><c r="A1" s="0"><v>44927</v></c></row>'],
             custom_fmts=['<numFmt numFmtId="164" formatCode=\'0 "pcs"\'/>'],
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn("44927", output)
         self.assertNotIn("2023-01-01", output)
 
@@ -202,7 +200,7 @@ class DateDecodingTests(unittest.TestCase):
             sheet_rows=['<row r="1"><c r="A1" s="0"><v>44927</v></c></row>'],
             custom_fmts=['<numFmt numFmtId="165" formatCode="[DBNum1]0"/>'],
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn("44927", output)
         self.assertNotIn("2023-01-01", output)
 

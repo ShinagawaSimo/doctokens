@@ -3,12 +3,9 @@
 import io
 import unittest
 import zipfile
-from pathlib import Path
 
 from xlsx_llm_parser import open_xlsx
 from xlsx_llm_parser.api import _render_chart_resource
-
-from test_support.file_contract import materialize_bytes
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -16,29 +13,29 @@ NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 NS_RP = "http://schemas.openxmlformats.org/package/2006/relationships"
 
 
-def find_cells(source: Path, query: str, **kwargs: object) -> str:
+def find_cells(source: bytes, query: str, **kwargs: object) -> str:
     with open_xlsx(source) as workbook:
         return workbook.find_cells(query, **kwargs).text  # type: ignore[arg-type]
 
 
-def query_data(source: Path, **kwargs: object) -> str:
+def query_data(source: bytes, **kwargs: object) -> str:
     with open_xlsx(source) as workbook:
         return workbook.query_data(**kwargs).text  # type: ignore[arg-type]
 
 
-def get_resource(source: Path, kind: str, resource_id: str) -> str | bytes:
+def get_resource(source: bytes, kind: str, resource_id: str) -> str | bytes:
     with open_xlsx(source) as workbook:
         if kind == "image":
             return workbook.read_resource(kind, resource_id)
         return workbook.render_resource(kind, resource_id).text
 
 
-def _make_xlsx(entries: dict[str, str]) -> Path:
+def _make_xlsx(entries: dict[str, str]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="tools")
+    return buf.getvalue()
 
 
 class FindCellsTests(unittest.TestCase):

@@ -50,7 +50,7 @@ Post-processing order is shared-formula expansion, merged cells, spills, hyperli
   - `Cell.col: int`
 
 - **Parsing**
-  - 1-based column; renderer emits its letter if different from expected_col. Expected starts at grid minimum and advances by cell colspan; shadow cells also update it.
+  - 1-based column; renderer emits its letter if different from expected_col. Expected starts at grid minimum and advances by each emitted cell's colspan. A suppressed shadow cell does not advance it.
 
 ### `text`
 
@@ -124,6 +124,8 @@ Post-processing order is shared-formula expansion, merged cells, spills, hyperli
 
 - **Parsing**
   - See [rich values](rich-value.md).
+- **Diagnostics**
+  - A used `@vm` with no `xl/metadata.xml` yields `XLSX_CATALOG_PART_MISSING`; malformed optional rich metadata or an unusable binding follows [catalog diagnostics](../workbook/catalog-diagnostics.md).
 
 ### `cellControl`
 

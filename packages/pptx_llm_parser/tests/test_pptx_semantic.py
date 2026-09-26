@@ -6,13 +6,13 @@ import unittest
 from xml.etree import ElementTree as ET
 
 from _pptx_fixtures import rich_deck_pptx
-
-from test_support.api_v2_text import Density, parse_pptx
+from pptx_llm_parser import parse_pptx
+from pptx_llm_parser.core.enums import Density
 
 
 class SemanticRenderingTests(unittest.TestCase):
     def test_semantic_output_contract(self) -> None:
-        text = parse_pptx(rich_deck_pptx(with_geometry=True), density=Density.SEMANTIC)
+        text = parse_pptx(rich_deck_pptx(with_geometry=True), density=Density.SEMANTIC).text
         root = ET.fromstring(text)
         self.assertEqual(root.attrib["density"], "semantic")
         slide_one, slide_two = root.findall("slide")

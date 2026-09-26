@@ -23,6 +23,8 @@ Cell vm resolves valueMetadata records in xl/metadata.xml through futureMetadata
 
 - **Parsing**
   - Default rich.
+- **Diagnostics**
+  - Invalid `xl/richData/*.xml` part syntax yields `XLSX_CATALOG_XML_INVALID`; the saved cell value remains available. See [optional catalog diagnostics](../workbook/catalog-diagnostics.md).
 
 ### `fields`
 
@@ -65,6 +67,8 @@ Cell vm resolves valueMetadata records in xl/metadata.xml through futureMetadata
 
 - **Parsing**
   - First nonempty. DTX rich branch is selected only with nonempty display/fallback; inside it choose alt, display, fallback, cell text. Plain chooses image alt/display/[Image] or entity display/fallback/cell text.
+- **Diagnostics**
+  - A used `s:c/@vm` with no `xl/metadata.xml` yields `XLSX_CATALOG_PART_MISSING`. A readable binding that points outside the rich-value list yields `XLSX_CATALOG_REFERENCE_UNRESOLVED`. An invalid metadata or rich-value XML part yields `XLSX_CATALOG_XML_INVALID`. The cached `s:v` text remains available.
 
 ### `imagePart`
 
@@ -79,6 +83,8 @@ Cell vm resolves valueMetadata records in xl/metadata.xml through futureMetadata
 
 - **Parsing**
   - Use resolved internal target; no automatic resource-directory entry for this in-cell image.
+- **Diagnostics**
+  - A missing declared binary target yields `XLSX_CATALOG_PART_MISSING`. An invalid rich relationship part yields `XLSX_CATALOG_RELS_INVALID`; an unresolved used `r:id` in a readable relationship part yields `XLSX_CATALOG_REFERENCE_UNRESOLVED`. No image target is inferred on those paths.
 
 ### `imageUrl`
 
@@ -93,6 +99,8 @@ Cell vm resolves valueMetadata records in xl/metadata.xml through futureMetadata
 
 - **Parsing**
   - Copy external target; no download or XML URL attribute.
+- **Diagnostics**
+  - Invalid optional relationship XML yields `XLSX_CATALOG_RELS_INVALID`; an unresolved used ID in valid relationship XML yields `XLSX_CATALOG_REFERENCE_UNRESOLVED`.
 
 ### `alt`
 
@@ -190,7 +198,7 @@ Cell vm resolves valueMetadata records in xl/metadata.xml through futureMetadata
   - Declared optional str.
 
 - **Parsing**
-  - Not populated by _parse_value; catalog XML failures caught by _parse_part return None without a warning record.
+  - `_parse_value` does not assign this per-value IR member. Catalog failures are emitted as parse-report warnings, not stored in `RichCellValue.warning`.
 
 
 ## Source references

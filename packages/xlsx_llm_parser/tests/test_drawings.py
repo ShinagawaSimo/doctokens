@@ -3,16 +3,13 @@
 import io
 import unittest
 import zipfile
-from pathlib import Path
 
 from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.models import RelationshipRecord
 from ooxml_llm_core.package import PackageReader
+from xlsx_llm_parser import parse_xlsx
 from xlsx_llm_parser import parse_xlsx as parse_xlsx_result
 from xlsx_llm_parser.parsing.modules.worksheets.post import parse_drawings
-
-from test_support.api_v2_text import parse_xlsx
-from test_support.file_contract import materialize_bytes
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -23,15 +20,15 @@ NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 NS_C = "http://schemas.openxmlformats.org/drawingml/2006/chart"
 
 
-def _make_xlsx(entries: dict[str, str]) -> Path:
+def _make_xlsx(entries: dict[str, str]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="drawings")
+    return buf.getvalue()
 
 
-def _workbook_with_broken_part(rel_type: str, part_path: str, part_xml: str, extra: dict[str, str] | None = None) -> Path:
+def _workbook_with_broken_part(rel_type: str, part_path: str, part_xml: str, extra: dict[str, str] | None = None) -> bytes:
     entries = {
         "[Content_Types].xml": (
             f'<Types xmlns="{NS_CT}"><Default Extension="xml" ContentType="application/xml"/>'
@@ -172,7 +169,7 @@ class ImageTests(unittest.TestCase):
                 ),
             },
         )
-        output = parse_xlsx(data, density="structural")
+        output = parse_xlsx(data, density="structural").text
         self.assertIn('<img id="image1" ref="A1" />', output)
 
 
@@ -244,8 +241,8 @@ class ChartTests(unittest.TestCase):
             },
         )
 
-        plain = parse_xlsx(data, density="plain")
-        structural = parse_xlsx(data, density="structural")
+        plain = parse_xlsx(data, density="plain").text
+        structural = parse_xlsx(data, density="structural").text
 
         self.assertIn("[Chart: Sales]", plain)
         self.assertNotIn("<chart ", plain)
@@ -341,7 +338,7 @@ class PivotTableTests(unittest.TestCase):
                 ),
             },
         )
-        output = parse_xlsx(data, density="structural")
+        output = parse_xlsx(data, density="structural").text
         self.assertIn('<pivot-table id="pivot1"', output)
 
 

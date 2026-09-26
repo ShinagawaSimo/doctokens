@@ -3,13 +3,9 @@
 import io
 import unittest
 import zipfile
-from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from xlsx_llm_parser import ParseOptions, open_xlsx
-
-from test_support.api_v2_text import parse_xlsx
-from test_support.file_contract import materialize_bytes
+from xlsx_llm_parser import ParseOptions, open_xlsx, parse_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_R = "http://schemas.openxmlformats.org/package/2006/relationships"
@@ -17,13 +13,13 @@ NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 
 
-def _make_xlsx(entries: dict[str, str]) -> Path:
+def _make_xlsx(entries: dict[str, str]) -> bytes:
     """Write entries into a real XLSX input file."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             zf.writestr(name, data)
-    return materialize_bytes(buf.getvalue(), suffix=".xlsx", package="xlsx", name="minimal")
+    return buf.getvalue()
 
 
 def _content_types() -> str:
@@ -85,7 +81,7 @@ class MinimalParseTests(unittest.TestCase):
             },
         )
 
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn("Widget", output)
         self.assertIn("99", output)
         self.assertIn('<sheet name="Sheet1">', output)
@@ -126,7 +122,7 @@ class MinimalParseTests(unittest.TestCase):
                 "xl/worksheets/sheet1.xml": _sheet_xml([]),
             },
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn('<sheet name="Empty"', output)
         self.assertNotIn("<grid", output)
 
@@ -143,7 +139,7 @@ class MinimalParseTests(unittest.TestCase):
                 ),
             },
         )
-        output = parse_xlsx(data)
+        output = parse_xlsx(data).text
         self.assertIn("true", output)
         self.assertIn("#N/A", output)
 

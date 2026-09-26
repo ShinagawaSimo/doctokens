@@ -6,7 +6,7 @@ Interactive-filter metadata is read without executing filters.
 
 ## Processing
 
-Scan XML paths containing slicercache; first slicerCacheDefinition descendant, fallback root. Catalog XML failures caught by _parse_part are skipped without an added diagnostic.
+Scan XML paths containing slicercache; first slicerCacheDefinition descendant, fallback root.
 
 ## Fields
 
@@ -23,6 +23,8 @@ Scan XML paths containing slicercache; first slicerCacheDefinition descendant, f
 
 - **Parsing**
   - slicer1,slicer2,...
+- **Diagnostics**
+  - Malformed slicer-cache XML yields `XLSX_CATALOG_XML_INVALID` at the part and contributes no slicer record. Other caches remain available. See [optional catalog diagnostics](../workbook/catalog-diagnostics.md).
 
 ### `name`
 

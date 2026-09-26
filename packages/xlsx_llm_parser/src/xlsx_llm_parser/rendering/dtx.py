@@ -285,7 +285,6 @@ def _append_grid(
         expected_col = min_col
         for cell in row:
             if cell.get("shadow"):
-                expected_col = cell["col"] + cell.get("colspan", 1)
                 continue
             attrs = _cell_attrs(cell, expected_col, density, format_index, suppressed_styles)
             node = append(row_node, "cell", **attrs)

@@ -15,6 +15,7 @@ from ..slides.scanner import tx_body_text
 NOTES_SLIDE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide"
 COMMENTS_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments"
 COMMENT_AUTHORS_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors"
+PRESENTATION_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
 
 
 class NotesParser:
@@ -119,7 +120,7 @@ class CommentsParser:
                     )
                 )
                 continue
-            if root.tag.startswith("{http://schemas.openxmlformats.org/presentationml/2006/main}"):
+            if root.tag.startswith(f"{{{PRESENTATION_NS}}}"):
                 self._warnings.append(
                     ParseWarning(
                         code="LEGACY_COMMENTS_PARSED",
@@ -195,8 +196,13 @@ class CommentsParser:
 
     @staticmethod
     def _comment_text(cm: ET.Element) -> str:
-        parts = [element.text for element in cm.iter() if local_name(element.tag) == "t" and element.text is not None]
-        return "".join(parts)
+        if cm.tag == f"{{{PRESENTATION_NS}}}cm":
+            body = cm.find(f"{{{PRESENTATION_NS}}}text")
+            return "".join(body.itertext()) if body is not None else ""
+        body = next((child for child in cm if local_name(child.tag) == "text"), None)
+        if body is None:
+            return ""
+        return "".join(element.text or "" for element in body.iter() if local_name(element.tag) == "t")
 
     def _read_xml(self, part: str) -> ET.Element:
         return self._pkg.read_xml(part)

@@ -4,10 +4,6 @@
 
 Caches supply field names and source metadata without refreshing records.
 
-## Processing
-
-Read failures handled by _parse_part (ParseError/OSError/ValueError) yield empty catalog content without an added diagnostic.
-
 ## Fields
 
 ### `id`
@@ -23,6 +19,8 @@ Read failures handled by _parse_part (ParseError/OSError/ValueError) yield empty
 
 - **Parsing**
   - cache1,cache2,...; failed catalog read still leaves a record with ID/cacheId/empty fields.
+- **Diagnostics**
+  - A declared missing cache target yields `XLSX_CATALOG_PART_MISSING`; malformed cache XML yields `XLSX_CATALOG_XML_INVALID`. The ID-only cache record remains. See [optional catalog diagnostics](../workbook/catalog-diagnostics.md).
 
 ### `cacheId`
 
@@ -79,6 +77,8 @@ Read failures handled by _parse_part (ParseError/OSError/ValueError) yield empty
 
 - **Parsing**
   - Preserve order, empty default; join with comma.
+- **Diagnostics**
+  - Failed cache XML leaves this list empty and reports `XLSX_CATALOG_XML_INVALID` at the cache part.
 
 ### `refreshOnLoad`
 

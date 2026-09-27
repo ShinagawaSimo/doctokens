@@ -1,1 +1,20 @@
-<document density="structural" format="docx" pagination="last-rendered-hints" revision-view="final" schema="doctokens-xml" version="1.0"><body><page number="1" /><p>// w:numFmt = upperLetter</p><p>// lang=zh-CN</p><p>// UI name: A, B, C …</p><p>A.<tab />Item 1</p><p>B.<tab />Item 2</p><p>C.<tab />Item 3</p><p>D.<tab />Item 4</p><p>E.<tab />Item 5</p><p>F.<tab />Item 6</p><p>G.<tab />Item 7</p><p>H.<tab />Item 8</p><p>I.<tab />Item 9</p><p>J.<tab />Item 10</p><p>WWWW.<tab />Item 101</p><p>ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ.<tab />Item 780</p></body></document>
+<document density="structural" format="docx" pagination="last-rendered-hints" revision-view="final">
+  <body>
+    <page number="1" />
+    <p>// w:numFmt = upperLetter</p>
+    <p>// lang=zh-CN</p>
+    <p>// UI name: A, B, C …</p>
+    <p>A.<tab />Item 1</p>
+    <p>B.<tab />Item 2</p>
+    <p>C.<tab />Item 3</p>
+    <p>D.<tab />Item 4</p>
+    <p>E.<tab />Item 5</p>
+    <p>F.<tab />Item 6</p>
+    <p>G.<tab />Item 7</p>
+    <p>H.<tab />Item 8</p>
+    <p>I.<tab />Item 9</p>
+    <p>J.<tab />Item 10</p>
+    <p>WWWW.<tab />Item 101</p>
+    <p>ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ.<tab />Item 780</p>
+  </body>
+</document>

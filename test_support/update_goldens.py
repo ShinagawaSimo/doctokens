@@ -1,8 +1,9 @@
-"""Manually update full-text goldens for Office files in fixtures/.
+"""Manually update full-file goldens for Office fixtures.
 
 Run from the repository root:
     python test_support/update_goldens.py --only docx-list-decimal.docx
-Omit --only to update every fixture. Review the resulting golden changes.
+Omit --only to update every fixture. XML baselines are pretty-printed for review;
+the parser's returned text is left unchanged. Review the resulting golden changes.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import argparse
 import sys
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from xml.etree import ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 if __name__ == "__main__":
@@ -43,8 +45,20 @@ def golden_path(fixture: Path, density: str) -> Path:
     return SUPPORT / "golden" / fixture.suffix[1:].lower() / f"{fixture.stem}.{density}.{extension}"
 
 
-def parse_text(fixture: Path, density: str) -> str:
-    return PARSERS[fixture.suffix[1:].lower()](fixture, density=density).text
+def parse_text(fixture: Path, density: str, **options: str) -> str:
+    return PARSERS[fixture.suffix[1:].lower()](fixture, density=density, **options).text
+
+
+def format_xml(value: str) -> str:
+    """Pretty-print one DTX result for the human-reviewed XML golden."""
+    root = ET.fromstring(value)
+    ET.indent(root, space="  ")
+    return ET.tostring(root, encoding="unicode", short_empty_elements=True) + "\n"
+
+
+def golden_text(text: str, density: str) -> str:
+    """Format XML baselines while leaving plain output byte-for-byte unchanged."""
+    return format_xml(text) if density in {"structural", "semantic"} else text
 
 
 def _write_golden(target: Path, text: str) -> None:
@@ -76,7 +90,11 @@ def main(argv: list[str] | None = None) -> int:
         fixtures = [fixture for fixture in fixtures if selected.intersection((fixture.name, fixture.stem))]
 
     # Validate selectors and finish parsing before changing any baseline.
-    outputs = [(golden_path(fixture, density), parse_text(fixture, density)) for fixture in fixtures for density in DENSITIES]
+    outputs = [
+        (golden_path(fixture, density), golden_text(parse_text(fixture, density), density))
+        for fixture in fixtures
+        for density in DENSITIES
+    ]
     for target, text in outputs:
         _write_golden(target, text)
         print(f"UPDATED {target}")

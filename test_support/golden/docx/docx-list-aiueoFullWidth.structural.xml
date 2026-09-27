@@ -1,1 +1,22 @@
-<document density="structural" format="docx" pagination="last-rendered-hints" revision-view="final" schema="doctokens-xml" version="1.0"><body><page number="1" /><p>// w:numFmt = aiueoFullWidth</p><p>// lang=zh-CN</p><p>// UI name: ア, イ, ウ …</p><p>ア.<tab />Item 1</p><p>イ.<tab />Item 2</p><p>ウ.<tab />Item 3</p><p>エ.<tab />Item 4</p><p>オ.<tab />Item 5</p><p>カ.<tab />Item 6</p><p>キ.<tab />Item 7</p><p>ク.<tab />Item 8</p><p>ケ.<tab />Item 9</p><p>コ.<tab />Item 10</p><p>ケ.<tab />Item 101</p><p>モ.<tab />Item 1001</p><p>テ.<tab />Item 10001</p><p>ニ.<tab />Item 10050</p></body></document>
+<document density="structural" format="docx" pagination="last-rendered-hints" revision-view="final">
+  <body>
+    <page number="1" />
+    <p>// w:numFmt = aiueoFullWidth</p>
+    <p>// lang=zh-CN</p>
+    <p>// UI name: ア, イ, ウ …</p>
+    <p>ア.<tab />Item 1</p>
+    <p>イ.<tab />Item 2</p>
+    <p>ウ.<tab />Item 3</p>
+    <p>エ.<tab />Item 4</p>
+    <p>オ.<tab />Item 5</p>
+    <p>カ.<tab />Item 6</p>
+    <p>キ.<tab />Item 7</p>
+    <p>ク.<tab />Item 8</p>
+    <p>ケ.<tab />Item 9</p>
+    <p>コ.<tab />Item 10</p>
+    <p>ケ.<tab />Item 101</p>
+    <p>モ.<tab />Item 1001</p>
+    <p>テ.<tab />Item 10001</p>
+    <p>ニ.<tab />Item 10050</p>
+  </body>
+</document>

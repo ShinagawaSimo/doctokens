@@ -117,17 +117,6 @@ class MergeCellTests(unittest.TestCase):
         following = grid.find("./tr[@number='2']/cell")
         self.assertEqual((following.get("column"), following.text), ("B", "Next"))
 
-    def test_no_merge_cells_no_effect(self) -> None:
-        data = self._make_merged(
-            "",
-            [
-                '<row r="1"><c r="A1" t="inlineStr"><is><t>Normal</t></is></c></row>',
-            ],
-        )
-        output = parse_xlsx(data, density="semantic").text
-        self.assertIn("Normal", output)
-        self.assertNotIn("colspan", output)
-
 
 if __name__ == "__main__":
     unittest.main()

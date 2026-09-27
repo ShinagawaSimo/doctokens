@@ -53,28 +53,6 @@ def element(name: str, text: str | None = None, /, **attrs: object | None) -> ET
 - **Parsing**
   - Must match root element.
 
-### `schema`
-
-- **Output**
-  - Root `@schema="doctokens-xml"`.
-
-- **IR**
-  - Constant.
-
-- **Parsing**
-  - Required on main DTX.
-
-### `version`
-
-- **Output**
-  - Root `@version="1.0"`.
-
-- **IR**
-  - Constant.
-
-- **Parsing**
-  - Required on main DTX.
-
 ### `attributes`
 
 - **Output**

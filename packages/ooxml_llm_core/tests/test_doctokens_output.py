@@ -30,7 +30,7 @@ class DoctokensPlainTests(unittest.TestCase):
 
 class DoctokensXmlTests(unittest.TestCase):
     def test_direct_element_tree_is_well_formed_and_escapes_text(self) -> None:
-        root = element("document", density="structural", format="docx", schema="doctokens-xml", version="1.0")
+        root = element("document", density="structural", format="docx")
         paragraph = append(root, "p")
         text(paragraph, "A < B")
         output = serialize(root)
@@ -39,9 +39,9 @@ class DoctokensXmlTests(unittest.TestCase):
 
     def test_validator_rejects_wrong_root_and_format(self) -> None:
         with self.assertRaises(ValueError):
-            validate_xml('<wrong schema="doctokens-xml" version="1.0" format="docx"/>')
+            validate_xml('<wrong format="docx"/>')
         with self.assertRaises(ValueError):
-            validate_xml('<document schema="doctokens-xml" version="1.0" format="xlsx"/>')
+            validate_xml('<document format="xlsx"/>')
 
 
 if __name__ == "__main__":

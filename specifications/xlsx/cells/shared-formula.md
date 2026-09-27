@@ -41,8 +41,8 @@ A shared formula group is scoped to one worksheet. In structural and semantic ou
 - **IR**
   - `SharedFormulaMaster.formula: str`; `Cell.formula: str`.
 - **Parsing**
-  - For a dependent at `(column, row)`, subtract the master's coordinate and apply that offset to relative A1 components in the master formula. `$`-anchored components are unchanged. Double-quoted literals and matched sheet-qualified references are unchanged.
-  - Matching recognizes one to three uppercase column letters and decimal row digits; it excludes references embedded after an alphanumeric character and matches resembling function calls. Translation is lexical and does not evaluate formulas, clamp out-of-bounds results, or parse the full Excel formula language.
+  - For a dependent at `(column, row)`, subtract the master's coordinate and apply that offset to relative A1 components in the master formula. `$`-anchored components and double-quoted literals are unchanged. A sheet qualifier is preserved, including quotes and escaped apostrophes; its relative cell coordinates still move. For example, copying `Source!B2` down one row yields `Source!B3`; `'Source A'!$B2` becomes `'Source A'!$B3`.
+  - Matching recognizes one to three uppercase column letters and decimal row digits; it excludes references embedded in identifiers and matches resembling function calls, including whitespace before the opening parenthesis. Translation is lexical and does not evaluate formulas, clamp out-of-bounds results, or parse the full Excel formula language.
   - The source formula and cached value on a selected master are retained. A dependent receives no inferred formula when expansion fails.
 - **Diagnostics**
   - `SHARED_FORMULA_UNRESOLVED` when a selected dependent has no master or the sole valid master has empty formula text.

@@ -1,0 +1,9 @@
+<workbook density="semantic" format="xlsx">
+  <sheet name="Sheet1">
+    <grid ref="A1:A1">
+      <tr number="1">
+        <cell formula="SUM(B1:B2 C1:C2)">#NULL!</cell>
+      </tr>
+    </grid>
+  </sheet>
+</workbook>

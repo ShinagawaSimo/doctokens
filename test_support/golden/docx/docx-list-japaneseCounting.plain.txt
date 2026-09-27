@@ -1,4 +1,4 @@
-density=plain format=docx pagination=last-rendered-hints revision_view=final syntax=doctokens-plain/1.0
+density=plain format=docx pagination=last-rendered-hints revision_view=final
 <page=1>
 
 // w:numFmt = japaneseCounting

@@ -1,0 +1,16 @@
+<workbook density="semantic" format="xlsx">
+  <sheet name="Sheet1">
+    <grid ref="A1:B3">
+      <tr number="1">
+        <cell formula="SUM(B1:B3)">6</cell>
+        <cell>1</cell>
+      </tr>
+      <tr number="2">
+        <cell column="B">2</cell>
+      </tr>
+      <tr number="3">
+        <cell column="B">3</cell>
+      </tr>
+    </grid>
+  </sheet>
+</workbook>

@@ -64,7 +64,7 @@ Post-processing order is shared-formula expansion, merged cells, spills, hyperli
   - `Cell.text: str`
 
 - **Parsing**
-  - inlineStr → direct is/t only; s → shared-string lookup; b → true exactly for v="1", otherwise false; other types → v text. Missing/empty v → empty string. Invalid shared index → empty string without warning. Numeric t=n with nonempty text and s attribute uses display formatting.
+  - inlineStr → direct is/t only; s → shared-string lookup; b → `TRUE` exactly for v="1", otherwise `FALSE`, matching Excel's displayed logical values; other types → v text. Missing/empty v → empty string. Invalid shared index → empty string without warning. Numeric t=n with nonempty text and s attribute uses display formatting. Formula caches with t=b follow the same logical-value rule.
 
 - **Absence and defaults**
   - Empty string.

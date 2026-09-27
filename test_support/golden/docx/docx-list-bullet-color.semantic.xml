@@ -1,1 +1,14 @@
-<document density="semantic" format="docx" pagination="last-rendered-hints" revision-view="final" schema="doctokens-xml" version="1.0"><body><page number="1" /><p numbering="true"><color value="#C00000">●<tab /></color>Item 1</p><p numbering="true"><color value="#C00000">●<tab /></color>Item 2</p><p numbering="true"><color value="#C00000">●<tab /></color>Item 3</p></body></document>
+<document density="semantic" format="docx" pagination="last-rendered-hints" revision-view="final">
+  <body>
+    <page number="1" />
+    <p numbering="true">
+      <color value="#C00000">●<tab />
+      </color>Item 1</p>
+    <p numbering="true">
+      <color value="#C00000">●<tab />
+      </color>Item 2</p>
+    <p numbering="true">
+      <color value="#C00000">●<tab />
+      </color>Item 3</p>
+  </body>
+</document>

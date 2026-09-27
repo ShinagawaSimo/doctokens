@@ -15,7 +15,7 @@ _TITLE_PLACEHOLDERS = {"title", "ctrTitle"}
 
 def iter_dtx(presentation: ParsedPresentation, density: str) -> Iterator[str]:
     """Yield one well-formed DTX presentation directly from PPTX IR."""
-    root = element("presentation", density=density, format="pptx", schema="doctokens-xml", version="1.0")
+    root = element("presentation", density=density, format="pptx")
     smartarts = {item["id"]: item for item in presentation.smartarts}
     for slide in presentation.slides:
         _append_slide(root, slide, density, smartarts, presentation.ocr_results)

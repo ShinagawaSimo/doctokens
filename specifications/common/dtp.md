@@ -2,14 +2,14 @@
 
 [COMMON](README.md) / DTP serialization
 
-DTP 1.0 consists of a header followed by format-specific readable content.
+DTP 1.0 consists of a header followed by format-specific readable content. 
 
 ## Fields
 
 ### `header`
 
 - **Output**
-  - `density=plain format=xlsx syntax=doctokens-plain/1.0` followed by LF.
+  - `density=plain format=xlsx` followed by LF.
 
 - **IR**
   - Envelope fields.

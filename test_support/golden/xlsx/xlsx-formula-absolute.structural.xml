@@ -1,0 +1,19 @@
+<workbook density="structural" format="xlsx">
+  <sheet name="Sheet1">
+    <grid ref="A1:C3">
+      <tr number="1">
+        <cell formula="C1*$B$1">2</cell>
+        <cell>2</cell>
+        <cell>1</cell>
+      </tr>
+      <tr number="2">
+        <cell formula="C2*$B$1">4</cell>
+        <cell column="C">2</cell>
+      </tr>
+      <tr number="3">
+        <cell formula="C3*$B$1">6</cell>
+        <cell column="C">3</cell>
+      </tr>
+    </grid>
+  </sheet>
+</workbook>

@@ -21,16 +21,16 @@ _CELL_REF_RE = re.compile(r"(?P<col_abs>\$)?(?P<col>[A-Z]{1,3})(?P<row_abs>\$)?(
 # Full single-cell or range reference captured greedily inside a formula.
 # Matches optional sheet prefix, then two cell refs optionally separated by ":".
 # The lookbehind rejects identifiers (so "1E5" does not match "E5" as a cell)
-# and the lookahead rejects function names (so "LOG10(" is left untouched —
-# "[0-9]*\(" also blocks backtracking into "LOG1" of "LOG10(").
+# and the lookahead rejects function names and partial identifiers (so
+# "LOG10(" is left untouched, without backtracking into "LOG1").
 _A1_REF_RE = re.compile(
-    r"(?<![A-Za-z0-9])"
-    r"(?:(?P<sheet>[A-Za-z0-9_ ]+)!)?"
+    r"(?<![\w.])"
+    r"(?:(?P<sheet>'(?:[^']|'')+'|(?:\[[^\]]+\])?[\w.]+)!)?"
     r"(?P<start_col_abs>\$)?(?P<start_col>[A-Z]{1,3})(?P<start_row_abs>\$)?(?P<start_row>[0-9]+)"
     r"(?::"
     r"(?P<end_col_abs>\$)?(?P<end_col>[A-Z]{1,3})(?P<end_row_abs>\$)?(?P<end_row>[0-9]+)"
     r")?"
-    r"(?![0-9]*\()"
+    r"(?![\w.]|\s*\()"
 )
 
 
@@ -38,7 +38,7 @@ class _Ref(NamedTuple):
     """Parsed cell or range reference."""
 
     span: tuple[int, int]  # (start, end) positions in the formula string
-    sheet: str | None  # optional sheet qualifier (kept verbatim when present)
+    sheet: str | None  # optional sheet qualifier; relative coordinates still shift
     raw: str  # the original matched text
 
 
@@ -214,16 +214,14 @@ def _offset_formula(formula: str, dc: int, dr: int) -> str:
         parts.append(formula[pos : r.span[0]])
         pos = r.span[1]
 
-        if r.sheet is not None:
-            # Cross-sheet references are kept as-is
-            parts.append(r.raw)
-            continue
-
         # Re-parse this specific match to get offset groups
         ref_match = _A1_REF_RE.match(r.raw)
         if ref_match is None:
             parts.append(r.raw)
             continue
+
+        if r.sheet is not None:
+            parts.append(f"{r.sheet}!")
 
         start_col_abs = ref_match.group("start_col_abs") is not None
         start_row_abs = ref_match.group("start_row_abs") is not None

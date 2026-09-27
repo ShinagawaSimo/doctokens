@@ -1,0 +1,9 @@
+<workbook density="semantic" format="xlsx">
+  <sheet name="Sheet1">
+    <grid ref="A1:A1">
+      <tr number="1">
+        <cell formula="&quot;Fixed text&quot;">Fixed text</cell>
+      </tr>
+    </grid>
+  </sheet>
+</workbook>

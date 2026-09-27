@@ -1,0 +1,18 @@
+<workbook density="semantic" format="xlsx">
+  <sheet name="Sheet1">
+    <grid ref="A1:B3">
+      <tr number="1">
+        <cell formula="LOG10(B1)">1</cell>
+        <cell>10</cell>
+      </tr>
+      <tr number="2">
+        <cell formula="LOG10(B2)">2</cell>
+        <cell>100</cell>
+      </tr>
+      <tr number="3">
+        <cell formula="LOG10(B3)">3</cell>
+        <cell>1000</cell>
+      </tr>
+    </grid>
+  </sheet>
+</workbook>

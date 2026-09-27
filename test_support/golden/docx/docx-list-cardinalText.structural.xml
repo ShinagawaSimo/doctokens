@@ -1,1 +1,22 @@
-<document density="structural" format="docx" pagination="last-rendered-hints" revision-view="final" schema="doctokens-xml" version="1.0"><body><page number="1" /><p>// w:numFmt = cardinalText</p><p>// lang=zh-CN</p><p>// UI name: One, Two, Three …</p><p>One.<tab />Item 1</p><p>Two.<tab />Item 2</p><p>Three.<tab />Item 3</p><p>Four.<tab />Item 4</p><p>Five.<tab />Item 5</p><p>Six.<tab />Item 6</p><p>Seven.<tab />Item 7</p><p>Eight.<tab />Item 8</p><p>Nine.<tab />Item 9</p><p>Ten.<tab />Item 10</p><p>One Hundred One.<tab />Item 101</p><p>One Thousand One.<tab />Item 1001</p><p>Ten Thousand One.<tab />Item 10001</p><p>Ten Thousand Fifty.<tab />Item 10050</p></body></document>
+<document density="structural" format="docx" pagination="last-rendered-hints" revision-view="final">
+  <body>
+    <page number="1" />
+    <p>// w:numFmt = cardinalText</p>
+    <p>// lang=zh-CN</p>
+    <p>// UI name: One, Two, Three …</p>
+    <p>One.<tab />Item 1</p>
+    <p>Two.<tab />Item 2</p>
+    <p>Three.<tab />Item 3</p>
+    <p>Four.<tab />Item 4</p>
+    <p>Five.<tab />Item 5</p>
+    <p>Six.<tab />Item 6</p>
+    <p>Seven.<tab />Item 7</p>
+    <p>Eight.<tab />Item 8</p>
+    <p>Nine.<tab />Item 9</p>
+    <p>Ten.<tab />Item 10</p>
+    <p>One Hundred One.<tab />Item 101</p>
+    <p>One Thousand One.<tab />Item 1001</p>
+    <p>Ten Thousand One.<tab />Item 10001</p>
+    <p>Ten Thousand Fifty.<tab />Item 10050</p>
+  </body>
+</document>

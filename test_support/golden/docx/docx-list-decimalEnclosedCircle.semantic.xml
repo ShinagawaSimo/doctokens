@@ -1,1 +1,28 @@
-<document density="semantic" format="docx" pagination="last-rendered-hints" revision-view="final" schema="doctokens-xml" version="1.0"><body><page number="1" /><p>// w:numFmt = decimalEnclosedCircle</p><p>// lang=zh-CN</p><p>// UI name: ①, ②, ③ …</p><p numbering="true">①.<tab />Item 1</p><p numbering="true">②.<tab />Item 2</p><p numbering="true">③.<tab />Item 3</p><p numbering="true">④.<tab />Item 4</p><p numbering="true">⑤.<tab />Item 5</p><p numbering="true">⑥.<tab />Item 6</p><p numbering="true">⑦.<tab />Item 7</p><p numbering="true">⑧.<tab />Item 8</p><p numbering="true">⑨.<tab />Item 9</p><p numbering="true">⑩.<tab />Item 10</p><p numbering="true">⑪.<tab />Item 11</p><p numbering="true">⑫.<tab />Item 12</p><p numbering="true">⑬.<tab />Item 13</p><p numbering="true">⑭.<tab />Item 14</p><p numbering="true">⑮.<tab />Item 15</p><p numbering="true">⑯.<tab />Item 16</p><p numbering="true">⑰.<tab />Item 17</p><p numbering="true">⑱.<tab />Item 18</p><p numbering="true">⑲.<tab />Item 19</p><p numbering="true">⑳.<tab />Item 20</p></body></document>
+<document density="semantic" format="docx" pagination="last-rendered-hints" revision-view="final">
+  <body>
+    <page number="1" />
+    <p>// w:numFmt = decimalEnclosedCircle</p>
+    <p>// lang=zh-CN</p>
+    <p>// UI name: ①, ②, ③ …</p>
+    <p numbering="true">①.<tab />Item 1</p>
+    <p numbering="true">②.<tab />Item 2</p>
+    <p numbering="true">③.<tab />Item 3</p>
+    <p numbering="true">④.<tab />Item 4</p>
+    <p numbering="true">⑤.<tab />Item 5</p>
+    <p numbering="true">⑥.<tab />Item 6</p>
+    <p numbering="true">⑦.<tab />Item 7</p>
+    <p numbering="true">⑧.<tab />Item 8</p>
+    <p numbering="true">⑨.<tab />Item 9</p>
+    <p numbering="true">⑩.<tab />Item 10</p>
+    <p numbering="true">⑪.<tab />Item 11</p>
+    <p numbering="true">⑫.<tab />Item 12</p>
+    <p numbering="true">⑬.<tab />Item 13</p>
+    <p numbering="true">⑭.<tab />Item 14</p>
+    <p numbering="true">⑮.<tab />Item 15</p>
+    <p numbering="true">⑯.<tab />Item 16</p>
+    <p numbering="true">⑰.<tab />Item 17</p>
+    <p numbering="true">⑱.<tab />Item 18</p>
+    <p numbering="true">⑲.<tab />Item 19</p>
+    <p numbering="true">⑳.<tab />Item 20</p>
+  </body>
+</document>

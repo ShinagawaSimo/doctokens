@@ -1,1 +1,20 @@
-<document density="semantic" format="docx" pagination="last-rendered-hints" revision-view="final" schema="doctokens-xml" version="1.0"><body><page number="1" /><p>// w:numFmt = upperLetter</p><p>// lang=zh-CN</p><p>// UI name: A, B, C …</p><p numbering="true">A.<tab />Item 1</p><p numbering="true">B.<tab />Item 2</p><p numbering="true">C.<tab />Item 3</p><p numbering="true">D.<tab />Item 4</p><p numbering="true">E.<tab />Item 5</p><p numbering="true">F.<tab />Item 6</p><p numbering="true">G.<tab />Item 7</p><p numbering="true">H.<tab />Item 8</p><p numbering="true">I.<tab />Item 9</p><p numbering="true">J.<tab />Item 10</p><p numbering="true">WWWW.<tab />Item 101</p><p numbering="true">ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ.<tab />Item 780</p></body></document>
+<document density="semantic" format="docx" pagination="last-rendered-hints" revision-view="final">
+  <body>
+    <page number="1" />
+    <p>// w:numFmt = upperLetter</p>
+    <p>// lang=zh-CN</p>
+    <p>// UI name: A, B, C …</p>
+    <p numbering="true">A.<tab />Item 1</p>
+    <p numbering="true">B.<tab />Item 2</p>
+    <p numbering="true">C.<tab />Item 3</p>
+    <p numbering="true">D.<tab />Item 4</p>
+    <p numbering="true">E.<tab />Item 5</p>
+    <p numbering="true">F.<tab />Item 6</p>
+    <p numbering="true">G.<tab />Item 7</p>
+    <p numbering="true">H.<tab />Item 8</p>
+    <p numbering="true">I.<tab />Item 9</p>
+    <p numbering="true">J.<tab />Item 10</p>
+    <p numbering="true">WWWW.<tab />Item 101</p>
+    <p numbering="true">ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ.<tab />Item 780</p>
+  </body>
+</document>

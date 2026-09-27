@@ -66,7 +66,7 @@ Discover XML bags in styles.xml and paths containing featurepropertybag; use bag
   - `str`
 
 - **Parsing**
-  - Exact true → true; false → false; empty or other → empty. Does not toggle or evaluate control.
+  - Saved display text `TRUE` → state `true`; `FALSE` → state `false`; empty or other → state `empty`. The value retains the uppercase display text. Does not toggle or evaluate control.
 
 
 ## Source references

@@ -18,7 +18,7 @@ _STYLE_RANGE_MIN_CELLS = 6
 
 def iter_dtx(parsed_workbook: ParsedWorkbook, density: str) -> Iterator[str]:
     """Yield one DTX workbook directly from parsed worksheet IR."""
-    root = element("workbook", density=density, format="xlsx", schema="doctokens-xml", version="1.0")
+    root = element("workbook", density=density, format="xlsx")
     _append_workbook_metadata(root, parsed_workbook, density)
     for sheet_index, sheet in enumerate(parsed_workbook["sheets"]):
         _append_sheet(root, sheet, parsed_workbook, density, emit_globals=sheet_index == 0)
@@ -32,7 +32,7 @@ def render_sheet_dtx(
     rows: list[list[Cell]] | None = None,
 ) -> str:
     """Render a selected sheet or range as an independent DTX workbook."""
-    root = element("workbook", density=density, format="xlsx", schema="doctokens-xml", version="1.0")
+    root = element("workbook", density=density, format="xlsx")
     selected = cast(SheetInfo, dict(sheet))
     if rows is not None:
         selected["rows"] = rows

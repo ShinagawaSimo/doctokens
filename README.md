@@ -200,10 +200,10 @@ with open_pptx("slides.pptx") as presentation:
 | structural | `doctokens-xml/1.0`，`application/xml` | 读取段落、表格、对象引用、工作表结构和公式 |
 | semantic | `doctokens-xml/1.0`，`application/xml` | 在结构上增加已解析的强调、颜色、状态和对象关系 |
 
-DTX 的根节点分别为 `<document>`、`<presentation>`、`<workbook>`，是闭合且可由 XML 解析器读取的文档。以下示例为便于阅读增加了缩进：
+DTX 的根节点分别为 `<document>`、`<presentation>`、`<workbook>`，是闭合且可由 XML 解析器读取的文档。语法版本保留在 `ParseResult.syntax_version`，正文不重复 schema/version/syntax。以下示例为便于阅读增加了缩进：
 
 ```xml
-<document density="semantic" format="docx" pagination="last-rendered-hints" revision-view="final" schema="doctokens-xml" version="1.0">
+<document density="semantic" format="docx" pagination="last-rendered-hints" revision-view="final">
   <body><page number="1" /><p>Hello <b>world</b>.</p></body>
 </document>
 ```
@@ -211,7 +211,7 @@ DTX 的根节点分别为 `<document>`、`<presentation>`、`<workbook>`，是�
 对应的 plain 内容：
 
 ```text
-density=plain format=docx pagination=last-rendered-hints revision_view=final syntax=doctokens-plain/1.0
+density=plain format=docx pagination=last-rendered-hints revision_view=final
 <page=1>
 
 Hello world.
@@ -220,13 +220,13 @@ Hello world.
 PPTX 和 XLSX 的结构示例：
 
 ```xml
-<presentation density="structural" format="pptx" schema="doctokens-xml" version="1.0">
+<presentation density="structural" format="pptx">
   <slide number="1"><title placeholder="title">Quarterly report</title></slide>
 </presentation>
 ```
 
 ```xml
-<workbook density="structural" format="xlsx" schema="doctokens-xml" version="1.0">
+<workbook density="structural" format="xlsx">
   <sheet name="Sales"><grid ref="A1:B1"><tr number="1"><cell>Total</cell><cell>42</cell></tr></grid></sheet>
 </workbook>
 ```
@@ -319,4 +319,4 @@ python -m pytest -q
 python test_support/update_goldens.py --only docx-list-decimal.docx
 ```
 
-脚本支持 DOCX、PPTX、XLSX，按目录发现文件；省略 `--only` 更新全部文件。生成后人工审查输出。真实文件回归统一放在 `tests/test_file_goldens.py`，只做全文比较，缺少 golden 就报错；测试不会更新基线，也不受 `UPDATE_GOLDEN` 影响。
+脚本支持 DOCX、PPTX、XLSX，按目录发现文件并更新完整文件 golden；省略 `--only` 更新全部文件。生成后人工审查输出。真实文件回归统一放在 `tests/test_file_goldens.py`，只做全文比较；XML golden 为便于阅读会缩进，测试对当前 XML 结果应用同一格式化后比较，解析器自身仍返回紧凑 XML。范围、资源、搜索和查询 API 只有在专用文件中另有明确用途时才保存对应 API golden。缺少 golden 就报错；测试不会更新基线，也不受 `UPDATE_GOLDEN` 影响。

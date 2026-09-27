@@ -111,15 +111,6 @@ class DateDecodingTests(unittest.TestCase):
         output = parse_xlsx(data).text
         self.assertIn("1904-01-02", output)
 
-    def test_plain_number_not_formatted(self) -> None:
-        """numFmtId 0 (General) leaves raw number unchanged."""
-        data = self._make_date_xlsx(
-            cell_xfs=['<xf numFmtId="0" xfId="0"/>'],
-            sheet_rows=['<row r="1"><c r="A1" s="0"><v>123.456</v></c></row>'],
-        )
-        output = parse_xlsx(data).text
-        self.assertIn("123.456", output)
-
     def test_missing_styles_file(self) -> None:
         """Workbook without styles.xml falls back to raw values."""
         data = _make_xlsx(

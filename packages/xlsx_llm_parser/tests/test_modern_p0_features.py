@@ -164,7 +164,7 @@ class ModernP0FeatureTests(unittest.TestCase):
                         [("XLSX_CATALOG_XML_INVALID", part)],
                     )
                     self.assertIn(first_text, result.text)
-                    self.assertIn("true", result.text)
+                    self.assertIn("[Checkbox true]" if density == "plain" and control else "TRUE", result.text)
                 root = ET.fromstring(parse_xlsx_result(source, density="semantic").text)
                 checkbox = root.find(".//cell[@control]")
                 self.assertEqual(checkbox.get("control") if checkbox is not None else None, control)
@@ -218,7 +218,7 @@ class ModernP0FeatureTests(unittest.TestCase):
                 entries.pop(part)
                 result = parse_xlsx_result(_make_xlsx(entries), density="semantic")
                 self.assertIn((code, locator), [(warning.code, warning.locator) for warning in result.report.warnings])
-                self.assertIn("true", result.text)
+                self.assertIn("TRUE", result.text)
         missing_metadata = dict(base)
         missing_metadata.pop("xl/metadata.xml")
         missing_metadata["xl/worksheets/sheet1.xml"] = missing_metadata["xl/worksheets/sheet1.xml"].replace(

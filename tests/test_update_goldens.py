@@ -7,6 +7,8 @@ import pytest
 
 from test_support import update_goldens as updater
 
+ROOT_TAGS = {"docx": "document", "pptx": "presentation", "xlsx": "workbook"}
+
 
 @pytest.fixture
 def fixtures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[Path]:
@@ -19,14 +21,16 @@ def fixtures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[Path]:
         (path.parent / f"~${path.name}").touch()
         (path.parent / "asset.png").touch()
         paths.append(path)
-    monkeypatch.setattr(
-        updater,
-        "PARSERS",
-        {
-            format_name: lambda source, *, density: SimpleNamespace(text=f"{source.name}: {density}\r\n中文 & < >\n")
-            for format_name in updater.PARSERS
-        },
-    )
+
+    def stub_parser(format_name: str):
+        def parse(source: Path, *, density: str) -> SimpleNamespace:
+            if density == "plain":
+                return SimpleNamespace(text=f"{source.name}: {density}\r\n中文 & < >\n")
+            return SimpleNamespace(text=f'<{ROOT_TAGS[format_name]} format="{format_name}"/>')
+
+        return parse
+
+    monkeypatch.setattr(updater, "PARSERS", {format_name: stub_parser(format_name) for format_name in updater.PARSERS})
     return paths
 
 
@@ -39,9 +43,20 @@ def test_selected_update_preserves_other_baselines(fixtures: list[Path]) -> None
     assert updater.main(["--only", fixtures[1].name]) == 0
     for fixture in fixtures:
         for density in updater.DENSITIES:
-            expected = f"{fixture.name}: {density}\r\n中文 & < >\n".encode() if fixture == fixtures[1] else b"reviewed"
+            raw = (
+                f'<{ROOT_TAGS[fixture.suffix[1:]]} format="{fixture.suffix[1:]}"/>'
+                if density != "plain"
+                else f"{fixture.name}: {density}\r\n中文 & < >\n"
+            )
+            expected = updater.golden_text(raw, density).encode()
+            expected = expected if fixture == fixtures[1] else b"reviewed"
             assert updater.golden_path(fixture, density).read_bytes() == expected
     assert not list(updater.SUPPORT.rglob("*.tmp"))
+
+
+def test_xml_goldens_are_pretty_printed_without_changing_inline_text() -> None:
+    source = '<document format="docx"><p>Before<b>bold</b>After</p></document>'
+    assert updater.format_xml(source) == '<document format="docx">\n  <p>Before<b>bold</b>After</p>\n</document>\n'
 
 
 def test_unknown_selector_changes_nothing(fixtures: list[Path]) -> None:
@@ -63,7 +78,7 @@ def test_parse_failure_does_not_partially_update(fixtures: list[Path], monkeypat
     def parse(source: Path, density: str) -> str:
         if density == "plain":
             raise ValueError("parse failed")
-        return "changed"
+        return '<document format="docx"/>'
 
     monkeypatch.setattr(updater, "parse_text", parse)
     with pytest.raises(ValueError, match="parse failed"):

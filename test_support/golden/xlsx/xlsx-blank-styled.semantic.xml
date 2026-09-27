@@ -1,0 +1,11 @@
+<workbook density="semantic" format="xlsx">
+  <sheet name="Sheet1">
+    <grid ref="A1:C1">
+      <tr number="1">
+        <cell>Before</cell>
+        <cell fill="#FFFF00" />
+        <cell>After</cell>
+      </tr>
+    </grid>
+  </sheet>
+</workbook>

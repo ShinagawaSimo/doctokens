@@ -1,1 +1,8 @@
-<document density="structural" format="docx" pagination="last-rendered-hints" revision-view="final" schema="doctokens-xml" version="1.0"><body><page number="1" /><p>Item 1</p><p>Item 2</p><p>Item 3</p></body></document>
+<document density="structural" format="docx" pagination="last-rendered-hints" revision-view="final">
+  <body>
+    <page number="1" />
+    <p>Item 1</p>
+    <p>Item 2</p>
+    <p>Item 3</p>
+  </body>
+</document>

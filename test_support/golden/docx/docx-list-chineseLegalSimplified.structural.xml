@@ -1,1 +1,22 @@
-<document density="structural" format="docx" pagination="last-rendered-hints" revision-view="final" schema="doctokens-xml" version="1.0"><body><page number="1" /><p>// w:numFmt = chineseLegalSimplified</p><p>// lang=zh-CN</p><p>// UI name: 壹, 贰, 叁 …</p><p>壹.<tab />Item 1</p><p>贰.<tab />Item 2</p><p>叁.<tab />Item 3</p><p>肆.<tab />Item 4</p><p>伍.<tab />Item 5</p><p>陆.<tab />Item 6</p><p>柒.<tab />Item 7</p><p>捌.<tab />Item 8</p><p>玖.<tab />Item 9</p><p>壹拾.<tab />Item 10</p><p>壹佰零壹.<tab />Item 101</p><p>壹仟零壹.<tab />Item 1001</p><p>壹萬零壹.<tab />Item 10001</p><p>壹萬零伍拾.<tab />Item 10050</p></body></document>
+<document density="structural" format="docx" pagination="last-rendered-hints" revision-view="final">
+  <body>
+    <page number="1" />
+    <p>// w:numFmt = chineseLegalSimplified</p>
+    <p>// lang=zh-CN</p>
+    <p>// UI name: 壹, 贰, 叁 …</p>
+    <p>壹.<tab />Item 1</p>
+    <p>贰.<tab />Item 2</p>
+    <p>叁.<tab />Item 3</p>
+    <p>肆.<tab />Item 4</p>
+    <p>伍.<tab />Item 5</p>
+    <p>陆.<tab />Item 6</p>
+    <p>柒.<tab />Item 7</p>
+    <p>捌.<tab />Item 8</p>
+    <p>玖.<tab />Item 9</p>
+    <p>壹拾.<tab />Item 10</p>
+    <p>壹佰零壹.<tab />Item 101</p>
+    <p>壹仟零壹.<tab />Item 1001</p>
+    <p>壹萬零壹.<tab />Item 10001</p>
+    <p>壹萬零伍拾.<tab />Item 10050</p>
+  </body>
+</document>

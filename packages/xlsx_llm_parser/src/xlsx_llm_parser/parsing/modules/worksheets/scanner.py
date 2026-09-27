@@ -628,7 +628,7 @@ def _parse_cell(
             cell["cellControl"] = control_data
             if control.get("kind") == "checkbox":
                 control_data["value"] = text
-                control_data["state"] = {"true": "true", "false": "false", "": "empty"}.get(text, "empty")
+                control_data["state"] = {"TRUE": "true", "FALSE": "false", "": "empty"}.get(text, "empty")
     if formula is not None:
         cell["formula"] = formula
     cell.update(formula_meta)
@@ -668,7 +668,7 @@ def _cell_text(
         return "", value_elem
 
     if cell_type == "b":
-        return ("true" if value_elem.text == "1" else "false"), value_elem
+        return ("TRUE" if value_elem.text == "1" else "FALSE"), value_elem
     return value_elem.text, value_elem
 
 

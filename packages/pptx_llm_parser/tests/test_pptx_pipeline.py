@@ -38,7 +38,7 @@ def _two_slide_deck() -> bytes:
 class PlainPipelineTests(unittest.TestCase):
     def test_plain_starts_with_density_marker(self) -> None:
         text = parse_pptx(_two_slide_deck(), density=Density.PLAIN).text
-        self.assertEqual(text.splitlines()[0], "density=plain format=pptx syntax=doctokens-plain/1.0")
+        self.assertEqual(text.splitlines()[0], "density=plain format=pptx")
 
     def test_plain_separates_slides(self) -> None:
         text = parse_pptx(_two_slide_deck(), density=Density.PLAIN).text

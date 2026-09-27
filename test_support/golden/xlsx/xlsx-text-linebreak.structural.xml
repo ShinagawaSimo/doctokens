@@ -1,0 +1,10 @@
+<workbook density="structural" format="xlsx">
+  <sheet name="Sheet1">
+    <grid ref="A1:A1">
+      <tr number="1">
+        <cell>Before
+After</cell>
+      </tr>
+    </grid>
+  </sheet>
+</workbook>

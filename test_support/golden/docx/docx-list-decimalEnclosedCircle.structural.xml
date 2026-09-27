@@ -1,1 +1,28 @@
-<document density="structural" format="docx" pagination="last-rendered-hints" revision-view="final" schema="doctokens-xml" version="1.0"><body><page number="1" /><p>// w:numFmt = decimalEnclosedCircle</p><p>// lang=zh-CN</p><p>// UI name: ①, ②, ③ …</p><p>①.<tab />Item 1</p><p>②.<tab />Item 2</p><p>③.<tab />Item 3</p><p>④.<tab />Item 4</p><p>⑤.<tab />Item 5</p><p>⑥.<tab />Item 6</p><p>⑦.<tab />Item 7</p><p>⑧.<tab />Item 8</p><p>⑨.<tab />Item 9</p><p>⑩.<tab />Item 10</p><p>⑪.<tab />Item 11</p><p>⑫.<tab />Item 12</p><p>⑬.<tab />Item 13</p><p>⑭.<tab />Item 14</p><p>⑮.<tab />Item 15</p><p>⑯.<tab />Item 16</p><p>⑰.<tab />Item 17</p><p>⑱.<tab />Item 18</p><p>⑲.<tab />Item 19</p><p>⑳.<tab />Item 20</p></body></document>
+<document density="structural" format="docx" pagination="last-rendered-hints" revision-view="final">
+  <body>
+    <page number="1" />
+    <p>// w:numFmt = decimalEnclosedCircle</p>
+    <p>// lang=zh-CN</p>
+    <p>// UI name: ①, ②, ③ …</p>
+    <p>①.<tab />Item 1</p>
+    <p>②.<tab />Item 2</p>
+    <p>③.<tab />Item 3</p>
+    <p>④.<tab />Item 4</p>
+    <p>⑤.<tab />Item 5</p>
+    <p>⑥.<tab />Item 6</p>
+    <p>⑦.<tab />Item 7</p>
+    <p>⑧.<tab />Item 8</p>
+    <p>⑨.<tab />Item 9</p>
+    <p>⑩.<tab />Item 10</p>
+    <p>⑪.<tab />Item 11</p>
+    <p>⑫.<tab />Item 12</p>
+    <p>⑬.<tab />Item 13</p>
+    <p>⑭.<tab />Item 14</p>
+    <p>⑮.<tab />Item 15</p>
+    <p>⑯.<tab />Item 16</p>
+    <p>⑰.<tab />Item 17</p>
+    <p>⑱.<tab />Item 18</p>
+    <p>⑲.<tab />Item 19</p>
+    <p>⑳.<tab />Item 20</p>
+  </body>
+</document>

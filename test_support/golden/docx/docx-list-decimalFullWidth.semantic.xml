@@ -1,1 +1,22 @@
-<document density="semantic" format="docx" pagination="last-rendered-hints" revision-view="final" schema="doctokens-xml" version="1.0"><body><page number="1" /><p>// w:numFmt = decimalFullWidth</p><p>// lang=zh-CN</p><p>// UI name: 全角 …</p><p numbering="true">１.<tab />Item 1</p><p numbering="true">２.<tab />Item 2</p><p numbering="true">３.<tab />Item 3</p><p numbering="true">４.<tab />Item 4</p><p numbering="true">５.<tab />Item 5</p><p numbering="true">６.<tab />Item 6</p><p numbering="true">７.<tab />Item 7</p><p numbering="true">８.<tab />Item 8</p><p numbering="true">９.<tab />Item 9</p><p numbering="true">１０.<tab />Item 10</p><p numbering="true">１０１.<tab />Item 101</p><p numbering="true">１００１.<tab />Item 1001</p><p numbering="true">１０００１.<tab />Item 10001</p><p numbering="true">１００５０.<tab />Item 10050</p></body></document>
+<document density="semantic" format="docx" pagination="last-rendered-hints" revision-view="final">
+  <body>
+    <page number="1" />
+    <p>// w:numFmt = decimalFullWidth</p>
+    <p>// lang=zh-CN</p>
+    <p>// UI name: 全角 …</p>
+    <p numbering="true">１.<tab />Item 1</p>
+    <p numbering="true">２.<tab />Item 2</p>
+    <p numbering="true">３.<tab />Item 3</p>
+    <p numbering="true">４.<tab />Item 4</p>
+    <p numbering="true">５.<tab />Item 5</p>
+    <p numbering="true">６.<tab />Item 6</p>
+    <p numbering="true">７.<tab />Item 7</p>
+    <p numbering="true">８.<tab />Item 8</p>
+    <p numbering="true">９.<tab />Item 9</p>
+    <p numbering="true">１０.<tab />Item 10</p>
+    <p numbering="true">１０１.<tab />Item 101</p>
+    <p numbering="true">１００１.<tab />Item 1001</p>
+    <p numbering="true">１０００１.<tab />Item 10001</p>
+    <p numbering="true">１００５０.<tab />Item 10050</p>
+  </body>
+</document>

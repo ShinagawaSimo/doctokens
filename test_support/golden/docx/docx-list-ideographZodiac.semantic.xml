@@ -1,1 +1,20 @@
-<document density="semantic" format="docx" pagination="last-rendered-hints" revision-view="final" schema="doctokens-xml" version="1.0"><body><page number="1" /><p>// w:numFmt = ideographZodiac</p><p>// lang=zh-CN</p><p>// UI name: 子, 丑, 寅 …</p><p numbering="true">子.<tab />Item 1</p><p numbering="true">丑.<tab />Item 2</p><p numbering="true">寅.<tab />Item 3</p><p numbering="true">卯.<tab />Item 4</p><p numbering="true">辰.<tab />Item 5</p><p numbering="true">巳.<tab />Item 6</p><p numbering="true">午.<tab />Item 7</p><p numbering="true">未.<tab />Item 8</p><p numbering="true">申.<tab />Item 9</p><p numbering="true">酉.<tab />Item 10</p><p numbering="true">戌.<tab />Item 11</p><p numbering="true">亥.<tab />Item 12</p></body></document>
+<document density="semantic" format="docx" pagination="last-rendered-hints" revision-view="final">
+  <body>
+    <page number="1" />
+    <p>// w:numFmt = ideographZodiac</p>
+    <p>// lang=zh-CN</p>
+    <p>// UI name: 子, 丑, 寅 …</p>
+    <p numbering="true">子.<tab />Item 1</p>
+    <p numbering="true">丑.<tab />Item 2</p>
+    <p numbering="true">寅.<tab />Item 3</p>
+    <p numbering="true">卯.<tab />Item 4</p>
+    <p numbering="true">辰.<tab />Item 5</p>
+    <p numbering="true">巳.<tab />Item 6</p>
+    <p numbering="true">午.<tab />Item 7</p>
+    <p numbering="true">未.<tab />Item 8</p>
+    <p numbering="true">申.<tab />Item 9</p>
+    <p numbering="true">酉.<tab />Item 10</p>
+    <p numbering="true">戌.<tab />Item 11</p>
+    <p numbering="true">亥.<tab />Item 12</p>
+  </body>
+</document>

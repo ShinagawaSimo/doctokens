@@ -1,4 +1,4 @@
-"""Versioned plain-text envelope and DOCX page-marker helpers."""
+"""Plain-text envelope and DOCX page-marker helpers."""
 
 from __future__ import annotations
 
@@ -32,7 +32,6 @@ def render_plain(
     fields = {
         "density": "plain",
         "format": format_name,
-        "syntax": "doctokens-plain/1.0",
     }
     if pagination is not None:
         fields["pagination"] = pagination
@@ -52,8 +51,6 @@ def validate_plain(text: str, *, format_name: str) -> None:
         raise ValueError("DTP header must declare density=plain")
     if fields.get("format") != format_name:
         raise ValueError("DTP header format does not match output format")
-    if fields.get("syntax") != "doctokens-plain/1.0":
-        raise ValueError("DTP header must declare doctokens-plain/1.0")
 
     previous_page = 0
     for line in lines[1:]:

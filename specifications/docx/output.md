@@ -7,7 +7,7 @@ DOCX output uses the common [DTX](../common/dtx.md) and [DTP](../common/dtp.md) 
 ## Synopsis
 
 ```xml
-<document density="semantic" format="docx" pagination="last-rendered-hints" revision-view="final" schema="doctokens-xml" version="1.0"><body><page number="1"/><p>Hello <b>world</b>.</p></body></document>
+<document density="semantic" format="docx" pagination="last-rendered-hints" revision-view="final"><body><page number="1"/><p>Hello <b>world</b>.</p></body></document>
 ```
 
 ## Processing

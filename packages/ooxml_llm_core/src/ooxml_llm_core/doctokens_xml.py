@@ -48,8 +48,6 @@ def validate_xml(value: str) -> None:
     expected_format = {"document": "docx", "presentation": "pptx", "workbook": "xlsx"}[root.tag]
     if root.get("format") != expected_format:
         raise ValueError(f"DTX root {root.tag!r} must declare format={expected_format!r}")
-    if root.get("schema") != "doctokens-xml" or root.get("version") != "1.0":
-        raise ValueError("DTX root must declare doctokens-xml version 1.0")
 
 
 def _attribute_value(value: object) -> str:

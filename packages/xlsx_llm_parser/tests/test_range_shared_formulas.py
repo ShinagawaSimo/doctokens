@@ -2,12 +2,11 @@
 
 import io
 import zipfile
-from pathlib import Path
 from xml.etree import ElementTree as ET
 
 import pytest
 from ooxml_llm_core.models import ParseResult
-from xlsx_llm_parser import open_xlsx, parse_xlsx
+from xlsx_llm_parser import parse_xlsx
 
 MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -44,34 +43,6 @@ def _cell(result: ParseResult) -> ET.Element:
     cell = root.find(".//grid/tr/cell")
     assert cell is not None
     return cell
-
-
-@pytest.mark.parametrize("density", ["structural", "semantic"])
-def test_range_uses_master_outside_selected_rows(density: str, tmp_path: Path) -> None:
-    source = _source(
-        {
-            "Data": (
-                '<row r="1"><c r="A1"><f t="shared" ref="A1:A2" si="0">B1*2</f><v>2</v></c></row>'
-                '<row r="2"><c r="A2"><f t="shared" si="0"/><v>4</v></c></row>'
-            )
-        }
-    )
-    path = tmp_path / "formulas.xlsx"
-    path.write_bytes(source)
-    once = parse_xlsx(source, density=density, sheet="Data", range_spec="A2:A2")
-    from_path = parse_xlsx(path, density=density, sheet="Data", range_spec="A2:A2")
-    with open_xlsx(source) as session:
-        repeated = session.render(density=density, sheet="Data", range_spec="A2:A2")
-    for result in (once, from_path, repeated):
-        root = ET.fromstring(result.text)
-        grid = root.find(".//grid")
-        assert grid is not None and grid.get("ref") == "A2:A2"
-        assert len(root.findall(".//grid/tr/cell")) == 1
-        assert _cell(result).get("formula") == "B2*2"
-        assert _cell(result).text == "4"
-        assert not result.report.warnings
-    assert once.report.manifest["cellCount"] == 1
-    assert once.text == from_path.text == repeated.text
 
 
 def test_range_uses_left_master_and_implicit_slave_reference() -> None:

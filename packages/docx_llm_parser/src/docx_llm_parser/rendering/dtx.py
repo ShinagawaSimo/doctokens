@@ -35,8 +35,6 @@ def iter_dtx(parsed_document: ParsedDocument, density: str) -> Iterator[str]:
         format="docx",
         pagination="last-rendered-hints",
         revision_view=revision_view if isinstance(revision_view, str) else None,
-        schema="doctokens-xml",
-        version="1.0",
     )
     body = append(root, "body")
     _append_body(body, parsed_document, density)

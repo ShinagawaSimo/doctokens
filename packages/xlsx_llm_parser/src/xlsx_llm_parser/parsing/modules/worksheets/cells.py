@@ -220,6 +220,10 @@ def _formula_metadata(cell_elem: ET.Element) -> tuple[str | None, Cell]:
             metadata["dynamicArray"] = True
     elif formula_type == "dataTable":
         metadata["formulaType"] = "dataTable"
+        if formula_range := formula_elem.get("ref", ""):
+            metadata["formulaRange"] = formula_range
+        # The worksheet pass reconstructs TABLE from its master's attributes.
+        formula = None
     return formula, metadata
 
 

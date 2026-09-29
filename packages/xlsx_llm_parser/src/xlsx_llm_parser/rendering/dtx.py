@@ -91,6 +91,7 @@ def _append_grid(
             append(grid, "style-range", ref=style_ref, **attrs)
     comments = _comment_records(emitted)
     comment_ids = _comment_ids_by_cell(comments)
+    data_table_groups: set[tuple[str, str]] = set()
     for row in emitted:
         row_node = append(
             grid,
@@ -105,6 +106,13 @@ def _append_grid(
             if cell.get("shadow"):
                 continue
             attrs = _cell_attrs(cell, expected_col, density, format_index, suppressed_styles)
+            if cell.get("formulaType") == "dataTable" and cell.get("formula") and cell.get("formulaRange"):
+                data_table_key = (cell["formulaRange"], cell["formula"])
+                if data_table_key in data_table_groups:
+                    for attr in ("formula", "formula_type", "formula_range"):
+                        attrs.pop(attr, None)
+                else:
+                    data_table_groups.add(data_table_key)
             node = append(row_node, "cell", **attrs)
             _append_cell_text(node, cell, density)
             for comment_id in comment_ids.get((cell["row"], cell["col"]), []):

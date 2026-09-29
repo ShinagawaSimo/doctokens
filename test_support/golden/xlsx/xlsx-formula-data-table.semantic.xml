@@ -8,7 +8,7 @@
       <tr number="2">
         <cell formula="B1*2">4</cell>
         <cell>3</cell>
-        <cell formula-type="dataTable">6</cell>
+        <cell formula="TABLE(,B1)" formula-range="D2:D3" formula-type="dataTable">6</cell>
       </tr>
       <tr number="3">
         <cell column="C">4</cell>

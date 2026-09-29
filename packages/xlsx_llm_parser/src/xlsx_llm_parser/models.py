@@ -46,7 +46,7 @@ class Cell(TypedDict, total=False):
     raw: str  # reconstructed formula-bar content for a non-formula cell
     numberFormatColor: str  # selected format-section color overrides font color
     type: str  # "number", "string", "boolean", "error", "date"
-    formula: str  # formula text from <f> element (e.g. "SUM(A1:A10)")
+    formula: str  # <f> text, expanded shared formula, or reconstructed TABLE(row_input,column_input)
     si: str  # shared formula index for slave cells
     shared_ref: str  # shared formula range (master cell only)
     formulaType: str  # "array" | "dataTable"

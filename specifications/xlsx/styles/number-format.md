@@ -77,7 +77,7 @@ Display formatting applies the effective Excel number format from the cell XF to
   - `Cell.raw: str`
 
 - **Parsing**
-  - Preserve decoded text before applying a supported text section. For ordinary numeric formats, emit the edit-form value only when it is independently recoverable. A supported uppercase scientific display token (`E+`/`E-`) is formatting syntax and does not by itself prevent recovery of the saved ordinary number. Omit it and add `XLSX_FORMULA_BAR_UNAVAILABLE` when the format needs Excel-specific rendering or would require guessing. Formula cells expose `<f>` through `formula` and do not copy the cached `<v>` into `raw`.
+  - Preserve decoded text before applying a supported text section. For ordinary numeric formats, emit the edit-form value only when it is independently recoverable. A supported uppercase scientific display token (`E+`/`E-`) is formatting syntax and does not by itself prevent recovery of the saved ordinary number. Omit it and add `XLSX_FORMULA_BAR_UNAVAILABLE` when the format needs Excel-specific rendering or would require guessing. Formula cells expose their expression through `formula` and do not copy the cached `<v>` into `raw`; this also applies to data-table members whose expression is reconstructed from the master's attributes.
   - Numeric reconstruction supports `zh-CN` and `en-US`, up to 15 significant decimal digits, and zero or magnitudes from `1e-9` inclusive to `1e15` exclusive. These limits also apply to scientific display formats. For example, saved `123456` with `0.00E+00` produces `<cell raw="123456">1.23E+05</cell>`; `raw` retains the unrounded number rather than reconstructing it from the rounded display.
 
 ## Source references

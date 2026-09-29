@@ -29,6 +29,7 @@ SpreadsheetML retains stored cell values, formula text, and worksheet structure.
 
 - [Formula text](cells/formula.md)
 - [Shared formulas](cells/shared-formula.md)
+- [Data table formulas](cells/data-table.md)
 - [Array formulas and spills](cells/array-formula.md)
 
 ## Cell values

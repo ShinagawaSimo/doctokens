@@ -24,6 +24,7 @@ from ..styles.index import FormatIndex
 from ..workbook.rich_values import RichValueCatalog
 from .cells import _parse_cell, _row_attrs
 from .comments import apply_comments
+from .data_tables import DataTableFormula, apply_data_tables, read_data_table
 from .formulas import SharedFormulaMaster, expand_selected_shared_formulas
 from .post import (
     apply_hyperlink_specs,
@@ -101,6 +102,7 @@ class SheetWorkingSet:
     cells_by_coord: dict[int, Cell] = field(default_factory=dict)
     shared_formula_groups: dict[str, list[Cell]] = field(default_factory=dict)
     shared_formula_masters: dict[str, list[SharedFormulaMaster]] = field(default_factory=dict)
+    data_tables: list[DataTableFormula] = field(default_factory=list)
     spill_sources: list[Cell] = field(default_factory=list)
 
     def add_row(self, row_number: int, cells: list[Cell]) -> None:
@@ -136,6 +138,7 @@ class SheetWorkingSet:
     ) -> SheetParseResult:
         if self.flags.formulas:
             expand_selected_shared_formulas(self.shared_formula_groups, self.shared_formula_masters, warnings, sheet_part)
+            apply_data_tables(self.data_tables, self.rows_by_number, warnings, sheet_part)
         apply_merge_refs(post.merge_refs, self.cells_by_coord)
         if self.flags.formulas:
             apply_spill_sources(self.spill_sources, self.cells_by_coord)
@@ -176,6 +179,7 @@ class SheetWorkingSet:
         self.rows_by_number.clear()
         self.shared_formula_groups.clear()
         self.shared_formula_masters.clear()
+        self.data_tables.clear()
         self.spill_sources.clear()
         return result
 
@@ -252,6 +256,8 @@ class WorksheetScanner:
                             shared_ref = formula.get("ref")
                             if si is not None and shared_ref is not None:
                                 working.add_shared_master(SharedFormulaMaster(si, ref, shared_ref, formula.text or ""))
+                        elif formula is not None and formula.get("t") == "dataTable":
+                            working.data_tables.append(read_data_table(formula, ref))
                     if current_cells is not None and self._includes_cell(col, row):
                         cell = self._parse_cell(
                             element,

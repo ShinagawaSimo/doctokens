@@ -71,6 +71,6 @@ Discover XML bags in styles.xml and paths containing featurepropertybag; use bag
 
 ## Source references
 
-- [CellControlCatalog.from_package](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/features.py#L276)
-- [_parse_cell](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L578)
+- [CellControlCatalog.from_package](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/features.py#L29)
+- [_parse_cell](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/cells.py#L42)
 - [_cell_text](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/plain.py#L61)

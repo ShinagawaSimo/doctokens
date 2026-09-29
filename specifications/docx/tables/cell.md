@@ -149,4 +149,4 @@ Rows and cells use table-local coordinates.
 
 - [TableParser._parse_row](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/tables.py#L122)
 - [TableParser.apply_vertical_merges](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/tables.py#L197)
-- [_append_cell_content](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L256)
+- [_append_cell_content](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L222)

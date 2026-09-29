@@ -79,5 +79,5 @@ DTX omits continuation cells and retains origin spans.
 
 ## Source references
 
-- [SlideParser._normalize_table_merges](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L743)
+- [SlideObjectParser._normalize_table_merges](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/objects.py#L284)
 - [_append_table_cells](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L189)

@@ -75,4 +75,4 @@ A session owns one open package and its parsed representation.
 
 - [DocxReadSession](../../packages/docx_llm_parser/src/docx_llm_parser/api.py#L101)
 - [PptxReadSession](../../packages/pptx_llm_parser/src/pptx_llm_parser/api.py#L126)
-- [XlsxReadSession](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L114)
+- [XlsxReadSession](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L63)

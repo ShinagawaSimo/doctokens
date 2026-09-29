@@ -99,5 +99,5 @@ Unknown run children produce `UNSUPPORTED_RUN_CHILD`; unknown paragraph wrappers
 
 - [RunParser.parse](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/runs.py#L47)
 - [RunParser._handle_child](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/runs.py#L107)
-- [_append_inline](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L105)
-- [_append_text_with_breaks](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L394)
+- [_append_inline](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L102)
+- [_append_text_with_breaks](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx_content.py#L106)

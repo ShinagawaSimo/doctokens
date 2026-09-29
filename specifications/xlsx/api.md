@@ -84,6 +84,6 @@ One-shot sheet/range selection narrows cell materialization while retaining mini
 
 ## Source references
 
-- [parse_xlsx](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L333)
+- [parse_xlsx](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L282)
 - [parse_range](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/selection.py#L17)
 - [filter_rows](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/selection.py#L27)

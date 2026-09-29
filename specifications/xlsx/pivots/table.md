@@ -195,6 +195,6 @@ Pivot output describes declared layout and source fields.
 
 ## Source references
 
-- [PivotCatalog._parse_table](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/features.py#L424)
-- [PivotCatalog.tables_for_relationships](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/features.py#L381)
-- [_append_sheet_metadata](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L79)
+- [PivotCatalog._parse_table](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/pivots.py#L111)
+- [PivotCatalog.tables_for_relationships](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/pivots.py#L64)
+- [_append_sheet_metadata](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx_metadata.py#L31)

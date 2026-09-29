@@ -83,5 +83,5 @@ Retain all runs only when at least one has formatting. Wrapper order is hyperlin
 
 ## Source references
 
-- [_parse_shared_strings](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/runner.py#L320)
-- [_append_cell_text](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L382)
+- [_parse_shared_strings](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/metadata.py#L142)
+- [_append_cell_text](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L204)

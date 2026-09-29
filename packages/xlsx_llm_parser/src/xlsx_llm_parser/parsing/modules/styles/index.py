@@ -1,151 +1,46 @@
-"""Number format detection and date-serial decoding.
+"""Runtime style index used while rendering worksheet cells.
 
-Parses xl/styles.xml to build a cell→format index, then decodes
-date serials, percentages, and currency values from raw cell data.
+The XML reader lives in :mod:`styles.parser`; number-format rendering lives in
+:mod:`styles.number_format`; and theme/font/fill records live in
+:mod:`styles.records`. Keeping this module focused on the in-memory index
+prevents new format cases from making the public style object unmanageably
+large while preserving the historical ``styles.index`` import path.
 """
 
 from __future__ import annotations
 
-import re
-from datetime import datetime, timedelta
-from typing import Literal, TypedDict
-from xml.etree import ElementTree as ET
-
-from ooxml_llm_core.package import PackageReader
-
 from ....models import CellControl
-
-NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
-
-# Spreadsheet theme color index order.
-_THEME_SLOTS = [
-    "lt1",
-    "dk1",
-    "lt2",
-    "dk2",
-    "accent1",
-    "accent2",
-    "accent3",
-    "accent4",
-    "accent5",
-    "accent6",
-    "hlink",
-    "folHlink",
-]
-
-# Office default theme colors (fallback when theme1.xml is absent).
-_DEFAULT_THEME: dict[int, str] = dict(
-    enumerate(
-        [
-            "FFFFFF",
-            "000000",
-            "E7E6E6",
-            "44546A",
-            "4472C4",
-            "ED7D31",
-            "A5A5A5",
-            "FFC000",
-            "5B9BD5",
-            "70AD47",
-            "0563C1",
-            "954F72",
-        ]
-    )
-)
-
-# numFmtId ranges for built-in date / time formats (ECMA-376 §18.8.30).
-_BUILTIN_DATE_IDS: set[int] = set()
-for _lo, _hi in [
-    (14, 22),
-    (27, 36),
-    (45, 47),
-    (50, 58),
-    (71, 81),
-]:
-    _BUILTIN_DATE_IDS.update(range(_lo, _hi + 1))
-
-# Built-in percentage format IDs.
-_BUILTIN_PCT_IDS = {9, 10}
-
-# Tokens that indicate a custom format string encodes a date or time.
-_DATE_TOKENS_RE = re.compile(
-    r"[yYmMdDhHsS]|AM/PM|am/pm|A/P|a/p|\[h\]|\[m\]|\[s\]",
-)
-
-# Percentage marker.
-_PCT_RE = re.compile(r"%")
-
-# Elapsed-time bracket sections that legitimately indicate a date/time format.
-_ELAPSED_TIME_SECTIONS = {"[h]", "[m]", "[s]"}
-
-
-def _date_scan_text(fmt_code: str) -> str:
-    """Blank quoted literals and non-elapsed bracket sections from a format code.
-
-    Date detection must ignore literal text like ``0 "pcs"`` or ``[DBNum1]``;
-    only real date/time tokens (and the elapsed-time brackets ``[h]``/``[m]``/
-    ``[s]``) should influence the date verdict.
-    """
-    out: list[str] = []
-    i = 0
-    n = len(fmt_code)
-    while i < n:
-        ch = fmt_code[i]
-        if ch == '"':
-            end = fmt_code.find('"', i + 1)
-            if end == -1:
-                end = n - 1
-            out.append(" " * (end - i + 1))
-            i = end + 1
-        elif ch == "[":
-            end = fmt_code.find("]", i)
-            if end == -1:
-                end = n - 1
-            section = fmt_code[i : end + 1]
-            out.append(section if section in _ELAPSED_TIME_SECTIONS else " " * len(section))
-            i = end + 1
-        else:
-            out.append(ch)
-            i += 1
-    return "".join(out)
-
-
-# ── Public API ──
-
-
-class FontInfo(TypedDict, total=False):
-    bold: bool
-    italic: bool
-    underline: bool
-    color: str
-
-
-class FillInfo(TypedDict, total=False):
-    fill: str
+from .number_format import format_value as format_number_value
+from .number_format import formula_bar_value, number_format_color, resolve_format, text_format_parts
+from .records import FillInfo, FontInfo
 
 
 class FormatIndex:
-    """Cell → display-value and style resolver built from styles.xml."""
+    """Cell-to-format and semantic-style resolver built from ``styles.xml``."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, locale: str = "zh-CN") -> None:
         # cellXfs index → (numFmtId, formatCode, fontId, fillId, locked, formulaHidden)
         self._cell_formats: list[tuple[int, str, int, int, bool, bool]] = []
-        # numFmtId → (is_date, is_pct)
-        self._fmt_cache: dict[int, tuple[bool, bool]] = {}
+        # (locale, numFmtId, formatCode) → (is_date, is_pct)
+        self._fmt_cache: dict[tuple[str, int, str], tuple[bool, bool]] = {}
         # style_index → resolved attribute string ("" = no styles)
         self._style_attrs_cache: dict[int, str] = {}
-        # fontId → {"bold": bool, "italic": bool, "color": str | None}
         self._fonts: list[FontInfo] = []
-        # fillId → {"fill": str | None}
         self._fills: list[FillInfo] = []
         # dxf index → compact semantic style summary used by conditional formatting.
         self._differential_styles: list[str] = []
         self._cell_controls: dict[int, CellControl] = {}
         self.date_1904 = False
+        self.locale = locale
 
     def set_date_system(self, date_1904: bool) -> None:
         self.date_1904 = date_1904
+
+    def set_locale(self, locale: str) -> None:
+        """Set the workbook/UI locale used for localized built-in formats."""
+        if locale:
+            self.locale = locale
+            self._fmt_cache.clear()
 
     def register_font(self, font_info: FontInfo) -> None:
         self._fonts.append(font_info)
@@ -182,31 +77,42 @@ class FormatIndex:
     ) -> None:
         self._cell_formats.append((num_fmt_id, format_code, font_id, fill_id, locked, formula_hidden))
 
-    def format_value(self, style_index: int | None, raw: str) -> str:
-        """Apply number formatting to a raw cell value string."""
-        if style_index is None or style_index >= len(self._cell_formats):
+    def format_value(self, style_index: int | None, raw: str, *, locale: str | None = None) -> str:
+        """Apply the resolved number format to a raw cell value string."""
+        if style_index is None or not 0 <= style_index < len(self._cell_formats):
             return raw
-        try:
-            num = float(raw)
-        except ValueError:
-            return raw
-
         num_fmt_id, fmt_code, _font_id, _fill_id, _locked, _hidden = self._cell_formats[style_index]
-        is_date, is_pct = self._resolve(num_fmt_id, fmt_code)
+        return format_number_value(
+            num_fmt_id,
+            fmt_code,
+            raw,
+            date_1904=self.date_1904,
+            locale=locale or self.locale,
+        )
 
-        if is_date:
-            return _decode_date(num, self.date_1904)
-        if is_pct:
-            return f"{num * 100:g}%"
-        return raw
+    def format_code(self, style_index: int | None) -> str:
+        if style_index is None:
+            return "General"
+        if 0 <= style_index < len(self._cell_formats):
+            return self._cell_formats[style_index][1]
+        return ""
+
+    def text_format_parts(self, style_index: int | None) -> list[str | None] | None:
+        return text_format_parts(self.format_code(style_index))
+
+    def formula_bar_value(self, style_index: int | None, value: str) -> str | None:
+        return formula_bar_value(value, self.format_code(style_index), self.locale)
+
+    def number_format_color(self, style_index: int | None, value: str, *, is_text: bool = False) -> str | None:
+        return number_format_color(value, self.format_code(style_index), is_text=is_text)
 
     def style_attrs(self, style_index: int | None) -> str:
-        """Return semantic style attributes for a cell, or empty string."""
+        """Return semantic font/fill attributes for a cell."""
         if style_index is None or style_index >= len(self._cell_formats):
             return ""
         if style_index not in self._style_attrs_cache:
             _num_fmt_id, _fmt_code, font_id, fill_id, _locked, _hidden = self._cell_formats[style_index]
-            parts = []
+            parts: list[str] = []
             if font_id < len(self._fonts):
                 font = self._fonts[font_id]
                 if font.get("bold"):
@@ -226,280 +132,26 @@ class FormatIndex:
         return self._style_attrs_cache[style_index]
 
     def protection_attrs(self, style_index: int | None) -> str:
-        """Return protection-related attributes (''unlocked'' / ''formulaHidden'')
-        when the cell deviates from the Excel default (locked, formula visible).
-
-        Only meaningful when sheet protection is active; callers must check that
-        separately.
-        """
+        """Return non-default protection attributes for a cell style."""
         if style_index is None or style_index >= len(self._cell_formats):
             return ""
         _num_fmt_id, _fmt_code, _font_id, _fill_id, locked, formula_hidden = self._cell_formats[style_index]
-        parts = []
+        parts: list[str] = []
         if not locked:
             parts.append("unlocked")
         if formula_hidden:
             parts.append("formulaHidden")
         return " ".join(parts)
 
-    def _resolve(self, num_fmt_id: int, fmt_code: str) -> tuple[bool, bool]:
-        if num_fmt_id not in self._fmt_cache:
-            is_date = num_fmt_id in _BUILTIN_DATE_IDS or bool(_DATE_TOKENS_RE.search(_date_scan_text(fmt_code)))
-            is_pct = num_fmt_id in _BUILTIN_PCT_IDS or bool(_PCT_RE.search(fmt_code))
-            self._fmt_cache[num_fmt_id] = (is_date, is_pct)
-        return self._fmt_cache[num_fmt_id]
+    def _resolve(self, num_fmt_id: int, fmt_code: str, locale: str) -> tuple[bool, bool]:
+        key = (locale, num_fmt_id, fmt_code)
+        if key not in self._fmt_cache:
+            self._fmt_cache[key] = resolve_format(num_fmt_id, fmt_code, locale)
+        return self._fmt_cache[key]
 
 
-StyleDetail = Literal["display", "structural", "semantic"]
+# Compatibility re-export: existing callers historically imported parse_styles
+# from styles.index. The implementation is intentionally kept in parser.py.
+from .parser import StyleDetail, parse_styles  # noqa: E402  (after FormatIndex)
 
-
-def parse_styles(
-    pkg: PackageReader,
-    *,
-    detail: StyleDetail = "semantic",
-    include_semantic_details: bool | None = None,
-) -> FormatIndex:
-    """Parse only the style layer required by the selected density.
-
-    ``display`` and ``structural`` retain number formats, cell-XF protection,
-    and merge-safe style indexes, but skip theme/font/fill/differential style
-    trees.  The deprecated boolean spelling remains accepted for internal
-    callers while plans migrate to the explicit three-level detail.
-    """
-    if include_semantic_details is not None:
-        detail = "semantic" if include_semantic_details else "structural"
-    index = FormatIndex()
-
-    if not pkg.exists("xl/styles.xml"):
-        return index
-
-    # Font/fill/dxf data is rendered only by semantic output. Numeric display
-    # formats remain necessary at every density.
-    include_semantic = detail == "semantic"
-    theme = _parse_theme(pkg) if include_semantic else {}
-
-    root = pkg.read_xml("xl/styles.xml")
-
-    # Custom number formats: numFmtId → formatCode
-    custom_fmts: dict[int, str] = {}
-    num_fmts = root.find(f"{{{NS_S}}}numFmts")
-    if num_fmts is not None:
-        for nf in num_fmts.findall(f"{{{NS_S}}}numFmt"):
-            fid = int(nf.get("numFmtId", "0"))
-            code = nf.get("formatCode", "")
-            custom_fmts[fid] = code
-
-    # Fonts: indexed by position
-    fonts_elem = root.find(f"{{{NS_S}}}fonts") if include_semantic else None
-    if fonts_elem is not None:
-        for font in fonts_elem.findall(f"{{{NS_S}}}font"):
-            index.register_font(_font_info(font, theme))
-
-    # Fills: indexed by position
-    fills_elem = root.find(f"{{{NS_S}}}fills") if include_semantic else None
-    if fills_elem is not None:
-        for fill in fills_elem.findall(f"{{{NS_S}}}fill"):
-            index.register_fill(_fill_info(fill, theme))
-
-    dxfs = root.find(f"{{{NS_S}}}dxfs") if include_semantic else None
-    if dxfs is not None:
-        for dxf in dxfs.findall(f"{{{NS_S}}}dxf"):
-            index.register_differential_style(_differential_style(dxf, theme))
-
-    # Cell formats: each references numFmtId, fontId, fillId
-    cell_xfs = root.find(f"{{{NS_S}}}cellXfs")
-    if cell_xfs is not None:
-        for xf in cell_xfs.findall(f"{{{NS_S}}}xf"):
-            fid = int(xf.get("numFmtId", "0"))
-            font_id = int(xf.get("fontId", "0"))
-            fill_id = int(xf.get("fillId", "0"))
-            code = custom_fmts.get(fid, "")
-            locked = True
-            formula_hidden = False
-            protection = xf.find(f"{{{NS_S}}}protection")
-            if protection is not None:
-                if protection.get("locked") == "0":
-                    locked = False
-                if protection.get("hidden") == "1":
-                    formula_hidden = True
-            index.register_cell_format(fid, code, font_id, fill_id, locked, formula_hidden)
-
-    return index
-
-
-def _font_info(font: ET.Element, theme: dict[int, str]) -> FontInfo:
-    info: FontInfo = {"bold": False, "italic": False, "underline": False}
-    if font.find(f"{{{NS_S}}}b") is not None:
-        info["bold"] = True
-    if font.find(f"{{{NS_S}}}i") is not None:
-        info["italic"] = True
-    if font.find(f"{{{NS_S}}}u") is not None:
-        info["underline"] = True
-    color = font.find(f"{{{NS_S}}}color")
-    if color is not None:
-        resolved = _resolve_color(color, theme)
-        if resolved:
-            info["color"] = f"#{resolved}"
-    return info
-
-
-def _fill_info(fill: ET.Element, theme: dict[int, str]) -> FillInfo:
-    info: FillInfo = {}
-    pattern_fill = fill.find(f"{{{NS_S}}}patternFill")
-    if pattern_fill is not None:
-        foreground = pattern_fill.find(f"{{{NS_S}}}fgColor")
-        if foreground is not None:
-            resolved = _resolve_color(foreground, theme)
-            if resolved:
-                info["fill"] = f"#{resolved}"
-    return info
-
-
-def _differential_style(dxf: ET.Element, theme: dict[int, str]) -> str:
-    """Summarize non-visual-noise dxf fields instead of retaining raw XML."""
-    parts: list[str] = []
-    font = dxf.find(f"{{{NS_S}}}font")
-    if font is not None:
-        font_info = _font_info(font, theme)
-        if font_info.get("bold"):
-            parts.append("bold")
-        if font_info.get("italic"):
-            parts.append("italic")
-        if font_info.get("underline"):
-            parts.append("underline")
-        if color := font_info.get("color"):
-            parts.append(f"color={color}")
-    fill = dxf.find(f"{{{NS_S}}}fill")
-    if fill is not None:
-        fill_info = _fill_info(fill, theme)
-        if color := fill_info.get("fill"):
-            parts.append(f"fill={color}")
-    num_fmt = dxf.find(f"{{{NS_S}}}numFmt")
-    if num_fmt is not None and (code := num_fmt.get("formatCode")):
-        parts.append(f"numberFormat={code}")
-    alignment = dxf.find(f"{{{NS_S}}}alignment")
-    if alignment is not None:
-        parts.extend(f"{key}={value}" for key in ("horizontal", "vertical", "wrapText") if (value := alignment.get(key)))
-    return " ".join(parts)
-
-
-def _rgb_hex(rgb: str) -> str:
-    """Normalize OOXML color (AARRGGBB or RRGGBB) to RRGGBB."""
-    if len(rgb) == 8:
-        return rgb[2:]  # strip alpha
-    return rgb
-
-
-def _parse_theme(pkg: PackageReader) -> dict[int, str]:
-    """Parse xl/theme/theme1.xml into index → RRGGBB hex mapping.
-
-    Returns the Office default theme when the part is missing.
-    """
-    if not pkg.exists("xl/theme/theme1.xml"):
-        return _DEFAULT_THEME.copy()
-
-    root = pkg.read_xml("xl/theme/theme1.xml")
-
-    scheme = root.find(f"{{{NS_A}}}themeElements/{{{NS_A}}}clrScheme")
-    if scheme is None:
-        return _DEFAULT_THEME.copy()
-
-    mapping: dict[int, str] = {}
-    for idx, slot in enumerate(_THEME_SLOTS):
-        elem = scheme.find(f"{{{NS_A}}}{slot}")
-        resolved = _theme_slot_value(elem)
-        if resolved:
-            mapping[idx] = resolved
-            continue
-        mapping[idx] = _DEFAULT_THEME.get(idx, "000000")
-    return mapping
-
-
-def _theme_slot_value(elem: ET.Element | None) -> str | None:
-    if elem is None:
-        return None
-    srgb = elem.find(f"{{{NS_A}}}srgbClr")
-    if srgb is not None:
-        val = srgb.get("val", "")
-        if val:
-            return val
-    sys_color = elem.find(f"{{{NS_A}}}sysClr")
-    if sys_color is not None:
-        val = sys_color.get("lastClr", "")
-        if val:
-            return val
-    return None
-
-
-def _resolve_color(color_elem: ET.Element, theme: dict[int, str]) -> str | None:
-    """Extract a RRGGBB hex string from an OOXML <color> element.
-
-    Handles ``rgb`` attribute (explicit), ``theme`` attribute (resolved
-    against the current theme), and optional ``tint`` for light/dark
-    variations.
-    """
-    # Explicit RGB — the common case; black placeholder is skipped.
-    rgb = color_elem.get("rgb")
-    if rgb and rgb != "00000000":
-        return _rgb_hex(rgb)
-
-    # Theme color reference
-    theme_str = color_elem.get("theme")
-    if theme_str is not None:
-        try:
-            idx = int(theme_str)
-            base = theme.get(idx)
-            if base is None:
-                return None
-            tint_str = color_elem.get("tint")
-            if tint_str is not None:
-                try:
-                    return _apply_tint(base, float(tint_str))
-                except ValueError:
-                    pass
-            return base
-        except ValueError:
-            pass
-
-    return None
-
-
-def _apply_tint(rgb_hex: str, tint: float) -> str:
-    """Mix an OOXML tint value into a RRGGBB hex colour.
-
-    Negative *tint* darkens (moves toward black), positive *tint* lightens
-    (moves toward white).  The linear interpolation is defined in
-    ECMA-376 §20.1.2.3.29.
-    """
-    if tint == 0:
-        return rgb_hex
-
-    channels = (int(rgb_hex[i : i + 2], 16) for i in (0, 2, 4))
-    if tint < 0:
-        factor = 1 + tint  # tint is negative → darken
-        result = (max(0, min(255, int(c * factor))) for c in channels)
-    else:
-        # tint > 0 → lighten toward white
-        result = (max(0, min(255, int(c * (1 - tint) + 255 * tint))) for c in channels)
-    return "".join(f"{c:02X}" for c in result)
-
-
-def _decode_date(serial: float, date_1904: bool) -> str:
-    """Decode an Excel date serial number to ISO 8601.
-
-    1900 system: epoch is 1899-12-31, serial 1 = 1900-01-01.
-    The Lotus 1-2-3 compatibility bug treats 1900 as a leap year:
-    serial 60 = 1900-02-29 (spurious), compensated by subtracting 1
-    from serials >= 61.
-    """
-    if date_1904:
-        return (datetime(1904, 1, 1) + timedelta(days=int(serial))).date().isoformat()
-
-    if serial <= 0:
-        return str(serial)
-    ordinal = int(serial)
-    if ordinal == 60:
-        return "1900-02-29"  # the spurious leap day
-    if ordinal > 60:
-        ordinal -= 1
-    return (datetime(1899, 12, 31) + timedelta(days=ordinal)).date().isoformat()
+__all__ = ["FormatIndex", "StyleDetail", "parse_styles"]

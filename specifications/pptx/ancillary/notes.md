@@ -29,4 +29,4 @@ Notes are attached to their source slide.
 
 ## Source references
 
-- [NotesParser.notes_for](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/ancillary/parts.py#L33)
+- [NotesParser.notes_for](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/ancillary/parts.py#L34)

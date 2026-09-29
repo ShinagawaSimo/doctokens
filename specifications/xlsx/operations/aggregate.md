@@ -53,6 +53,6 @@ Aggregates run only inside a requested grouping operation.
 
 ## Source references
 
-- [_resolve_aggregates](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L232)
-- [_update_group](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L367)
-- [_finalize_averages](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L402)
+- [_resolve_aggregates](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L211)
+- [_update_group](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_query_operations.py#L60)
+- [_finalize_averages](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_query_operations.py#L95)

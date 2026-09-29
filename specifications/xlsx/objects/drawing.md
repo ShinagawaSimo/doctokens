@@ -41,5 +41,5 @@ Missing drawing → DRAWING_PART_MISSING. Invalid relationship XML → DRAWING_R
 
 ## Source references
 
-- [parse_drawings](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/post.py#L420)
-- [_parse_drawing_anchor](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/post.py#L476)
+- [parse_drawings](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/drawings.py#L35)
+- [_parse_drawing_anchor](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/drawings.py#L91)

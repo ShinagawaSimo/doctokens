@@ -69,6 +69,23 @@ Post-processing order is shared-formula expansion, merged cells, spills, hyperli
 - **Absence and defaults**
   - Empty string.
 
+### `raw`
+
+- **Output**
+  - Structural and semantic DTX emit `cell/@raw` only when a non-formula cell's formula-bar value can be reconstructed reliably and differs from the displayed cell text. Plain output never emits this attribute.
+
+- **OOXML**
+  - Shared strings and inline strings provide decoded text. Numeric cells provide a stored value and style; the formula-bar value is an application rendering and is not stored as a separate OOXML field.
+
+- **IR**
+  - `Cell.raw: str`
+
+- **Parsing**
+  - For text cells, decode shared-string or inline-string content and apply a supported text section around it. For ordinary numeric formats whose edit form is independently recoverable, preserve that formula-bar form. Do not use a date/time serial, percentage display, scientific display, or formula cache as `raw`. Formula cells use `formula` and omit `raw`; when a numeric formula-bar value cannot be reconstructed reliably, omit `raw` and add `XLSX_FORMULA_BAR_UNAVAILABLE` to the parse report.
+
+- **Absence and defaults**
+  - Omit for formula cells and for numeric values whose formula-bar form is uncertain. Omit from DTX when `raw == text`.
+
 ### `type`
 
 - **Output**
@@ -144,8 +161,8 @@ Post-processing order is shared-formula expansion, merged cells, spills, hyperli
 
 ## Source references
 
-- [_parse_cell](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L578)
-- [_cell_text](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L635)
-- [SheetWorkingSet.finalize](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L176)
-- [_cell_attrs](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L339)
+- [_parse_cell](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/cells.py#L42)
+- [_cell_text](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/cells.py#L156)
+- [SheetWorkingSet.finalize](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L125)
+- [_cell_attrs](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L156)
 - [parse_ref](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_utils.py#L9)

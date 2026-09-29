@@ -166,6 +166,6 @@ Slides follow the relationship sequence in ppt/presentation.xml.
 
 ## Source references
 
-- [_SlideSequence](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/runner.py#L126)
-- [SlideParser._shapes](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L121)
+- [_SlideSequence](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/slide_sequence.py#L113)
+- [SlideParser._shapes](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L104)
 - [_append_slide](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L26)

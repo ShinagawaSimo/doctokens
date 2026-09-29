@@ -65,5 +65,5 @@ Images are referenced by package location without eager binary reads.
 
 ## Source references
 
-- [_parse_drawing_anchor](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/post.py#L476)
-- [_resource_descriptors](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L36)
+- [_parse_drawing_anchor](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/drawings.py#L91)
+- [_resource_descriptors](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_resources.py#L12)

@@ -128,7 +128,7 @@ Retain textless shapes when they have alt, title, link, fromShape, or toShape; a
 
 ## Source references
 
-- [SlideParser._descriptive_shape](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L308)
-- [SlideParser._filter_decorative_shapes](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L371)
-- [SlideParser._renumber_shapes](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L395)
+- [SlideParser._descriptive_shape](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L216)
+- [_filter_decorative_shapes](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/shape_details.py#L40)
+- [_renumber_shapes](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/shape_details.py#L62)
 - [_shape_attrs](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L140)

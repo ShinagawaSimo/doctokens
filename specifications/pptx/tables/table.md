@@ -107,6 +107,6 @@ DrawingML tables preserve their cell merge declarations.
 
 ## Source references
 
-- [SlideParser._table_shape](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L686)
+- [SlideObjectParser._table_shape](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/objects.py#L227)
 - [_append_table](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L177)
 - [_shape_text](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/plain.py#L35)

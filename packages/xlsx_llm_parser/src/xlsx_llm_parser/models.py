@@ -14,8 +14,12 @@ from ooxml_llm_core.options import PackageOptions
 class ParseOptions(PackageOptions):
     """XLSX parser options sharing OPC limits and diagnostics with other formats."""
 
+    locale: str = "zh-CN"
+
     def __post_init__(self) -> None:
         self.validate_package_options()
+        if not isinstance(self.locale, str) or not self.locale.strip():
+            raise ValueError("locale must be a non-empty string")
 
 
 class RichTextRun(TypedDict, total=False):
@@ -39,6 +43,8 @@ class Cell(TypedDict, total=False):
     row: int  # 1-based row number
     col: int  # 1-based column number
     text: str  # resolved display text
+    raw: str  # reconstructed formula-bar content for a non-formula cell
+    numberFormatColor: str  # selected format-section color overrides font color
     type: str  # "number", "string", "boolean", "error", "date"
     formula: str  # formula text from <f> element (e.g. "SUM(A1:A10)")
     si: str  # shared formula index for slave cells

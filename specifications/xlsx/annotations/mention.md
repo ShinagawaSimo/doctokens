@@ -51,4 +51,4 @@ Mention offsets are retained without editing comment text.
 
 ## Source references
 
-- [_threaded_mentions](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/post.py#L309)
+- [_threaded_mentions](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/comments.py#L191)

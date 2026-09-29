@@ -65,5 +65,5 @@ Validation declarations are extracted without enforcing cell constraints.
 
 ## Source references
 
-- [_parse_data_validations_element](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L457)
-- [_append_sheet_metadata](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L79)
+- [_parse_data_validations_element](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/rules.py#L108)
+- [_append_sheet_metadata](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx_metadata.py#L31)

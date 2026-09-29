@@ -37,5 +37,5 @@ Repeated color/fill styles can be emitted once per rectangular region.
 
 ## Source references
 
-- [_style_range_records](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L464)
-- [_rectangular_ranges](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L490)
+- [_style_range_records](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/style_ranges.py#L12)
+- [_rectangular_ranges](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/style_ranges.py#L38)

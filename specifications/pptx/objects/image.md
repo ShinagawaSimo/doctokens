@@ -54,5 +54,5 @@ Pictures resolve the first descendant blip against the asset index.
 
 ## Source references
 
-- [SlideParser._picture_shape](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L467)
+- [SlideObjectParser._picture_shape](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/objects.py#L41)
 - [_append_shape](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L54)

@@ -174,4 +174,4 @@ SmartArt preserves nonempty labels and connections between those retained labels
 
 - [parse_smartart_root](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/resources/objects.py#L251)
 - [EmbeddedObjectExtractor._build_layout_map](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/resources/objects.py#L52)
-- [_append_smartart](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L226)
+- [_append_smartart](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx_content.py#L36)

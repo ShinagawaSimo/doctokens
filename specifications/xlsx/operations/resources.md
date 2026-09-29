@@ -51,6 +51,6 @@ XLSX resources come from drawing and table metadata in the parsed scope.
 
 ## Source references
 
-- [XlsxReadSession.read_resource](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L281)
-- [XlsxReadSession.render_resource](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L295)
-- [_render_chart_resource](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L437)
+- [XlsxReadSession.read_resource](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L230)
+- [XlsxReadSession.render_resource](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L244)
+- [_render_chart_resource](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_resources.py#L56)

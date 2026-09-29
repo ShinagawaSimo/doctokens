@@ -37,6 +37,6 @@ Targets are preserved as strings; no navigation action is executed.
 
 ## Source references
 
-- [_run_link](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L1088)
-- [SlideParser._attach_shape_navigation](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L265)
-- [_normalize_slide_navigation](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/runner.py#L77)
+- [_run_link](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/runs.py#L299)
+- [SlideParser._attach_shape_navigation](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L173)
+- [_normalize_slide_navigation](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/slide_sequence.py#L64)

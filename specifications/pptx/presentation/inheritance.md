@@ -74,7 +74,7 @@ The semantic parse plan and sessions resolve template defaults. Template prompt 
 
 ## Source references
 
-- [LayoutMasterResolver.resolve](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/inheritance.py#L109)
-- [LayoutMasterResolver._layout_model](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/inheritance.py#L145)
-- [LayoutMasterResolver._text_styles](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/inheritance.py#L260)
-- [LayoutMasterResolver._merge_text_styles](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/inheritance.py#L357)
+- [LayoutMasterResolver.resolve](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/inheritance.py#L110)
+- [LayoutMasterResolver._layout_model](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/inheritance.py#L146)
+- [TextStyleParser.parse](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/text_styles.py#L57)
+- [_merge_text_styles](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/text_styles.py#L15)

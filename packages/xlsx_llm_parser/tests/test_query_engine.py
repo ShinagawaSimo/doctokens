@@ -5,15 +5,14 @@ from __future__ import annotations
 import unittest
 from typing import Any, cast
 
-from xlsx_llm_parser.query import (
+from xlsx_llm_parser._query_operations import (
     _average_accumulator,
     _coerce_cell_value,
     _finalize_averages,
     _matches_condition,
     _order_key,
-    _render_query_result,
-    query_data,
 )
+from xlsx_llm_parser.query import _render_query_result, query_data
 
 
 def _workbook() -> dict[str, object]:

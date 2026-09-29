@@ -201,4 +201,4 @@ Series conversion: shared snake_case keys become DOCX camelCase keys. See [serie
 - [EmbeddedObjectExtractor._extract_charts](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/resources/objects.py#L76)
 - [parse_chart_root](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/resources/objects.py#L188)
 - [_chart_summary](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/resources/objects.py#L156)
-- [_append_chart](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L208)
+- [_append_chart](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx_content.py#L18)

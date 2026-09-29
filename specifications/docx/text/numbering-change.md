@@ -52,7 +52,7 @@ In the `original` revision view, `w:numberingChange` can provide level definitio
   - Lookup in `NumberFormatRenderer._NFC_FORMATS`.
 
 - **Parsing**
-  - Use the exact mapping in [NumberFormatRenderer](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L23). An unknown selector skips its definition.
+  - Use the exact mapping in [NumberFormatRenderer](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L32). An unknown selector skips its definition.
 
 - **Diagnostics**
   - `40` or `>=60`: `APPLICATION_DEFINED_NUMBER_FORMAT`; other unknown values: `INVALID_NUMBERING_CHANGE`.
@@ -92,4 +92,4 @@ In the `original` revision view, `w:numberingChange` can provide level definitio
 ## Source references
 
 - [parse_numbering_change](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/change.py#L12)
-- [DocumentBodyParser._paragraph_numbering](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/scanner.py#L415)
+- [ParagraphNumbering.parse](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/numbering.py#L39)

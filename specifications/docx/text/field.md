@@ -80,4 +80,4 @@ Complex-field stack is reset for each paragraph. `begin` pushes; `separate` reco
 
 - [RunParser.handle_field_character](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/runs.py#L200)
 - [RunParser.apply_field_instruction](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/runs.py#L224)
-- [_append_inline_object](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L167)
+- [_append_inline_object](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L164)

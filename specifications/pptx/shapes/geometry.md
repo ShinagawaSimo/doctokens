@@ -69,7 +69,7 @@ Group scales are ext/chExt; offsets are off - chOff*scale. Compose nested transf
 
 ## Source references
 
-- [_GroupTransform](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L36)
-- [SlideParser._group_transform](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L563)
-- [SlideParser._attach_inheritance](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L231)
+- [_GroupTransform](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/geometry.py#L23)
+- [SlideGeometry._group_transform](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/geometry.py#L143)
+- [SlideGeometry._attach_inheritance](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/geometry.py#L109)
 - [shape_geometry](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/inheritance.py#L51)

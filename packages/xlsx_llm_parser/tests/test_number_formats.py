@@ -27,11 +27,9 @@ class DateDecodingTests(unittest.TestCase):
         cell_xfs: list[str],
         sheet_rows: list[str],
         *,
-        date_1904: bool = False,
         custom_fmts: list[str] | None = None,
     ) -> bytes:
         """Build a minimal XLSX with styles.xml for date format testing."""
-        date_attr = ' date1904="1"' if date_1904 else ""
         custom_fmts_xml = ""
         if custom_fmts:
             items = "".join(custom_fmts)
@@ -56,7 +54,7 @@ class DateDecodingTests(unittest.TestCase):
                 "xl/workbook.xml": (
                     f'<workbook xmlns="{NS_S}" '
                     'xmlns:r="http://schemas.openxmlformats.org/package/2006/relationships">'
-                    f"<workbookPr{date_attr}/>"
+                    "<workbookPr/>"
                     "<sheets>"
                     '<sheet name="Data" sheetId="1" r:id="rSheet1"/>'
                     "</sheets>"
@@ -81,35 +79,6 @@ class DateDecodingTests(unittest.TestCase):
                 ),
             },
         )
-
-    def test_builtin_date_format_14(self) -> None:
-        """numFmtId 14 (m/d/yyyy) is detected as date and decoded."""
-        data = self._make_date_xlsx(
-            cell_xfs=['<xf numFmtId="14" xfId="0"/>'],
-            sheet_rows=['<row r="1"><c r="A1" s="0"><v>44927</v></c></row>'],
-        )
-        output = parse_xlsx(data).text
-        # 44927 = 2023-01-01
-        self.assertIn("2023-01-01", output)
-
-    def test_builtin_date_format_22(self) -> None:
-        """numFmtId 22 (m/d/yyyy h:mm) includes time."""
-        data = self._make_date_xlsx(
-            cell_xfs=['<xf numFmtId="22" xfId="0"/>'],
-            sheet_rows=['<row r="1"><c r="A1" s="0"><v>44927.5</v></c></row>'],
-        )
-        output = parse_xlsx(data).text
-        self.assertIn("2023-01-01", output)
-
-    def test_date_1904_system(self) -> None:
-        """Mac date system (1904-based) decodes differently."""
-        data = self._make_date_xlsx(
-            cell_xfs=['<xf numFmtId="14" xfId="0"/>'],
-            sheet_rows=['<row r="1"><c r="A1" s="0"><v>1</v></c></row>'],
-            date_1904=True,
-        )
-        output = parse_xlsx(data).text
-        self.assertIn("1904-01-02", output)
 
     def test_missing_styles_file(self) -> None:
         """Workbook without styles.xml falls back to raw values."""
@@ -153,15 +122,6 @@ class DateDecodingTests(unittest.TestCase):
         )
         output = parse_xlsx(data).text
         self.assertIn("44927", output)
-
-    def test_percentage_format(self) -> None:
-        """numFmtId 9 (0%) is detected as percentage."""
-        data = self._make_date_xlsx(
-            cell_xfs=['<xf numFmtId="9" xfId="0"/>'],
-            sheet_rows=['<row r="1"><c r="A1" s="0"><v>0.125</v></c></row>'],
-        )
-        output = parse_xlsx(data).text
-        self.assertIn("12.5%", output)
 
     def test_custom_date_format(self) -> None:
         """Custom format containing 'yyyy' is detected as date."""

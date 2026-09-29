@@ -203,7 +203,7 @@ Cell vm resolves valueMetadata records in xl/metadata.xml through futureMetadata
 
 ## Source references
 
-- [RichValueCatalog.from_package](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/features.py#L74)
-- [RichValueCatalog.resolve](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/features.py#L132)
-- [RichValueCatalog._parse_value](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/features.py#L195)
-- [_append_cell_text](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L382)
+- [RichValueCatalog.from_package](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/rich_values.py#L38)
+- [RichValueCatalog.resolve](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/rich_values.py#L97)
+- [RichValueCatalog._parse_value](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/rich_values.py#L199)
+- [_append_cell_text](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L204)

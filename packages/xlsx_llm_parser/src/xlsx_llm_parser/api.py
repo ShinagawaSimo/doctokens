@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterator
-from html import escape as escape_text
 from pathlib import Path
 from typing import cast
 
@@ -13,7 +11,8 @@ from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.models import Density, ParseReport, ParseResult, ResourceDescriptor
 from ooxml_llm_core.package import PackageReader
 
-from .models import Cell, DrawingChart, ParsedWorkbook, ParseOptions, SheetInfo
+from ._resources import _render_chart_resource, _resource_descriptors
+from .models import Cell, ParsedWorkbook, ParseOptions, SheetInfo
 from .parsing import get_render_pipeline
 from .parsing.runner import _parse_workbook
 from .plan import XlsxParsePlan
@@ -21,7 +20,8 @@ from .query import AggregateSpec, OrderSpec, WhereCondition
 from .query import query_data as _query_data
 from .rendering.dtx import render_sheet_dtx
 from .rendering.plain import iter_plain_rows
-from .rendering.selection import filter_rows, find_sheet, parse_range
+from .rendering.selection import filter_rows, parse_range
+from .search import _find_cells, _sheet
 
 Source = str | Path | bytes
 _DENSITIES = {"plain", "structural", "semantic"}
@@ -31,50 +31,6 @@ def _density(value: str) -> str:
     if value not in _DENSITIES:
         raise ValueError(f"density must be one of: {', '.join(sorted(_DENSITIES))}")
     return value
-
-
-def _resource_descriptors(workbook: ParsedWorkbook) -> tuple[ResourceDescriptor, ...]:
-    descriptors: list[ResourceDescriptor] = []
-    for sheet in workbook["sheets"]:
-        descriptors.extend(
-            ResourceDescriptor(
-                id=image["id"],
-                kind="image",
-                source="embedded",
-                locator=f"{sheet['name']}!{image.get('ref', '')}",
-                part=image.get("part"),
-            )
-            for image in sheet.get("images", [])
-        )
-        descriptors.extend(
-            ResourceDescriptor(
-                id=chart["id"],
-                kind="chart",
-                source="embedded",
-                locator=f"{sheet['name']}!{chart.get('ref', '')}",
-                part=chart.get("part"),
-            )
-            for chart in sheet.get("charts", [])
-        )
-        descriptors.extend(
-            ResourceDescriptor(
-                id=pivot["id"],
-                kind="pivot_table",
-                source="embedded",
-                locator=f"{sheet['name']}!{pivot.get('ref', '')}",
-            )
-            for pivot in sheet.get("pivot_tables", [])
-        )
-        descriptors.extend(
-            ResourceDescriptor(
-                id=table["id"],
-                kind="table",
-                source="embedded",
-                locator=f"{sheet['name']}!{table.get('ref', '')}",
-            )
-            for table in sheet.get("tables", [])
-        )
-    return tuple(descriptors)
 
 
 def _result(
@@ -102,13 +58,6 @@ def _output_metadata(density: str) -> tuple[str, str]:
     if density == "plain":
         return "doctokens-plain/1.0", "text/plain"
     return "doctokens-xml/1.0", "application/xml"
-
-
-def _sheet(workbook: ParsedWorkbook, name: str) -> SheetInfo:
-    try:
-        return find_sheet(workbook, name)
-    except ValueError as exc:
-        raise KeyError(name) from exc
 
 
 class XlsxReadSession:
@@ -374,98 +323,6 @@ def _render_selected_plain(sheet: SheetInfo, rows: list[list[Cell]] | None = Non
         "density=plain\n" + "".join(iter_plain_rows(selected, hidden_cols=sheet.get("hidden_cols", []))),
         format_name="xlsx",
     )
-
-
-def _find_cells(
-    workbook: ParsedWorkbook,
-    query: str,
-    *,
-    sheets: list[str] | None,
-    kind: str | None,
-    limit: int,
-) -> str:
-    if not query:
-        return "<matches>\n"
-    pattern = re.compile(re.escape(query))
-    matches: list[str] = []
-    selected_sheets = sheets or [sheet["name"] for sheet in workbook["sheets"]]
-    seen_names: set[str] = set()
-    for sheet_name in selected_sheets:
-        if len(matches) >= limit:
-            break
-        sheet = _sheet(workbook, sheet_name)
-        for row in sheet.get("rows", []):
-            for cell in row:
-                if len(matches) >= limit:
-                    break
-                match = _cell_match(sheet_name, cell, pattern, kind)
-                if match is not None:
-                    matches.append(match)
-        if len(matches) < limit and kind in {None, "definedName"}:
-            for defined_name in workbook["metadata"].get("defined_names", []):
-                if len(matches) >= limit:
-                    break
-                name = defined_name["name"]
-                if name in seen_names:
-                    continue
-                scope = defined_name.get("scopeSheet")
-                if scope and scope != sheet_name:
-                    continue
-                if pattern.search(name) or pattern.search(defined_name.get("ref", "")):
-                    seen_names.add(name)
-                    matches.append(f"<match field=definedName>{escape_text(name)} = {escape_text(defined_name['ref'])}")
-    return "<matches>\n" + "\n".join(matches) + "\n"
-
-
-def _cell_match(sheet_name: str, cell: Cell, pattern: re.Pattern[str], kind: str | None) -> str | None:
-    fields = (
-        ("value", cell["text"]),
-        ("formula", cell.get("formula", "")),
-        ("comment", cell.get("comment", "")),
-        ("hyperlink", cell.get("hyperlink", "")),
-    )
-    for field_name, value in fields:
-        if kind not in {None, field_name}:
-            continue
-        rendered = str(value)
-        if pattern.search(rendered):
-            cell_ref = f"{escape_text(sheet_name, quote=True)}!{cell['ref']}"
-            return f'<match cell="{cell_ref}" field={field_name}>{escape_text(rendered)}'
-    return None
-
-
-def _render_chart_resource(chart: DrawingChart) -> str:
-    attrs = f"id={chart['id']} ref={chart['ref']} type={chart.get('type', '?')}"
-    if chart.get("plotTypes"):
-        attrs += f" plots={escape_text(','.join(chart['plotTypes']), quote=True)}"
-    attrs += f" series={chart.get('series_count', 0)}"
-    if chart.get("title"):
-        attrs += f" title={escape_text(chart['title'], quote=True)}"
-    parts = [f"<chart {attrs}>"]
-    is_combination = chart.get("type") == "combination"
-    for series in chart.get("series", []):
-        series_attrs = f"index={series.get('index', 0)}"
-        if series.get("name"):
-            series_attrs += f" name={escape_text(series['name'], quote=True)}"
-        if "min" in series:
-            series_attrs += f" min={series['min']}"
-        if "max" in series:
-            series_attrs += f" max={series['max']}"
-        if is_combination and series.get("chartType"):
-            series_attrs += f" type={series['chartType']}"
-        if series.get("bubbleSizes"):
-            series_attrs += f" bubbleSizes={escape_text(','.join(series['bubbleSizes']), quote=True)}"
-        if series.get("hidden"):
-            series_attrs += " hidden"
-        parts.append(f"\n<series {series_attrs}>")
-        for point in series.get("points", []):
-            point_attrs = ""
-            for name in ("category", "value", "x", "y", "bubbleSize"):
-                value = point.get(name, "")
-                if value:
-                    point_attrs += f" {name}={escape_text(str(value), quote=True)}"
-            parts.append(f"\n<point{point_attrs}/>")
-    return "".join(parts)
 
 
 __all__ = ["XlsxReadSession", "open_xlsx", "parse_xlsx"]

@@ -40,5 +40,5 @@ Placeholder type supplies title identity and inherited defaults.
 
 ## Source references
 
-- [SlideParser._attach_inheritance](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L231)
-- [LayoutMasterResolver._layout_model](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/inheritance.py#L145)
+- [SlideGeometry._attach_inheritance](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/geometry.py#L109)
+- [LayoutMasterResolver._layout_model](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/inheritance.py#L146)

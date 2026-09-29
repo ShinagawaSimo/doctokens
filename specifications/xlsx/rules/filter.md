@@ -282,5 +282,5 @@ Within each filterColumn, process values, custom, dynamic, top10, color, icon, t
 
 ## Source references
 
-- [_parse_filter_column](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L377)
-- [_append_sheet_metadata](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L79)
+- [_parse_filter_column](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/rules.py#L28)
+- [_append_sheet_metadata](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx_metadata.py#L31)

@@ -111,5 +111,5 @@ Read only first threadedComment relationship for the sheet. Missing part → THR
 
 ## Source references
 
-- [_apply_threaded_comments](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/post.py#L236)
+- [_apply_threaded_comments](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/comments.py#L118)
 - [valid_parent_links](../../../packages/ooxml_llm_core/src/ooxml_llm_core/annotations.py#L34)

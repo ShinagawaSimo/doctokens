@@ -105,5 +105,5 @@ DOCX and PPTX accept an explicitly supplied OCR provider. XLSX exposes no OCR op
 ## Source references
 
 - [PackageOptions.validate_ocr_options](../../packages/ooxml_llm_core/src/ooxml_llm_core/options.py#L32)
-- [_append_ocr](../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L306)
+- [_append_ocr](../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx_content.py#L49)
 - [_append_ocr](../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L225)

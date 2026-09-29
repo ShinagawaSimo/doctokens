@@ -103,5 +103,5 @@ Plain separates retained blocks with blank lines; table summaries, note/comment 
 
 ## Source references
 
-- [iter_dtx](../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L29)
+- [iter_dtx](../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L28)
 - [iter_plain](../../packages/docx_llm_parser/src/docx_llm_parser/rendering/document/pipeline.py#L16)

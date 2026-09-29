@@ -80,6 +80,6 @@ find_cells is a literal search over retained session data.
 
 ## Source references
 
-- [XlsxReadSession.find_cells](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L225)
-- [_find_cells](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L379)
-- [_cell_match](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L420)
+- [XlsxReadSession.find_cells](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L174)
+- [_find_cells](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/search.py#L19)
+- [_cell_match](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/search.py#L60)

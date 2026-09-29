@@ -153,6 +153,6 @@ Apply recognized child transforms in XML order. Invalid/non-finite numeric trans
 
 ## Source references
 
-- [resolve_color_element](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/colors.py#L203)
-- [_apply_transforms](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/colors.py#L236)
-- [is_default_text_color](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/colors.py#L190)
+- [resolve_color_element](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/colors.py#L37)
+- [_apply_transforms](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/colors.py#L70)
+- [is_default_text_color](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/colors.py#L24)

@@ -185,4 +185,4 @@ Wrapper order, outer to inner: revision, citation, hyperlink, mark, color, strik
 
 - [parse_run_format](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/formatting.py#L26)
 - [merge_run_formats](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/formatting.py#L90)
-- [_append_format_wrappers](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L144)
+- [_append_format_wrappers](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L141)

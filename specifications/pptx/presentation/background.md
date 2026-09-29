@@ -37,5 +37,5 @@ Background extraction requires the internal GEOMETRY feature, absent from all pu
 
 ## Source references
 
-- [SlideParser._background](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L190)
+- [SlideGeometry._background](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/geometry.py#L68)
 - [PptxParsePlan.session](../../../packages/pptx_llm_parser/src/pptx_llm_parser/plan.py#L74)

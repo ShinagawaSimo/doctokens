@@ -65,6 +65,6 @@ Cell fonts and fills use the workbook theme when necessary.
 
 ## Source references
 
-- [_resolve_color](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/index.py#L434)
-- [_parse_theme](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/index.py#L393)
-- [_apply_tint](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/index.py#L467)
+- [resolve_color](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/records.py#L149)
+- [parse_theme](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/records.py#L62)
+- [apply_tint](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/records.py#L177)

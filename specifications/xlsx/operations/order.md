@@ -37,6 +37,6 @@ Sort runs after selection, against the resulting column catalog.
 
 ## Source references
 
-- [_resolve_order_specs](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L252)
-- [_apply_order_by](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L428)
-- [_order_key](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L440)
+- [_resolve_order_specs](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L231)
+- [_apply_order_by](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_query_operations.py#L121)
+- [_order_key](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_query_operations.py#L133)

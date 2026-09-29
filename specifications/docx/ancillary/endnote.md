@@ -85,4 +85,4 @@ XML read failure: `ANCILLARY_XML_PARSE_FAILED`; omit the failed part. Skip sourc
 
 - [AncillaryParser._parse_notes](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/ancillary/parts.py#L100)
 - [AncillaryParser._container_content](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/ancillary/parts.py#L247)
-- [_append_supplemental](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L319)
+- [_append_supplemental](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L272)

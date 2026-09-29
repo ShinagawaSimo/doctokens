@@ -51,4 +51,4 @@ Plain emits display text, not hyperlink markup. Result-run links from fields use
 ## Source references
 
 - [RunParser.hyperlink_info](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/runs.py#L264)
-- [_append_run_text](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L122)
+- [_append_run_text](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L119)

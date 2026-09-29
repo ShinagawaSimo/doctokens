@@ -59,4 +59,4 @@ OLE content is represented by a type/name placeholder.
 
 - [parse_embedded_object](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/objects.py#L140)
 - [_progid_to_type](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/objects.py#L345)
-- [_append_inline_object](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L167)
+- [_append_inline_object](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L164)

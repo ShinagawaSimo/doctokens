@@ -139,5 +139,5 @@ Main output contains chart identity, family, and counts.
 ## Source references
 
 - [EmbeddedObjectExtractor._load_chart](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/resources/objects.py#L166)
-- [SlideParser._chart_shape](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L596)
+- [SlideObjectParser._chart_shape](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/objects.py#L137)
 - [_append_shape](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L54)

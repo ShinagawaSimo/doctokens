@@ -211,7 +211,7 @@ Counters are scoped by numbering instance and advanced while parsing source para
 
 ## Source references
 
-- [DocumentBodyParser._paragraph_numbering](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/scanner.py#L415)
-- [NumberingState](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/state.py#L14)
-- [NumberFormatRenderer](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L23)
+- [ParagraphNumbering.parse](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/numbering.py#L39)
+- [NumberingState](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/state.py#L15)
+- [NumberFormatRenderer](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L32)
 - [NumberingParser](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/parser.py#L97)

@@ -1,0 +1,9 @@
+<workbook density="structural" format="xlsx">
+  <sheet name="Sheet1">
+    <grid ref="A1:A1">
+      <tr number="1">
+        <cell>2026/8/1</cell>
+      </tr>
+    </grid>
+  </sheet>
+</workbook>

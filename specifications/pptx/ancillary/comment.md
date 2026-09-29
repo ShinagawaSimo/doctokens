@@ -154,7 +154,7 @@ Only the comments relationship URI handled by CommentsParser participates. Missi
 
 ## Source references
 
-- [CommentsParser.parse](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/ancillary/parts.py#L95)
-- [_CommentAttachmentPlan](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/runner.py#L240)
-- [PptxParser._attach_comments](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/runner.py#L390)
+- [CommentsParser.parse](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/ancillary/parts.py#L96)
+- [_CommentAttachmentPlan](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/runner.py#L40)
+- [PptxParser._attach_comments](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/runner.py#L190)
 - [_append_comments](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L207)

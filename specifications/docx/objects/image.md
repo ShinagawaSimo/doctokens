@@ -115,5 +115,5 @@ Image records are indexed by owning part and relationship ID.
 
 - [AssetExtractor.extract](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/resources/assets.py#L30)
 - [_append_image_or_placeholder](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/objects.py#L166)
-- [_append_inline_object](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L167)
-- [_append_assets](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L297)
+- [_append_inline_object](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L164)
+- [_append_assets](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L263)

@@ -51,5 +51,5 @@ Identity, text, runs, paragraph properties, controls, and page fields have the s
 ## Source references
 
 - [StyleMap._resolve_heading_level](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/styles.py#L90)
-- [_append_block](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L68)
-- [_append_cell_content](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L256)
+- [_append_block](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L65)
+- [_append_cell_content](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L222)

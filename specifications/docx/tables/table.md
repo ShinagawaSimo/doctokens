@@ -85,5 +85,5 @@ Table block identity/page/section fields use [body](../document/body.md), [pagin
 
 - [TableParser.parse](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/tables.py#L18)
 - [TableParser._make_block](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/tables.py#L79)
-- [_append_table](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L239)
-- [_append_table_rows](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L283)
+- [_append_table](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L205)
+- [_append_table_rows](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L249)

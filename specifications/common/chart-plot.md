@@ -51,5 +51,5 @@ Plot membership is retained for combination charts.
 
 ## Source references
 
-- [ChartParser._parse_chartml](../../packages/ooxml_llm_core/src/ooxml_llm_core/chart_ml.py#L122)
-- [ChartParser._parse_chartex](../../packages/ooxml_llm_core/src/ooxml_llm_core/chart_ml.py#L187)
+- [ChartParser._parse_chartml](../../packages/ooxml_llm_core/src/ooxml_llm_core/chart_ml.py#L142)
+- [ChartParser._parse_chartex](../../packages/ooxml_llm_core/src/ooxml_llm_core/chart_ml.py#L207)

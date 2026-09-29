@@ -6,6 +6,17 @@ Rich values, cell controls, pivot caches and tables, slicers, and timelines use 
 
 ## Warning fields
 
+### `XLSX_FORMULA_BAR_UNAVAILABLE`
+
+- **Output**
+  - `ParseWarning.code = "XLSX_FORMULA_BAR_UNAVAILABLE"`; `locator` is the worksheet part and cell reference.
+- **OOXML**
+  - A non-formula numeric cell has a display format whose formula-bar edit value cannot be reconstructed from the stored value, effective XF, date system, and explicit locale alone.
+- **IR**
+  - The cell keeps its formatted `text`, omits `raw`, and does not copy the cached `<v>` value into the formula-bar field.
+- **Parsing**
+  - Dates, times, percentages, scientific notation, locale-specific numbering, and unsupported custom sections may produce this warning. A formula cell does not produce this warning for its cache; it uses `formula` and the cache is only used for display.
+
 ### `XLSX_CATALOG_XML_INVALID`
 
 - **Output**
@@ -52,7 +63,7 @@ Rich values, cell controls, pivot caches and tables, slicers, and timelines use 
 
 ## Source references
 
-- [_CatalogParts](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/features.py)
-- [RichValueCatalog](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/features.py)
-- [CellControlCatalog](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/features.py)
-- [PivotCatalog](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/features.py)
+- [_CatalogParts](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/catalog_parts.py#L38)
+- [RichValueCatalog](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/rich_values.py#L28)
+- [CellControlCatalog](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/features.py#L23)
+- [PivotCatalog](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/pivots.py#L22)

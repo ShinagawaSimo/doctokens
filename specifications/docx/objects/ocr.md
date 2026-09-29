@@ -65,4 +65,4 @@ OCR is performed only when an adapter is supplied and the parse plan includes OC
 
 ## Source references
 
-- [_append_ocr](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L306)
+- [_append_ocr](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx_content.py#L49)

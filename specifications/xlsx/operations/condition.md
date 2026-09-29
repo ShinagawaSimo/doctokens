@@ -51,5 +51,5 @@ Predicates are combined with logical AND.
 
 ## Source references
 
-- [_resolve_where_conditions](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L211)
-- [_matches_condition](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L330)
+- [_resolve_where_conditions](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L190)
+- [_matches_condition](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_query_operations.py#L23)

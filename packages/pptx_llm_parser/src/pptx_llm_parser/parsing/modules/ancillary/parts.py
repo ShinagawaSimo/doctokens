@@ -10,7 +10,7 @@ from ooxml_llm_core.relationships import RelationshipIndex
 from ....core.constants import first_child, local_name
 from ....core.models import CommentItem
 from ....core.package import PackageReader
-from ..slides.scanner import tx_body_text
+from ..slides.runs import tx_body_text
 
 NOTES_SLIDE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide"
 COMMENTS_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments"

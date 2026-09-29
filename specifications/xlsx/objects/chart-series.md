@@ -177,5 +177,5 @@ XLSX adapts shared series arrays to point records.
 
 ## Source references
 
-- [_parse_chart_part](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/post.py#L527)
-- [_render_chart_resource](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L437)
+- [_parse_chart_part](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/drawings.py#L142)
+- [_render_chart_resource](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_resources.py#L56)

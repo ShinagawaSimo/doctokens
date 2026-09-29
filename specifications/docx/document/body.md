@@ -85,6 +85,6 @@ The main part is `word/document.xml`. Body blocks retain XML order, including co
 
 ## Source references
 
-- [DocumentBodyParser.parse](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/scanner.py#L110)
-- [DocumentBodyParser._parse_sdt](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/scanner.py#L178)
+- [DocumentBodyParser.parse](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/scanner.py#L95)
+- [DocumentBodyParser._parse_sdt](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/scanner.py#L163)
 - [TableParser._make_block](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/tables.py#L79)

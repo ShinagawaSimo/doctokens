@@ -51,5 +51,5 @@ Merge ranges describe existing cells; they do not fill missing cells.
 
 ## Source references
 
-- [apply_merge_refs](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/post.py#L52)
-- [_append_grid](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L244)
+- [apply_merge_refs](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/post.py#L30)
+- [_append_grid](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L62)

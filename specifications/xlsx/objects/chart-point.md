@@ -79,4 +79,4 @@ Point records preserve saved string values.
 
 ## Source references
 
-- [_parse_chart_part](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/post.py#L527)
+- [_parse_chart_part](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/drawings.py#L142)

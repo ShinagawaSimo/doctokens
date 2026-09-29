@@ -191,6 +191,6 @@ Rules describe conditions and formatting; they do not calculate effective per-ce
 
 ## Source references
 
-- [_parse_conditional_format_element](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L470)
-- [_append_conditional_formats](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L187)
-- [_conditional_details](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L446)
+- [_parse_conditional_format_element](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/rules.py#L121)
+- [_append_conditional_formats](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx_metadata.py#L139)
+- [_conditional_details](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx_metadata.py#L214)

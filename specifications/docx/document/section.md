@@ -29,6 +29,6 @@ Section membership follows section boundaries in document order.
 
 ## Source references
 
-- [DocumentBodyParser._begin_section](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/scanner.py#L538)
-- [DocumentBodyParser.parse_paragraph](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/scanner.py#L200)
-- [_append_body](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L48)
+- [BodySections._begin_section](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/sections.py#L35)
+- [DocumentBodyParser.parse_paragraph](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/scanner.py#L185)
+- [_append_body](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L45)

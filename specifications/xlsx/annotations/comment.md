@@ -69,6 +69,6 @@ Invalid cell ref is skipped. Missing part → COMMENTS_PART_MISSING; invalid XML
 
 ## Source references
 
-- [apply_comments](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/post.py#L147)
-- [_apply_legacy_comments](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/post.py#L179)
-- [_comment_records](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L312)
+- [apply_comments](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/comments.py#L29)
+- [_apply_legacy_comments](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/comments.py#L61)
+- [_comment_records](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L129)

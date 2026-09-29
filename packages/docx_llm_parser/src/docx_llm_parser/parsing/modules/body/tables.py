@@ -23,7 +23,7 @@ class TableParser:
     ) -> list[TableBlock]:
         """Parse a table into one block per row-level page segment."""
         self.owner._order += 1
-        section_index = self.owner._begin_section()
+        section_index = self.owner._sections._begin_section()
         table_id = self._next_table_id()
         segment_page = self.owner._flush_pending_page_breaks()
 

@@ -22,7 +22,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_r](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L149)
+  - [_handle_r](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L48)
 
 - **Conversion**
 
@@ -48,7 +48,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_t](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L159)
+  - [_handle_t](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L58)
 
 - **Conversion**
 
@@ -69,7 +69,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_f](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L167)
+  - [_handle_f](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L66)
 
 - **Conversion**
 
@@ -92,7 +92,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_rad](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L177)
+  - [_handle_rad](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L76)
 
 - **Conversion**
 
@@ -117,7 +117,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_ssub](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L189)
+  - [_handle_ssub](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L88)
 
 - **Conversion**
 
@@ -141,7 +141,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_ssup](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L197)
+  - [_handle_ssup](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L96)
 
 - **Conversion**
 
@@ -165,7 +165,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_ssubsup](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L205)
+  - [_handle_ssubsup](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L104)
 
 - **Conversion**
 
@@ -195,7 +195,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_spre](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L219)
+  - [_handle_spre](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L118)
 
 - **Conversion**
 
@@ -225,7 +225,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_nary](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L236)
+  - [_handle_nary](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L135)
 
 - **Conversion**
 
@@ -259,7 +259,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_acc](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L259)
+  - [_handle_acc](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L158)
 
 - **Conversion**
 
@@ -283,7 +283,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_bar](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L270)
+  - [_handle_bar](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L169)
 
 - **Conversion**
 
@@ -308,7 +308,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_func](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L282)
+  - [_handle_func](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L181)
 
 - **Conversion**
 
@@ -340,7 +340,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_groupchr](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L310)
+  - [_handle_groupchr](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L209)
 
 - **Conversion**
 
@@ -365,7 +365,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_d](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L322)
+  - [_handle_d](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L221)
 
 - **Conversion**
 
@@ -391,7 +391,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_m](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L335)
+  - [_handle_m](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L234)
 
 - **Conversion**
 
@@ -417,7 +417,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_eqarr](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L348)
+  - [_handle_eqarr](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L247)
 
 - **Conversion**
 
@@ -440,7 +440,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_limlow](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L358)
+  - [_handle_limlow](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L257)
 
 - **Conversion**
 
@@ -463,7 +463,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_limupp](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L365)
+  - [_handle_limupp](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L264)
 
 - **Conversion**
 
@@ -486,7 +486,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_phant](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L375)
+  - [_handle_phant](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L274)
 
 - **Conversion**
 
@@ -508,7 +508,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_borderbox](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L381)
+  - [_handle_borderbox](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L280)
 
 - **Conversion**
 
@@ -530,7 +530,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_box](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L387)
+  - [_handle_box](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L286)
 
 - **Conversion**
 
@@ -551,7 +551,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L411)
+  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L310)
 
 - **Conversion**
 
@@ -577,7 +577,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L411)
+  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L310)
 
 - **Conversion**
 
@@ -603,7 +603,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L411)
+  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L310)
 
 - **Conversion**
 
@@ -629,7 +629,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L411)
+  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L310)
 
 - **Conversion**
 
@@ -655,7 +655,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L411)
+  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L310)
 
 - **Conversion**
 
@@ -681,7 +681,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L411)
+  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L310)
 
 - **Conversion**
 
@@ -707,7 +707,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L411)
+  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L310)
 
 - **Conversion**
 
@@ -733,7 +733,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L411)
+  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L310)
 
 - **Conversion**
 
@@ -759,7 +759,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L411)
+  - [_convert_children](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L310)
 
 - **Conversion**
 
@@ -1069,7 +1069,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
 
 ## Character conversion
 
-- [_escape_latex](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L438)
-- [_plain_text](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L432)
-- [_wrap_group](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L421)
-- [_child_attr](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L403)
+- [_escape_latex](../../packages/ooxml_llm_core/src/ooxml_llm_core/_omml_support.py#L143)
+- [_plain_text](../../packages/ooxml_llm_core/src/ooxml_llm_core/_omml_support.py#L137)
+- [_wrap_group](../../packages/ooxml_llm_core/src/ooxml_llm_core/_omml_support.py#L126)
+- [_child_attr](../../packages/ooxml_llm_core/src/ooxml_llm_core/omml_latex.py#L302)

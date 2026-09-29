@@ -30,5 +30,5 @@ Bookmarks provide target names for parsed internal navigation.
 ## Source references
 
 - [InlineParser._extract_inline_runs](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/inline.py#L96)
-- [DocumentBodyParser._discard_unreferenced_anchors](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/scanner.py#L369)
-- [_used_anchors](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L406)
+- [BodyAnchors._discard_unreferenced_anchors](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/anchors.py#L44)
+- [_used_anchors](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L303)

@@ -100,5 +100,5 @@ Dispatch to ChartEx only for `{http://schemas.microsoft.com/office/drawing/2014/
 
 ## Source references
 
-- [ChartParser.parse](../../packages/ooxml_llm_core/src/ooxml_llm_core/chart_ml.py#L117)
-- [_chart_info](../../packages/ooxml_llm_core/src/ooxml_llm_core/chart_ml.py#L269)
+- [ChartParser.parse](../../packages/ooxml_llm_core/src/ooxml_llm_core/chart_ml.py#L137)
+- [_chart_info](../../packages/ooxml_llm_core/src/ooxml_llm_core/chart_ml.py#L289)

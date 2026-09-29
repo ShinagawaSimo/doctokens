@@ -88,73 +88,73 @@ The following upper limits return `""` and `NUMBERING_VALUE_OUT_OF_RANGE` when e
 
 ## Source references
 
-- [NumberFormatRenderer.format](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L134)
-- [NumberFormatRenderer._format_custom](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L312)
+- [NumberFormatRenderer.format](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L47)
+- [NumberFormatRenderer._format_custom](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L117)
 
 ## Conversion expressions
 
 | `number_format` | Conversion expression |
 | --- | --- |
-| `aiueo` | `partial(self._word_cycled_sequence, sequence=self._AIUEO_HALF_WIDTH)` ([NumberFormatRenderer._word_cycled_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L404)) |
-| `aiueoFullWidth` | `partial(self._word_cycled_sequence, sequence=self._AIUEO_FULL_WIDTH)` ([NumberFormatRenderer._word_cycled_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L404)) |
-| `arabicAbjad` | `partial(self._arabic_sequence, sequence=self._ARABIC_ABJAD, prefix='\u200c')` ([NumberFormatRenderer._arabic_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L414)) |
-| `arabicAlpha` | `partial(self._arabic_sequence, sequence=self._ARABIC_ALPHA, suffix='\u200c')` ([NumberFormatRenderer._arabic_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L414)) |
+| `aiueo` | `partial(_word_cycled_sequence, sequence=_AIUEO_HALF_WIDTH)` ([_word_cycled_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L54)) |
+| `aiueoFullWidth` | `partial(_word_cycled_sequence, sequence=_AIUEO_FULL_WIDTH)` ([_word_cycled_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L54)) |
+| `arabicAbjad` | `partial(_arabic_sequence, sequence=_ARABIC_ABJAD, prefix='\u200c')` ([_arabic_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L64)) |
+| `arabicAlpha` | `partial(_arabic_sequence, sequence=_ARABIC_ALPHA, suffix='\u200c')` ([_arabic_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L64)) |
 | `bahtText` | `str` |
 | `bullet` | `str` |
-| `cardinalText` | `self._english_cardinal` ([NumberFormatRenderer._english_cardinal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L801)) |
-| `chicago` | `self._chicago` ([NumberFormatRenderer._chicago](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L791)) |
-| `chineseCounting` | `self._chinese_counting` ([NumberFormatRenderer._chinese_counting](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L440)) |
-| `chineseCountingThousand` | `self._chinese_counting_thousand` ([NumberFormatRenderer._chinese_counting_thousand](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L452)) |
-| `chineseLegalSimplified` | `self._chinese_legal_simplified` ([NumberFormatRenderer._chinese_legal_simplified](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L546)) |
-| `chosung` | `partial(self._word_cycled_sequence, sequence='ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ')` ([NumberFormatRenderer._word_cycled_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L404)) |
-| `custom` | `self._custom` ([NumberFormatRenderer._custom](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L309)) |
+| `cardinalText` | `_english_cardinal` ([_english_cardinal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_words.py#L8)) |
+| `chicago` | `_chicago` ([_chicago](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L215)) |
+| `chineseCounting` | `_chinese_counting` ([_chinese_counting](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L88)) |
+| `chineseCountingThousand` | `east_asian._chinese_counting_thousand` ([EastAsianNumberRenderer._chinese_counting_thousand](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_east_asian.py#L20)) |
+| `chineseLegalSimplified` | `east_asian._chinese_legal_simplified` ([EastAsianNumberRenderer._chinese_legal_simplified](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_east_asian.py#L77)) |
+| `chosung` | `partial(_word_cycled_sequence, sequence='ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ')` ([_word_cycled_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L54)) |
+| `custom` | `_custom` ([_custom](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L25)) |
 | `decimal` | `str` |
-| `decimalEnclosedCircle` | `partial(self._enclosed_decimal, start=9312, last=20)` ([NumberFormatRenderer._enclosed_decimal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L428)) |
-| `decimalEnclosedCircleChinese` | `partial(self._enclosed_decimal, start=9312, last=10)` ([NumberFormatRenderer._enclosed_decimal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L428)) |
-| `decimalEnclosedFullstop` | `partial(self._enclosed_decimal, start=9352, last=20)` ([NumberFormatRenderer._enclosed_decimal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L428)) |
-| `decimalEnclosedParen` | `partial(self._enclosed_decimal, start=9332, last=20)` ([NumberFormatRenderer._enclosed_decimal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L428)) |
-| `decimalFullWidth` | `partial(self._translate_digits, digits='０１２３４５６７８９')` ([NumberFormatRenderer._translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L385)) |
-| `decimalFullWidth2` | `partial(self._translate_digits, digits='０１２３４５６７８９')` ([NumberFormatRenderer._translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L385)) |
+| `decimalEnclosedCircle` | `partial(_enclosed_decimal, start=9312, last=20)` ([_enclosed_decimal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L78)) |
+| `decimalEnclosedCircleChinese` | `partial(_enclosed_decimal, start=9312, last=10)` ([_enclosed_decimal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L78)) |
+| `decimalEnclosedFullstop` | `partial(_enclosed_decimal, start=9352, last=20)` ([_enclosed_decimal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L78)) |
+| `decimalEnclosedParen` | `partial(_enclosed_decimal, start=9332, last=20)` ([_enclosed_decimal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L78)) |
+| `decimalFullWidth` | `partial(_translate_digits, digits='０１２３４５６７８９')` ([_translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L37)) |
+| `decimalFullWidth2` | `partial(_translate_digits, digits='０１２３４５６７８９')` ([_translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L37)) |
 | `decimalHalfWidth` | `str` |
-| `decimalZero` | `self._decimal_zero` ([NumberFormatRenderer._decimal_zero](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L302)) |
+| `decimalZero` | `_decimal_zero` ([_decimal_zero](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L17)) |
 | `dollarText` | `str` |
-| `ganada` | `partial(self._word_cycled_sequence, sequence='가나다라마바사아자차카타파하')` ([NumberFormatRenderer._word_cycled_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L404)) |
-| `hebrew1` | `self._hebrew_numeral` ([NumberFormatRenderer._hebrew_numeral](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L766)) |
-| `hebrew2` | `self._hebrew_alphabet` ([NumberFormatRenderer._hebrew_alphabet](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L784)) |
-| `hex` | `self._hexadecimal` ([NumberFormatRenderer._hexadecimal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L377)) |
-| `hindiConsonants` | `partial(self._word_repeated_sequence, sequence=(*tuple((chr(codepoint) for codepoint in range(2309, 2325))), 'अं', 'अः'))` ([NumberFormatRenderer._word_repeated_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L397)) |
-| `hindiCounting` | `self._hindi_counting` ([NumberFormatRenderer._hindi_counting](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L888)) |
-| `hindiNumbers` | `partial(self._translate_digits, digits='०१२३४५६७८९')` ([NumberFormatRenderer._translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L385)) |
-| `hindiVowels` | `partial(self._word_repeated_sequence, sequence=''.join((chr(codepoint) for codepoint in range(2325, 2362))))` ([NumberFormatRenderer._word_repeated_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L397)) |
-| `ideographDigital` | `partial(self._translate_digits, digits='〇一二三四五六七八九')` ([NumberFormatRenderer._translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L385)) |
-| `ideographEnclosedCircle` | `self._ideograph_enclosed_circle` ([NumberFormatRenderer._ideograph_enclosed_circle](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L432)) |
-| `ideographLegalTraditional` | `self._ideograph_legal_traditional` ([NumberFormatRenderer._ideograph_legal_traditional](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L555)) |
-| `ideographTraditional` | `partial(self._bounded_sequence, sequence='甲乙丙丁戊己庚辛壬癸')` ([NumberFormatRenderer._bounded_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L424)) |
-| `ideographZodiac` | `partial(self._bounded_sequence, sequence='子丑寅卯辰巳午未申酉戌亥')` ([NumberFormatRenderer._bounded_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L424)) |
-| `ideographZodiacTraditional` | `self._sexagenary_cycle` ([NumberFormatRenderer._sexagenary_cycle](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L755)) |
-| `iroha` | `partial(self._cycled_sequence, sequence=self._IROHA_HALF_WIDTH)` ([NumberFormatRenderer._cycled_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L418)) |
-| `irohaFullWidth` | `partial(self._cycled_sequence, sequence=self._IROHA_FULL_WIDTH)` ([NumberFormatRenderer._cycled_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L418)) |
-| `japaneseCounting` | `self._japanese_counting` ([NumberFormatRenderer._japanese_counting](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L587)) |
-| `japaneseDigitalTenThousand` | `partial(self._translate_digits, digits='〇一二三四五六七八九')` ([NumberFormatRenderer._translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L385)) |
-| `japaneseLegal` | `self._japanese_legal` ([NumberFormatRenderer._japanese_legal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L627)) |
-| `koreanCounting` | `self._korean_counting` ([NumberFormatRenderer._korean_counting](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L672)) |
-| `koreanDigital` | `partial(self._translate_digits, digits='영일이삼사오육칠팔구')` ([NumberFormatRenderer._translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L385)) |
-| `koreanDigital2` | `partial(self._translate_digits, digits='零一二三四五六七八九')` ([NumberFormatRenderer._translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L385)) |
-| `koreanLegal` | `self._korean_legal` ([NumberFormatRenderer._korean_legal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L722)) |
-| `lowerLetter` | `partial(self._word_letter_sequence, sequence='abcdefghijklmnopqrstuvwxyz')` ([NumberFormatRenderer._word_letter_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L410)) |
-| `lowerRoman` | `lambda value: self._roman(value).lower()` |
+| `ganada` | `partial(_word_cycled_sequence, sequence='가나다라마바사아자차카타파하')` ([_word_cycled_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L54)) |
+| `hebrew1` | `_hebrew_numeral` ([_hebrew_numeral](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L190)) |
+| `hebrew2` | `_hebrew_alphabet` ([_hebrew_alphabet](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L208)) |
+| `hex` | `_hexadecimal` ([_hexadecimal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L29)) |
+| `hindiConsonants` | `partial(_word_repeated_sequence, sequence=(*tuple((chr(codepoint) for codepoint in range(2309, 2325))), 'अं', 'अः'))` ([_word_repeated_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L47)) |
+| `hindiCounting` | `_hindi_counting` ([_hindi_counting](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_words.py#L95)) |
+| `hindiNumbers` | `partial(_translate_digits, digits='०१२३४५६७८९')` ([_translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L37)) |
+| `hindiVowels` | `partial(_word_repeated_sequence, sequence=''.join((chr(codepoint) for codepoint in range(2325, 2362))))` ([_word_repeated_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L47)) |
+| `ideographDigital` | `partial(_translate_digits, digits='〇一二三四五六七八九')` ([_translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L37)) |
+| `ideographEnclosedCircle` | `_ideograph_enclosed_circle` ([_ideograph_enclosed_circle](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L82)) |
+| `ideographLegalTraditional` | `east_asian._ideograph_legal_traditional` ([EastAsianNumberRenderer._ideograph_legal_traditional](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_east_asian.py#L86)) |
+| `ideographTraditional` | `partial(_bounded_sequence, sequence='甲乙丙丁戊己庚辛壬癸')` ([_bounded_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L74)) |
+| `ideographZodiac` | `partial(_bounded_sequence, sequence='子丑寅卯辰巳午未申酉戌亥')` ([_bounded_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L74)) |
+| `ideographZodiacTraditional` | `_sexagenary_cycle` ([_sexagenary_cycle](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L181)) |
+| `iroha` | `partial(_cycled_sequence, sequence=_IROHA_HALF_WIDTH)` ([_cycled_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L68)) |
+| `irohaFullWidth` | `partial(_cycled_sequence, sequence=_IROHA_FULL_WIDTH)` ([_cycled_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L68)) |
+| `japaneseCounting` | `east_asian._japanese_counting` ([EastAsianNumberRenderer._japanese_counting](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_east_asian.py#L118)) |
+| `japaneseDigitalTenThousand` | `partial(_translate_digits, digits='〇一二三四五六七八九')` ([_translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L37)) |
+| `japaneseLegal` | `east_asian._japanese_legal` ([EastAsianNumberRenderer._japanese_legal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_east_asian.py#L158)) |
+| `koreanCounting` | `east_asian._korean_counting` ([EastAsianNumberRenderer._korean_counting](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_east_asian.py#L203)) |
+| `koreanDigital` | `partial(_translate_digits, digits='영일이삼사오육칠팔구')` ([_translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L37)) |
+| `koreanDigital2` | `partial(_translate_digits, digits='零一二三四五六七八九')` ([_translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L37)) |
+| `koreanLegal` | `east_asian._korean_legal` ([EastAsianNumberRenderer._korean_legal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_east_asian.py#L210)) |
+| `lowerLetter` | `partial(_word_letter_sequence, sequence='abcdefghijklmnopqrstuvwxyz')` ([_word_letter_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L60)) |
+| `lowerRoman` | `lambda value: _roman(value).lower()` |
 | `none` | `lambda _value: ''` |
-| `numberInDash` | `self._number_in_dash` ([NumberFormatRenderer._number_in_dash](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L306)) |
-| `ordinal` | `self._decimal_ordinal` ([NumberFormatRenderer._decimal_ordinal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L297)) |
-| `ordinalText` | `self._english_ordinal` ([NumberFormatRenderer._english_ordinal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L844)) |
-| `russianLower` | `partial(self._word_repeated_sequence, sequence=''.join((chr(codepoint) for codepoint in range(1072, 1081))) + ''.join((chr(codepoint) for codepoint in range(1082, 1088))) + ''.join((chr(codepoint) for codepoint in range(1088, 1098))) + 'ыэюя')` ([NumberFormatRenderer._word_repeated_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L397)) |
-| `russianUpper` | `partial(self._word_repeated_sequence, sequence=''.join((chr(codepoint) for codepoint in range(1040, 1049))) + ''.join((chr(codepoint) for codepoint in range(1050, 1056))) + ''.join((chr(codepoint) for codepoint in range(1056, 1066))) + 'ЫЭЮЯ')` ([NumberFormatRenderer._word_repeated_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L397)) |
-| `taiwaneseCounting` | `self._taiwanese_counting` ([NumberFormatRenderer._taiwanese_counting](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L478)) |
-| `taiwaneseCountingThousand` | `self._taiwanese_counting_thousand` ([NumberFormatRenderer._taiwanese_counting_thousand](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L485)) |
-| `taiwaneseDigital` | `partial(self._translate_digits, digits='○一二三四五六七八九')` ([NumberFormatRenderer._translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L385)) |
-| `thaiCounting` | `self._thai_counting` ([NumberFormatRenderer._thai_counting](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L1034)) |
-| `thaiLetters` | `partial(self._word_repeated_sequence, sequence='กขค' + ''.join((chr(codepoint) for codepoint in range(3591, 3620))) + 'ล' + ''.join((chr(codepoint) for codepoint in range(3623, 3631))))` ([NumberFormatRenderer._word_repeated_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L397)) |
-| `thaiNumbers` | `partial(self._translate_digits, digits='๐๑๒๓๔๕๖๗๘๙')` ([NumberFormatRenderer._translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L385)) |
-| `upperLetter` | `partial(self._word_letter_sequence, sequence='ABCDEFGHIJKLMNOPQRSTUVWXYZ')` ([NumberFormatRenderer._word_letter_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L410)) |
-| `upperRoman` | `self._roman` ([NumberFormatRenderer._roman](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L381)) |
-| `vietnameseCounting` | `self._vietnamese_counting` ([NumberFormatRenderer._vietnamese_counting](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L1060)) |
+| `numberInDash` | `_number_in_dash` ([_number_in_dash](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L21)) |
+| `ordinal` | `_decimal_ordinal` ([_decimal_ordinal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L12)) |
+| `ordinalText` | `_english_ordinal` ([_english_ordinal](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_words.py#L51)) |
+| `russianLower` | `partial(_word_repeated_sequence, sequence=''.join((chr(codepoint) for codepoint in range(1072, 1081))) + ''.join((chr(codepoint) for codepoint in range(1082, 1088))) + ''.join((chr(codepoint) for codepoint in range(1088, 1098))) + 'ыэюя')` ([_word_repeated_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L47)) |
+| `russianUpper` | `partial(_word_repeated_sequence, sequence=''.join((chr(codepoint) for codepoint in range(1040, 1049))) + ''.join((chr(codepoint) for codepoint in range(1050, 1056))) + ''.join((chr(codepoint) for codepoint in range(1056, 1066))) + 'ЫЭЮЯ')` ([_word_repeated_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L47)) |
+| `taiwaneseCounting` | `east_asian._taiwanese_counting` ([EastAsianNumberRenderer._taiwanese_counting](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_east_asian.py#L46)) |
+| `taiwaneseCountingThousand` | `east_asian._taiwanese_counting_thousand` ([EastAsianNumberRenderer._taiwanese_counting_thousand](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_east_asian.py#L53)) |
+| `taiwaneseDigital` | `partial(_translate_digits, digits='○一二三四五六七八九')` ([_translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L37)) |
+| `thaiCounting` | `_thai_counting` ([_thai_counting](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_words.py#L241)) |
+| `thaiLetters` | `partial(_word_repeated_sequence, sequence='กขค' + ''.join((chr(codepoint) for codepoint in range(3591, 3620))) + 'ล' + ''.join((chr(codepoint) for codepoint in range(3623, 3631))))` ([_word_repeated_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L47)) |
+| `thaiNumbers` | `partial(_translate_digits, digits='๐๑๒๓๔๕๖๗๘๙')` ([_translate_digits](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L37)) |
+| `upperLetter` | `partial(_word_letter_sequence, sequence='ABCDEFGHIJKLMNOPQRSTUVWXYZ')` ([_word_letter_sequence](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L60)) |
+| `upperRoman` | `_roman` ([_roman](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_sequences.py#L33)) |
+| `vietnameseCounting` | `_vietnamese_counting` ([_vietnamese_counting](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/format_words.py#L267)) |

@@ -219,4 +219,4 @@ A control supplies metadata around its saved content; it does not perform bindin
 
 - [parse_content_control](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/content_controls.py#L28)
 - [_parse_options](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/content_controls.py#L97)
-- [_append_controls](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L350)
+- [_append_controls](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx_content.py#L62)

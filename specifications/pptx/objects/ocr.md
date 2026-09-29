@@ -65,5 +65,5 @@ Semantic parsing/session can OCR referenced embedded image assets when an adapte
 
 ## Source references
 
-- [PptxParser._run_ocr](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/runner.py#L431)
+- [PptxParser._run_ocr](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/runner.py#L231)
 - [_append_ocr](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L225)

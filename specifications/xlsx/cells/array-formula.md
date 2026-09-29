@@ -51,5 +51,5 @@ Classic array ranges and dynamic spill associations have separate fields.
 
 ## Source references
 
-- [SheetWorkingSet.add_cell](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L168)
-- [apply_spill_sources](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/post.py#L79)
+- [SheetWorkingSet.add_cell](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L112)
+- [apply_spill_sources](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/post.py#L57)

@@ -168,7 +168,7 @@ Source → typed row materialization → where → group/aggregate → select �
 
 ## Source references
 
-- [query_data](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L42)
-- [_resolve_query_source](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L95)
-- [_coerce_cell_value](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L315)
-- [_render_query_result](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L448)
+- [query_data](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L21)
+- [_resolve_query_source](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L74)
+- [_coerce_cell_value](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_query_operations.py#L8)
+- [_render_query_result](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L294)

@@ -23,5 +23,5 @@ The output catalogs selected references found inside defined-name expressions.
 
 ## Source references
 
-- [_external_link_targets](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/runner.py#L307)
-- [_external_links_from_defined_names](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/runner.py#L298)
+- [_external_link_targets](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/metadata.py#L129)
+- [_external_links_from_defined_names](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/metadata.py#L120)

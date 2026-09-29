@@ -51,6 +51,6 @@ DTX emits sparse cells with row and column coordinates.
 
 ## Source references
 
-- [_append_grid](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L244)
-- [_visible_bounds](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L403)
+- [_append_grid](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L62)
+- [_visible_bounds](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L225)
 - [iter_plain_rows](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/plain.py#L19)

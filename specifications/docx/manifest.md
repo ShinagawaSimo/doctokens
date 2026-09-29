@@ -128,4 +128,4 @@
 
 ## Source references
 
-- [DocxParser.parse](../../packages/docx_llm_parser/src/docx_llm_parser/parsing/runner.py#L67)
+- [DocxParser.parse](../../packages/docx_llm_parser/src/docx_llm_parser/parsing/runner.py#L43)

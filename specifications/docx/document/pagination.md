@@ -81,6 +81,6 @@ Page numbers describe stored pagination hints. They are not calculated by laying
 ## Source references
 
 - [RunParser._handle_child](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/runs.py#L107)
-- [DocumentBodyParser.parse_paragraph](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/scanner.py#L200)
-- [_append_body](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L48)
-- [_append_cell_content](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L256)
+- [DocumentBodyParser.parse_paragraph](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/scanner.py#L185)
+- [_append_body](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L45)
+- [_append_cell_content](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L222)

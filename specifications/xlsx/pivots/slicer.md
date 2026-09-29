@@ -85,5 +85,5 @@ Scan XML paths containing slicercache; first slicerCacheDefinition descendant, f
 
 ## Source references
 
-- [PivotCatalog._parse_slicers](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/features.py#L482)
-- [_append_pivot_context](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L212)
+- [PivotCatalog._parse_slicers](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/pivots.py#L169)
+- [_append_pivot_context](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx_metadata.py#L164)

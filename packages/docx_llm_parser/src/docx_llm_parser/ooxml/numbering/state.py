@@ -6,6 +6,7 @@ import re
 from collections.abc import Mapping
 
 from ...core.models import NumberingLabel, ParseWarning, append_warning
+from .format_sequences import _chinese_counting, _chinese_digital
 from .formats import NumberFormatRenderer
 from .models import NumberingLevel, bullet_symbol
 from .parser import NumberingMap
@@ -155,8 +156,8 @@ class NumberingState:
             return " "
         return "\t"
 
-    _chinese_counting = staticmethod(NumberFormatRenderer._chinese_counting)
-    _chinese_digital = staticmethod(NumberFormatRenderer._chinese_digital)
+    _chinese_counting = staticmethod(_chinese_counting)
+    _chinese_digital = staticmethod(_chinese_digital)
 
     @staticmethod
     def _japanese_counting(value: int) -> str:

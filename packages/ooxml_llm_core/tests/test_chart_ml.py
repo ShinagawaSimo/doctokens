@@ -5,15 +5,13 @@ from __future__ import annotations
 import unittest
 from xml.etree import ElementTree as ET
 
+from ooxml_llm_core._chart_values import _flatten_category_levels, _safe_int, _to_float
 from ooxml_llm_core.chart_ml import (
     ChartParser,
     _first_dimension,
-    _flatten_category_levels,
     _local_name,
     _namespace,
-    _safe_int,
     _summary_chart_type,
-    _to_float,
     _true_value,
     _unique_in_order,
     parse_chart_xml,

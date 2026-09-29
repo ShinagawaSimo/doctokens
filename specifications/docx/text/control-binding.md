@@ -61,4 +61,4 @@
 ## Source references
 
 - [parse_content_control](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/content_controls.py#L28)
-- [_append_controls](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L350)
+- [_append_controls](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx_content.py#L62)

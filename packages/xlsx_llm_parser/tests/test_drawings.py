@@ -9,7 +9,7 @@ from ooxml_llm_core.models import RelationshipRecord
 from ooxml_llm_core.package import PackageReader
 from xlsx_llm_parser import parse_xlsx
 from xlsx_llm_parser import parse_xlsx as parse_xlsx_result
-from xlsx_llm_parser.parsing.modules.worksheets.post import parse_drawings
+from xlsx_llm_parser.parsing.modules.worksheets.drawings import parse_drawings
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"

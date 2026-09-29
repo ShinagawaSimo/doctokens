@@ -191,5 +191,5 @@ Visual-format dictionaries retain source strings.
 
 ## Source references
 
-- [_conditional_format_detail](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L508)
-- [_format_thresholds](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L553)
+- [_conditional_format_detail](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/rules.py#L159)
+- [_format_thresholds](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/rules.py#L204)

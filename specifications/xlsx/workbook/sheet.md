@@ -107,6 +107,6 @@ Sheet order is the workbook sheet-list order.
 
 ## Source references
 
-- [_parse_workbook_xml](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/runner.py#L214)
-- [SheetPostIndex](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L103)
-- [_append_sheet](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L60)
+- [_parse_workbook_xml](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/metadata.py#L32)
+- [SheetPostIndex](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L46)
+- [_append_sheet](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L43)

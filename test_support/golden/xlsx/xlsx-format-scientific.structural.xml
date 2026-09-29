@@ -2,7 +2,7 @@
   <sheet name="Sheet1">
     <grid ref="A1:A1">
       <tr number="1">
-        <cell>1.23E+05</cell>
+        <cell raw="123456">1.23E+05</cell>
       </tr>
     </grid>
   </sheet>

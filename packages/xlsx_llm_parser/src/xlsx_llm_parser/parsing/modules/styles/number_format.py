@@ -87,7 +87,11 @@ def formula_bar_value(raw: str, fmt_code: str, locale: str) -> str | None:
         if is_date or is_pct or _section_directives(section)[2]:
             return None
         syntax = _date_scan_text(section)
-        if re.search(r"(?i)[a-z]", syntax) and syntax.lower() != "general":
+        # Scientific display formats use the uppercase ``E+``/``E-`` token.
+        # It is formatting syntax, not literal text, so it must not prevent
+        # recovery of the ordinary saved number shown in Excel's formula bar.
+        syntax_without_scientific = re.sub(r"[0#?]+(?:\.[0#?]+)?E[+-][0#?]+", "", syntax)
+        if re.search(r"(?i)[a-z]", syntax_without_scientific) and syntax.lower() != "general":
             return None
         if abs(value) >= Decimal("1e15") or 0 < abs(value) < Decimal("1e-9"):
             return None

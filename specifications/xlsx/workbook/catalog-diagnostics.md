@@ -15,7 +15,7 @@ Rich values, cell controls, pivot caches and tables, slicers, and timelines use 
 - **IR**
   - The cell keeps its formatted `text`, omits `raw`, and does not copy the cached `<v>` value into the formula-bar field.
 - **Parsing**
-  - Dates, times, percentages, scientific notation, locale-specific numbering, and unsupported custom sections may produce this warning. A formula cell does not produce this warning for its cache; it uses `formula` and the cache is only used for display.
+  - Dates, times, percentages, locale-specific numbering, and unsupported custom sections may produce this warning. A supported uppercase scientific display code does not produce the warning solely because it contains `E+`/`E-`; unresolved magnitude or precision limits can still do so. A formula cell does not produce this warning for its cache; it uses `formula` and the cache is only used for display.
 
 ### `XLSX_CATALOG_XML_INVALID`
 

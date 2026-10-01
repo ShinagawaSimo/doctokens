@@ -9,6 +9,7 @@ from ooxml_llm_core.models import RelationshipRecord
 from ooxml_llm_core.package import PackageReader
 from xlsx_llm_parser import parse_xlsx
 from xlsx_llm_parser import parse_xlsx as parse_xlsx_result
+from xlsx_llm_parser.api import _render_chart_resource
 from xlsx_llm_parser.parsing.modules.worksheets.drawings import parse_drawings
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -286,12 +287,12 @@ class ChartTests(unittest.TestCase):
         )
 
         with PackageReader(data, PackageLimits()) as package:
-            images, charts = parse_drawings([sheet_rel], package)
+            _images, charts = parse_drawings([sheet_rel], package)
 
-        self.assertEqual(images, [])
-        self.assertEqual(charts[0]["ref"], "")
-        self.assertEqual(charts[0]["type"], "waterfall")
-        self.assertEqual(charts[0]["series"][0]["points"][0], {"category": "North", "value": "7"})
+        # Temporary final resource coverage until xlsx-chart-waterfall.xlsx exists.
+        output = _render_chart_resource(charts[0])
+        self.assertIn("type=waterfall", output)
+        self.assertIn("<point category=North value=7/>", output)
 
 
 class PivotTableTests(unittest.TestCase):

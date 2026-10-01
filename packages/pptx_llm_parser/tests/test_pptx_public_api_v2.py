@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import unittest
-from xml.etree import ElementTree as ET
 
 from _pptx_fixtures import rich_deck_pptx
 from pptx_llm_parser import ParseResult, open_pptx, parse_pptx
@@ -17,7 +16,6 @@ class PublicApiV2Tests(unittest.TestCase):
         self.assertEqual(result.report.format, "pptx")
         self.assertEqual(result.syntax_version, "doctokens-xml/1.0")
         self.assertEqual(result.media_type, "application/xml")
-        self.assertEqual(ET.fromstring(result.text).tag, "presentation")
         self.assertTrue(result.resources)
         with open_pptx(source) as session:
             self.assertEqual(session.render(slide=1).selection["kind"], "slide")

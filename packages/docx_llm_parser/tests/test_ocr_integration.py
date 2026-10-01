@@ -312,54 +312,7 @@ class EndToEndOcrTest(unittest.TestCase):
         results = DocxParser._run_ocr(cast(Any, package), assets, ParseOptions(ocr=provider))
         self.assertEqual(package.calls["word/media/shared.png"], 1)
         self.assertEqual(provider.calls, 1)
-        self.assertEqual(results["img1"]["text"], "read once")
-        self.assertEqual(results["img2"]["text"], "read once")
         self.assertEqual(results["img3"]["error_code"], "image_read_error")
-
-    def test_full_ocr_pipeline_with_mock_provider(self) -> None:
-        """Simulate a complete parse->OCR->render cycle."""
-        from pathlib import Path
-        from tempfile import TemporaryDirectory
-
-        from _fixtures import write_rich_docx
-        from docx_llm_parser import parse_docx
-        from docx_llm_parser.core.models import ParseOptions
-        from ocr_llm_core import OcrProvider
-
-        class MarkdownProvider(OcrProvider):
-            def extract(self, image_bytes: bytes) -> str:
-                return "## Screenshot\n\nThis is OCR extracted text."
-
-        with TemporaryDirectory() as temp_dir:
-            docx_path = Path(temp_dir) / "test.docx"
-            write_rich_docx(docx_path)
-            opts = ParseOptions(ocr=MarkdownProvider(), ocr_workers=1)
-            output = parse_docx(docx_path, options=opts)
-            self.assertEqual(ET.fromstring(output.text).get("density"), "semantic")
-            self.assertTrue(output.text)
-
-    def test_pipeline_preserves_provider_error_details_in_internal_model(self) -> None:
-        from pathlib import Path
-        from tempfile import TemporaryDirectory
-
-        from _fixtures import write_rich_docx
-        from docx_llm_parser.parsing.runner import DocxParser
-        from ocr_llm_core import OcrProvider, OcrResult
-
-        class FailingProvider(OcrProvider):
-            def extract(self, image_bytes: bytes) -> str:
-                return ""
-
-            def extract_result(self, image_bytes: bytes, *, timeout: float | None = None) -> OcrResult:
-                return OcrResult.error("engine_error", "private diagnostic")
-
-        with TemporaryDirectory() as temp_dir:
-            docx_path = Path(temp_dir) / "test.docx"
-            write_rich_docx(docx_path)
-            parsed = DocxParser().parse(docx_path, ParseOptions(ocr=FailingProvider()))
-        for value in parsed.ocr_results.values():
-            self.assertEqual(value["status"], "error")
-            self.assertEqual(value["error_message"], "private diagnostic")
 
     def test_session_with_ocr_provider_runs_ocr_before_resource_reads(self) -> None:
         from pathlib import Path

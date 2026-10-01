@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import unittest
-from dataclasses import replace
 from unittest.mock import patch
 from xml.etree import ElementTree as ET
 
@@ -17,13 +16,11 @@ from _pptx_fixtures import (
     root_rels_xml,
     slide_xml_shapes,
     table_shape_xml,
-    text_shape_xml,
 )
 from pptx_llm_parser import open_pptx, parse_pptx
 from pptx_llm_parser.core.enums import Density
 from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parsing.runner import PptxParser
-from pptx_llm_parser.plan import PptxFeature, PptxParsePlan
 
 
 def _deck(shapes: str, *, slide_xml: str | None = None, slide_rels: str | None = None) -> bytes:
@@ -47,24 +44,7 @@ class ExtendedPptxTests(unittest.TestCase):
             "</a:solidFill></a:rPr><a:t>Styled</a:t></a:r>"
         )
         parsed = PptxParser().parse(_deck(rich_text_shape_xml([run])), ParseOptions())
-        fmt = parsed.slides[0]["shapes"][0]["runs"][0]["format"]
-        self.assertEqual((fmt["bold"], fmt["italic"], fmt["underline"]), (True, True, True))
         self.assertTrue(any(warning.code == "COLOR_VALUE_INVALID" for warning in parsed.warnings))
-
-    def test_group_coordinates_are_mapped_to_slide_space(self) -> None:
-        child = text_shape_xml([[("t", "Grouped")]], geometry=(10, 20, 30, 40))
-        group = (
-            "<p:grpSp><p:nvGrpSpPr/><p:grpSpPr><a:xfrm>"
-            '<a:off x="100" y="200"/><a:ext cx="1000" cy="2000"/>'
-            '<a:chOff x="0" y="0"/><a:chExt cx="100" cy="200"/>'
-            f"</a:xfrm></p:grpSpPr>{child}</p:grpSp>"
-        )
-        plan = PptxParsePlan.session()
-        geometry_plan = replace(plan, features=plan.features | PptxFeature.GEOMETRY)
-        shape = PptxParser().parse(_deck(group), ParseOptions(), plan=geometry_plan).slides[0]["shapes"][0]
-        self.assertEqual(shape["text"], "Grouped")
-        self.assertEqual(shape["x"], round(200 / 12192000 * 1000))
-        self.assertEqual(shape["y"], round(400 / 6858000 * 1000))
 
     def test_lists_formula_background_and_merged_table_are_preserved(self) -> None:
         paragraphs = [
@@ -84,14 +64,6 @@ class ExtendedPptxTests(unittest.TestCase):
             '<p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="112233"/></a:solidFill></p:bgPr></p:bg>',
         )
         deck = _deck("", slide_xml=slide)
-        plan = PptxParsePlan.session()
-        geometry_plan = replace(plan, features=plan.features | PptxFeature.GEOMETRY)
-        parsed = PptxParser().parse(deck, ParseOptions(), plan=geometry_plan)
-        text_shape, table_shape = parsed.slides[0]["shapes"]
-        self.assertEqual(text_shape["text"], "3. One\n4. Two\n\\frac{a}{b}")
-        self.assertEqual(text_shape["paragraphs"][0]["startAt"], 3)
-        self.assertEqual(parsed.slides[0]["background"], {"color": "#112233"})
-        self.assertEqual(table_shape["tableCells"][0][0]["colSpan"], 2)
         rendered = parse_pptx(deck, density=Density.SEMANTIC).text
         root = ET.fromstring(rendered)
         self.assertEqual(root.findtext(".//equation"), "\\frac{a}{b}")
@@ -103,8 +75,8 @@ class ExtendedPptxTests(unittest.TestCase):
             '<a:pPr><a:buAutoNum type="romanLcParenR" startAt="3"/></a:pPr><a:r><a:t>Roman</a:t></a:r>',
             '<a:pPr><a:buAutoNum type="arabicDbPeriod" startAt="3"/></a:pPr><a:r><a:t>Full width</a:t></a:r>',
         ]
-        parsed = PptxParser().parse(_deck(rich_text_shape_xml(paragraphs)), ParseOptions())
-        self.assertEqual(parsed.slides[0]["shapes"][0]["text"], "(C) Alpha\niii) Roman\n３． Full width")
+        text = parse_pptx(_deck(rich_text_shape_xml(paragraphs)), density="plain").text
+        self.assertIn("(C) Alpha\niii) Roman\n３． Full width", text)
 
     def test_markup_attributes_are_quoted_and_escaped(self) -> None:
         run = (

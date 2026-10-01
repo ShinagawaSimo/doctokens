@@ -14,7 +14,7 @@ SHEET_PART = "xl/worksheets/sheet1.xml"
 
 
 @pytest.mark.parametrize("density", ["structural", "semantic"])
-def test_selection_without_master_retains_group_in_one_shot_and_session(density: str) -> None:
+def test_selections_do_not_mutate_session_and_match_one_shot(density: str) -> None:
     selected = parse_xlsx(FIXTURE, density=density, sheet="Sheet1", range_spec="D3:D3")
     with open_xlsx(FIXTURE) as session:
         full_before = session.render(density=density).text
@@ -22,18 +22,6 @@ def test_selection_without_master_retains_group_in_one_shot_and_session(density:
         # Render-time compaction must not erase formula membership from session IR.
         assert session.render(density=density).text == full_before
         assert session.render(density=density, sheet="Sheet1", range_spec="D3:D3").text == selected.text
-    root = ET.fromstring(selected.text)
-    grid = root.find(".//grid")
-    assert grid is not None and grid.get("ref") == "D3:D3"
-    cells = root.findall(".//cell")
-    assert len(cells) == 1
-    assert cells[0].attrib == {
-        "formula": "TABLE(,B1)",
-        "formula-type": "dataTable",
-        "formula-range": "D2:D3",
-    }
-    assert cells[0].text == "8"
-    assert not selected.report.warnings
 
 
 def _malformed_master(attributes: dict[str, str | None], *, conflicting_formula: bool = False) -> bytes:

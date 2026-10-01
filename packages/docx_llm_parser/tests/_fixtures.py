@@ -1,4 +1,4 @@
-"""Shared test fixtures for building synthetic DOCX packages."""
+"""Temporary DOCX setup for features still awaiting real files in docs/真实测试文件清单.md."""
 
 import base64
 import zipfile

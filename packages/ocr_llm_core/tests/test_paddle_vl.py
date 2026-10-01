@@ -190,6 +190,7 @@ class PaddleVLProviderTest(unittest.TestCase):
         self.assertEqual(result.error_code, "image_too_large")
 
     def test_reads_dimensions_from_supported_image_headers(self) -> None:
+        # Temporary: real JPEG/BMP/TIFF assets are requested in docs/真实测试文件清单.md.
         jpeg = b"\xff\xd8\xff\xc0\x00\x0b\x08\x00\x02\x00\x03\x01\x01\x11\x00"
         bmp = bytearray(26)
         bmp[:2] = b"BM"

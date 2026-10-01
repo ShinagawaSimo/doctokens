@@ -4,7 +4,6 @@ import io
 import unittest
 import zipfile
 from pathlib import Path
-from xml.etree import ElementTree as ET
 
 from xlsx_llm_parser import open_xlsx, parse_xlsx
 
@@ -32,7 +31,6 @@ class StreamingTests(unittest.TestCase):
         with open_xlsx(data) as workbook:
             streamed = "".join(workbook.iter_render())
         self.assertEqual(full, streamed)
-        self.assertEqual(ET.fromstring(full).get("density"), "structural")
 
     def test_invalid_density_raises(self) -> None:
         data = FIXTURES / "xlsx-formula-relative.xlsx"

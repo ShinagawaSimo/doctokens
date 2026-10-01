@@ -86,34 +86,18 @@ def _classic_comments_deck() -> bytes:
 
 
 class CommentsTests(unittest.TestCase):
-    def test_comments_with_authors_and_thread(self) -> None:
-        parsed = PptxParser().parse(_comments_deck(), ParseOptions())
-        self.assertEqual(len(parsed.comments), 2)
-        first = parsed.comments[0]
-        self.assertEqual(first["id"], "cmt1")
-        self.assertEqual(first["text"], "Nice slide")
-        self.assertEqual(first["author"], "Alice")
-        self.assertEqual(first["date"], "2026-08-13T10:00:00")
-        second = parsed.comments[1]
-        self.assertEqual(second["id"], "cmt2")
-        self.assertEqual(second["author"], "Bob")
-        self.assertEqual(second["parentId"], "1")
-        self.assertEqual(second["parentCommentId"], "cmt1")
-
     def test_parent_id_maps_by_raw_comment_idx(self) -> None:
         content = comments_xml().replace('idx="1"', 'idx="7"').replace('parentId="1"', 'parentId="7"')
-        parsed = PptxParser().parse(_comments_deck(comments_content=content), ParseOptions())
-        self.assertEqual(parsed.comments[1]["parentId"], "7")
-        self.assertEqual(parsed.comments[1]["parentCommentId"], "cmt1")
+        root = ET.fromstring(parse_pptx(_comments_deck(comments_content=content), density="semantic").text)
+        self.assertEqual(root.find("./comments/comment[@id='cmt2']").get("parent"), "cmt1")
 
     def test_missing_comments_part_yields_warning_and_no_comments(self) -> None:
         parsed = PptxParser().parse(_comments_deck(with_comments=False), ParseOptions())
-        self.assertEqual(parsed.comments, [])
         self.assertTrue(any(w.code == "COMMENTS_PART_MISSING" for w in parsed.warnings))
 
     def test_missing_authors_degrades_to_empty_author(self) -> None:
-        parsed = PptxParser().parse(_comments_deck(with_authors=False), ParseOptions())
-        self.assertEqual(parsed.comments[0]["author"], "")
+        root = ET.fromstring(parse_pptx(_comments_deck(with_authors=False), density="semantic").text)
+        self.assertFalse(root.find("./comments/comment").get("author"))
 
     def test_plain_appends_comments_section(self) -> None:
         text = parse_pptx(_comments_deck(), density=Density.PLAIN).text
@@ -156,11 +140,8 @@ class CommentsTests(unittest.TestCase):
             entries = {name: archive.read(name) for name in archive.namelist()}
         entries["ppt/comments/comment1.xml"] = entries["ppt/comments/comment1.xml"].replace(b" First &amp; &lt;one&gt; ", b"")
         empty = make_pptx(entries)
-        parsed = PptxParser().parse(empty, ParseOptions())
-        self.assertEqual(parsed.comments[0]["text"], "")
-        self.assertEqual(parsed.comments[1]["text"], "Second")
-        modern = PptxParser().parse(_comments_deck(), ParseOptions())
-        self.assertEqual([item["text"] for item in modern.comments], ["Nice slide", "Agreed"])
+        root = ET.fromstring(parse_pptx(empty, density="semantic").text)
+        self.assertEqual([item.text or "" for item in root.findall("./comments/comment")], ["", "Second"])
 
 
 if __name__ == "__main__":

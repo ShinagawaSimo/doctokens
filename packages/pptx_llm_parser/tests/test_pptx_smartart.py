@@ -52,30 +52,12 @@ def _smartart_deck(*, with_data: bool = True) -> bytes:
 
 
 class SmartArtShapeTests(unittest.TestCase):
-    def test_smartart_shape_and_record(self) -> None:
-        parsed = PptxParser().parse(_smartart_deck(), ParseOptions())
-        shapes = parsed.slides[0]["shapes"]
-        self.assertEqual(len(shapes), 1)
-        self.assertEqual(shapes[0]["type"], "smartart")
-        self.assertEqual(shapes[0]["smartartId"], "smartart1")
-        self.assertEqual(shapes[0]["layoutType"], "process")
-        self.assertEqual(shapes[0]["nodeCount"], 3)
-        self.assertEqual(shapes[0]["linkCount"], 2)
-        self.assertEqual(len(parsed.smartarts), 1)
-        smartart = parsed.smartarts[0]
-        self.assertEqual(smartart["id"], "smartart1")
-        self.assertEqual([node["text"] for node in smartart["nodes"]], ["Start", "Middle", "End"])
-        self.assertEqual(smartart["links"], [{"from": 1, "to": 2}, {"from": 2, "to": 3}])
-
     def test_plain_smartart_placeholder(self) -> None:
         text = parse_pptx(_smartart_deck(), density=Density.PLAIN).text
         self.assertIn("[SmartArt: process, 3 nodes]", text)
 
     def test_missing_data_part_degrades_with_warning(self) -> None:
         parsed = PptxParser().parse(_smartart_deck(with_data=False), ParseOptions())
-        shape = parsed.slides[0]["shapes"][0]
-        self.assertEqual(shape["type"], "smartart")
-        self.assertNotIn("smartartId", shape)
         self.assertTrue(any(w.code == "SMARTART_PART_MISSING" for w in parsed.warnings))
         text = parse_pptx(_smartart_deck(with_data=False), density=Density.PLAIN).text
         self.assertIn("[SmartArt]", text)

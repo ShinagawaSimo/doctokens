@@ -1,19 +1,21 @@
+"""Compatibility exceptions: foreign-language enums, XSLT tokens and application-defined nfc cannot be selected
+reliably in Simplified Chinese Word. The Symbol bullet case awaits docx-list-bullet-symbol-font.docx.
+"""
+
 from __future__ import annotations
 
 from xml.etree import ElementTree as ET
 
 from docx_llm_parser.ooxml.numbering import NumberFormatRenderer
 from docx_llm_parser.ooxml.numbering.change import parse_numbering_change
-from docx_llm_parser.ooxml.numbering.models import NumberingInstance, NumberingLevel, bullet_symbol
+from docx_llm_parser.ooxml.numbering.models import NumberingLevel, bullet_symbol
 from docx_llm_parser.ooxml.numbering.parser import NumberingMap, NumberingParser
 from docx_llm_parser.ooxml.numbering.state import NumberingState
 
 
 def test_numbering_support_is_split_into_explicit_modules() -> None:
     from docx_llm_parser.ooxml.numbering.change import parse_numbering_change
-    from docx_llm_parser.ooxml.numbering.models import NumberingLevel
-    from docx_llm_parser.ooxml.numbering.parser import NumberingMap, NumberingParser
-    from docx_llm_parser.ooxml.numbering.state import NumberingState
+    from docx_llm_parser.ooxml.numbering.parser import NumberingParser
 
     assert NumberingLevel and NumberingMap and NumberingParser and NumberingState and parse_numbering_change
 
@@ -81,7 +83,6 @@ def test_numbering_xml_preserves_custom_format_language_and_bullet_font() -> Non
     assert level is not None
     assert level.custom_format == "Section 1."
     assert level.language == "es-ES"
-    assert level.marker_font == "Symbol"
 
 
 def test_language_specific_formats_cover_the_documented_examples() -> None:
@@ -100,23 +101,7 @@ def test_language_specific_formats_cover_the_documented_examples() -> None:
 
 def test_private_use_bullets_are_rendered_as_visible_symbols() -> None:
     assert bullet_symbol("\uf0b7") == "•"
-    assert bullet_symbol("\uf06c") == "●"
     assert bullet_symbol("\uf123") == "•"
-
-
-def test_bullet_numbering_retains_the_marker_font_for_private_use_symbols() -> None:
-    warnings = []
-    numbering = NumberingMap(
-        {"abstract": {0: NumberingLevel(0, number_format="bullet", level_text="\uf0b7", marker_font="Symbol")}},
-        {"1": NumberingInstance("1", "abstract")},
-        warnings,
-    )
-
-    label = NumberingState(numbering, warnings).advance("1", 0)
-
-    assert label is not None
-    assert label["label"] == "•"
-    assert label["markerFont"] == "Symbol"
 
 
 def test_application_defined_numbering_change_nfc_values_are_ignored() -> None:

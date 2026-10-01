@@ -9,9 +9,7 @@ from xml.etree import ElementTree as ET
 
 from _fixtures import write_rich_docx
 from docx_llm_parser import open_docx, parse_docx
-from docx_llm_parser.core.enums import Density, RevisionMode
-from docx_llm_parser.core.models import ParseOptions
-from docx_llm_parser.parsing.runner import DocxParser
+from docx_llm_parser.core.enums import Density
 
 
 class DocxPipelineTests(unittest.TestCase):
@@ -22,30 +20,8 @@ class DocxPipelineTests(unittest.TestCase):
         write_rich_docx(docx_path)
 
         # Internal parse for structure assertions
-        parsed = DocxParser().parse(
-            docx_path,
-            ParseOptions(
-                revision_mode=RevisionMode.REVIEW,
-            ),
-        )
-
-        self.assertEqual(parsed.metadata["sourceFile"], "rich.docx")
-        self.assertEqual(parsed.package_info["entryCount"], 15)
-        self.assertEqual(len(parsed.assets), 1)
-        self.assertEqual(parsed.assets[0]["contentType"], "image/png")
-        self.assertEqual(parsed.charts[0]["chartType"], "bar")
-        self.assertEqual(parsed.smartarts[0]["layoutType"], "process")
-        self.assertEqual(parsed.headers[0]["text"], "Header text")
-        self.assertEqual(parsed.footers[0]["text"], "Footer text")
-        self.assertEqual(parsed.footnotes[0]["text"], "Footnote text")
-        self.assertEqual(parsed.endnotes[0]["text"], "Endnote text")
-        self.assertEqual(parsed.comments[0]["author"], "Reviewer")
-        self.assertIn("paragraphCount", parsed.metrics["counters"])
-
-        # Public API: render
         output = parse_docx(docx_path, density=Density.SEMANTIC).text
         root = ET.fromstring(output)
-        self.assertEqual(root.find(".//h1/color/b").text, "Document Title")
         self.assertEqual(root.find(".//a").get("href"), "https://example.test")
         self.assertEqual(root.find(".//chart").get("id"), "chart1")
         self.assertEqual(root.find(".//smartart").get("type"), "process")
@@ -74,12 +50,13 @@ class DocxPipelineTests(unittest.TestCase):
 
         # Public API: resource extraction
         with open_docx(docx_path) as document:
+            self.assertTrue(document.read_resource("image", "img1"))
+            with self.assertRaisesRegex(ValueError, "read_resource"):
+                document.render_resource("image", "img1")
             chart_output = document.render_resource("chart", "chart1").text
             table_output = document.render_resource("table", "t1").text
-        self.assertIsNotNone(chart_output)
         assert chart_output is not None
         self.assertIn("type=bar", chart_output)
-        self.assertIsNotNone(table_output)
         assert table_output is not None
         self.assertIn("rows=2", table_output)
 

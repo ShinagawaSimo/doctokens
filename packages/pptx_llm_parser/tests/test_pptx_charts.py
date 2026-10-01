@@ -15,7 +15,7 @@ from _pptx_fixtures import (
     slide_rels_xml,
     slide_xml_shapes,
 )
-from pptx_llm_parser import parse_pptx
+from pptx_llm_parser import open_pptx, parse_pptx
 from pptx_llm_parser.core.enums import Density
 from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.parsing.runner import PptxParser
@@ -81,42 +81,18 @@ def _chart_ex_deck() -> bytes:
 
 
 class ChartShapeTests(unittest.TestCase):
-    def test_chart_shape_and_chart_record(self) -> None:
-        parsed = PptxParser().parse(_chart_deck(), ParseOptions())
-        shapes = parsed.slides[0]["shapes"]
-        self.assertEqual(len(shapes), 1)
-        self.assertEqual(shapes[0]["type"], "chart")
-        self.assertEqual(shapes[0]["chartId"], "chart1")
-        self.assertEqual(shapes[0]["chartType"], "bar")
-        self.assertEqual(shapes[0]["seriesCount"], 2)
-        self.assertEqual(shapes[0]["pointCount"], 4)
-        self.assertEqual(len(parsed.charts), 1)
-        chart = parsed.charts[0]
-        self.assertEqual(chart["id"], "chart1")
-        self.assertEqual(chart["chart_type"], "bar")
-        self.assertEqual(chart["title"], "Sales")
-        self.assertEqual(len(chart["series"]), 2)
-        self.assertEqual(chart["series"][0]["name"], "Q1")
-        self.assertEqual(chart["series"][0]["values"], ["10", "20"])
-
     def test_plain_chart_placeholder(self) -> None:
         text = parse_pptx(_chart_deck(), density=Density.PLAIN).text
         self.assertIn("[Chart: bar, 2 series]", text)
 
-    def test_chart_ex_shape_uses_the_shared_chart_parser(self) -> None:
-        parsed = PptxParser().parse(_chart_ex_deck(), ParseOptions())
-
-        shape = parsed.slides[0]["shapes"][0]
-        self.assertEqual(shape["type"], "chart")
-        self.assertEqual(shape["chartType"], "waterfall")
-        chart = parsed.charts[0]
-        self.assertEqual(chart["series"][0]["values"], ["10"])
+    def test_chart_ex_output_and_resource(self) -> None:
+        source = _chart_ex_deck()
+        self.assertIn("[Chart: waterfall, 1 series]", parse_pptx(source, density="plain").text)
+        with open_pptx(source) as session:
+            self.assertIn("categories=Start values=10", session.render_resource("chart", "chart1").text)
 
     def test_missing_chart_part_degrades_with_warning(self) -> None:
         parsed = PptxParser().parse(_chart_deck(with_part=False), ParseOptions())
-        shape = parsed.slides[0]["shapes"][0]
-        self.assertEqual(shape["type"], "chart")
-        self.assertNotIn("chartId", shape)
         self.assertTrue(any(w.code == "CHART_PART_MISSING" for w in parsed.warnings))
         text = parse_pptx(_chart_deck(with_part=False), density=Density.PLAIN).text
         self.assertIn("[Chart]", text)

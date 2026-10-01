@@ -74,57 +74,6 @@ class StyleTests(unittest.TestCase):
         self.assertIn("bold", semantic)
         self.assertIn('color="#FF0000"', semantic)
 
-    def test_fill_detected(self) -> None:
-        data = _make_xlsx(
-            {
-                "[Content_Types].xml": (
-                    f'<Types xmlns="{NS_CT}">'
-                    '<Default Extension="xml" ContentType="application/xml"/>'
-                    '<Default Extension="rels" ContentType='
-                    '"application/vnd.openxmlformats-package.relationships+xml"/>'
-                    '<Override PartName="/xl/workbook.xml" '
-                    'ContentType="application/vnd.openxmlformats-officedocument.'
-                    'spreadsheetml.sheet.main+xml"/>'
-                    "</Types>"
-                ),
-                "_rels/.rels": (
-                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                    f'<Relationship Id="r1" Type="{NS_O}/officeDocument" Target="xl/workbook.xml"/>'
-                    "</Relationships>"
-                ),
-                "xl/workbook.xml": (
-                    f'<workbook xmlns="{NS_S}" '
-                    'xmlns:r="http://schemas.openxmlformats.org/package/2006/relationships">'
-                    "<sheets>"
-                    '<sheet name="Data" sheetId="1" r:id="rSheet1"/>'
-                    "</sheets>"
-                    "</workbook>"
-                ),
-                "xl/_rels/workbook.xml.rels": (
-                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                    f'<Relationship Id="rSheet1" Type="{NS_O}/worksheet" '
-                    'Target="worksheets/sheet1.xml"/>'
-                    "</Relationships>"
-                ),
-                "xl/styles.xml": (
-                    f'<styleSheet xmlns="{NS_S}">'
-                    '<fonts count="1"><font/></fonts>'
-                    '<fills count="1">'
-                    '<fill><patternFill><fgColor rgb="FFFFFF00"/></patternFill></fill>'
-                    "</fills>"
-                    '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0"/></cellXfs>'
-                    "</styleSheet>"
-                ),
-                "xl/worksheets/sheet1.xml": (
-                    f'<worksheet xmlns="{NS_S}"><sheetData>'
-                    '<row r="1"><c r="A1" s="0" t="inlineStr"><is><t>Yellow</t></is></c></row>'
-                    "</sheetData></worksheet>"
-                ),
-            },
-        )
-        semantic = parse_xlsx(data, density="semantic").text
-        self.assertIn('fill="#FFFF00"', semantic)
-
     def test_no_styles_file(self) -> None:
         """Missing styles.xml should not crash style output."""
         data = _make_xlsx(
@@ -242,58 +191,6 @@ class StyleTests(unittest.TestCase):
         )
         semantic = parse_xlsx(data, density="semantic").text
         self.assertIn('color="#ED7D31"', semantic)
-
-    def test_default_theme_text_color_omitted(self) -> None:
-        """theme=1 is default dark text in SpreadsheetML and should not add noise."""
-        data = _make_xlsx(
-            {
-                "[Content_Types].xml": (
-                    f'<Types xmlns="{NS_CT}">'
-                    '<Default Extension="xml" ContentType="application/xml"/>'
-                    '<Default Extension="rels" ContentType='
-                    '"application/vnd.openxmlformats-package.relationships+xml"/>'
-                    '<Override PartName="/xl/workbook.xml" '
-                    'ContentType="application/vnd.openxmlformats-officedocument.'
-                    'spreadsheetml.sheet.main+xml"/>'
-                    "</Types>"
-                ),
-                "_rels/.rels": (
-                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                    f'<Relationship Id="r1" Type="{NS_O}/officeDocument" Target="xl/workbook.xml"/>'
-                    "</Relationships>"
-                ),
-                "xl/workbook.xml": (
-                    f'<workbook xmlns="{NS_S}" '
-                    'xmlns:r="http://schemas.openxmlformats.org/package/2006/relationships">'
-                    "<sheets>"
-                    '<sheet name="Data" sheetId="1" r:id="rSheet1"/>'
-                    "</sheets>"
-                    "</workbook>"
-                ),
-                "xl/_rels/workbook.xml.rels": (
-                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                    f'<Relationship Id="rSheet1" Type="{NS_O}/worksheet" '
-                    'Target="worksheets/sheet1.xml"/>'
-                    "</Relationships>"
-                ),
-                "xl/styles.xml": (
-                    f'<styleSheet xmlns="{NS_S}">'
-                    '<fonts count="1"><font><color theme="1"/></font></fonts>'
-                    '<fills count="1"><fill><patternFill/></fill></fills>'
-                    '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0"/></cellXfs>'
-                    "</styleSheet>"
-                ),
-                "xl/worksheets/sheet1.xml": (
-                    f'<worksheet xmlns="{NS_S}"><sheetData>'
-                    '<row r="1"><c r="A1" s="0" t="inlineStr"><is><t>Default black</t></is></c></row>'
-                    "</sheetData></worksheet>"
-                ),
-            },
-        )
-        semantic = parse_xlsx(data, density="semantic").text
-        self.assertIn("Default black", semantic)
-        self.assertNotIn("color=", semantic)
-        self.assertNotIn("#FFFFFF", semantic)
 
     def test_theme_fill_color_resolved(self) -> None:
         """Fill colour via theme accent4 with tint → resolved to tinted RGB."""

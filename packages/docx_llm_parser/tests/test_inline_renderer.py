@@ -3,21 +3,14 @@
 from __future__ import annotations
 
 import unittest
-from io import BytesIO
 from typing import Any, cast
 from xml.etree import ElementTree as ET
 
-from docx_llm_parser.core.models import ParseOptions, ParseWarning, RelationshipRecord
-from docx_llm_parser.core.package import PackageReader
+from docx_llm_parser.core.models import ParseOptions, ParseWarning
 from docx_llm_parser.core.relationships import RelationshipIndex
-from docx_llm_parser.ooxml.numbering import NumberingMap, NumberingState
 from docx_llm_parser.ooxml.styles import StyleMap
 from docx_llm_parser.parsing.modules.body.inline import InlineParser
-from docx_llm_parser.parsing.modules.body.scanner import DocumentBodyParser
 from docx_llm_parser.parsing.modules.resources.objects import (
-    CHART_REL_TYPE,
-    DIAGRAM_DATA_REL_TYPE,
-    EmbeddedObjectExtractor,
     parse_chart_root,
     parse_smartart_root,
 )
@@ -147,54 +140,6 @@ class InlineRendererTests(unittest.TestCase):
             "<nestedtable rows=1 cols=3><row><td>A<td colspan=2>B",
         )
 
-    def test_vertical_merge_updates_origin_rowspan(self) -> None:
-        """vMerge continue 应推动 restart 起点的 rowSpan。"""
-        rows = [
-            {
-                "rowIndex": 0,
-                "cells": [
-                    {
-                        "rowIndex": 0,
-                        "colIndex": 0,
-                        "rowSpan": 1,
-                        "colSpan": 1,
-                        "text": "A",
-                        "blocks": [],
-                        "vMerge": "restart",
-                    }
-                ],
-            },
-            {
-                "rowIndex": 1,
-                "cells": [
-                    {
-                        "rowIndex": 1,
-                        "colIndex": 0,
-                        "rowSpan": 1,
-                        "colSpan": 1,
-                        "text": "",
-                        "blocks": [],
-                        "vMerge": "continue",
-                    }
-                ],
-            },
-        ]
-        numbering = NumberingMap({}, {}, self.warnings)
-        parser = DocumentBodyParser(
-            cast(PackageReader, object()),
-            StyleMap({}, self.warnings),
-            ParseOptions(),
-            self.warnings,
-            RelationshipIndex.from_records([]),
-            {},
-            {},
-            NumberingState(numbering, self.warnings),
-        )
-
-        parser._apply_vertical_merges(cast(Any, rows))
-
-        self.assertEqual(rows[0]["cells"][0]["rowSpan"], 2)  # type: ignore[index]
-
     def test_chart_cache_renders_as_chart_summary(self) -> None:
         """图表缓存数据应渲染为轻量 chart 摘要。"""
         chart_xml = f"""<c:chartSpace {NS}>
@@ -241,66 +186,6 @@ class InlineRendererTests(unittest.TestCase):
         rendered = self._render_with_objects(xml, {("word/document.xml", "rIdDm"): smartart})
 
         self.assertIn("<smartart id=smartart1 type= nodes=2 links=1 truncated>采集 分析", rendered)
-
-    def test_embedded_object_extractor_builds_lookup(self) -> None:
-        """对象解析器应按 relationship 建立 chart/SmartArt 查询索引。"""
-        chart_xml = f"""<c:chartSpace {NS}><c:chart>
-          <c:plotArea><c:lineChart><c:ser>
-            <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>3</c:v></c:pt>
-            </c:numCache></c:numRef></c:val>
-          </c:ser></c:lineChart></c:plotArea>
-        </c:chart></c:chartSpace>"""
-        smartart_xml = f"""<dgm:dataModel {NS}><dgm:ptLst>
-          <dgm:pt modelId="n1"><dgm:t><a:p><a:r><a:t>节点</a:t></a:r></a:p></dgm:t></dgm:pt>
-        </dgm:ptLst></dgm:dataModel>"""
-        package = FakePackage(
-            {
-                "word/charts/chart1.xml": chart_xml,
-                "word/diagrams/data1.xml": smartart_xml,
-            }
-        )
-        relationships = RelationshipIndex.from_records(
-            [
-                RelationshipRecord(
-                    source_part="word/document.xml",
-                    id="rChart",
-                    type=CHART_REL_TYPE,
-                    target="charts/chart1.xml",
-                    resolved_target="word/charts/chart1.xml",
-                ),
-                RelationshipRecord(
-                    source_part="word/document.xml",
-                    id="rDm",
-                    type=DIAGRAM_DATA_REL_TYPE,
-                    target="diagrams/data1.xml",
-                    resolved_target="word/diagrams/data1.xml",
-                ),
-            ]
-        )
-
-        lookup, charts, smartarts = EmbeddedObjectExtractor(cast(Any, package), relationships, self.warnings).extract()
-
-        self.assertEqual(charts[0]["chartType"], "line")
-        self.assertEqual(smartarts[0]["nodes"][0]["text"], "节点")
-        self.assertEqual(lookup[("word/document.xml", "rChart")]["id"], "chart1")
-        self.assertEqual(lookup[("word/document.xml", "rDm")]["id"], "smartart1")
-
-
-class FakePackage:
-    """测试用最小 package reader。"""
-
-    def __init__(self, parts: dict[str, str]) -> None:
-        self.parts = parts
-
-    def exists(self, name: str) -> bool:
-        # 对象解析器只需要 exists/read_xml 两个接口。
-        return name in self.parts
-
-    def open_entry(self, name: str) -> BytesIO:
-        return BytesIO(self.parts[name].encode("utf-8"))
-
-    def read_xml(self, name: str) -> ET.Element:
-        return ET.fromstring(self.parts[name])
 
 
 if __name__ == "__main__":

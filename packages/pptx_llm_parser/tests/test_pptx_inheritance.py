@@ -1,4 +1,6 @@
-"""Layout → master inheritance: placeholder idx matching, geometry fallback, clrMap merging."""
+"""Missing layout parts and explicit conflicting clrMap encodings are compatibility exceptions; ordinary intermediate
+geometry checks are intentionally omitted.
+"""
 
 from __future__ import annotations
 
@@ -11,7 +13,6 @@ from _pptx_fixtures import (
     layout_xml,
     make_pptx,
     master_xml,
-    ph_shape_xml,
     presentation_rels_xml,
     presentation_xml,
     root_rels_xml,
@@ -77,31 +78,6 @@ def _resolver(deck: bytes) -> tuple[LayoutMasterResolver, PackageReader, ET.Elem
 
 
 class LayoutMasterResolverTests(unittest.TestCase):
-    def test_placeholder_by_idx_with_layout_geometry(self) -> None:
-        deck = _deck(layout_shapes=ph_shape_xml(idx="0", ph_type="title", geometry=(100, 200, 300, 400)))
-        resolver, pkg, root = _resolver(deck)
-        try:
-            context = resolver.resolve("ppt/slides/slide1.xml", root)
-        finally:
-            pkg.__exit__(None, None, None)
-        ph = context["placeholders"]["0"]
-        self.assertEqual(ph["type"], "title")
-        self.assertEqual((ph["x"], ph["y"], ph["w"], ph["h"]), (100, 200, 300, 400))
-
-    def test_placeholder_geometry_falls_back_to_master_by_type(self) -> None:
-        deck = _deck(
-            layout_shapes=ph_shape_xml(idx="0", ph_type="title"),
-            master_shapes=ph_shape_xml(idx="0", ph_type="title", geometry=(50, 60, 70, 80)),
-        )
-        resolver, pkg, root = _resolver(deck)
-        try:
-            context = resolver.resolve("ppt/slides/slide1.xml", root)
-        finally:
-            pkg.__exit__(None, None, None)
-        ph = context["placeholders"]["0"]
-        self.assertEqual(ph["type"], "title")
-        self.assertEqual((ph["x"], ph["y"], ph["w"], ph["h"]), (50, 60, 70, 80))
-
     def test_missing_layout_yields_warning_and_empty_context(self) -> None:
         entries: dict[str, str | bytes] = {
             "[Content_Types].xml": content_types_xml(1),
@@ -119,10 +95,9 @@ class LayoutMasterResolverTests(unittest.TestCase):
             resolver = LayoutMasterResolver(pkg, relationships, warnings)
             with pkg.open_entry("ppt/slides/slide1.xml") as stream:
                 root = ET.parse(stream).getroot()
-            context = resolver.resolve("ppt/slides/slide1.xml", root)
+            resolver.resolve("ppt/slides/slide1.xml", root)
         finally:
             pkg.__exit__(None, None, None)
-        self.assertEqual(context["placeholders"], {})
         self.assertTrue(any(w.code == "LAYOUT_PART_MISSING" for w in warnings))
 
     def test_clr_map_merge_slide_over_layout_over_master_over_default(self) -> None:

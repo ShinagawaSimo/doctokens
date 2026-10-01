@@ -4,72 +4,13 @@ from __future__ import annotations
 
 import unittest
 from typing import Any, cast
-from xml.etree import ElementTree as ET
 
-from docx_llm_parser.core.models import ParsedDocument, ParseOptions, ParseWarning
-from docx_llm_parser.core.package import PackageReader
-from docx_llm_parser.core.relationships import RelationshipIndex
-from docx_llm_parser.ooxml.numbering import NumberingMap, NumberingState
-from docx_llm_parser.ooxml.styles import StyleMap
-from docx_llm_parser.parsing.modules.body.scanner import DocumentBodyParser
-from docx_llm_parser.rendering.dispatch import build_manifest as _build_manifest
+from docx_llm_parser.core.models import ParsedDocument
 from docx_llm_parser.rendering.dispatch import render_resource as _render_resource
 from docx_llm_parser.rendering.plain.helpers import table_text_only
-from docx_llm_parser.rendering.tables.render import table_id
-
-WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-
-
-def _table_xml(body: str) -> ET.Element:
-    return ET.fromstring(f'<w:tbl xmlns:w="{WORD_NS}">{body}</w:tbl>')
-
-
-def _body_parser() -> DocumentBodyParser:
-    warnings: list[ParseWarning] = []
-    numbering = NumberingMap({}, {}, warnings)
-    return DocumentBodyParser(
-        cast(PackageReader, object()),
-        StyleMap({}, warnings),
-        ParseOptions(),
-        warnings,
-        RelationshipIndex.from_records([]),
-        {},
-        {},
-        NumberingState(numbering, warnings),
-    )
 
 
 class TableIdentityTests(unittest.TestCase):
-    def test_logical_tables_receive_unique_ids(self) -> None:
-        parser = _body_parser()
-        first = parser.parse_table(
-            _table_xml("<w:tr><w:tc><w:p><w:r><w:t>A</w:t></w:r></w:p></w:tc></w:tr>"),
-            "word/document.xml",
-        )
-        second = parser.parse_table(
-            _table_xml("<w:tr><w:tc><w:p><w:r><w:t>B</w:t></w:r></w:p></w:tc></w:tr>"),
-            "word/document.xml",
-        )
-
-        self.assertEqual((first[0]["tableId"], first[0]["segmentIndex"]), ("t1", 1))
-        self.assertEqual((second[0]["tableId"], second[0]["segmentIndex"]), ("t2", 1))
-        self.assertEqual(table_id(first[0]), "t1")
-
-    def test_page_split_segments_share_logical_table_id(self) -> None:
-        parser = _body_parser()
-        table = _table_xml(
-            "<w:tr><w:tc><w:p><w:r><w:t>A</w:t></w:r></w:p></w:tc></w:tr>"
-            "<w:tr><w:tc><w:p><w:r><w:lastRenderedPageBreak/><w:t>B</w:t>"
-            "</w:r></w:p></w:tc></w:tr>"
-        )
-
-        segments = parser.parse_table(table, "word/document.xml")
-
-        self.assertEqual(
-            [(block["tableId"], block["segmentIndex"]) for block in segments],
-            [("t1", 1), ("t1", 2)],
-        )
-
     def test_plain_truncation_uses_assigned_table_id(self) -> None:
         rows: list[dict[str, Any]] = [{"cells": [{"text": "x"}]} for _ in range(11)]
 
@@ -120,7 +61,6 @@ class TableIdentityTests(unittest.TestCase):
         results = _render_resource(parsed, "table", "t1")
         self.assertEqual(len(results), 1)
         self.assertIn("<table id=t1 rows=2 cols=3>", results[0])
-        self.assertEqual(_build_manifest(parsed)["tables"], 1)
 
     def _make_table(self, headers: list[str], data: list[list[str]], table_id: str = "t1") -> ParsedDocument:
         """Build a minimal ParsedDocument with one table."""

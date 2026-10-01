@@ -6,10 +6,11 @@ import math
 import re
 from decimal import Decimal
 
+from .number_formats.chinese import format_chinese_integer
 from .number_formats.codes import _date_scan_text, _localized_builtin_code
 from .number_formats.codes import builtin_format_code as builtin_format_code
 from .number_formats.codes import resolve_format as resolve_format
-from .number_formats.dates import _format_date_value
+from .number_formats.dates import _format_date_value, time_formula_bar_value
 from .number_formats.numbers import _format_number_value
 from .number_formats.sections import _clean_display_pattern, _section_directives, _select_format_section, _split_format_sections
 
@@ -34,12 +35,11 @@ def format_value(
     section, _value = _select_format_section(num, fmt_code)
     if section is None:
         return raw
-    if _section_directives(section)[2]:
-        # DBNum is a numbering system, not a digit substitution. Keep the
-        # saved value until the target Excel variants have real coverage.
-        return raw
     is_date, _is_pct = resolve_format(0, section, locale)
     try:
+        if _section_directives(section)[2]:
+            rendered = format_chinese_integer(Decimal(raw), section, fmt_code, locale)
+            return rendered if rendered is not None else raw
         if is_date:
             return _format_date_value(num, section, date_1904, locale)
         return _format_number_value(num, raw, fmt_code, _is_pct, locale)
@@ -67,10 +67,10 @@ def text_format_parts(fmt_code: str) -> list[str | None] | None:
 
 
 def formula_bar_value(raw: str, fmt_code: str, locale: str) -> str | None:
-    """Reconstruct only the verified-independent, ordinary numeric edit form.
+    """Reconstruct supported numeric and Simplified Chinese time edit forms.
 
     The formula bar is an application rendering, not the lexical XML value.
-    Date/time, percentage, locale-specific or precision-sensitive edit forms
+    Unverified date/time, percentage or precision-sensitive edit forms
     need a separate Excel comparison; returning None never substitutes a
     serial or cached result for that unavailable rendering.
     """
@@ -84,14 +84,18 @@ def formula_bar_value(raw: str, fmt_code: str, locale: str) -> str | None:
         if section is None:
             return None
         is_date, is_pct = resolve_format(0, section, locale)
-        if is_date or is_pct or _section_directives(section)[2]:
+        if is_date:
+            return time_formula_bar_value(value, section, locale)
+        if is_pct:
+            return None
+        if _section_directives(section)[2] and format_chinese_integer(value, section, fmt_code, locale) is None:
             return None
         syntax = _date_scan_text(section)
         # Scientific display formats use the uppercase ``E+``/``E-`` token.
         # It is formatting syntax, not literal text, so it must not prevent
         # recovery of the ordinary saved number shown in Excel's formula bar.
         syntax_without_scientific = re.sub(r"[0#?]+(?:\.[0#?]+)?E[+-][0#?]+", "", syntax)
-        if re.search(r"(?i)[a-z]", syntax_without_scientific) and syntax.lower() != "general":
+        if re.search(r"(?i)[a-z]", syntax_without_scientific) and syntax.strip().lower() != "general":
             return None
         if abs(value) >= Decimal("1e15") or 0 < abs(value) < Decimal("1e-9"):
             return None

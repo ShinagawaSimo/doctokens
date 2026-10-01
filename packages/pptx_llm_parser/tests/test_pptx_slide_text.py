@@ -15,8 +15,6 @@ from _pptx_fixtures import (
     text_shape_xml,
 )
 from pptx_llm_parser import parse_pptx
-from pptx_llm_parser.core.models import ParseOptions, ShapeBlock
-from pptx_llm_parser.parsing.runner import PptxParser
 
 
 class SlideTextParsingTests(unittest.TestCase):
@@ -30,41 +28,25 @@ class SlideTextParsingTests(unittest.TestCase):
         }
         return make_pptx(entries)
 
-    def _parse(self, shapes_xml: str) -> list[ShapeBlock]:
-        parsed = PptxParser().parse(self._deck(shapes_xml), ParseOptions())
-        return parsed.slides[0]["shapes"]
+    def _plain(self, shapes_xml: str) -> str:
+        return parse_pptx(self._deck(shapes_xml), density="plain").text
 
     def test_runs_concatenate(self) -> None:
         shapes = text_shape_xml([[("t", "Hello"), ("t", " World")]])
-        self.assertEqual(
-            self._parse(shapes),
-            [{"id": "s1", "type": "text", "name": "TextBox 1", "text": "Hello World", "z": 1}],
-        )
+        self.assertEqual(self._plain(shapes), "density=plain format=pptx\n=== Slide 1 ===\nHello World")
 
     def test_soft_break_and_tab(self) -> None:
         shapes = text_shape_xml([[("t", "A"), ("br", ""), ("t", "B"), ("tab", ""), ("t", "C")]])
-        self.assertEqual(self._parse(shapes)[0]["text"], "A\nB\tC")
-
-    def test_multiple_paragraphs_join_with_newline(self) -> None:
-        shapes = text_shape_xml([[("t", "First")], [("t", "Second")]])
-        self.assertEqual(self._parse(shapes)[0]["text"], "First\nSecond")
+        self.assertEqual(self._plain(shapes), "density=plain format=pptx\n=== Slide 1 ===\nA\nB\tC")
 
     def test_empty_and_textless_shapes_are_skipped(self) -> None:
         shapes = text_shape_xml([]) + text_shape_xml([[("t", "Only")]], name="Body")
-        parsed = self._parse(shapes)
-        self.assertEqual(len(parsed), 1)
-        self.assertEqual(parsed[0]["text"], "Only")
-
-    def test_shape_order_follows_xml(self) -> None:
-        shapes = text_shape_xml([[("t", "One")]], name="A") + text_shape_xml([[("t", "Two")]], name="B")
-        self.assertEqual([shape["text"] for shape in self._parse(shapes)], ["One", "Two"])
+        self.assertEqual(self._plain(shapes), "density=plain format=pptx\n=== Slide 1 ===\nOnly")
 
     def test_shape_without_txbody_is_skipped(self) -> None:
         bare = '<p:sp><p:nvSpPr><p:cNvPr id="3" name="Decor"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/></p:sp>'
         shapes = bare + text_shape_xml([[("t", "Keep")]])
-        parsed = self._parse(shapes)
-        self.assertEqual(len(parsed), 1)
-        self.assertEqual(parsed[0]["text"], "Keep")
+        self.assertEqual(self._plain(shapes), "density=plain format=pptx\n=== Slide 1 ===\nKeep")
 
     def test_accessible_shape_and_connector_are_retained_in_xml_order(self) -> None:
         def shape_xml(shape_id: int, description: str) -> str:
@@ -83,16 +65,10 @@ class SlideTextParsingTests(unittest.TestCase):
             '<a:stCxn id="2" idx="0"/><a:endCxn id="3" idx="0"/>'
             "</p:spPr></p:cxnSp>"
         )
-        shapes = self._parse(shape_xml(2, "Start") + shape_xml(3, "End") + connector)
-        self.assertEqual([shape["kind"] for shape in shapes], ["roundRect", "roundRect", "connector"])
-        self.assertEqual(shapes[2]["fromShape"], shapes[0]["id"])
-        self.assertEqual(shapes[2]["toShape"], shapes[1]["id"])
-        self.assertEqual(shapes[2]["title"], "Flow connection")
         semantic = parse_pptx(self._deck(shape_xml(2, "Start") + shape_xml(3, "End") + connector), density="semantic").text
         structural = parse_pptx(self._deck(shape_xml(2, "Start") + shape_xml(3, "End") + connector), density="structural").text
         semantic_root = ET.fromstring(semantic)
         connector_node = semantic_root.find(".//shape[@kind='connector']")
-        self.assertIsNotNone(connector_node)
         assert connector_node is not None
         self.assertEqual(
             (
@@ -105,7 +81,6 @@ class SlideTextParsingTests(unittest.TestCase):
         )
         structural_root = ET.fromstring(structural)
         connector_node = structural_root.find(".//shape[@kind='connector']")
-        self.assertIsNotNone(connector_node)
         assert connector_node is not None
         self.assertEqual(
             (connector_node.get("id"), connector_node.get("from-shape"), connector_node.get("to-shape")),

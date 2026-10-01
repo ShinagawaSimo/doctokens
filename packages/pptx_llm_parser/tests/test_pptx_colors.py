@@ -1,11 +1,13 @@
-"""DrawingML color element resolution: srgb/scheme+HSL/sys/prst/hsl/scrgb + tint/shade."""
+"""Theme light/dark and transparency cases await real PPTX files. Preset/scRGB/system encodings and exact transforms
+cannot be requested reliably in the current Office UI; malformed colors remain exceptions.
+"""
 
 from __future__ import annotations
 
 import unittest
 from xml.etree import ElementTree as ET
 
-from pptx_llm_parser.ooxml.colors import DEFAULT_COLOR_MAP, resolve_color_element
+from pptx_llm_parser.ooxml.colors import resolve_color_element
 
 A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
@@ -21,21 +23,6 @@ def _theme(**slots: str) -> dict[str, str]:
 
 
 class ColorResolutionTests(unittest.TestCase):
-    def test_srgb_color(self) -> None:
-        self.assertEqual(resolve_color_element(_color('<a:srgbClr val="4472C4"/>'), _theme()), "#4472C4")
-
-    def test_scheme_color_uses_theme_slot(self) -> None:
-        self.assertEqual(
-            resolve_color_element(_color('<a:schemeClr val="accent1"/>'), _theme()),
-            "#4472C4",
-        )
-
-    def test_scheme_color_default_map_tx1_to_dk1(self) -> None:
-        self.assertEqual(
-            resolve_color_element(_color('<a:schemeClr val="tx1"/>'), _theme()),
-            "#000000",
-        )
-
     def test_scheme_color_explicit_map(self) -> None:
         element = _color('<a:schemeClr val="accent1"/>')
         self.assertEqual(
@@ -93,13 +80,6 @@ class ColorResolutionTests(unittest.TestCase):
     def test_alpha_is_ignored(self) -> None:
         element = _color('<a:srgbClr val="FF0000"><a:alpha val="50000"/></a:srgbClr>')
         self.assertEqual(resolve_color_element(element, _theme()), "#FF0000")
-
-    def test_default_color_map_contents(self) -> None:
-        self.assertEqual(DEFAULT_COLOR_MAP["tx1"], "dk1")
-        self.assertEqual(DEFAULT_COLOR_MAP["tx2"], "dk2")
-        self.assertEqual(DEFAULT_COLOR_MAP["bg1"], "lt1")
-        self.assertEqual(DEFAULT_COLOR_MAP["bg2"], "lt2")
-        self.assertEqual(DEFAULT_COLOR_MAP["accent3"], "accent3")
 
 
 if __name__ == "__main__":

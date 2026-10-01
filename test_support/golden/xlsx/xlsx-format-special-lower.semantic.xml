@@ -1,0 +1,9 @@
+<workbook density="semantic" format="xlsx">
+  <sheet name="Sheet1">
+    <grid ref="A1:A1">
+      <tr number="1">
+        <cell raw="1234">一千二百三十四</cell>
+      </tr>
+    </grid>
+  </sheet>
+</workbook>

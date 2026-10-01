@@ -1,4 +1,4 @@
-"""Programmatic PPTX package fixtures (zero external dependencies)."""
+"""Temporary PPTX setup: no real PPTX fixtures exist yet; replace by the atoms in docs/真实测试文件清单.md."""
 
 from __future__ import annotations
 

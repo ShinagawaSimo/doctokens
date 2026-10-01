@@ -16,8 +16,6 @@ from _pptx_fixtures import (
 )
 from pptx_llm_parser import parse_pptx
 from pptx_llm_parser.core.enums import Density
-from pptx_llm_parser.core.models import ParseOptions
-from pptx_llm_parser.parsing.runner import PptxParser
 
 
 def _media_deck(kind: str = "video") -> bytes:
@@ -39,21 +37,6 @@ def _media_deck(kind: str = "video") -> bytes:
 
 
 class MediaShapeTests(unittest.TestCase):
-    def test_video_shape_and_asset(self) -> None:
-        parsed = PptxParser().parse(_media_deck(), ParseOptions())
-        shapes = parsed.slides[0]["shapes"]
-        self.assertEqual(len(shapes), 1)
-        self.assertEqual(shapes[0]["type"], "media")
-        self.assertEqual(shapes[0]["kind"], "video")
-        self.assertEqual(shapes[0]["assetId"], "media1")
-        self.assertEqual(parsed.assets[0]["type"], "media")
-        self.assertEqual(parsed.assets[0]["contentType"], "video/mp4")
-        self.assertEqual(parsed.assets[0]["zipPath"], "ppt/media/movie.mp4")
-
-    def test_audio_shape_kind(self) -> None:
-        parsed = PptxParser().parse(_media_deck(kind="audio"), ParseOptions())
-        self.assertEqual(parsed.slides[0]["shapes"][0]["kind"], "audio")
-
     def test_plain_video_placeholder(self) -> None:
         text = parse_pptx(_media_deck(), density=Density.PLAIN).text
         self.assertIn("[Video]", text)

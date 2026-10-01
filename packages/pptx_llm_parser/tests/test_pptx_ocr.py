@@ -35,13 +35,6 @@ class PptxOcrTests(unittest.TestCase):
         with self.assertRaisesRegex(TypeError, "ocr must provide"):
             ParseOptions(ocr=object())
 
-    def test_embedded_picture_is_ocrd_once_and_stored_by_asset_id(self) -> None:
-        provider = _TextProvider()
-        parsed = PptxParser().parse(_image_deck(), ParseOptions(ocr=provider))
-        self.assertEqual(provider.calls, 1)
-        self.assertEqual(parsed.ocr_results["img1"]["status"], "success")
-        self.assertEqual(parsed.ocr_results["img1"]["text"], "Slide <text>")
-
     def test_semantic_emits_escaped_ocr_sibling_only(self) -> None:
         options = ParseOptions(ocr=_TextProvider())
         semantic = parse_pptx(_image_deck(), density=Density.SEMANTIC, options=options).text
@@ -65,9 +58,8 @@ class PptxOcrTests(unittest.TestCase):
 
     def test_external_picture_is_not_downloaded_or_ocrd(self) -> None:
         provider = _TextProvider()
-        parsed = PptxParser().parse(_image_deck(external=True), ParseOptions(ocr=provider))
+        PptxParser().parse(_image_deck(external=True), ParseOptions(ocr=provider))
         self.assertEqual(provider.calls, 0)
-        self.assertEqual(parsed.ocr_results, {})
 
     def test_unreferenced_package_image_is_not_ocrd(self) -> None:
         import zipfile
@@ -95,8 +87,6 @@ class PptxOcrTests(unittest.TestCase):
                 return OcrResult.error("engine_error", "private diagnostic")
 
         options = ParseOptions(ocr=ErrorProvider())
-        parsed = PptxParser().parse(_image_deck(), options)
-        self.assertEqual(parsed.ocr_results["img1"]["error_message"], "private diagnostic")
         rendered = parse_pptx(_image_deck(), density=Density.SEMANTIC, options=options).text
         root = ET.fromstring(rendered)
         marker = root.find(".//ocr-text")

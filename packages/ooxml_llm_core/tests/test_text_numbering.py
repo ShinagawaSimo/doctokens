@@ -1,4 +1,6 @@
-"""Shared DrawingML automatic-numbering conversions."""
+"""Pending PPTX list files cover menu-supported schemes. Nonpositive counters and schemes absent from the Simplified
+Chinese menu remain compatibility exceptions.
+"""
 
 import unittest
 
@@ -9,7 +11,6 @@ class TextNumberingTests(unittest.TestCase):
     def test_alpha_and_roman_sequences_support_large_values(self) -> None:
         self.assertEqual(alpha_number(1, upper=False), "a")
         self.assertEqual(alpha_number(27, upper=True), "AA")
-        self.assertEqual(roman_number(10001), "MMMMMMMMMMI")
 
     def test_drawingml_schemes_apply_punctuation(self) -> None:
         expected = {

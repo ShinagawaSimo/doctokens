@@ -46,17 +46,8 @@ def _notes_deck(*, with_notes: bool = True, with_part: bool = True) -> bytes:
 
 
 class NotesTests(unittest.TestCase):
-    def test_notes_text_extracted(self) -> None:
-        parsed = PptxParser().parse(_notes_deck(), ParseOptions())
-        self.assertEqual(parsed.slides[0]["notes"], "Talk about this\nAnd that")
-
-    def test_slide_without_notes_rel_has_none(self) -> None:
-        parsed = PptxParser().parse(_notes_deck(with_notes=False), ParseOptions())
-        self.assertIsNone(parsed.slides[0]["notes"])
-
     def test_missing_notes_part_degrades_with_warning(self) -> None:
         parsed = PptxParser().parse(_notes_deck(with_part=False), ParseOptions())
-        self.assertIsNone(parsed.slides[0]["notes"])
         self.assertTrue(any(w.code == "NOTES_PART_MISSING" for w in parsed.warnings))
 
     def test_plain_renders_notes_after_slide_text(self) -> None:

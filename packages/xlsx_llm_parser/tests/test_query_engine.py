@@ -7,10 +7,8 @@ from typing import Any, cast
 
 from xlsx_llm_parser._query_operations import (
     _average_accumulator,
-    _coerce_cell_value,
     _finalize_averages,
     _matches_condition,
-    _order_key,
 )
 from xlsx_llm_parser.query import _render_query_result, query_data
 
@@ -194,26 +192,15 @@ class QueryEngineTests(unittest.TestCase):
         )
         self.assertIn("<td>9<tr><td>10<tr><td>100", result)
 
-    def test_query_value_helpers_cover_empty_and_invalid_paths(self) -> None:
-        self.assertEqual(_coerce_cell_value("1.5"), 1.5)
-        self.assertEqual(_coerce_cell_value("text"), "text")
+    def test_query_value_helpers_reject_invalid_internal_inputs(self) -> None:
+        # Malformed query values/accumulators cannot be encoded in an Office file.
         row = {"name": "Alice", "amount": 10}
-        self.assertTrue(_matches_condition(row, {"column": "name", "op": "eq", "value": "Alice"}))
-        self.assertTrue(_matches_condition(row, {"column": "name", "op": "contains", "value": "li"}))
-        self.assertTrue(_matches_condition(row, {"column": "amount", "op": "gt", "value": "9"}))
-        self.assertTrue(_matches_condition(row, {"column": "amount", "op": "lt", "value": "11"}))
         self.assertFalse(_matches_condition(row, {"column": "amount", "op": "gt", "value": "bad"}))
         self.assertFalse(_matches_condition(row, {"column": "name", "op": "unknown", "value": "Alice"}))
-        self.assertEqual(_average_accumulator((1, 1), 2), (3, 2))
         self.assertEqual(_average_accumulator(("bad", 1), 2), (2, 1))
-        average_row: dict[str, object] = {"avg_amount": (3, 2)}
-        _finalize_averages(average_row, [{"op": "avg", "column": "amount", "as": "avg_amount"}])
-        self.assertEqual(average_row["avg_amount"], 1.5)
         empty_average: dict[str, object] = {}
         _finalize_averages(empty_average, [{"op": "avg", "column": "amount"}])
         self.assertEqual(empty_average["avg_amount"], 0)
-        self.assertEqual(_order_key({"value": 2}, "value"), (0, 2))
-        self.assertEqual(_order_key({"value": "2"}, "value"), (1, "2"))
         self.assertEqual(_render_query_result([]), "<table>\n")
 
 

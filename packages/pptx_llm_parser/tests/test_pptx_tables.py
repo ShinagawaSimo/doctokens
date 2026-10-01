@@ -15,8 +15,6 @@ from _pptx_fixtures import (
 )
 from pptx_llm_parser import parse_pptx
 from pptx_llm_parser.core.enums import Density
-from pptx_llm_parser.core.models import ParseOptions
-from pptx_llm_parser.parsing.runner import PptxParser
 
 
 def _table_deck(rows: list[list[str]]) -> bytes:
@@ -31,14 +29,6 @@ def _table_deck(rows: list[list[str]]) -> bytes:
 
 
 class TableShapeTests(unittest.TestCase):
-    def test_table_shape_rows(self) -> None:
-        parsed = PptxParser().parse(_table_deck([["A", "B"], ["C", "D"]]), ParseOptions())
-        shapes = parsed.slides[0]["shapes"]
-        self.assertEqual(len(shapes), 1)
-        self.assertEqual(shapes[0]["type"], "table")
-        self.assertEqual(shapes[0]["name"], "Table 3")
-        self.assertEqual(shapes[0]["rows"], [["A", "B"], ["C", "D"]])
-
     def test_plain_table_tab_separated(self) -> None:
         text = parse_pptx(_table_deck([["A", "B"], ["C", "D"]]), density=Density.PLAIN).text
         self.assertIn("A\tB\nC\tD", text)

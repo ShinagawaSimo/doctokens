@@ -11,7 +11,7 @@ from docx_llm_parser import parse_docx
 from docx_llm_parser.core.enums import Density, RevisionMode
 from docx_llm_parser.core.models import ParseOptions
 from docx_llm_parser.parsing.runner import DocxParser
-from docx_llm_parser.rendering.dispatch import build_manifest, to_output
+from docx_llm_parser.rendering.dispatch import to_output
 
 NS_W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -67,10 +67,9 @@ class BodyStructureTests(unittest.TestCase):
             "<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"
             "</w:sdtContent></w:sdt>"
         )
-        parsed = DocxParser().parse(data, ParseOptions())
-        self.assertEqual(parsed.blocks[0]["text"], "Wrapped text")
-        self.assertEqual(parsed.blocks[1]["type"], "table")
-        self.assertEqual(parsed.blocks[1]["rows"][0]["cells"][0]["text"], "Cell")
+        root = ET.fromstring(parse_docx(data).text)
+        self.assertEqual(root.findtext(".//content-control/p"), "Wrapped text")
+        self.assertEqual("".join(root.find(".//table").itertext()), "Cell")
 
     def test_content_control_semantics_and_density(self) -> None:
         """Form controls retain fill/select semantics without duplicating their content."""
@@ -92,14 +91,6 @@ class BodyStructureTests(unittest.TestCase):
         parsed = DocxParser().parse(data, ParseOptions())
         self.assertFalse(any(w.code == "UNSUPPORTED_PARAGRAPH_CHILD" for w in parsed.warnings))
 
-        first_control = parsed.blocks[0]["contentControls"][0]
-        self.assertEqual(first_control["controlType"], "dropDownList")
-        self.assertEqual(first_control["alias"], "Status")
-        self.assertEqual(first_control["binding"]["xpath"], "/root/status")
-        self.assertEqual([item["display"] for item in first_control["options"]], ["Open", "Closed"])
-        self.assertEqual(parsed.blocks[2]["text"], "")
-        self.assertEqual(parsed.blocks[2]["contentControls"][0]["controlType"], "comboBox")
-
         semantic = to_output(parsed, Density.SEMANTIC)
         root = ET.fromstring(semantic)
         controls = root.findall(".//content-control")
@@ -114,7 +105,6 @@ class BodyStructureTests(unittest.TestCase):
 
         structural = ET.fromstring(to_output(parsed, Density.STRUCTURAL))
         structural_control = structural.find(".//content-control[@type='dropDownList']")
-        self.assertIsNotNone(structural_control)
         assert structural_control is not None
         self.assertEqual(structural_control.get("locked"), "true")
         self.assertEqual(structural_control.get("choices"), "Open=open|Closed=closed")
@@ -136,7 +126,7 @@ class BodyStructureTests(unittest.TestCase):
         codes = [warning.code for warning in parsed.warnings if warning.code == "UNSUPPORTED_BODY_CHILD"]
         self.assertEqual(codes, ["UNSUPPORTED_BODY_CHILD"])
         # Bookmarks are noise, not content: no warning, and the paragraph text survives.
-        self.assertEqual(parsed.blocks[0]["text"], "Visible")
+        self.assertEqual(_body_text_for_page(to_output(parsed, Density.STRUCTURAL)), ["Visible"])
 
     def test_paragraph_sectpr_advances_page_after_paragraph(self) -> None:
         """A sectPr inside pPr starts the next block on a new page."""
@@ -145,16 +135,15 @@ class BodyStructureTests(unittest.TestCase):
             "<w:p><w:pPr><w:sectPr/></w:pPr><w:r><w:t>Last of section</w:t></w:r></w:p>"
             "<w:p><w:r><w:t>Next section</w:t></w:r></w:p>"
         )
-        parsed = DocxParser().parse(data, ParseOptions())
-        self.assertEqual([block["page"] for block in parsed.blocks], [1, 1, 2])
+        self.assertEqual(_body_text_for_page(parse_docx(data, page_hint=1).text), ["First", "Last of section"])
+        self.assertEqual(_body_text_for_page(parse_docx(data, page_hint=2).text), ["Next section"])
 
     def test_empty_paragraph_sectpr_still_breaks_page(self) -> None:
         """Even a dropped empty paragraph's sectPr must start a new page."""
         data = _make_docx(
             "<w:p><w:r><w:t>A</w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:r><w:t>B</w:t></w:r></w:p>"
         )
-        parsed = DocxParser().parse(data, ParseOptions())
-        self.assertEqual([block["page"] for block in parsed.blocks], [1, 2])
+        self.assertEqual(_body_text_for_page(parse_docx(data, page_hint=2).text), ["B"])
 
     def test_empty_numbered_paragraph_keeps_label(self) -> None:
         """Word renders an empty numbered paragraph as its visible number; the label
@@ -165,9 +154,7 @@ class BodyStructureTests(unittest.TestCase):
             "<w:r><w:t>Item</w:t></w:r></w:p>",
             extra_entries={"word/numbering.xml": _NUMBERING_XML},
         )
-        parsed = DocxParser().parse(data, ParseOptions())
-        texts = [block["text"] for block in parsed.blocks]
-        self.assertEqual(texts, ["1. ", "2. Item"])
+        self.assertEqual(_body_text_for_page(parse_docx(data).text), ["1. ", "2. Item"])
 
     def test_full_level_override_honors_its_start_override_in_final_text(self) -> None:
         """A ``lvlOverride`` can replace formatting and independently restart its level."""
@@ -185,16 +172,13 @@ class BodyStructureTests(unittest.TestCase):
             extra_entries={"word/numbering.xml": numbering},
         )
 
-        parsed = DocxParser().parse(data, ParseOptions())
-
-        self.assertEqual(parsed.blocks[0]["text"], "(V) Item")
-        self.assertEqual(parsed.blocks[0]["numbering"]["counter"], 5)
+        self.assertEqual(_body_text_for_page(parse_docx(data).text), ["(V) Item"])
 
     def test_hyperlink_without_relationship_degrades(self) -> None:
         """A dangling hyperlink r:id must not abort the whole parse."""
         data = _make_docx('<w:p><w:hyperlink r:id="rMissing"><w:r><w:t>link text</w:t></w:r></w:hyperlink></w:p>')
         parsed = DocxParser().parse(data, ParseOptions())
-        self.assertEqual(parsed.blocks[0]["text"], "link text")
+        self.assertEqual(_body_text_for_page(to_output(parsed, Density.STRUCTURAL)), ["link text"])
         self.assertTrue(any(w.code == "HYPERLINK_TARGET_MISSING" for w in parsed.warnings))
 
     def test_table_page_split_preserves_vertical_merge(self) -> None:
@@ -210,12 +194,9 @@ class BodyStructureTests(unittest.TestCase):
             "<w:p><w:r><w:t>C</w:t></w:r></w:p></w:tc></w:tr>"
             "</w:tbl>"
         )
-        parsed = DocxParser().parse(data, ParseOptions())
-        tables = [block for block in parsed.blocks if block["type"] == "table"]
-        self.assertEqual(len(tables), 2)
-        # The origin in segment 1 spans all three rows, including segment 2's continues.
-        self.assertEqual(tables[0]["rows"][0]["cells"][0]["rowSpan"], 3)
-        self.assertEqual(tables[1]["rows"][0]["cells"][0]["vMerge"], "continue")
+        root = ET.fromstring(parse_docx(data).text)
+        self.assertEqual(len(root.findall(".//table")), 2)
+        self.assertEqual(root.find(".//table/tr/td").get("rowspan"), "3")
 
     def test_window_on_page_hole_returns_empty(self) -> None:
         """Pages skipped by multiple breaks contain no blocks; window() must
@@ -238,9 +219,6 @@ class BodyStructureTests(unittest.TestCase):
             "<w:p><w:r><w:t>D</w:t></w:r></w:p>"
         )
         parsed = DocxParser().parse(data, ParseOptions())
-        paragraph = parsed.blocks[0]
-        self.assertEqual((paragraph["page"], paragraph["pageEnd"]), (1, 3))
-        self.assertEqual([run.get("text") for run in paragraph["runs"]], ["A", "", "B", "", "C"])
         rendered = ET.fromstring(to_output(parsed, Density.SEMANTIC))
         self.assertEqual([item.get("number") for item in rendered.findall(".//body/page")], ["1", "2", "3"])
         self.assertEqual([item.text for item in rendered.findall(".//body/p")], ["A", "B", "C", "D"])
@@ -251,21 +229,14 @@ class BodyStructureTests(unittest.TestCase):
         """The compact parse mode retains text page segments without run metadata."""
         data = _make_docx("<w:p><w:r><w:t>A</w:t><w:lastRenderedPageBreak/><w:t>B</w:t></w:r></w:p>")
         parsed = DocxParser().parse(data, ParseOptions(include_runs=False))
-        self.assertEqual(parsed.blocks[0]["pageSegments"], [{"page": 1, "text": "A"}, {"page": 2, "text": "B"}])
         self.assertEqual(_body_text_for_page(to_output(parsed, Density.STRUCTURAL)), ["A", "B"])
-
-    def test_trailing_inline_break_contributes_to_page_count(self) -> None:
-        data = _make_docx("<w:p><w:r><w:t>A</w:t><w:lastRenderedPageBreak/></w:r></w:p>")
-        parsed = DocxParser().parse(data, ParseOptions())
-        self.assertEqual(build_manifest(parsed)["pages"], 2)
 
     def test_leading_inline_break_assigns_block_to_first_content_page(self) -> None:
         data = _make_docx("<w:p><w:r><w:lastRenderedPageBreak/><w:t>B</w:t></w:r></w:p>")
         parsed = DocxParser().parse(data, ParseOptions())
-        self.assertEqual(parsed.blocks[0]["page"], 2)
         root = ET.fromstring(to_output(parsed, Density.SEMANTIC))
         self.assertEqual([item.get("number") for item in root.findall(".//body/page")], ["2"])
-        self.assertEqual([item.text for item in root.findall(".//body/p")], ["B"])
+        self.assertEqual([item.text for item in root.findall(".//body//p")], ["B"])
 
     def test_table_cell_paragraph_keeps_inline_pages_and_advances_body(self) -> None:
         data = _make_docx(
@@ -274,8 +245,6 @@ class BodyStructureTests(unittest.TestCase):
             "<w:p><w:r><w:t>D</w:t></w:r></w:p>"
         )
         parsed = DocxParser().parse(data, ParseOptions())
-        self.assertEqual((parsed.blocks[0]["page"], parsed.blocks[0]["pageEnd"]), (1, 3))
-        self.assertEqual(parsed.blocks[1]["page"], 3)
         rendered = ET.fromstring(to_output(parsed, Density.SEMANTIC))
         self.assertEqual([item.get("number") for item in rendered.findall(".//table//page")], ["2", "3"])
         self.assertEqual([item.text for item in rendered.findall(".//body/p")], ["D"])
@@ -286,13 +255,11 @@ class BodyStructureTests(unittest.TestCase):
             "<w:ins><w:r><w:t>inserted</w:t></w:r></w:ins>"
             "<w:del><w:r><w:delText>deleted</w:delText></w:r></w:del></w:p>"
         )
-        original = DocxParser().parse(data, ParseOptions(revision_mode=RevisionMode.ORIGINAL))
-        text = original.blocks[0]["text"]
+        text = parse_docx(data, options=ParseOptions(revision_mode=RevisionMode.ORIGINAL)).text
         self.assertIn("deleted", text)
         self.assertNotIn("inserted", text)
 
-        final = DocxParser().parse(data, ParseOptions(revision_mode=RevisionMode.FINAL))
-        final_text = final.blocks[0]["text"]
+        final_text = parse_docx(data, options=ParseOptions(revision_mode=RevisionMode.FINAL)).text
         self.assertIn("inserted", final_text)
         self.assertNotIn("deleted", final_text)
 
@@ -315,36 +282,25 @@ class BodyStructureTests(unittest.TestCase):
             '<w:moveFrom w:author="Editor"><w:r><w:delText>Moved</w:delText></w:r></w:moveFrom></w:p>',
             extra_entries={"word/comments.xml": comments, "word/commentsExtended.xml": comments_extended},
         )
-        parsed = DocxParser().parse(data, ParseOptions(revision_mode=RevisionMode.REVIEW))
-        self.assertEqual(parsed.comments[0]["anchor"], "b1")
-        self.assertEqual(parsed.comments[1]["parentId"], "0")
-        self.assertTrue(parsed.comments[1]["resolved"])
-        self.assertEqual(parsed.blocks[2]["anchors"], ["target"])
-        self.assertEqual(parsed.blocks[2]["runs"][0]["field"], {"kind": "citation", "key": "Smith2024"})
-        self.assertEqual(parsed.blocks[3]["runs"][0]["revisionAuthor"], "Editor")
-
         rendered = parse_docx(data, density=Density.SEMANTIC, options=ParseOptions(revision_mode=RevisionMode.REVIEW)).text
         root = ET.fromstring(rendered)
         citation = root.find(".//p[@anchor='target']/cite")
-        self.assertIsNotNone(citation)
         assert citation is not None
         self.assertEqual((citation.get("key"), citation.text), ("Smith2024", "(Smith, 2024)"))
         inserted = root.find(".//ins")
-        self.assertIsNotNone(inserted)
         assert inserted is not None
         self.assertEqual(
             (inserted.get("author"), inserted.get("date"), inserted.text),
             ("Editor", "2026-08-01T00:00:00Z", "Added"),
         )
         reply = root.find(".//comments/comment[@id='1']")
-        self.assertIsNotNone(reply)
         assert reply is not None
         self.assertEqual((reply.get("parent"), reply.get("resolved")), ("0", "true"))
 
 
 def _body_text_for_page(output: str) -> list[str]:
     root = ET.fromstring(output)
-    return [item.text or "" for item in root.findall(".//body/p")]
+    return ["".join(item.itertext()) for item in root.findall(".//body//p")]
 
 
 if __name__ == "__main__":

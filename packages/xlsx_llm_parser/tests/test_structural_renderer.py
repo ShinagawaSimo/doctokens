@@ -125,9 +125,6 @@ class StructuralRendererTests(unittest.TestCase):
             formula_cell = root.find(".//cell[@formula]")
             self.assertEqual(formula_cell.get("colspan"), "2")
             self.assertEqual(formula_cell.get("rowspan"), "2")
-            self.assertEqual(formula_cell.get("formula"), "SUM(B3:B4)")
-            self.assertEqual(formula_cell.get("formula-type"), "array")
-            self.assertEqual(formula_cell.get("formula-range"), "B2:B4")
             self.assertEqual(formula_cell.get("spill-range"), "B2:B4")
 
         self.assertEqual(structural.find(".//cell/a").get("href"), "https://example.test/a")

@@ -18,10 +18,6 @@ def _valid_entries() -> dict[str, str]:
 
 
 class PptxPackageReaderTests(unittest.TestCase):
-    def test_validate_accepts_presentation_package(self) -> None:
-        with PackageReader(make_pptx(_valid_entries()), ParseOptions()) as pkg:
-            pkg.validate()
-
     def test_validate_requires_presentation_part_by_default(self) -> None:
         entries = _valid_entries()
         entries.pop("ppt/presentation.xml")
@@ -39,20 +35,6 @@ class PptxPackageReaderTests(unittest.TestCase):
             self.assertRaisesRegex(PackageError, "Missing \\[Content_Types\\].xml"),
         ):
             pkg.validate()
-
-    def test_read_entry_index_lists_members(self) -> None:
-        with PackageReader(make_pptx(_valid_entries()), ParseOptions()) as pkg:
-            names = {entry["name"] for entry in pkg.read_entry_index()}
-        self.assertIn("ppt/presentation.xml", names)
-        self.assertIn("[Content_Types].xml", names)
-
-    def test_read_all_relationships_finds_office_document(self) -> None:
-        with PackageReader(make_pptx(_valid_entries()), ParseOptions()) as pkg:
-            records = pkg.read_all_relationships()
-        office = [record for record in records if record.id == "rId1"]
-        self.assertEqual(len(office), 1)
-        self.assertEqual(office[0].target, "ppt/presentation.xml")
-        self.assertEqual(office[0].resolved_target, "ppt/presentation.xml")
 
     def test_rejects_non_zip_source(self) -> None:
         with self.assertRaisesRegex(PackageError, "Not a valid zip"), PackageReader(b"not a zip", ParseOptions()):

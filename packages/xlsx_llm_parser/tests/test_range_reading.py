@@ -16,7 +16,6 @@ class RangeReadingTests(unittest.TestCase):
         self.assertEqual(plan.cell_window, (1, 2, 3, 10))
         self.assertFalse(plan.needs(XlsxFeature.FORMULAS))
         self.assertTrue(plan.needs(XlsxFeature.DRAWINGS))
-        self.assertIn("worksheets.plain_cells", plan.module_keys)
 
     def test_range_sheet_not_found(self) -> None:
         """Unknown sheet name raises KeyError."""

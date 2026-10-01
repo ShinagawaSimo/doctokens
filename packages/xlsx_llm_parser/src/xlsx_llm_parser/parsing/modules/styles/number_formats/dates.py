@@ -30,6 +30,27 @@ class _SerialDateTime(NamedTuple):
 _EXCEL_1900_LEAP_SERIAL = 60
 
 
+def time_formula_bar_value(value: Decimal, section: str, locale: str) -> str | None:
+    """Reconstruct the zh-CN formula bar for a time within the first day.
+
+    The formula bar omits fractional seconds independently of the cell's
+    fractional-second display format. It is not a lossless serial encoding.
+    Date, elapsed, AM/PM and other locale-dependent edit forms remain unknown.
+    """
+    if locale.replace("_", "-").lower() != "zh-cn" or not 0 <= value < 1:
+        return None
+    if not re.fullmatch(r"h{1,2}:mm:ss(?:\.0{1,3})?", section, re.IGNORECASE):
+        return None
+    # Resolve binary serial noise at Excel's millisecond precision before
+    # taking whole seconds, without rounding to the cell's display precision.
+    milliseconds = int((value * 86_400_000).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+    if milliseconds >= 86_400_000:
+        return None
+    hour, remainder = divmod(milliseconds // 1000, 3600)
+    minute, second = divmod(remainder, 60)
+    return f"{hour}:{minute:02d}:{second:02d}"
+
+
 def _format_date_value(serial: float, fmt_code: str, date_1904: bool, locale: str) -> str:
     fraction = re.search(r"(?i)(?:s+|\[s+\])\.([0#?]+)", _date_scan_text(fmt_code))
     if fraction:

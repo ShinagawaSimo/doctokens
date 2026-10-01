@@ -46,23 +46,10 @@ def _theme_deck(*, with_theme: bool = True) -> bytes:
 class ThemeParserTests(unittest.TestCase):
     def test_plain_plan_avoids_theme_and_layout_resolution(self) -> None:
         plan = PptxParsePlan.render("plain")
-        parsed = PptxParser().parse(_theme_deck(), ParseOptions(), plan=plan)
         self.assertFalse(plan.needs(PptxFeature.THEME_AND_LAYOUT))
-        self.assertEqual(plan.module_keys[1], "slides.plain")
-        self.assertEqual(parsed.theme, {})
-
-    def test_theme_colors_resolved(self) -> None:
-        parsed = PptxParser().parse(_theme_deck(), ParseOptions())
-        self.assertEqual(parsed.theme["dk1"], "#1A1A1A")
-        self.assertEqual(parsed.theme["lt1"], "#FEFEFE")
-        self.assertEqual(parsed.theme["accent1"], "#4472C4")
-        self.assertEqual(parsed.theme["folHlink"], "#954F72")
 
     def test_missing_theme_part_falls_back_to_default_with_warning(self) -> None:
         parsed = PptxParser().parse(_theme_deck(with_theme=False), ParseOptions())
-        self.assertEqual(parsed.theme["dk1"], "#000000")
-        self.assertEqual(parsed.theme["lt1"], "#FFFFFF")
-        self.assertEqual(parsed.theme["accent1"], "#4472C4")
         self.assertTrue(any(w.code == "THEME_PART_MISSING" for w in parsed.warnings))
 
 

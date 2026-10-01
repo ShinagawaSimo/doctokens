@@ -153,7 +153,6 @@ def _format_fraction(value: float, core: str) -> str:
     denominator_literal = after.strip()
     fixed_denominator = int(denominator_literal) if re.fullmatch(r"[1-9]\d*", denominator_literal) else None
     denominator_pattern = re.sub(r"[^0#?]", "", after)
-    denominator_width = len(denominator_pattern) or len(denominator_literal)
     denominator_limit = fixed_denominator if fixed_denominator is not None else 10 ** max(1, len(denominator_pattern)) - 1
     denominator_limit = max(1, min(denominator_limit, 999))
 
@@ -181,7 +180,7 @@ def _format_fraction(value: float, core: str) -> str:
     denominator = (
         str(denominator_value)
         if fixed_denominator is not None
-        else _fraction_placeholder(str(denominator_value), denominator_pattern, literal_width=denominator_width)
+        else _fraction_placeholder(str(denominator_value), denominator_pattern)
     )
     if remainder == 0:
         return whole
@@ -190,19 +189,12 @@ def _format_fraction(value: float, core: str) -> str:
     return f"{numerator}/{denominator}"
 
 
-def _fraction_placeholder(value: str, pattern: str, *, literal_width: int = 0) -> str:
-    """Apply fraction placeholder padding without turning ``?`` into zero.
+def _fraction_placeholder(value: str, pattern: str) -> str:
+    """Keep required zeroes, but omit width-only fraction alignment blanks.
 
-    In an Excel format code, ``0`` reserves a visible zero while ``?``
-    reserves a blank position.  The old implementation padded every
-    numerator and denominator with ``0``, which made ``# ??/??`` render
-    ``01/04`` instead of the Office-style space-padded fraction.
+    Numerator/denominator ``?`` positions align fractions visually in Excel;
+    they are not spaces inside the textual value (``# ??/??`` gives ``1/4``).
+    A mixed fraction still retains the separator after its whole-number part.
     """
-    width = max(1, len(pattern) or literal_width)
-    if len(value) >= width:
-        return value
-    if "0" in pattern:
-        return value.rjust(width, "0")
-    if "?" in pattern:
-        return value.rjust(width, " ")
-    return value
+    required_width = len(pattern) - pattern.index("0") if "0" in pattern else 0
+    return value.zfill(required_width)

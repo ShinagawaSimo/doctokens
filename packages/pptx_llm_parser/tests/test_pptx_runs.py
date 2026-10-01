@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from xml.etree import ElementTree as ET
 
 from _pptx_fixtures import (
     content_types_xml,
@@ -15,11 +16,9 @@ from _pptx_fixtures import (
     slide_xml_shapes,
     theme_xml,
 )
-from pptx_llm_parser.core.models import ParseOptions
-from pptx_llm_parser.parsing.runner import PptxParser
+from pptx_llm_parser import parse_pptx
 
 _A = "http://schemas.openxmlformats.org/drawingml/2006/main"
-_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 
 _THEME_REL = (
     '<Relationship Id="rId99" '
@@ -45,29 +44,16 @@ def _runs_deck(shape_xml: str, *, slide_rels: str = "", with_theme: bool = True)
     return make_pptx(entries)
 
 
-def _shape_runs(deck: bytes) -> list[dict]:
-    parsed = PptxParser().parse(deck, ParseOptions())
-    return parsed.slides[0]["shapes"][0]["runs"]
+def _semantic(deck: bytes) -> ET.Element:
+    return ET.fromstring(parse_pptx(deck, density="semantic").text)
 
 
 class RunFormatTests(unittest.TestCase):
-    def test_bold_run(self) -> None:
-        deck = _runs_deck(rich_text_shape_xml([f'<a:r><a:rPr xmlns:a="{_A}"><a:b/></a:rPr><a:t>Hi</a:t></a:r>']))
-        runs = _shape_runs(deck)
-        self.assertEqual(runs[0]["text"], "Hi")
-        self.assertEqual(runs[0]["format"], {"bold": True})
-
     def test_italic_and_underline(self) -> None:
         deck = _runs_deck(rich_text_shape_xml([f'<a:r><a:rPr xmlns:a="{_A}"><a:i/><a:u/></a:rPr><a:t>X</a:t></a:r>']))
-        self.assertEqual(_shape_runs(deck)[0]["format"], {"italic": True, "underline": True})
-
-    def test_srgb_color(self) -> None:
-        deck = _runs_deck(
-            rich_text_shape_xml(
-                [f'<a:r><a:rPr xmlns:a="{_A}"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:rPr><a:t>C</a:t></a:r>']
-            )
-        )
-        self.assertEqual(_shape_runs(deck)[0]["format"], {"color": "#FF0000"})
+        root = _semantic(deck)
+        self.assertEqual("".join(root.find(".//i").itertext()), "X")
+        self.assertIsNotNone(root.find(".//u"))
 
     def test_scheme_color_resolved_through_theme(self) -> None:
         deck = _runs_deck(
@@ -75,7 +61,7 @@ class RunFormatTests(unittest.TestCase):
                 [f'<a:r><a:rPr xmlns:a="{_A}"><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:rPr><a:t>C</a:t></a:r>']
             )
         )
-        self.assertEqual(_shape_runs(deck)[0]["format"], {"color": "#4472C4"})
+        self.assertEqual(_semantic(deck).find(".//color").get("value"), "#4472C4")
 
     def test_near_black_scheme_color_filtered(self) -> None:
         deck = _runs_deck(
@@ -83,48 +69,7 @@ class RunFormatTests(unittest.TestCase):
                 [f'<a:r><a:rPr xmlns:a="{_A}"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill></a:rPr><a:t>C</a:t></a:r>']
             )
         )
-        parsed = PptxParser().parse(deck, ParseOptions())
-        shape = parsed.slides[0]["shapes"][0]
-        self.assertEqual(shape["text"], "C")
-        self.assertNotIn("runs", shape)
-
-    def test_hyperlink_run(self) -> None:
-        rel = (
-            '<Relationship Id="rId40" '
-            'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" '
-            'Target="https://example.test/doc" TargetMode="External"/>'
-        )
-        deck = _runs_deck(
-            rich_text_shape_xml(
-                [f'<a:r><a:rPr xmlns:a="{_A}" xmlns:r="{_R}"><a:hlinkClick r:id="rId40"/></a:rPr><a:t>Go</a:t></a:r>']
-            ),
-            slide_rels=rel,
-        )
-        self.assertEqual(_shape_runs(deck)[0]["link"], "https://example.test/doc")
-
-    def test_plain_text_shape_omits_runs(self) -> None:
-        deck = _runs_deck(rich_text_shape_xml(["<a:r><a:t>A</a:t></a:r><a:br/><a:tab/><a:r><a:t>B</a:t></a:r>"]))
-        parsed = PptxParser().parse(deck, ParseOptions())
-        shape = parsed.slides[0]["shapes"][0]
-        self.assertEqual(shape["text"], "A\n\tB")
-        self.assertNotIn("runs", shape)
-
-    def test_paragraphs_join_in_text(self) -> None:
-        deck = _runs_deck(rich_text_shape_xml(["<a:r><a:t>One</a:t></a:r>", "<a:r><a:t>Two</a:t></a:r>"]))
-        parsed = PptxParser().parse(deck, ParseOptions())
-        shape = parsed.slides[0]["shapes"][0]
-        self.assertEqual(shape["text"], "One\nTwo")
-        self.assertNotIn("runs", shape)
-
-    def test_runs_match_flattened_text_when_formatted(self) -> None:
-        deck = _runs_deck(
-            rich_text_shape_xml([f'<a:r><a:t>A</a:t></a:r><a:br/><a:r><a:rPr xmlns:a="{_A}"><a:b/></a:rPr><a:t>B</a:t></a:r>'])
-        )
-        parsed = PptxParser().parse(deck, ParseOptions())
-        shape = parsed.slides[0]["shapes"][0]
-        self.assertEqual(shape["text"], "".join(run["text"] for run in shape["runs"]))
-        self.assertEqual(shape["runs"][0], {"text": "A"})
-        self.assertEqual(shape["runs"][2], {"text": "B", "format": {"bold": True}})
+        self.assertIsNone(_semantic(deck).find(".//color"))
 
 
 if __name__ == "__main__":

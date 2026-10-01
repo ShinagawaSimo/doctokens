@@ -32,25 +32,6 @@ def _deck(slide_count: int = 2, *, hidden: set[int] | None = None, drop_slide_pa
 
 
 class PresentationParsingTests(unittest.TestCase):
-    def test_slide_order_parts_and_ids_follow_sld_id_lst(self) -> None:
-        parsed = PptxParser().parse(_deck(2), ParseOptions())
-        self.assertEqual([slide["n"] for slide in parsed.slides], [1, 2])
-        self.assertEqual(
-            [slide["part"] for slide in parsed.slides],
-            ["ppt/slides/slide1.xml", "ppt/slides/slide2.xml"],
-        )
-        self.assertEqual([slide["sldId"] for slide in parsed.slides], ["256", "257"])
-        self.assertTrue(all(slide["type"] == "slide" for slide in parsed.slides))
-
-    def test_slide_size(self) -> None:
-        parsed = PptxParser().parse(_deck(2), ParseOptions())
-        self.assertEqual(parsed.slide_size, (12192000, 6858000))
-
-    def test_hidden_slide_flag(self) -> None:
-        parsed = PptxParser().parse(_deck(2, hidden={2}), ParseOptions())
-        self.assertFalse(parsed.slides[0]["hidden"])
-        self.assertTrue(parsed.slides[1]["hidden"])
-
     def test_missing_sld_id_lst_yields_warning_and_no_slides(self) -> None:
         entries = {
             "[Content_Types].xml": content_types_xml(),

@@ -1,0 +1,9 @@
+<workbook density="semantic" format="xlsx">
+  <sheet name="Sheet1">
+    <grid ref="A1:A1">
+      <tr number="1">
+        <cell raw="-1234.5">¥-1,234.50</cell>
+      </tr>
+    </grid>
+  </sheet>
+</workbook>

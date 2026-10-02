@@ -3,9 +3,9 @@
 import io
 import unittest
 import zipfile
+from xml.etree import ElementTree as ET
 
 from xlsx_llm_parser import open_xlsx
-from xlsx_llm_parser.api import _render_chart_resource
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -127,9 +127,13 @@ class FindCellsTests(unittest.TestCase):
         formula_result = find_cells(data, "SUM", kind="formula")
         defined_name_result = find_cells(data, "NamedTotal", kind="definedName")
 
-        self.assertIn("field=formula", formula_result)
-        self.assertIn("Data!B1", formula_result)
-        self.assertIn("NamedTotal", defined_name_result)
+        formula_match = ET.fromstring(formula_result).find(".//match")
+        assert formula_match is not None
+        self.assertEqual(formula_match.get("field"), "formula")
+        self.assertEqual(formula_match.get("cell"), "Data!B1")
+        defined_name_match = ET.fromstring(defined_name_result).find(".//match")
+        assert defined_name_match is not None
+        self.assertIn("NamedTotal", defined_name_match.text or "")
 
 
 class QueryDataTests(unittest.TestCase):
@@ -315,61 +319,6 @@ class GetResourceTests(unittest.TestCase):
         self.assertIsNotNone(r)
         assert r is not None
         self.assertIsInstance(r, bytes)
-
-    def test_render_chart_resource_details(self) -> None:
-        output = _render_chart_resource(
-            {
-                "id": "chart1",
-                "ref": "C3",
-                "type": "bar",
-                "title": "Sales",
-                "series_count": 1,
-                "series": [
-                    {
-                        "index": 1,
-                        "name": "Q1",
-                        "min": 1.0,
-                        "max": 2.0,
-                        "points": [
-                            {"category": "A", "value": "1"},
-                            {"category": "B", "value": "2"},
-                        ],
-                    }
-                ],
-            }
-        )
-
-        self.assertIn("<chart id=chart1 ref=C3 type=bar series=1 title=Sales>", output)
-        self.assertIn("<series index=1 name=Q1 min=1.0 max=2.0>", output)
-        self.assertIn("<point category=A value=1/>", output)
-
-    def test_render_chart_optional_fields(self) -> None:
-        output = _render_chart_resource(
-            {
-                "id": "chart2",
-                "ref": "D4",
-                "type": "combination",
-                "plotTypes": ["bar", "line"],
-                "series": [
-                    {
-                        "index": 1,
-                        "chartType": "line",
-                        "bubbleSizes": ["3"],
-                        "xValues": ["1"],
-                        "yValues": ["2"],
-                        "hidden": True,
-                        "points": [{"category": "A", "value": "1", "x": "1", "y": "2", "bubbleSize": "3"}],
-                    }
-                ],
-            }
-        )
-        self.assertIn("plots=bar,line", output)
-        self.assertIn("type=line", output)
-        self.assertIn("bubbleSizes=3", output)
-        self.assertIn("hidden", output)
-        self.assertIn("x=1", output)
-        self.assertIn("y=2", output)
-        self.assertIn("bubbleSize=3", output)
 
 
 if __name__ == "__main__":

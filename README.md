@@ -109,6 +109,20 @@ python -m pip install -e ./packages/ooxml_llm_core -e ./packages/docx_llm_parser
 
 三个格式包互不依赖，共用 `ooxml_llm_core`。共享核心没有必需的第三方运行依赖；DOCX 另依赖 `typing_extensions`。OCR 的安装方式见下文。
 
+### 本地复现 GitHub Actions
+
+在仓库根目录用需要验证的 Python 运行：
+
+```sh
+python scripts/ci.py
+```
+
+Windows 已有开发环境时可直接运行 `.venv\Scripts\python.exe scripts/ci.py`。脚本会创建临时干净 venv，按 `constraints-ci.txt` 安装完整的固定依赖（包括构建工具和间接依赖），依次运行格式检查、lint、mypy、隔离 wheel 安装与完整 pytest；检查结束后删除临时环境。GitHub Actions 调用同一脚本的各步骤，并使用同一依赖约束。
+
+需要快速检查现有开发环境时，先运行 `python scripts/ci.py --install-only` 同步依赖，再运行 `python scripts/ci.py --skip-install`；单独复现某一步可追加 `--step format|lint|types|wheels|test`。检查命令失败时脚本返回非零退出码。依赖刷新时更新 `requirements-ci.in`，用约束文件顶部的命令重新解析并验证完整矩阵。
+
+远程矩阵固定为 Ubuntu 24.04 的 Python 3.10、3.11、3.12，以及 Windows 2025 的 Python 3.12。上述本地命令只验证当前 Python 和操作系统；在 Windows 上通过不能证明 Linux 上也通过。提交前应在对应 Linux 环境（WSL、容器或虚拟机）中分别运行三种 Python 的同一命令，并保留远程矩阵作为最终检查。比较结果时还应确保所有源码、fixture 与 golden 已加入 Git，避免本地未跟踪文件影响测试。
+
 ### 智能体工具与 MCP
 
 工具适配包管理文件快照、短期会话、范围缓存和长结果。直接 TOOL_CALL 与 MCP 共用同一套定义和执行逻辑，模型调用循环由宿主负责。安装解析包后，可安装工具包及官方 MCP SDK：

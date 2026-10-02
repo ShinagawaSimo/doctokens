@@ -221,11 +221,18 @@ class RendererBranchTests(unittest.TestCase):
         self.assertIn("names=S1,S2", chart_to_output(cast(Any, {**chart, "chartType": "surface"})))
         self.assertIn("<chart id=empty type=? series=0 truncated>", chart_to_output(cast(Any, {"id": "empty"})))
         chart_output = render_chart_resource(cast(Any, chart))
-        self.assertIn("id=chartX", chart_output)
-        self.assertIn("type=bar", chart_output)
-        self.assertIn("series=6", chart_output)
-        self.assertIn("name=S1", chart_output)
-        self.assertIn("<point category=Q1 value=1/>", chart_output)
+        chart_resource = ET.fromstring(chart_output)
+        chart_node = chart_resource.find(".//chart")
+        assert chart_node is not None
+        self.assertEqual(chart_node.get("id"), "chartX")
+        self.assertEqual(chart_node.get("type"), "bar")
+        self.assertEqual(chart_node.get("series"), "6")
+        series_node = chart_node.find("series")
+        assert series_node is not None
+        self.assertEqual(series_node.get("name"), "S1")
+        point = series_node.find("point")
+        assert point is not None
+        self.assertEqual(point.attrib, {"category": "Q1", "value": "1"})
 
         smartart = {
             "id": "sa1",

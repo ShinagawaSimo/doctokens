@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 from typing import Any, cast
+from xml.etree import ElementTree as ET
 
 from xlsx_llm_parser._query_operations import (
     _average_accumulator,
@@ -100,13 +101,16 @@ class QueryEngineTests(unittest.TestCase):
         wb = cast(Any, workbook)
         result = query_data(wb, sheet="Data", range_spec="A1:C2", header_row=1)
 
-        self.assertIn("<th><th>Young<th>Adult", result)
-        self.assertNotIn("Col1", result)
-        self.assertIn("<td>Site A<td>10%<td>90%", result)
+        table = ET.fromstring(result).find("query/table")
+        assert table is not None
+        self.assertEqual([node.text or "" for node in table.findall("tr/th")], ["", "Young", "Adult"])
+        self.assertEqual([node.text for node in table.findall("tr/td")], ["Site A", "10%", "90%"])
 
         selected = query_data(wb, sheet="Data", range_spec="A1:C2", header_row=1, select=["A", "Adult"])
-        self.assertIn("<th><th>Adult", selected)
-        self.assertIn("<td>Site A<td>90%", selected)
+        table = ET.fromstring(selected).find("query/table")
+        assert table is not None
+        self.assertEqual([node.text or "" for node in table.findall("tr/th")], ["", "Adult"])
+        self.assertEqual([node.text for node in table.findall("tr/td")], ["Site A", "90%"])
 
     def test_table_query_filters_contains_gt_and_lt(self) -> None:
         result = query_data(
@@ -190,7 +194,7 @@ class QueryEngineTests(unittest.TestCase):
             header_row=1,
             order_by=[{"column": "Amount"}],
         )
-        self.assertIn("<td>9<tr><td>10<tr><td>100", result)
+        self.assertEqual([node.text for node in ET.fromstring(result).findall("query/table/tr/td")], ["9", "10", "100"])
 
     def test_query_value_helpers_reject_invalid_internal_inputs(self) -> None:
         # Malformed query values/accumulators cannot be encoded in an Office file.
@@ -201,7 +205,11 @@ class QueryEngineTests(unittest.TestCase):
         empty_average: dict[str, object] = {}
         _finalize_averages(empty_average, [{"op": "avg", "column": "amount"}])
         self.assertEqual(empty_average["avg_amount"], 0)
-        self.assertEqual(_render_query_result([]), "<table>\n")
+        root = ET.fromstring(_render_query_result([]))
+        self.assertEqual(root.tag, "workbook")
+        table = root.find("query/table")
+        assert table is not None
+        self.assertEqual(list(table), [])
 
 
 if __name__ == "__main__":

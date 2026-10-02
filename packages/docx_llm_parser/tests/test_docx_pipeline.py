@@ -56,9 +56,16 @@ class DocxPipelineTests(unittest.TestCase):
             chart_output = document.render_resource("chart", "chart1").text
             table_output = document.render_resource("table", "t1").text
         assert chart_output is not None
-        self.assertIn("type=bar", chart_output)
+        chart_resource = ET.fromstring(chart_output)
+        chart = chart_resource.find(".//chart")
+        assert chart is not None
+        self.assertEqual(chart.get("type"), "bar")
+        self.assertEqual(chart.get("series"), "1")
         assert table_output is not None
-        self.assertIn("rows=2", table_output)
+        table_resource = ET.fromstring(table_output)
+        table = table_resource.find(".//table")
+        assert table is not None
+        self.assertEqual(table.get("rows"), "2")
 
 
 if __name__ == "__main__":

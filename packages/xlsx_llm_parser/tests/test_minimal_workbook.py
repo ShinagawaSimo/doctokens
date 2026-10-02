@@ -2,6 +2,7 @@
 
 import unittest
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from xlsx_llm_parser import ParseOptions, open_xlsx
 
@@ -16,7 +17,11 @@ class SessionOptionTests(unittest.TestCase):
             self.assertEqual(session.render().text, session.render().text)
             self.assertTrue(list(session.iter_render(density="plain")))
             session.render(sheet="Sheet1", range_spec="A1:A1")
-            self.assertEqual(session.find_cells("").text, "<matches>\n")
+            matches = ET.fromstring(session.find_cells("").text)
+            self.assertEqual(matches.tag, "workbook")
+            container = matches.find("matches")
+            assert container is not None
+            self.assertEqual(list(container), [])
             with self.assertRaises(KeyError):
                 session.render_resource("chart", "missing")
             with self.assertRaisesRegex(ValueError, "density"):

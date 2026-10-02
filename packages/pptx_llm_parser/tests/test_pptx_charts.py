@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from xml.etree import ElementTree as ET
 
 from _pptx_fixtures import (
     chart_shape_xml,
@@ -89,7 +90,12 @@ class ChartShapeTests(unittest.TestCase):
         source = _chart_ex_deck()
         self.assertIn("[Chart: waterfall, 1 series]", parse_pptx(source, density="plain").text)
         with open_pptx(source) as session:
-            self.assertIn("categories=Start values=10", session.render_resource("chart", "chart1").text)
+            chart = ET.fromstring(session.render_resource("chart", "chart1").text).find(".//chart")
+            assert chart is not None
+            series = chart.find("series")
+            assert series is not None
+            self.assertEqual(series.get("categories"), "Start")
+            self.assertEqual(series.get("values"), "10")
 
     def test_missing_chart_part_degrades_with_warning(self) -> None:
         parsed = PptxParser().parse(_chart_deck(with_part=False), ParseOptions())

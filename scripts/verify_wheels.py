@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -10,6 +11,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+CONSTRAINTS = ROOT / "constraints-ci.txt"
 PACKAGE_ORDER = (
     "ooxml_llm_core",
     "ocr_llm_core",
@@ -22,7 +24,10 @@ IMPORTS = "import docx_llm_parser, ooxml_llm_core, ocr_llm_core, pptx_llm_parser
 
 
 def _run(*args: str, cwd: Path = ROOT) -> None:
-    subprocess.run(args, cwd=cwd, check=True)
+    environment = dict(os.environ)
+    environment.pop("PYTHONPATH", None)
+    environment["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
+    subprocess.run(args, cwd=cwd, env=environment, check=True)
 
 
 def _venv_python(directory: Path) -> Path:
@@ -67,11 +72,21 @@ def main() -> None:
         environment = root / "environment"
         venv.EnvBuilder(with_pip=True).create(environment)
         python = _venv_python(environment)
+        _run(str(python), "-m", "pip", "install", "-c", str(CONSTRAINTS), "pip", cwd=environment)
         for package in PACKAGE_ORDER:
-            _run(str(python), "-m", "pip", "install", str(_wheel(wheelhouse, package)), cwd=environment)
+            _run(str(python), "-m", "pip", "install", "-c", str(CONSTRAINTS), str(_wheel(wheelhouse, package)), cwd=environment)
         _run(str(python), "-c", IMPORTS, cwd=environment)
         # Verify base imports first, then the optional SDK and installed stdio entry point.
-        _run(str(python), "-m", "pip", "install", str(_wheel(wheelhouse, "doctokens_agent_tools")) + "[mcp]", cwd=environment)
+        _run(
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            "-c",
+            str(CONSTRAINTS),
+            str(_wheel(wheelhouse, "doctokens_agent_tools")) + "[mcp]",
+            cwd=environment,
+        )
         _run(str(python), "-c", "import mcp; from doctokens_agent_tools.mcp import build_server", cwd=environment)
         command = environment / ("Scripts/doctokens-mcp.exe" if sys.platform == "win32" else "bin/doctokens-mcp")
         _run(str(command), "--help", cwd=environment)

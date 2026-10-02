@@ -3,6 +3,7 @@
 import io
 import unittest
 import zipfile
+from xml.etree import ElementTree as ET
 
 from xlsx_llm_parser import open_xlsx, parse_xlsx
 
@@ -81,8 +82,10 @@ class HyperlinkTests(unittest.TestCase):
         self.assertIn('<a href="https://example.com">Click</a>', semantic)
         with open_xlsx(data) as workbook:
             matches = workbook.find_cells("example.com", kind="hyperlink").text
-        self.assertIn("field=hyperlink", matches)
-        self.assertIn("https://example.com", matches)
+        match = ET.fromstring(matches).find(".//match")
+        assert match is not None
+        self.assertEqual(match.get("field"), "hyperlink")
+        self.assertEqual(match.text, "https://example.com")
 
     def test_internal_location_rendered_as_anchor(self) -> None:
         """Internal hyperlink via location → <a href='#Sheet2!A1'>."""

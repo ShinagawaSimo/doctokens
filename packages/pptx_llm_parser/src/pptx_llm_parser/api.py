@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import dataclasses
 from collections.abc import Iterator
-from pathlib import Path
 
 from ooxml_llm_core.models import Density, ParseReport, ParseResult, ResourceDescriptor
+from ooxml_llm_core.session import SessionLifecycle
 
+from ._api_support import Source, _density, _resource_descriptors, _result, _select_slides
 from .core.enums import ResourceType
 from .core.models import ParsedPresentation, ParseOptions
 from .core.package import PackageReader
@@ -15,112 +15,6 @@ from .parsing import get_render_pipeline
 from .parsing.runner import PptxParser
 from .plan import PptxParsePlan
 from .rendering.resources import render_resource
-
-Source = str | Path | bytes
-
-
-def _density(value: Density | str) -> Density:
-    if value not in {"plain", "structural", "semantic"}:
-        raise ValueError("density must be one of: 'plain', 'structural', 'semantic'")
-    return value
-
-
-def _resource_descriptors(presentation: ParsedPresentation) -> tuple[ResourceDescriptor, ...]:
-    descriptors: list[ResourceDescriptor] = []
-    for asset in presentation.assets:
-        source = "external" if asset.get("source") == "external" else "embedded"
-        descriptors.append(
-            ResourceDescriptor(
-                id=asset["id"],
-                kind=str(asset.get("type", "image")),
-                source=source,  # type: ignore[arg-type]
-                locator=asset.get("zipPath") or asset.get("href") or asset["id"],
-                content_type=asset.get("contentType"),
-                part=asset.get("zipPath"),
-                external_target=asset.get("href"),
-            )
-        )
-    for chart in presentation.charts:
-        descriptors.append(  # noqa: PERF401
-            ResourceDescriptor(chart["id"], "chart", "embedded", chart.get("part", chart["id"]), part=chart.get("part"))
-        )
-    for smartart in presentation.smartarts:
-        descriptors.append(  # noqa: PERF401
-            ResourceDescriptor(
-                smartart["id"],
-                "smartart",
-                "embedded",
-                smartart.get("part", smartart["id"]),
-                part=smartart.get("part"),
-            )
-        )
-    for slide in presentation.slides:
-        for shape in slide["shapes"]:
-            table_id = shape.get("tableId")
-            if shape.get("type") == "table" and table_id:
-                descriptors.append(ResourceDescriptor(table_id, "table", "embedded", slide["part"], part=slide["part"]))
-    return tuple(descriptors)
-
-
-def _result(
-    presentation: ParsedPresentation,
-    text: str,
-    density: Density,
-    selection: dict[str, object],
-    *,
-    syntax_version: str | None = None,
-    media_type: str | None = None,
-) -> ParseResult:
-    if presentation.report is None:  # pragma: no cover - parser always attaches a report
-        raise RuntimeError("parsed PPTX has no parse report")
-    resolved_syntax, resolved_media_type = _output_metadata(density)
-    return ParseResult(
-        text,
-        density,
-        selection,
-        presentation.report,
-        _resource_descriptors(presentation),
-        syntax_version or resolved_syntax,
-        media_type or resolved_media_type,
-    )
-
-
-def _output_metadata(density: Density) -> tuple[str, str]:
-    if density == "plain":
-        return "doctokens-plain/1.0", "text/plain"
-    return "doctokens-xml/1.0", "application/xml"
-
-
-def _select_slides(
-    presentation: ParsedPresentation,
-    slide: int | None,
-    span: int,
-) -> tuple[ParsedPresentation, dict[str, object]]:
-    if slide is not None and (isinstance(slide, bool) or not isinstance(slide, int) or slide == 0 or slide < -1):
-        raise ValueError("slide must be -1 or a positive integer")
-    if isinstance(span, bool) or not isinstance(span, int) or span <= 0:
-        raise ValueError("span must be a positive integer")
-    if slide is None:
-        if span != 1:
-            raise ValueError("span requires slide")
-        return presentation, {"kind": "all"}
-
-    start = len(presentation.slides) + slide if slide < 0 else slide - 1
-    if start < 0 or start >= len(presentation.slides):
-        return dataclasses.replace(presentation, slides=[], comments=[]), {
-            "kind": "slide",
-            "start": slide,
-            "span": span,
-            "empty": True,
-        }
-    selected = presentation.slides[start : start + span]
-    selected_ids = {item["id"] for item in selected}
-    comments = [item for item in presentation.comments if item.get("slideId") in selected_ids]
-    return dataclasses.replace(presentation, slides=selected, comments=comments), {
-        "kind": "slide",
-        "start": start + 1,
-        "span": span,
-    }
 
 
 class PptxReadSession:
@@ -131,41 +25,31 @@ class PptxReadSession:
         self.options = options
         self.parsed_presentation: ParsedPresentation | None = None
         self._package_reader: PackageReader | None = None
-        self._state = "new"
+        self._lifecycle: SessionLifecycle[ParsedPresentation] = SessionLifecycle("PPTX")
 
     def __enter__(self) -> PptxReadSession:
-        if self._state != "new":
-            raise RuntimeError("PPTX session cannot be entered twice")
+        self._lifecycle.check_new()
         self._package_reader = PackageReader(self.source, self.options)
+        package = self._package_reader
         try:
-            self._package_reader.__enter__()
-            self.parsed_presentation = PptxParser().parse(
-                self._package_reader,
-                self.options,
-                plan=PptxParsePlan.session(),
+            self.parsed_presentation = self._lifecycle.enter(
+                package, lambda: PptxParser().parse(package, self.options, plan=PptxParsePlan.session())
             )
         except BaseException:
             self.close()
             raise
-        self._state = "open"
         return self
 
     def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
         self.close()
 
     def close(self) -> None:
-        if self._state == "closed":
-            return
-        if self._package_reader is not None:
-            self._package_reader.__exit__(None, None, None)
-            self._package_reader = None
+        self._lifecycle.close()
+        self._package_reader = None
         self.parsed_presentation = None
-        self._state = "closed"
 
     def _require_open(self) -> ParsedPresentation:
-        if self._state != "open" or self.parsed_presentation is None:
-            raise RuntimeError("PPTX session is not open")
-        return self.parsed_presentation
+        return self._lifecycle.require()
 
     @property
     def report(self) -> ParseReport:
@@ -177,6 +61,18 @@ class PptxReadSession:
     @property
     def resources(self) -> tuple[ResourceDescriptor, ...]:
         return _resource_descriptors(self._require_open())
+
+    def describe(self) -> dict[str, object]:
+        presentation = self._require_open()
+        return {
+            "format": "pptx",
+            "report": self.report.to_dict(),
+            "navigation": {
+                "kind": "slides",
+                "slide_count": len(presentation.slides),
+                "slides": [{"number": s["n"], "hidden": s["hidden"], "section": s.get("section")} for s in presentation.slides],
+            },
+        }
 
     def render(
         self,
@@ -259,8 +155,8 @@ class PptxReadSession:
             text,
             "semantic",
             {"kind": "resource", "resource_kind": kind, "id": resource_id},
-            syntax_version="legacy-markup/0",
-            media_type="text/plain",
+            syntax_version="doctokens-xml/1.0",
+            media_type="application/xml",
         )
 
 

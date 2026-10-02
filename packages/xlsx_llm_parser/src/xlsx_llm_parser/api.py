@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from pathlib import Path
-from typing import cast
 
 from ooxml_llm_core.doctokens_plain import render_plain
+from ooxml_llm_core.doctokens_xml import element
 from ooxml_llm_core.limits import PackageLimits
-from ooxml_llm_core.models import Density, ParseReport, ParseResult, ResourceDescriptor
+from ooxml_llm_core.models import ParseReport, ParseResult, ResourceDescriptor
 from ooxml_llm_core.package import PackageReader
+from ooxml_llm_core.resource_xml import resource_document
+from ooxml_llm_core.session import SessionLifecycle
 
+from ._api_support import Source, _density, _result
 from ._resources import _render_chart_resource, _resource_descriptors
 from .models import Cell, ParsedWorkbook, ParseOptions, SheetInfo
 from .parsing import get_render_pipeline
@@ -23,42 +25,6 @@ from .rendering.plain import iter_plain_rows
 from .rendering.selection import filter_rows, parse_range
 from .search import _find_cells, _sheet
 
-Source = str | Path | bytes
-_DENSITIES = {"plain", "structural", "semantic"}
-
-
-def _density(value: str) -> str:
-    if value not in _DENSITIES:
-        raise ValueError(f"density must be one of: {', '.join(sorted(_DENSITIES))}")
-    return value
-
-
-def _result(
-    workbook: ParsedWorkbook,
-    text: str,
-    density: str,
-    selection: dict[str, object],
-    *,
-    syntax_version: str | None = None,
-    media_type: str | None = None,
-) -> ParseResult:
-    resolved_syntax, resolved_media_type = _output_metadata(density)
-    return ParseResult(
-        text,
-        cast(Density, density),
-        selection,
-        workbook["report"],
-        _resource_descriptors(workbook),
-        syntax_version or resolved_syntax,
-        media_type or resolved_media_type,
-    )
-
-
-def _output_metadata(density: str) -> tuple[str, str]:
-    if density == "plain":
-        return "doctokens-plain/1.0", "text/plain"
-    return "doctokens-xml/1.0", "application/xml"
-
 
 class XlsxReadSession:
     """Context-managed XLSX session with one package reader owner."""
@@ -68,42 +34,36 @@ class XlsxReadSession:
         self.options = options
         self.parsed_workbook: ParsedWorkbook | None = None
         self._package: PackageReader | None = None
-        self._state = "new"
+        self._lifecycle: SessionLifecycle[ParsedWorkbook] = SessionLifecycle("XLSX")
 
     def __enter__(self) -> XlsxReadSession:
-        if self._state != "new":
-            raise RuntimeError("XLSX session cannot be entered twice")
+        self._lifecycle.check_new()
         limits = PackageLimits(
             max_zip_entries=self.options.max_zip_entries,
             max_entry_uncompressed_bytes=self.options.max_entry_uncompressed_bytes,
             max_total_uncompressed_bytes=self.options.max_total_uncompressed_bytes,
         )
         self._package = PackageReader(self.source, limits)
+        package = self._package
         try:
-            self._package.__enter__()
-            self.parsed_workbook = _parse_workbook(self._package, self.options, plan=XlsxParsePlan.session())
+            self.parsed_workbook = self._lifecycle.enter(
+                package, lambda: _parse_workbook(package, self.options, plan=XlsxParsePlan.session())
+            )
         except BaseException:
             self.close()
             raise
-        self._state = "open"
         return self
 
     def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
         self.close()
 
     def close(self) -> None:
-        if self._state == "closed":
-            return
-        if self._package is not None:
-            self._package.__exit__(None, None, None)
-            self._package = None
+        self._lifecycle.close()
+        self._package = None
         self.parsed_workbook = None
-        self._state = "closed"
 
     def _require_open(self) -> ParsedWorkbook:
-        if self._state != "open" or self.parsed_workbook is None:
-            raise RuntimeError("XLSX session is not open")
-        return self.parsed_workbook
+        return self._lifecycle.require()
 
     @property
     def report(self) -> ParseReport:
@@ -112,6 +72,21 @@ class XlsxReadSession:
     @property
     def resources(self) -> tuple[ResourceDescriptor, ...]:
         return _resource_descriptors(self._require_open())
+
+    def describe(self) -> dict[str, object]:
+        return {
+            "format": "xlsx",
+            "report": self.report.to_dict(),
+            "sheets": [
+                {
+                    "name": s["name"],
+                    "kind": s.get("kind", "worksheet"),
+                    "visibility": s.get("state", "visible"),
+                    "tables": s.get("tables", []),
+                }
+                for s in self._require_open()["sheets"]
+            ],
+        }
 
     def render(
         self,
@@ -186,8 +161,8 @@ class XlsxReadSession:
             text,
             "structural",
             {"kind": "search"},
-            syntax_version="legacy-markup/0",
-            media_type="text/plain",
+            syntax_version="doctokens-xml/1.0",
+            media_type="application/xml",
         )
 
     def query_data(
@@ -223,8 +198,8 @@ class XlsxReadSession:
             text,
             "structural",
             {"kind": "query"},
-            syntax_version="legacy-markup/0",
-            media_type="text/plain",
+            syntax_version="doctokens-xml/1.0",
+            media_type="application/xml",
         )
 
     def read_resource(self, kind: str, resource_id: str) -> bytes:
@@ -252,21 +227,21 @@ class XlsxReadSession:
                             _render_chart_resource(chart),
                             "semantic",
                             _resource_selection(kind, resource_id),
-                            syntax_version="legacy-markup/0",
-                            media_type="text/plain",
+                            syntax_version="doctokens-xml/1.0",
+                            media_type="application/xml",
                         )
         if kind == "pivot_table":
             for sheet in workbook["sheets"]:
                 for pivot in sheet.get("pivot_tables", []):
                     if pivot["id"] == resource_id:
-                        text = f"<pivotTable id={resource_id} name={pivot.get('name', '')}/>"
+                        text = resource_document("xlsx", element("pivot-table", id=resource_id, name=pivot.get("name", "")))
                         return _result(
                             workbook,
                             text,
                             "semantic",
                             _resource_selection(kind, resource_id),
-                            syntax_version="legacy-markup/0",
-                            media_type="text/plain",
+                            syntax_version="doctokens-xml/1.0",
+                            media_type="application/xml",
                         )
         raise KeyError(f"resource {kind!r}/{resource_id!r} not found")
 

@@ -26,7 +26,7 @@ Public result of a parse, render, resource, search, or query operation.
   - `ParseResult.density: Density`
 
 - **Parsing**
-  - Read together with `syntax_version`; side operations can return legacy text even with a structural density.
+  - Body reads use the requested density. Resource explanations use semantic DTX; search and query use structural DTX.
 
 ### `selection`
 
@@ -73,7 +73,7 @@ Public result of a parse, render, resource, search, or query operation.
   - `ParseResult.syntax_version: str`
 
 - **Parsing**
-  - Main plain: `doctokens-plain/1.0`; main XML: `doctokens-xml/1.0`; explanatory side results: `legacy-markup/0`.
+  - Plain body: `doctokens-plain/1.0`; XML body and resource/search/query results: `doctokens-xml/1.0`.
 
 ### `media_type`
 
@@ -84,7 +84,15 @@ Public result of a parse, render, resource, search, or query operation.
   - `ParseResult.media_type: str`
 
 - **Parsing**
-  - DTX: `application/xml`; DTP and legacy side text: `text/plain`.
+  - DTX: `application/xml`; DTP: `text/plain`.
+
+### `to_dict()`
+
+- **Output**
+  - JSON-compatible dictionary containing all result fields, the report, and resource descriptors. `ResourceDescriptor.to_dict()` exports its public fields without bytes.
+
+- **Parsing**
+  - Creates a new dictionary; does not retain a package reader or serialize private format IR.
 
 
 ## Source references

@@ -82,8 +82,19 @@ One-shot sheet/range selection narrows cell materialization while retaining mini
   - See [package options](../common/package.md). No XLSX OCR option.
 
 
+### `inspect_xlsx(source, options=...)`
+
+- **Output**
+  - JSON-compatible `format`, `scope="workbook-index"`, `sheet_count`, `sheets`, `date_1904`, `defined_names`, and `external_links`.
+  - Each sheet exposes `name`, `kind`, and `visibility` (default `visible`).
+
+- **Parsing**
+  - Reuses workbook metadata and relationship reading with the same package limits. Opens and closes its own package reader; does not load worksheets, shared strings, styles, or cell data.
+  - Cell and resource counts are not inferred. Normal parse/session entry points retain their existing default body behavior.
+
 ## Source references
 
-- [parse_xlsx](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L282)
+- [parse_xlsx](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py)
+- [inspect_xlsx](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/inspection.py)
 - [parse_range](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/selection.py#L17)
 - [filter_rows](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/selection.py#L27)

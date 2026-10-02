@@ -18,8 +18,7 @@ find_cells is a literal search over retained session data.
   - `str`
 
 - **Parsing**
-  - Regex-escape query and perform case-sensitive substring matching. Empty query returns `<matches>
-  - `.
+  - Regex-escape query and perform case-sensitive substring matching. Empty query returns a complete workbook containing an empty `matches` element.
 
 ### `sheets`
 
@@ -66,7 +65,7 @@ find_cells is a literal search over retained session data.
 ### `text`
 
 - **Output**
-  - `<matches>` followed by `<match ...>text` records.
+  - Complete `<workbook density="structural" format="xlsx"><matches><match ...>text</match></matches></workbook>`.
 
 - **Source**
   - Matched retained fields.
@@ -75,11 +74,11 @@ find_cells is a literal search over retained session data.
   - `ParseResult.text`
 
 - **Parsing**
-  - Cell matches include quoted `cell="Sheet!A1"` and bare field attribute; defined-name matches include name = ref. No closing match/matches tags. Escape text with html.escape; syntax_version=legacy-markup/0, media_type=text/plain.
+  - Cell matches include quoted `cell="Sheet!A1"` and `field="value|formula|comment|hyperlink"` attributes. Defined-name matches use `field="definedName"` and `name = ref` text. All elements close; XML text and attributes are escaped. `syntax_version=doctokens-xml/1.0`, `media_type=application/xml`, `density=structural`.
 
 
 ## Source references
 
-- [XlsxReadSession.find_cells](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L174)
-- [_find_cells](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/search.py#L19)
-- [_cell_match](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/search.py#L60)
+- [XlsxReadSession.find_cells](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py)
+- [_find_cells](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/search.py)
+- [_cell_match](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/search.py)

@@ -46,11 +46,12 @@ XLSX resources come from drawing and table metadata in the parsed scope.
   - `ParseResult.text`
 
 - **Parsing**
-  - Chart emits legacy chart/series/point records. Pivot emits `<pivotTable id=... name=.../>`. syntax_version=legacy-markup/0; media_type=text/plain; density=semantic.
+  - Complete `<workbook density="semantic" format="xlsx"><resources>OBJECT</resources></workbook>` with `syntax_version=doctokens-xml/1.0`, `media_type=application/xml`, `density=semantic`.
+  - Chart retains chart/series/point records. Pivot summary uses a closed `pivot-table` with quoted `id` and `name` attributes. XML attributes and text are escaped by the shared serializer.
 
 
 ## Source references
 
-- [XlsxReadSession.read_resource](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L230)
-- [XlsxReadSession.render_resource](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L244)
-- [_render_chart_resource](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_resources.py#L56)
+- [XlsxReadSession.read_resource](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py)
+- [XlsxReadSession.render_resource](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py)
+- [_render_chart_resource](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_resources.py)

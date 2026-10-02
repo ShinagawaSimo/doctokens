@@ -6,6 +6,9 @@ import base64
 import zipfile
 from collections.abc import Callable
 
+from ooxml_llm_core.doctokens_xml import append, element
+from ooxml_llm_core.resource_xml import resource_document
+
 from ...core.enums import ResourceType
 from ...core.models import ParsedDocument, TableBlock, TableRow
 from ..common.ocr import render_ocr_result
@@ -129,25 +132,18 @@ def _render_table_resource(
     aggregate_column: str | None,
 ) -> str:
     all_rows = [row for segment in segments for row in segment["rows"]]
-    column_count = max((segment["columnCount"] for segment in segments), default=0)
-    attrs = f"id={table_id} rows={len(all_rows)} cols={column_count}"
-    output_parts = [f"<table {attrs}>"]
-
+    node = element(
+        "table", id=table_id, rows=len(all_rows), cols=max((segment["columnCount"] for segment in segments), default=0)
+    )
     if aggregate is not None:
-        aggregate_result = _aggregate_rows(all_rows, aggregate, aggregate_column or "")
-        op = aggregate_result.get("aggregate", "")
-        col = aggregate_result.get("aggregate_column", "")
-        val = aggregate_result.get("aggregate_value", "")
-        output_parts.append(f"\n<aggregate op={op} column={col}>{val}")
+        result = _aggregate_rows(all_rows, aggregate, aggregate_column or "")
+        append(node, "aggregate", str(result["aggregate_value"]), op=result["aggregate"], column=result["aggregate_column"])
     else:
-        filtered = _filter_and_slice_rows(all_rows, rows, columns)
-        for row in filtered:
-            cells = "|".join(cell.get("text", "") for cell in row["cells"])
-            if row.get("isHeader"):
-                output_parts.append(f"\n<tr isHeader>{cells}")
-            else:
-                output_parts.append(f"\n<tr>{cells}")
-    return "".join(output_parts)
+        for row in _filter_and_slice_rows(all_rows, rows, columns):
+            child = append(node, "tr", isHeader=True if row.get("isHeader") else None)
+            for cell in row["cells"]:
+                append(child, "td", cell.get("text", ""))
+    return resource_document("docx", node)
 
 
 def _filter_and_slice_rows(

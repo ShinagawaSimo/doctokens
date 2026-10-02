@@ -102,12 +102,13 @@ Embedded resources are accessed through an open PPTX session.
   - `ParseResult.text`
 
 - **Parsing**
-  - syntax_version=legacy-markup/0; media_type=text/plain; density=semantic. Chart uses comma-joined cached arrays; SmartArt uses node/link records; table includes selected rows plus optional aggregate. Exact constructors below define escaping and boundaries.
+  - `syntax_version=doctokens-xml/1.0`, `media_type=application/xml`, `density=semantic`. Complete `<presentation density="semantic" format="pptx"><resources>OBJECT</resources></presentation>`.
+  - Chart series retain comma-joined cached arrays. SmartArt retains node/link records. Tables use closed `table/tr/td` elements and an optional `aggregate` element. XML attributes and text are escaped by the shared serializer.
 
 
 ## Source references
 
-- [PptxReadSession.render_resource](../../../packages/pptx_llm_parser/src/pptx_llm_parser/api.py#L229)
-- [_render_chart](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/resources.py#L61)
-- [_render_smartart](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/resources.py#L105)
-- [_render_table](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/resources.py#L129)
+- [PptxReadSession.render_resource](../../../packages/pptx_llm_parser/src/pptx_llm_parser/api.py)
+- [_render_chart](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/resources.py)
+- [_render_smartart](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/resources.py)
+- [_render_table](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/resources.py)

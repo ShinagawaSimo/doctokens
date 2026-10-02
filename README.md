@@ -35,6 +35,7 @@ doctokens/
     pptx_llm_parser/  # PowerPoint：幻灯片、形状、文字、备注、批注、对象
     xlsx_llm_parser/  # Excel：网格、公式、样式、规则、透视表、检索与查询
     ocr_llm_core/     # 可选 OCR 适配层
+    doctokens_agent_tools/ # 共享工具运行层、直接 TOOL_CALL、可选 MCP stdio
   specifications/    # 当前解析行为、输出字段与限制
   test_support/      # 真实 Office 文件、素材、golden 与手动更新脚本
   tests/             # 真实文件全文回归与更新脚本测试
@@ -107,6 +108,45 @@ python -m pip install -e ./packages/ooxml_llm_core -e ./packages/docx_llm_parser
 ```
 
 三个格式包互不依赖，共用 `ooxml_llm_core`。共享核心没有必需的第三方运行依赖；DOCX 另依赖 `typing_extensions`。OCR 的安装方式见下文。
+
+### 智能体工具与 MCP
+
+工具适配包管理文件快照、短期会话、范围缓存和长结果。直接 TOOL_CALL 与 MCP 共用同一套定义和执行逻辑，模型调用循环由宿主负责。安装解析包后，可安装工具包及官方 MCP SDK：
+
+```sh
+python -m pip install -e "./packages/doctokens_agent_tools[mcp]"
+doctokens-mcp --root /absolute/path/to/documents
+```
+
+`--root` 是允许读取的目录，可重复指定。MCP 客户端配置示例（替换为本机绝对路径）：
+
+```json
+{
+  "mcpServers": {
+    "doctokens": {
+      "command": "D:\\Word Project\\.venv\\Scripts\\doctokens-mcp.exe",
+      "args": ["--root", "D:\\Word Project\\test_support\\fixtures"]
+    }
+  }
+}
+```
+
+直接 Python 调用只需基础工具包，不要求 MCP SDK：
+
+```python
+from pathlib import Path
+from doctokens_agent_tools import RuntimeConfig, ToolRuntime
+
+with ToolRuntime(RuntimeConfig(allowed_roots=(Path("documents"),))) as runtime:
+    tools = [tool.to_dict() for tool in runtime.list_tools()]
+    result = runtime.execute("read_docx", {"path": "report.docx", "density": "semantic"})
+    print(result.to_dict())
+    # 异步宿主使用 await runtime.aexecute(name, arguments)。
+```
+
+三格式正文工具都接受 `density="plain" | "structural" | "semantic"`，默认 `structural`。DOCX 默认逐页读取前 3 个保存分页提示页，PPTX 默认前 3 张；XLSX 未指定选区时只返回轻量工作表目录。全文须显式传入 `whole_document=true`。后续可用 `document_id` 读取原快照；超出默认 12,000 字符预算的内容通过 `result_id` 和 `read_result` 分段取回。片段声明 `fragment=true`，拼接后才是完整 XML。
+
+工具还覆盖资源目录、图片和媒体、格式专属资源解释、XLSX 搜索/查询及文档释放。图片通过 MCP 原生图片内容返回；直接调用得到业务结果及二进制附件。默认最多保留 4 个解析会话，空闲 10 分钟过期；缓存、快照和回复限制均可配置。完整参数、生命周期和错误码见[工具行为参考](specifications/agent-tools/README.md)。
 
 ### 架构边界
 
@@ -231,7 +271,7 @@ PPTX 和 XLSX 的结构示例：
 </workbook>
 ```
 
-**资源、搜索和查询的解释性输出尚未迁移为 DTX。** `render_resource()`、`find_cells()`、`query_data()` 目前返回 `legacy-markup/0`、`text/plain`；即使含有类似标签的文本，也不能当作 XML。以 `ParseResult.syntax_version` 和 `media_type` 判断语法。二进制资源由 `read_resource()` 直接返回 bytes。
+从解析包 `0.2.0` 起，`render_resource()`、`find_cells()`、`query_data()` 的解释性输出也是完整 DTX：资源位于格式根节点的 `<resources>` 内，搜索为 `<workbook><matches>…</matches></workbook>`，查询为 `<workbook><query><table>…</table></query></workbook>`。空结果同样是完整 XML。此变更替换了旧旁路文本语法，方法名与参数保持不变；以 `ParseResult.syntax_version` 和 `media_type` 判断语法。二进制资源由 `read_resource()` 直接返回 bytes。
 
 #### API 速查
 
@@ -246,6 +286,8 @@ PPTX 和 XLSX 的结构示例：
 | `session.read_resource(kind, resource_id)` | DOCX/XLSX 支持图片，PPTX 支持图片和媒体；不下载外部目标 |
 | `session.render_resource(kind, resource_id, ...)` | DOCX/PPTX 支持表格、图表、SmartArt；XLSX 支持图表和透视表摘要 |
 | `workbook.find_cells(...)` / `workbook.query_data(...)` | 单元格搜索与实验性表格查询 |
+| `inspect_xlsx(source, options=...)` | 轻量工作簿元数据目录，不扫描单元格 |
+| `session.describe()` | 格式专属导航信息与报告的 JSON 字典 |
 
 所有选择参数均为关键字参数；详细签名、选项和限制见各格式的 [DOCX API](specifications/docx/api.md)、[PPTX API](specifications/pptx/api.md)、[XLSX API](specifications/xlsx/api.md) 与[会话参考](specifications/common/session.md)。
 
@@ -300,7 +342,7 @@ print(result.text)
 - [x] DOCX、PPTX、XLSX 的三档 DTP/DTX 正文输出与显式读取会话
 - [x] 可选 OCR 适配、资源读取和实验性工作簿查询
 - [ ] 用小型真实 Office 文件逐步替代正常内容的手工 XML 测试，人工审查 golden
-- [ ] 资源、搜索和查询输出的后续契约完善
+- [x] 资源、搜索和查询的完整 DTX 输出，共享工具运行层与 MCP stdio 接入
 - [ ] PDF 解析器
 - [ ] 更细的只读排版信息及可编辑投影；`typography`、`geometry`、`full` 尚非公开 API
 

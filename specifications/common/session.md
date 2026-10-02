@@ -62,7 +62,7 @@ A session owns one open package and its parsed representation.
 ### `render_resource`
 
 - **Output**
-  - Explanatory `ParseResult`, `legacy-markup/0`, `text/plain`.
+  - Explanatory `ParseResult`, `doctokens-xml/1.0`, `application/xml`, semantic density.
 
 - **OOXML**
   - Parsed object record.
@@ -70,9 +70,18 @@ A session owns one open package and its parsed representation.
 - **Parsing**
   - DOCX/PPTX: chart, SmartArt, table; XLSX: supported resource kinds described by its API. Arguments and text grammar are format-specific.
 
+### `describe`
+
+- **Output**
+  - JSON-compatible format identity, navigation, and report.
+
+- **Parsing**
+  - DOCX exposes saved-hint `page_count` and `content_pages`; PPTX exposes `slide_count`, ordered slide numbers, hidden state and sections; XLSX exposes worksheet and table metadata.
+  - Reads an entered session's parsed representation. XLSX also provides standalone `inspect_xlsx` for workbook metadata without parsing cells.
+
 
 ## Source references
 
-- [DocxReadSession](../../packages/docx_llm_parser/src/docx_llm_parser/api.py#L101)
-- [PptxReadSession](../../packages/pptx_llm_parser/src/pptx_llm_parser/api.py#L126)
-- [XlsxReadSession](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py#L63)
+- [DocxReadSession](../../packages/docx_llm_parser/src/docx_llm_parser/api.py)
+- [PptxReadSession](../../packages/pptx_llm_parser/src/pptx_llm_parser/api.py)
+- [XlsxReadSession](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py)

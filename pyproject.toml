@@ -67,6 +67,7 @@ format.quote-style = "double"
 strict = true
 warn_unreachable = true
 files = [
+    "packages/doctokens_agent_tools/src",
     "packages/ooxml_llm_core/src",
     "packages/docx_llm_parser/src",
     "packages/xlsx_llm_parser/src",

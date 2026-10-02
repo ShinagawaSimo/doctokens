@@ -176,7 +176,7 @@ def parse_docx(
 
 ## Source references
 
-- [parse_docx](../../packages/docx_llm_parser/src/docx_llm_parser/api.py#L249)
-- [DocxReadSession](../../packages/docx_llm_parser/src/docx_llm_parser/api.py#L101)
+- [parse_docx](../../packages/docx_llm_parser/src/docx_llm_parser/api.py)
+- [DocxReadSession](../../packages/docx_llm_parser/src/docx_llm_parser/api.py)
 - [render_page_window](../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dispatch.py#L34)
 - [ParseOptions](../../packages/docx_llm_parser/src/docx_llm_parser/core/models/document.py#L38)

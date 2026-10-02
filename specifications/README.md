@@ -8,6 +8,7 @@ The reference defines how OOXML packages become Doctokens Plain Text (DTP), Doct
 | [DOCX](docx/README.md) | Document flow, text, numbering, tables, annotations, and drawing objects |
 | [PPTX](pptx/README.md) | Slides, shapes, inheritance, text, tables, annotations, and media |
 | [XLSX](xlsx/README.md) | Worksheets, cells, formulas, formatting, annotations, objects, and queries |
+| [Agent tools](agent-tools/README.md) | Direct tool calls, MCP, snapshots, bounded reads, and result retrieval |
 
 ## Notation
 

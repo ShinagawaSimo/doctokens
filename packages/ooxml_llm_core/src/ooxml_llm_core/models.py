@@ -7,7 +7,7 @@ their respective parser packages.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Literal, TypedDict
 
 
@@ -67,6 +67,9 @@ class ResourceDescriptor:
     part: str | None = None
     external_target: str | None = None
 
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
 
 Density = Literal["plain", "structural", "semantic"]
 
@@ -82,6 +85,17 @@ class ParseResult:
     resources: tuple[ResourceDescriptor, ...] = ()
     syntax_version: str = "legacy-markup/0"
     media_type: str = "text/plain"
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "text": self.text,
+            "density": self.density,
+            "selection": self.selection,
+            "report": self.report.to_dict(),
+            "resources": [item.to_dict() for item in self.resources],
+            "syntax_version": self.syntax_version,
+            "media_type": self.media_type,
+        }
 
 
 @dataclass(frozen=True, slots=True)

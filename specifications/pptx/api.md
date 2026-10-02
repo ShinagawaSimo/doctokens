@@ -142,5 +142,5 @@ def _select_slides(
 
 ## Source references
 
-- [parse_pptx](../../packages/pptx_llm_parser/src/pptx_llm_parser/api.py#L271)
-- [PptxReadSession](../../packages/pptx_llm_parser/src/pptx_llm_parser/api.py#L126)
+- [parse_pptx](../../packages/pptx_llm_parser/src/pptx_llm_parser/api.py)
+- [PptxReadSession](../../packages/pptx_llm_parser/src/pptx_llm_parser/api.py)

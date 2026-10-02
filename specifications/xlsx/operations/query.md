@@ -153,7 +153,7 @@ Source → typed row materialization → where → group/aggregate → select �
 ### `text`
 
 - **Output**
-  - Legacy table text.
+  - Complete DTX workbook containing a query table.
 
 - **Source**
   - Query result records.
@@ -162,13 +162,13 @@ Source → typed row materialization → where → group/aggregate → select �
   - `ParseResult.text`
 
 - **Parsing**
-  - `<table>`, `<tr>`, `<th>label`, `<td>value` with implicit boundaries; no DTX guarantee. Empty → `<table>
-  - `. Label/value text uses html.escape. syntax_version=legacy-markup/0, media_type=text/plain.
+  - `<workbook density="structural" format="xlsx"><query><table>…</table></query></workbook>`. Headers use `tr/th`; result rows use `tr/td`. Empty records produce an empty table inside the same complete envelope.
+  - Labels and values retain their existing query conversion and are XML-escaped. `syntax_version=doctokens-xml/1.0`, `media_type=application/xml`, `density=structural`.
 
 
 ## Source references
 
-- [query_data](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L21)
-- [_resolve_query_source](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L74)
+- [query_data](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py)
+- [_resolve_query_source](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py)
 - [_coerce_cell_value](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_query_operations.py#L8)
-- [_render_query_result](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L294)
+- [_render_query_result](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py)

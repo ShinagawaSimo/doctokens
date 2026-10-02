@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from html import escape as escape_text
+from ooxml_llm_core.doctokens_xml import append, serialize
+from ooxml_llm_core.resource_xml import operation_root
 
 from ._query_operations import _aggregate_name, _apply_aggregation, _apply_order_by, _apply_where, _coerce_cell_value
 from ._query_types import AggregateSpec as AggregateSpec
@@ -292,16 +293,20 @@ def _aggregation_columns(
 
 
 def _render_query_result(rows: list[dict[str, object]], columns: list[QueryColumn] | None = None) -> str:
-    if not rows:
-        return "<table>\n"
-    all_cols: list[QueryColumn]
-    if columns is None:
-        all_cols = [{"key": col, "label": col, "col": 0} for col in rows[0] if col != "__row"]
-    else:
-        all_cols = [col for col in columns if any(col["key"] in row for row in rows)]
-    parts = ["<table>\n<tr>"]
-    parts.extend(f"<th>{escape_text(column['label'])}" for column in all_cols)
-    for row in rows:
-        parts.append("<tr>")
-        parts.extend(f"<td>{escape_text(str(row.get(column['key'], '')))}" for column in all_cols)
-    return "".join(parts) + "\n"
+    root = operation_root("xlsx", "structural")
+    table = append(append(root, "query"), "table")
+    if rows:
+        all_cols: list[QueryColumn]
+        all_cols = (
+            [{"key": col, "label": col, "col": 0} for col in rows[0] if col != "__row"]
+            if columns is None
+            else [col for col in columns if any(col["key"] in row for row in rows)]
+        )
+        header = append(table, "tr")
+        for column in all_cols:
+            append(header, "th", column["label"])
+        for row in rows:
+            child = append(table, "tr")
+            for column in all_cols:
+                append(child, "td", str(row.get(column["key"], "")))
+    return serialize(root)

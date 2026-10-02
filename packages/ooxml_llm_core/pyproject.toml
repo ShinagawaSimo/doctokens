@@ -1,6 +1,6 @@
 [project]
 name = "ooxml-llm-core"
-version = "0.1.0"
+version = "0.2.0"
 description = "Shared OOXML package infrastructure for LLM-oriented parsers"
 requires-python = ">=3.10"
 dependencies = []

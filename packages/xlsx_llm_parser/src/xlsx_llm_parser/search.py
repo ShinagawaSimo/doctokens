@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import re
-from html import escape as escape_text
+from xml.etree import ElementTree as ET
+
+from ooxml_llm_core.doctokens_xml import append, element, serialize
+from ooxml_llm_core.resource_xml import operation_root
 
 from .models import Cell, ParsedWorkbook, SheetInfo
 from .rendering.selection import find_sheet
@@ -24,10 +27,12 @@ def _find_cells(
     kind: str | None,
     limit: int,
 ) -> str:
+    root = operation_root("xlsx", "structural")
+    container = append(root, "matches")
     if not query:
-        return "<matches>\n"
+        return serialize(root)
     pattern = re.compile(re.escape(query))
-    matches: list[str] = []
+    matches: list[ET.Element] = []
     selected_sheets = sheets or [sheet["name"] for sheet in workbook["sheets"]]
     seen_names: set[str] = set()
     for sheet_name in selected_sheets:
@@ -53,11 +58,12 @@ def _find_cells(
                     continue
                 if pattern.search(name) or pattern.search(defined_name.get("ref", "")):
                     seen_names.add(name)
-                    matches.append(f"<match field=definedName>{escape_text(name)} = {escape_text(defined_name['ref'])}")
-    return "<matches>\n" + "\n".join(matches) + "\n"
+                    matches.append(element("match", f"{name} = {defined_name['ref']}", field="definedName"))
+    container.extend(matches)
+    return serialize(root)
 
 
-def _cell_match(sheet_name: str, cell: Cell, pattern: re.Pattern[str], kind: str | None) -> str | None:
+def _cell_match(sheet_name: str, cell: Cell, pattern: re.Pattern[str], kind: str | None) -> ET.Element | None:
     fields = (
         ("value", cell["text"]),
         ("formula", cell.get("formula", "")),
@@ -69,6 +75,6 @@ def _cell_match(sheet_name: str, cell: Cell, pattern: re.Pattern[str], kind: str
             continue
         rendered = str(value)
         if pattern.search(rendered):
-            cell_ref = f"{escape_text(sheet_name, quote=True)}!{cell['ref']}"
-            return f'<match cell="{cell_ref}" field={field_name}>{escape_text(rendered)}'
+            cell_ref = f"{sheet_name}!{cell['ref']}"
+            return element("match", rendered, cell=cell_ref, field=field_name)
     return None

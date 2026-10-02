@@ -16,8 +16,9 @@ PACKAGE_ORDER = (
     "docx_llm_parser",
     "xlsx_llm_parser",
     "pptx_llm_parser",
+    "doctokens_agent_tools",
 )
-IMPORTS = "import docx_llm_parser, ooxml_llm_core, ocr_llm_core, pptx_llm_parser, xlsx_llm_parser"
+IMPORTS = "import docx_llm_parser, ooxml_llm_core, ocr_llm_core, pptx_llm_parser, xlsx_llm_parser, doctokens_agent_tools"
 
 
 def _run(*args: str, cwd: Path = ROOT) -> None:
@@ -69,6 +70,11 @@ def main() -> None:
         for package in PACKAGE_ORDER:
             _run(str(python), "-m", "pip", "install", str(_wheel(wheelhouse, package)), cwd=environment)
         _run(str(python), "-c", IMPORTS, cwd=environment)
+        # Verify base imports first, then the optional SDK and installed stdio entry point.
+        _run(str(python), "-m", "pip", "install", str(_wheel(wheelhouse, "doctokens_agent_tools")) + "[mcp]", cwd=environment)
+        _run(str(python), "-c", "import mcp; from doctokens_agent_tools.mcp import build_server", cwd=environment)
+        command = environment / ("Scripts/doctokens-mcp.exe" if sys.platform == "win32" else "bin/doctokens-mcp")
+        _run(str(command), "--help", cwd=environment)
 
 
 if __name__ == "__main__":

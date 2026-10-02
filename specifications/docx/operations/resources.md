@@ -102,12 +102,13 @@ Session binary reads and explanatory renderings have distinct result types.
   - `ParseResult.text`
 
 - **Parsing**
-  - syntax_version=legacy-markup/0; media_type=text/plain; density=semantic. Table uses pipe-separated cells after `<tr>`; chart uses series and point records; SmartArt uses node and link records. Exact constructors below define escaping and boundaries.
+  - `syntax_version=doctokens-xml/1.0`, `media_type=application/xml`, `density=semantic`. Complete `<document density="semantic" format="docx"><resources>OBJECT</resources></document>`.
+  - Tables use closed `table/tr/td` elements; aggregate output uses `table/aggregate` with `op`, `column`, and numeric text. Charts retain series and point records; SmartArt retains node and link records. XML attributes and text are escaped by the shared serializer.
 
 
 ## Source references
 
-- [DocxReadSession.render_resource](../../../packages/docx_llm_parser/src/docx_llm_parser/api.py#L208)
-- [_render_table_resource](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/objects/resources.py#L123)
-- [render_chart_resource](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/objects/charts.py#L36)
-- [render_smartart_resource](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/objects/smartarts.py#L24)
+- [DocxReadSession.render_resource](../../../packages/docx_llm_parser/src/docx_llm_parser/api.py)
+- [_render_table_resource](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/objects/resources.py)
+- [render_chart_resource](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/objects/charts.py)
+- [render_smartart_resource](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/objects/smartarts.py)

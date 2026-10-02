@@ -117,6 +117,6 @@ A resource descriptor identifies data available to a session. Presence in the di
 ## Source references
 
 - [ResourceDescriptor](../../packages/ooxml_llm_core/src/ooxml_llm_core/models.py#L59)
-- [_resource_descriptors](../../packages/docx_llm_parser/src/docx_llm_parser/api.py#L39)
-- [_resource_descriptors](../../packages/pptx_llm_parser/src/pptx_llm_parser/api.py#L28)
-- [_resource_descriptors](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_resources.py#L12)
+- [_resource_descriptors](../../packages/docx_llm_parser/src/docx_llm_parser/_api_support.py)
+- [_resource_descriptors](../../packages/pptx_llm_parser/src/pptx_llm_parser/_api_support.py)
+- [_resource_descriptors](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_resources.py)

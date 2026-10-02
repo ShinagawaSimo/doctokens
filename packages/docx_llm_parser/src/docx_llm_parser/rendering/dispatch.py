@@ -94,6 +94,15 @@ def build_manifest(parsed_document: ParsedDocument) -> DocumentManifest:
     }
 
 
+def describe_pages(parsed_document: ParsedDocument) -> dict[str, object]:
+    index = _build_page_index(parsed_document)
+    return {
+        "kind": "saved-page-hints",
+        "page_count": _total_pages(parsed_document, index),
+        "content_pages": [page for page, (start, end) in index.items() if end >= start],
+    }
+
+
 def _total_pages(parsed_document: ParsedDocument, page_index: dict[int, tuple[int, int]]) -> int:
     """Include a trailing page break even when its page has no content block."""
     indexed_pages = max(page_index.keys()) if page_index else 1

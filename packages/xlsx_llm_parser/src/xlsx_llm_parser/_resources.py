@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from html import escape as escape_text
-
+from ooxml_llm_core.doctokens_xml import append, element
 from ooxml_llm_core.models import ResourceDescriptor
+from ooxml_llm_core.resource_xml import resource_document
 
 from .models import DrawingChart, ParsedWorkbook
 
@@ -54,34 +54,31 @@ def _resource_descriptors(workbook: ParsedWorkbook) -> tuple[ResourceDescriptor,
 
 
 def _render_chart_resource(chart: DrawingChart) -> str:
-    attrs = f"id={chart['id']} ref={chart['ref']} type={chart.get('type', '?')}"
-    if chart.get("plotTypes"):
-        attrs += f" plots={escape_text(','.join(chart['plotTypes']), quote=True)}"
-    attrs += f" series={chart.get('series_count', 0)}"
-    if chart.get("title"):
-        attrs += f" title={escape_text(chart['title'], quote=True)}"
-    parts = [f"<chart {attrs}>"]
-    is_combination = chart.get("type") == "combination"
+    node = element(
+        "chart",
+        id=chart["id"],
+        ref=chart["ref"],
+        type=chart.get("type", "?"),
+        plots=",".join(chart["plotTypes"]) if chart.get("plotTypes") else None,
+        series=chart.get("series_count", 0),
+        title=chart.get("title") or None,
+    )
     for series in chart.get("series", []):
-        series_attrs = f"index={series.get('index', 0)}"
-        if series.get("name"):
-            series_attrs += f" name={escape_text(series['name'], quote=True)}"
-        if "min" in series:
-            series_attrs += f" min={series['min']}"
-        if "max" in series:
-            series_attrs += f" max={series['max']}"
-        if is_combination and series.get("chartType"):
-            series_attrs += f" type={series['chartType']}"
-        if series.get("bubbleSizes"):
-            series_attrs += f" bubbleSizes={escape_text(','.join(series['bubbleSizes']), quote=True)}"
-        if series.get("hidden"):
-            series_attrs += " hidden"
-        parts.append(f"\n<series {series_attrs}>")
+        child = append(
+            node,
+            "series",
+            index=series.get("index", 0),
+            name=series.get("name") or None,
+            min=series.get("min"),
+            max=series.get("max"),
+            type=series.get("chartType") if chart.get("type") == "combination" else None,
+            bubbleSizes=",".join(series["bubbleSizes"]) if series.get("bubbleSizes") else None,
+            hidden=True if series.get("hidden") else None,
+        )
         for point in series.get("points", []):
-            point_attrs = ""
-            for name in ("category", "value", "x", "y", "bubbleSize"):
-                value = point.get(name, "")
-                if value:
-                    point_attrs += f" {name}={escape_text(str(value), quote=True)}"
-            parts.append(f"\n<point{point_attrs}/>")
-    return "".join(parts)
+            append(
+                child,
+                "point",
+                **{name: point[name] for name in ("category", "value", "x", "y", "bubbleSize") if point.get(name, "")},
+            )
+    return resource_document("xlsx", node)

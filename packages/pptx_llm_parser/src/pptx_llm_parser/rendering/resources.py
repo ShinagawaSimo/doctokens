@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import base64
 import re
-from html import escape as escape_text
+
+from ooxml_llm_core.doctokens_xml import append, element
+from ooxml_llm_core.resource_xml import resource_document
 
 from ..core.enums import ResourceType
 from ..core.models import ParsedPresentation
 from ..core.package import PackageReader
-from .markup import AttributeBuilder
 
 _AGGREGATE_OPS = {"sum", "count", "avg", "min", "max"}
 
@@ -62,44 +63,38 @@ def _render_chart(parsed_presentation: ParsedPresentation, resource_id: str) -> 
     chart = next((chart for chart in parsed_presentation.charts if chart.get("id") == resource_id), None)
     if chart is None:
         return None
-    attrs = AttributeBuilder().add("id", resource_id)
     chart_type = chart.get("chart_type")
-    if chart_type:
-        attrs.add("type", chart_type)
     title = chart.get("title")
-    if title:
-        attrs.add("title", title)
     series = chart.get("series", [])
     point_count = chart.get("point_count")
-    attrs.add("series", len(series)).add("points", point_count if point_count is not None else 0)
     plots = chart.get("plots", [])
     is_combination = chart_type == "combination"
-    if is_combination and plots:
-        attrs.add("plots", ",".join(plot.get("chart_type", "unknown") for plot in plots))
-    output_lines = [f"<chart{attrs.render()}>"]
+    node = element(
+        "chart",
+        id=resource_id,
+        type=chart_type or None,
+        title=title or None,
+        series=len(series),
+        points=point_count if point_count is not None else 0,
+        plots=",".join(plot.get("chart_type", "unknown") for plot in plots) if is_combination and plots else None,
+    )
     for series_index, series_item in enumerate(series, start=1):
-        series_attrs = AttributeBuilder().add("id", series_index)
-        series_name = series_item.get("name")
-        if series_name:
-            series_attrs.add("name", series_name)
-        series_attrs.add("categories", ",".join(series_item.get("categories", [])))
-        series_attrs.add("values", ",".join(series_item.get("values", [])))
-        if is_combination and series_item.get("chart_type"):
-            series_attrs.add("type", series_item["chart_type"])
-        if series_item.get("bubble_sizes"):
-            series_attrs.add("bubbleSizes", ",".join(series_item["bubble_sizes"]))
-        if series_item.get("hidden"):
-            series_attrs.flag("hidden")
-        if series_item.get("x_values"):
-            series_attrs.add("xValues", ",".join(series_item["x_values"]))
-        if series_item.get("y_values"):
-            series_attrs.add("yValues", ",".join(series_item["y_values"]))
-        if series_item.get("min") is not None:
-            series_attrs.add("min", f"{series_item['min']:g}")
-        if series_item.get("max") is not None:
-            series_attrs.add("max", f"{series_item['max']:g}")
-        output_lines.append(f"<series{series_attrs.render()}>")
-    return "\n".join(output_lines)
+        append(
+            node,
+            "series",
+            id=series_index,
+            name=series_item.get("name") or None,
+            categories=",".join(series_item.get("categories", [])),
+            values=",".join(series_item.get("values", [])),
+            type=series_item.get("chart_type") if is_combination else None,
+            bubbleSizes=",".join(series_item["bubble_sizes"]) if series_item.get("bubble_sizes") else None,
+            xValues=",".join(series_item["x_values"]) if series_item.get("x_values") else None,
+            yValues=",".join(series_item["y_values"]) if series_item.get("y_values") else None,
+            hidden=True if series_item.get("hidden") else None,
+            min=f"{series_item['min']:g}" if series_item.get("min") is not None else None,
+            max=f"{series_item['max']:g}" if series_item.get("max") is not None else None,
+        )
+    return resource_document("pptx", node)
 
 
 def _render_smartart(parsed_presentation: ParsedPresentation, resource_id: str) -> str | None:
@@ -119,11 +114,12 @@ def _render_smartart(parsed_presentation: ParsedPresentation, resource_id: str) 
             break
     nodes = smartart_record.get("nodes", [])
     links = smartart_record.get("links", [])
-    attrs = AttributeBuilder().add("id", resource_id).add("type", layout_type).add("nodes", len(nodes)).add("links", len(links))
-    output_lines = [f"<smartart{attrs.render()}>"]
-    output_lines.extend(f"<node{AttributeBuilder().add('id', node['id']).render()}>{escape_text(node['text'])}" for node in nodes)
-    output_lines.extend(f"<link{AttributeBuilder().add('from', link['from']).add('to', link['to']).render()}>" for link in links)
-    return "\n".join(output_lines)
+    root = element("smartart", id=resource_id, type=layout_type, nodes=len(nodes), links=len(links))
+    for node in nodes:
+        append(root, "node", node["text"], id=node["id"])
+    for link in links:
+        append(root, "link", **{"from": link["from"], "to": link["to"]})
+    return resource_document("pptx", root)
 
 
 def _render_table(
@@ -163,21 +159,15 @@ def _render_table(
     if columns is not None:
         selected_rows = [[row[column_index] for column_index in columns if column_index < len(row)] for row in selected_rows]
     column_count = max((len(row) for row in selected_rows), default=0)
-    attrs = AttributeBuilder().add("id", resource_id).add("rows", len(selected_rows)).add("cols", column_count)
-    output_lines = [f"<table{attrs.render()}>"]
+    node = element("table", id=resource_id, rows=len(selected_rows), cols=column_count)
     for row in selected_rows:
-        cells = "".join(f"<td>{escape_text(cell)}</td>" for cell in row)
-        output_lines.append(f"<tr>{cells}")
+        child = append(node, "tr")
+        for cell in row:
+            append(child, "td", cell)
     if aggregate is not None and aggregate_column is not None:
         values = _numeric_cells(aggregate_rows, aggregate_column)
-        attrs = (
-            AttributeBuilder()
-            .add("op", aggregate)
-            .add("column", aggregate_column)
-            .add("value", f"{_aggregate(aggregate, values):g}")
-        )
-        output_lines.append(f"<aggregate{attrs.render()}>")
-    return "\n".join(output_lines)
+        append(node, "aggregate", op=aggregate, column=aggregate_column, value=f"{_aggregate(aggregate, values):g}")
+    return resource_document("pptx", node)
 
 
 def _parse_rows_spec(spec: str | None, row_count: int) -> tuple[int, int]:

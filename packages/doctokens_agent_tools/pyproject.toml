@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "doctokens-agent-tools"
+version = "0.1.0"
+description = "Bounded Office document tools for direct tool calls and MCP"
+requires-python = ">=3.10"
+dependencies = ["docx-llm-parser>=0.2,<0.3", "pptx-llm-parser>=0.2,<0.3", "xlsx-llm-parser>=0.2,<0.3", "pydantic>=2.11,<3"]
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.12,<2"]
+
+[project.scripts]
+doctokens-mcp = "doctokens_agent_tools.mcp:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+doctokens_agent_tools = ["py.typed"]

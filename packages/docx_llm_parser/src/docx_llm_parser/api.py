@@ -3,99 +3,18 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from pathlib import Path
 
 from ooxml_llm_core.models import Density, ParseReport, ParseResult, ResourceDescriptor
+from ooxml_llm_core.session import SessionLifecycle
 
+from ._api_support import Source, _density, _resource_descriptors, _result, _validate_window
 from .core.enums import ResourceType
 from .core.models import ParsedDocument, ParseOptions
 from .core.package import PackageReader
 from .parsing import get_render_pipeline
 from .parsing.runner import DocxParser
 from .plan import DocxParsePlan
-from .rendering.dispatch import render_page_window, render_resource
-from .rendering.objects.resources import table_groups
-
-Source = str | Path | bytes
-
-
-def _density(value: Density | str) -> Density:
-    if value not in {"plain", "structural", "semantic"}:
-        raise ValueError("density must be one of: 'plain', 'structural', 'semantic'")
-    return value
-
-
-def _validate_window(page_hint: int | None, span: int) -> None:
-    if page_hint is not None and (
-        isinstance(page_hint, bool) or not isinstance(page_hint, int) or page_hint == 0 or page_hint < -1
-    ):
-        raise ValueError("page_hint must be -1 or a positive integer")
-    if isinstance(span, bool) or not isinstance(span, int) or span <= 0:
-        raise ValueError("span must be a positive integer")
-    if page_hint is None and span != 1:
-        raise ValueError("span requires page_hint")
-
-
-def _resource_descriptors(document: ParsedDocument) -> tuple[ResourceDescriptor, ...]:
-    descriptors: list[ResourceDescriptor] = []
-    for asset in document.assets:
-        source = "external" if asset.get("source") == "external" else "embedded"
-        descriptors.append(
-            ResourceDescriptor(
-                id=asset["id"],
-                kind=str(asset.get("type", "image")),
-                source=source,  # type: ignore[arg-type]
-                locator=asset.get("zipPath") or asset.get("href") or asset["id"],
-                content_type=asset.get("contentType"),
-                part=asset.get("zipPath"),
-                external_target=asset.get("href"),
-            )
-        )
-    descriptors.extend(
-        ResourceDescriptor(chart["id"], "chart", "embedded", chart.get("part", chart["id"]), part=chart.get("part"))
-        for chart in document.charts
-    )
-    descriptors.extend(
-        ResourceDescriptor(
-            smartart["id"],
-            "smartart",
-            "embedded",
-            smartart.get("part", smartart["id"]),
-            part=smartart.get("part"),
-        )
-        for smartart in document.smartarts
-    )
-    descriptors.extend(ResourceDescriptor(table_id, "table", "embedded", table_id) for table_id in table_groups(document))
-    return tuple(descriptors)
-
-
-def _result(
-    document: ParsedDocument,
-    text: str,
-    density: Density,
-    selection: dict[str, object],
-    *,
-    syntax_version: str | None = None,
-    media_type: str | None = None,
-) -> ParseResult:
-    if document.report is None:  # pragma: no cover - parser always attaches a report
-        raise RuntimeError("parsed DOCX has no parse report")
-    resolved_syntax, resolved_media_type = _output_metadata(density)
-    return ParseResult(
-        text,
-        density,
-        selection,
-        document.report,
-        _resource_descriptors(document),
-        syntax_version or resolved_syntax,
-        media_type or resolved_media_type,
-    )
-
-
-def _output_metadata(density: Density) -> tuple[str, str]:
-    if density == "plain":
-        return "doctokens-plain/1.0", "text/plain"
-    return "doctokens-xml/1.0", "application/xml"
+from .rendering.dispatch import describe_pages, render_page_window, render_resource
 
 
 class DocxReadSession:
@@ -106,37 +25,31 @@ class DocxReadSession:
         self.options = options
         self.parsed_document: ParsedDocument | None = None
         self._package: PackageReader | None = None
-        self._state = "new"
+        self._lifecycle: SessionLifecycle[ParsedDocument] = SessionLifecycle("DOCX")
 
     def __enter__(self) -> DocxReadSession:
-        if self._state != "new":
-            raise RuntimeError("DOCX session cannot be entered twice")
+        self._lifecycle.check_new()
         self._package = PackageReader(self.source, self.options)
+        package = self._package
         try:
-            self._package.__enter__()
-            self.parsed_document = DocxParser().parse(self._package, self.options, plan=DocxParsePlan.session())
+            self.parsed_document = self._lifecycle.enter(
+                package, lambda: DocxParser().parse(package, self.options, plan=DocxParsePlan.session())
+            )
         except BaseException:
             self.close()
             raise
-        self._state = "open"
         return self
 
     def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
         self.close()
 
     def close(self) -> None:
-        if self._state == "closed":
-            return
-        if self._package is not None:
-            self._package.__exit__(None, None, None)
-            self._package = None
+        self._lifecycle.close()
+        self._package = None
         self.parsed_document = None
-        self._state = "closed"
 
     def _require_open(self) -> ParsedDocument:
-        if self._state != "open" or self.parsed_document is None:
-            raise RuntimeError("DOCX session is not open")
-        return self.parsed_document
+        return self._lifecycle.require()
 
     @property
     def report(self) -> ParseReport:
@@ -148,6 +61,9 @@ class DocxReadSession:
     @property
     def resources(self) -> tuple[ResourceDescriptor, ...]:
         return _resource_descriptors(self._require_open())
+
+    def describe(self) -> dict[str, object]:
+        return {"format": "docx", "navigation": describe_pages(self._require_open()), "report": self.report.to_dict()}
 
     def render(
         self,
@@ -237,8 +153,8 @@ class DocxReadSession:
             rendered[0],
             "semantic",
             {"kind": "resource", "resource_kind": kind, "id": resource_id},
-            syntax_version="legacy-markup/0",
-            media_type="text/plain",
+            syntax_version="doctokens-xml/1.0",
+            media_type="application/xml",
         )
 
 

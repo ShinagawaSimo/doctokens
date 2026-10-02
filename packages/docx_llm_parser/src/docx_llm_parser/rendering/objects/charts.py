@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from html import escape as escape_text
 
+from ooxml_llm_core.doctokens_xml import append, element
+from ooxml_llm_core.resource_xml import resource_document
+
 from ...core.models import Chart, ChartSeries, InlineObject
 from ..common import constants as _constants
 
@@ -34,52 +37,49 @@ def chart_type_attrs(chart: InlineObject, chart_type: str) -> str:
 
 
 def render_chart_resource(chart: Chart) -> str:
-    """Render a chart resource with its full series data."""
-    output_parts = [f"<chart {_chart_attrs(chart, include_points=True)}>"]
-    is_combination = chart.get("chartType") == "combination"
-
-    if is_combination:
+    """Render full chart data directly as a complete DTX resource document."""
+    node = element(
+        "chart",
+        id=chart.get("id", "?"),
+        type=chart.get("chartType", "?"),
+        title=chart.get("title") or None,
+        series=chart.get("seriesCount", 0),
+        points=chart.get("pointCount", 0),
+    )
+    combination = chart.get("chartType") == "combination"
+    if chart.get("plots"):
+        node.set("plots", ",".join(str(p.get("chartType", "unknown")) for p in chart["plots"]))
+    if combination:
         for plot in chart.get("plots") or []:
-            plot_attrs = f"index={plot.get('index', 0)} type={escape_text(plot.get('chartType', 'unknown'), quote=True)}"
-            series_indices = plot.get("seriesIndices", [])
-            if series_indices:
-                plot_attrs += f" series={','.join(str(index) for index in series_indices)}"
-            output_parts.append(f"\n<plot {plot_attrs}/>")
-
+            indices = plot.get("seriesIndices", [])
+            append(
+                node,
+                "plot",
+                index=plot.get("index", 0),
+                type=plot.get("chartType", "unknown"),
+                series=",".join(str(i) for i in indices) if indices else None,
+            )
     for series in chart.get("series") or []:
-        series_attrs = f"index={series.get('index', 0)}"
-        if series.get("name"):
-            series_attrs += f" name={escape_text(series['name'], quote=True)}"
-        if "min" in series:
-            series_attrs += f" min={series['min']}"
-        if "max" in series:
-            series_attrs += f" max={series['max']}"
-        if is_combination and series.get("chartType"):
-            series_attrs += f" type={escape_text(series['chartType'], quote=True)}"
-        if series.get("hidden"):
-            series_attrs += " hidden"
-        output_parts.append(f"\n<series {series_attrs}>")
-
-        categories = series.get("categories", [])
-        values = series.get("values", [])
-        x_values = series.get("xValues", [])
-        y_values = series.get("yValues", [])
-        bubble_sizes = series.get("bubbleSizes", [])
-        for index in range(max(len(categories), len(values), len(x_values), len(y_values), len(bubble_sizes))):
-            point_attrs = ""
-            if index < len(categories):
-                point_attrs += f" category={escape_text(categories[index], quote=True)}"
-            if index < len(values):
-                point_attrs += f" value={escape_text(values[index], quote=True)}"
-            if index < len(x_values):
-                point_attrs += f" x={escape_text(x_values[index], quote=True)}"
-            if index < len(y_values):
-                point_attrs += f" y={escape_text(y_values[index], quote=True)}"
-            if index < len(bubble_sizes):
-                point_attrs += f" bubbleSize={escape_text(bubble_sizes[index], quote=True)}"
-            output_parts.append(f"\n<point{point_attrs}/>")
-
-    return "".join(output_parts)
+        child = append(
+            node,
+            "series",
+            index=series.get("index", 0),
+            name=series.get("name") or None,
+            min=series.get("min"),
+            max=series.get("max"),
+            type=series.get("chartType") if combination else None,
+            hidden=True if series.get("hidden") else None,
+        )
+        arrays = [
+            ("category", series.get("categories", [])),
+            ("value", series.get("values", [])),
+            ("x", series.get("xValues", [])),
+            ("y", series.get("yValues", [])),
+            ("bubbleSize", series.get("bubbleSizes", [])),
+        ]
+        for i in range(max((len(values) for _, values in arrays), default=0)):
+            append(child, "point", **{name: values[i] for name, values in arrays if i < len(values)})
+    return resource_document("docx", node)
 
 
 def _chart_attrs(chart: Chart | InlineObject, *, include_points: bool = False) -> str:

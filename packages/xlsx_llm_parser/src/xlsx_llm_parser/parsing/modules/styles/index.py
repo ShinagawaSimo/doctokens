@@ -30,6 +30,7 @@ class FormatIndex:
         # dxf index → compact semantic style summary used by conditional formatting.
         self._differential_styles: list[str] = []
         self._cell_controls: dict[int, CellControl] = {}
+        self._visible_blank_styles: set[int] = set()
         self.date_1904 = False
         self.locale = locale
 
@@ -74,8 +75,19 @@ class FormatIndex:
         fill_id: int = 0,
         locked: bool = True,
         formula_hidden: bool = False,
+        visible_blank: bool = False,
     ) -> None:
+        if visible_blank or not locked or formula_hidden:
+            self._visible_blank_styles.add(len(self._cell_formats))
         self._cell_formats.append((num_fmt_id, format_code, font_id, fill_id, locked, formula_hidden))
+
+    def preserves_blank(self, style_index: int | None) -> bool:
+        """Keep visible fills/borders and controls even in lower densities."""
+        if style_index is None:
+            return False
+        if not 0 <= style_index < len(self._cell_formats):
+            return True  # Unknown styling is not evidence of a disposable blank.
+        return style_index in self._visible_blank_styles or style_index in self._cell_controls
 
     def format_value(self, style_index: int | None, raw: str, *, locale: str | None = None) -> str:
         """Apply the resolved number format to a raw cell value string."""

@@ -7,6 +7,7 @@ from html import escape as escape_text
 from typing import cast
 
 from ..models import Cell, ParsedWorkbook, SheetInfo
+from .reading_rows import reading_rows
 
 
 def iter_plain(workbook: ParsedWorkbook) -> Iterator[str]:
@@ -51,7 +52,7 @@ def _iter_sheet(sheet: SheetInfo, workbook: ParsedWorkbook, *, emit_globals: boo
         yield f"[PivotTable{' ' + pivot['name'] if pivot.get('name') else ''}]\n"
     for table in sheet.get("tables", []):
         yield _table_summary(table)
-    yield from iter_plain_rows(sheet.get("rows", []), hidden_cols=sheet.get("hidden_cols", []))
+    yield from iter_plain_rows(reading_rows(sheet.get("rows", [])), hidden_cols=sheet.get("hidden_cols", []))
 
 
 def _hidden_column(column: int, ranges: list[tuple[int, int]] | None) -> bool:

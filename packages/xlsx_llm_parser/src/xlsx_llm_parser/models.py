@@ -44,6 +44,7 @@ class Cell(TypedDict, total=False):
     col: int  # 1-based column number
     text: str  # resolved display text
     raw: str  # reconstructed formula-bar content for a non-formula cell
+    blankCandidate: bool  # saved empty cell without content or visible cell style; projection checks later associations
     numberFormatColor: str  # selected format-section color overrides font color
     type: str  # "number", "string", "boolean", "error", "date"
     formula: str  # <f> text, expanded shared formula, or reconstructed TABLE(row_input,column_input)

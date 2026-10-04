@@ -50,6 +50,6 @@ A shared formula group is scoped to one worksheet. In structural and semantic ou
 
 ## Source references
 
-- [WorksheetScanner.parse](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L221)
+- [WorksheetScanner.parse](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L164)
 - [expand_selected_shared_formulas](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/formulas.py)
 - [_offset_formula](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/formulas.py)

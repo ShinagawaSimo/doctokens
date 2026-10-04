@@ -6,8 +6,6 @@ from contextlib import suppress
 from typing import cast
 from xml.etree import ElementTree as ET
 
-from ooxml_llm_core.models import ParseWarning
-
 from ...._utils import parse_ref
 from ....models import (
     Cell,
@@ -36,6 +34,7 @@ def _row_attrs(row_elem: ET.Element) -> RowAttrs:
         hidden=row_elem.get("hidden") == "1",
         outline_level=int(outline_level_str) if outline_level_str else 0,
         collapsed=row_elem.get("collapsed") == "1",
+        style=_style_index(row_elem),
     )
 
 
@@ -53,8 +52,6 @@ def _parse_cell(
     include_semantic_style: bool,
     include_formulas: bool,
     include_cell_controls: bool,
-    warnings: list[ParseWarning] | None = None,
-    sheet_part: str = "",
 ) -> Cell:
     col, row = parse_ref(ref)
     cell_type = cell_elem.get("t", "n")
@@ -64,13 +61,24 @@ def _parse_cell(
     text = _formatted_text(cell_elem, cell_type, text, format_index)
 
     cell: Cell = {"ref": ref, "row": row_attrs.number or row, "col": col, "text": text}
+    if (
+        not text
+        and cell_type == "n"
+        and (value_elem is None or not value_elem.text)
+        and not any(child.tag in {f"{{{NS_S}}}is", f"{{{NS_S}}}f"} for child in cell_elem)
+        and cell_elem.get("vm") is None
+        and cell_elem.get("cm") is None
+        and (format_index is not None and not format_index.preserves_blank(_style_index(cell_elem)))
+        and not format_index.preserves_blank(row_attrs.style)
+    ):
+        cell["blankCandidate"] = True
     _apply_row_attrs(cell, row_attrs)
     if include_rich_text:
         _attach_rich_text(cell, cell_type, value_elem, rich_text_map)
     if cell_type in {"s", "str", "inlineStr"} and format_index is not None:
         _format_text_cell(cell, source_text, format_index.text_format_parts(_style_index(cell_elem)))
     if include_style_index and cell_elem.find(f"{{{NS_S}}}f") is None:
-        _attach_formula_bar_value(cell, cell_elem, cell_type, source_text, format_index, warnings, sheet_part)
+        _attach_formula_bar_value(cell, cell_elem, cell_type, source_text, format_index)
     if include_semantic_style and format_index is not None and cell_type in {"n", "s", "str", "inlineStr"}:
         color = format_index.number_format_color(_style_index(cell_elem), source_text, is_text=cell_type != "n")
         if color:
@@ -123,8 +131,6 @@ def _attach_formula_bar_value(
     cell_type: str,
     source: str,
     format_index: FormatIndex | None,
-    warnings: list[ParseWarning] | None,
-    sheet_part: str,
 ) -> None:
     if not source:
         return
@@ -137,14 +143,6 @@ def _attach_formula_bar_value(
         raw = index.formula_bar_value(_style_index(element), source)
     if raw is not None:
         cell["raw"] = raw
-    elif warnings is not None and cell.get("text") != source:
-        warnings.append(
-            ParseWarning(
-                "XLSX_FORMULA_BAR_UNAVAILABLE",
-                "Formula-bar content cannot be reliably reconstructed; raw is omitted and cell display is retained.",
-                f"{sheet_part}!{cell['ref']}",
-            )
-        )
 
 
 def _style_index(cell_elem: ET.Element) -> int | None:

@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from functools import partial
-from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.models import ParseWarning, RelationshipRecord
 from ooxml_llm_core.package import PackageError, PackageReader
@@ -14,14 +13,12 @@ from ooxml_llm_core.xml import iterparse
 from ...._utils import col_letter, coord_key, parse_ref
 from ....models import (
     Cell,
-    ConditionalFormat,
-    DataValidation,
-    FilterColumn,
     RichTextRun,
 )
 from ....plan import XlsxParsePlan
 from ..styles.index import FormatIndex
 from ..workbook.rich_values import RichValueCatalog
+from .blank_cells import preserve_blank_ranges
 from .cells import _parse_cell, _row_attrs
 from .comments import apply_comments
 from .data_tables import DataTableFormula, apply_data_tables, read_data_table
@@ -31,65 +28,8 @@ from .post import (
     apply_merge_refs,
     apply_spill_sources,
 )
-from .rules import _parse_auto_filter_element, _parse_conditional_format_element, _parse_data_validations_element, _safe_int
-from .sheet_types import NS_R, NS_S, RowAttrs, SheetParseFlags, SheetParseResult
-
-_TAG_S_COL = f"{{{NS_S}}}col"
-_TAG_S_MERGE_CELL = f"{{{NS_S}}}mergeCell"
-_TAG_S_HYPERLINK = f"{{{NS_S}}}hyperlink"
-_TAG_S_SHEET_PROTECTION = f"{{{NS_S}}}sheetProtection"
-_TAG_S_AUTO_FILTER = f"{{{NS_S}}}autoFilter"
-_TAG_S_DATA_VALIDATIONS = f"{{{NS_S}}}dataValidations"
-_TAG_S_CONDITIONAL_FORMATTING = f"{{{NS_S}}}conditionalFormatting"
-
-
-@dataclass(slots=True)
-class SheetPostIndex:
-    """Small sheet-level declarations collected during the primary XML scan."""
-
-    flags: SheetParseFlags
-    hidden_cols: list[tuple[int, int]] = field(default_factory=list)
-    merge_refs: list[str] = field(default_factory=list)
-    hyperlinks: list[tuple[str, str, str]] = field(default_factory=list)
-    sheet_protection: bool = False
-    filter_range: str = ""
-    filter_cols: list[FilterColumn] = field(default_factory=list)
-    data_validations: list[DataValidation] = field(default_factory=list)
-    conditional_formats: list[ConditionalFormat] = field(default_factory=list)
-
-    def collect(self, element: ET.Element, *, format_index: FormatIndex | None) -> None:
-        """Consume one completed metadata element while its children are available."""
-        if element.tag == _TAG_S_MERGE_CELL:
-            if ref := element.get("ref"):
-                self.merge_refs.append(ref)
-            element.clear()
-            return
-        if element.tag == _TAG_S_COL:
-            if element.get("hidden") == "1":
-                minimum = _safe_int(element.get("min"), 1)
-                maximum = _safe_int(element.get("max"), minimum)
-                self.hidden_cols.append((minimum, maximum))
-            element.clear()
-            return
-        if not self.flags.sheet_rules and not self.flags.hyperlinks:
-            return
-        if element.tag == _TAG_S_HYPERLINK and self.flags.hyperlinks:
-            self.hyperlinks.append((element.get("ref", ""), element.get(f"{{{NS_R}}}id", ""), element.get("location", "")))
-            element.clear()
-            return
-        if not self.flags.sheet_rules:
-            return
-        if element.tag == _TAG_S_SHEET_PROTECTION:
-            self.sheet_protection = True
-        elif element.tag == _TAG_S_AUTO_FILTER:
-            self.filter_range, self.filter_cols = _parse_auto_filter_element(element)
-            element.clear()
-        elif element.tag == _TAG_S_DATA_VALIDATIONS:
-            self.data_validations = _parse_data_validations_element(element)
-            element.clear()
-        elif element.tag == _TAG_S_CONDITIONAL_FORMATTING:
-            self.conditional_formats.extend(_parse_conditional_format_element(element, format_index))
-            element.clear()
+from .sheet_post_index import SheetPostIndex
+from .sheet_types import NS_S, RowAttrs, SheetParseFlags, SheetParseResult
 
 
 @dataclass(slots=True)
@@ -165,6 +105,7 @@ class SheetWorkingSet:
             self.rows.sort(key=lambda row_cells: row_cells[0]["row"] if row_cells else 0)
             for row_cells in self.rows:
                 row_cells.sort(key=lambda cell: cell["col"])
+        preserve_blank_ranges(self.rows, post.blank_content_refs)
         result = SheetParseResult(
             self.rows,
             post.hidden_cols,
@@ -217,8 +158,6 @@ class WorksheetScanner:
             include_semantic_style=self.flags.semantic_style,
             include_formulas=self.flags.formulas,
             include_cell_controls=self.flags.cell_controls,
-            warnings=self.warnings,
-            sheet_part=sheet_part,
         )
         self.cell_window = cell_window
 
@@ -241,7 +180,7 @@ class WorksheetScanner:
                         raw_attrs = _row_attrs(element)
                         effective_row = raw_attrs.number or previous_row + 1
                         previous_row = effective_row
-                        current_attrs = RowAttrs(effective_row, raw_attrs.hidden, raw_attrs.outline_level, raw_attrs.collapsed)
+                        current_attrs = raw_attrs._replace(number=effective_row)
                         current_cells = [] if self._includes_row(effective_row) else None
                         previous_col = 0
                     continue
@@ -249,8 +188,10 @@ class WorksheetScanner:
                     ref = element.get("r", "") or f"{col_letter(previous_col + 1)}{current_attrs.number}"
                     col, row = parse_ref(ref)
                     previous_col = col
+                    formula = element.find(f"{{{NS_S}}}f")
+                    if formula is not None and formula.get("ref"):
+                        post.blank_content_refs.append(formula.get("ref", ""))
                     if self.flags.formulas:
-                        formula = element.find(f"{{{NS_S}}}f")
                         if formula is not None and formula.get("t") == "shared":
                             si = formula.get("si")
                             shared_ref = formula.get("ref")

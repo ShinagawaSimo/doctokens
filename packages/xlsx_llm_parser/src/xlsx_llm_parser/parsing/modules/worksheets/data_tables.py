@@ -110,8 +110,6 @@ def apply_data_tables(
                 conflicts.add(index)
         members.append(selected)
 
-    cache_warnings = {item.locator for item in warnings if item.code == "XLSX_FORMULA_BAR_UNAVAILABLE"}
-    resolved_cache_warnings: set[str] = set()
     for index, (table, selected) in enumerate(zip(tables, members, strict=True)):
         if not selected:
             continue
@@ -128,12 +126,3 @@ def apply_data_tables(
                 cell["formula"] = table.formula
             # These v nodes are cached results, not editable literal inputs.
             cell.pop("raw", None)
-            locator = f"{sheet_part}!{cell['ref']}"
-            if locator in cache_warnings:
-                resolved_cache_warnings.add(locator)
-    if resolved_cache_warnings:
-        warnings[:] = [
-            item
-            for item in warnings
-            if item.code != "XLSX_FORMULA_BAR_UNAVAILABLE" or item.locator not in resolved_cache_warnings
-        ]

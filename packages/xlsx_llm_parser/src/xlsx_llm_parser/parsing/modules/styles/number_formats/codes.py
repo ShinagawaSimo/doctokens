@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import re
 
+from .date_context import date_locale
+from .sections import _section_directives
+
 # Built-in format codes from ECMA-376 §18.8.30.  Excel may omit the
 # corresponding ``numFmt`` element for these IDs, so the parser needs the
 # table even when styles.xml contains no custom formats.
@@ -115,6 +118,21 @@ _DATE_TOKENS_RE = re.compile(
     r"[yYmMdDhHsS]|AM/PM|am/pm|A/P|a/p|\[h\]|\[m\]|\[s\]",
 )
 
+# Shared by classification and rendering; literals have already been masked.
+_DATE_FIELD_RE = re.compile(r"y+|m+|d+|h+|s+|a{3,4}", re.IGNORECASE)
+
+
+def _has_date_fields(section: str, locale: str) -> bool:
+    syntax = _date_scan_text(section)
+    if _DATE_TOKENS_RE.search(syntax):
+        return True
+    try:
+        return date_locale(section, locale) == "zh-cn" and any(
+            token.group().lower() in {"aaa", "aaaa"} for token in _DATE_FIELD_RE.finditer(syntax)
+        )
+    except ValueError:
+        return False
+
 
 # Percentage marker.
 _PCT_RE = re.compile(r"%")
@@ -171,7 +189,7 @@ def resolve_format(num_fmt_id: int, fmt_code: str, locale: str) -> tuple[bool, b
     # one of the built-in IDs.  The ID is only a fallback when the workbook
     # omitted a formatCode (the normal built-in representation).
     key_code = fmt_code or _localized_builtin_code(num_fmt_id, locale)
-    is_date = bool(_DATE_TOKENS_RE.search(_date_scan_text(key_code)))
+    is_date = _section_directives(key_code).language_info in {0xF800, 0xF400} or _has_date_fields(key_code, locale)
     if not fmt_code:
         is_date = is_date or num_fmt_id in _BUILTIN_DATE_IDS
     is_pct = bool(_PCT_RE.search(_date_scan_text(key_code)))

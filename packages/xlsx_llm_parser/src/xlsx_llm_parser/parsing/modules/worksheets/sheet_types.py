@@ -37,6 +37,7 @@ class RowAttrs(NamedTuple):
     hidden: bool
     outline_level: int
     collapsed: bool
+    style: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

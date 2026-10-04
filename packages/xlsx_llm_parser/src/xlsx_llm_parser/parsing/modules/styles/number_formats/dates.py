@@ -8,7 +8,9 @@ from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import NamedTuple
 
-from .codes import _date_scan_text
+from .codes import _DATE_FIELD_RE, _date_scan_text
+from .date_context import date_context
+from .date_words import date_number, month_name, weekday_name
 
 
 class _SerialDateTime(NamedTuple):
@@ -52,6 +54,8 @@ def time_formula_bar_value(value: Decimal, section: str, locale: str) -> str | N
 
 
 def _format_date_value(serial: float, fmt_code: str, date_1904: bool, locale: str) -> str:
+    context = date_context(fmt_code, locale)
+    fmt_code, locale, dbnum = context
     fraction = re.search(r"(?i)(?:s+|\[s+\])\.([0#?]+)", _date_scan_text(fmt_code))
     if fraction:
         places = len(fraction.group(1))
@@ -67,6 +71,7 @@ def _format_date_value(serial: float, fmt_code: str, date_1904: bool, locale: st
         serial_time.milliseconds,
         serial_time.day,
         locale,
+        dbnum,
     )
 
 
@@ -121,6 +126,7 @@ def _format_datetime_code(
     milliseconds: int,
     elapsed_days: int,
     locale: str,
+    dbnum: str | None = None,
 ) -> str:
     year, month, day = date
     hour, remainder = divmod(seconds, 3600)
@@ -187,28 +193,23 @@ def _format_datetime_code(
                     i = end + 1
                     previous_field = token[0]
                     continue
-        token_match = re.match(r"(?i)(y+|m+|d+|h+|s+)", section[i:])
+        token_match = _DATE_FIELD_RE.match(section, i)
         if token_match:
             token = token_match.group(0)
             lower = token[0].lower()
             if lower == "y":
-                output.append(str(year % 100).zfill(2) if len(token) == 2 else str(year).zfill(len(token)))
+                output.append(date_number(year % 100 if len(token) == 2 else year, token, dbnum))
                 previous_field = "y"
+            elif lower == "a":
+                if locale != "zh-cn":
+                    raise ValueError("Localized weekday token requires zh-CN")
+                output.append(weekday_name(year, month, day, short=len(token) == 3, locale=locale))
+                previous_field = "d"
             elif lower == "d":
-                if len(token) == 1:
-                    output.append(str(day))
-                elif len(token) == 2:
-                    output.append(str(day).zfill(2))
-                elif len(token) == 3:
-                    output.append(
-                        ("周" if locale.lower().startswith("zh") else "")
-                        + _weekday_name(year, month, day, short=True, locale=locale)
-                    )
+                if len(token) <= 2:
+                    output.append(date_number(day, token, dbnum))
                 else:
-                    output.append(
-                        ("星期" if locale.lower().startswith("zh") else "")
-                        + _weekday_name(year, month, day, short=False, locale=locale)
-                    )
+                    output.append(weekday_name(year, month, day, short=len(token) == 3, locale=locale))
                 previous_field = "d"
             elif lower == "h":
                 output.append(str(hour_value) if len(token) == 1 else str(hour_value).zfill(2))
@@ -236,20 +237,17 @@ def _format_datetime_code(
                 if minute_token:
                     output.append(str(minute) if len(token) == 1 else str(minute).zfill(2))
                     previous_field = "n"
-                elif len(token) == 1:
-                    output.append(str(month))
-                    previous_field = "M"
-                elif len(token) == 2:
-                    output.append(str(month).zfill(2))
+                elif len(token) <= 2:
+                    output.append(date_number(month, token, dbnum))
                     previous_field = "M"
                 elif len(token) == 3:
-                    output.append(_month_name(month, short=True, locale=locale))
+                    output.append(month_name(month, short=True, locale=locale))
                     previous_field = "M"
                 elif len(token) == 4:
-                    output.append(_month_name(month, short=False, locale=locale))
+                    output.append(month_name(month, short=False, locale=locale))
                     previous_field = "M"
                 else:
-                    output.append(_month_name(month, short=True, locale=locale)[0])
+                    output.append(month_name(month, short=True, locale=locale)[0])
                     previous_field = "M"
             i += len(token)
             continue
@@ -267,36 +265,3 @@ def _format_datetime_code(
         output.append(section[i])
         i += 1
     return "".join(output)
-
-
-def _month_name(month: int, *, short: bool, locale: str) -> str:
-    names = (
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December",
-    )
-    short_names = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-    return (short_names if short else names)[month - 1]
-
-
-def _weekday_name(year: int, month: int, day: int, *, short: bool, locale: str) -> str:
-    try:
-        value = datetime(year, month, day).weekday()
-    except ValueError:
-        return ""
-    if locale.lower().startswith("zh"):
-        return ("一", "二", "三", "四", "五", "六", "日")[value]
-    return (
-        ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")[value]
-        if short
-        else ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")[value]
-    )

@@ -22,6 +22,7 @@ from .query import AggregateSpec, OrderSpec, WhereCondition
 from .query import query_data as _query_data
 from .rendering.dtx import render_sheet_dtx
 from .rendering.plain import iter_plain_rows
+from .rendering.reading_rows import reading_rows
 from .rendering.selection import filter_rows, parse_range
 from .search import _find_cells, _sheet
 
@@ -293,7 +294,7 @@ def parse_xlsx(
 
 
 def _render_selected_plain(sheet: SheetInfo, rows: list[list[Cell]] | None = None) -> str:
-    selected = sheet.get("rows", []) if rows is None else rows
+    selected = reading_rows(sheet.get("rows", [])) if rows is None else rows
     return render_plain(
         "density=plain\n" + "".join(iter_plain_rows(selected, hidden_cols=sheet.get("hidden_cols", []))),
         format_name="xlsx",

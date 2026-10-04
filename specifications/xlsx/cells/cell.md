@@ -81,7 +81,7 @@ Post-processing order is shared-formula expansion, merged cells, spills, hyperli
   - `Cell.raw: str`
 
 - **Parsing**
-  - For text cells, decode shared-string or inline-string content and apply a supported text section around it. For ordinary numeric formats whose edit form is independently recoverable, preserve that formula-bar form. A scientific display token is formatting syntax; the saved ordinary number may be emitted as `raw` when the supported precision and range limits make it reliable. Do not reconstruct `raw` from the rounded scientific display, and do not use a date/time serial, percentage display, or formula cache as `raw`. Formula cells use `formula` and omit `raw`; when a numeric formula-bar value cannot be reconstructed reliably, omit `raw` and add `XLSX_FORMULA_BAR_UNAVAILABLE` to the parse report.
+  - For text cells, decode shared-string or inline-string content and apply a supported text section around it. For ordinary numeric formats whose edit form is independently recoverable, preserve that formula-bar form. A scientific display token is formatting syntax; the saved ordinary number may be emitted as `raw` when the supported precision and range limits make it reliable. Do not reconstruct `raw` from the rounded scientific display, and do not use a date/time serial, percentage display, or formula cache as `raw`. Formula cells use `formula` and omit `raw`; when a numeric formula-bar value cannot be reconstructed reliably, omit `raw` without adding a diagnostic.
   - Supported Simplified Chinese `DBNum1/2` General integers retain their ordinary numeric edit form. Supported `zh-CN` pure times reconstruct `h:mm:ss` without fractional seconds, independently of the rounded cell display; for example, `raw="12:30:00"` accompanies `12:30:00.1`. This edit-form value is not a lossless encoding of the saved time. See [number formats](../styles/number-format.md#raw) for the precise locale, pattern, and range limits.
 
 - **Absence and defaults**
@@ -162,8 +162,8 @@ Post-processing order is shared-formula expansion, merged cells, spills, hyperli
 
 ## Source references
 
-- [_parse_cell](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/cells.py#L42)
-- [_cell_text](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/cells.py#L156)
-- [SheetWorkingSet.finalize](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L125)
-- [_cell_attrs](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L156)
+- [_parse_cell](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/cells.py#L41)
+- [_cell_text](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/cells.py#L154)
+- [SheetWorkingSet.finalize](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L67)
+- [_cell_attrs](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L167)
 - [parse_ref](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_utils.py#L9)

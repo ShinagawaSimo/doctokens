@@ -74,7 +74,6 @@ def test_chinese_locale_and_literals(code: str, locale: str, expected: str) -> N
         ("1000000000000000", "[DBNum2][$-804]General"),
         ("1234", "[DBNum3][$-804]General"),
         ("1234", "[DBNum1]0"),
-        ("44927", "[DBNum1]yyyy-mm-dd"),
     ],
 )
 def test_unverified_chinese_forms_keep_the_saved_value(raw: str, code: str) -> None:

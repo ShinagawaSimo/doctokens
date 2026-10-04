@@ -32,22 +32,37 @@ Display formatting applies the effective Excel number format from the cell XF to
   - `FormatIndex._cell_formats[style_index][1]: str`
 
 - **Parsing**
-  - Split sections only at semicolons outside quoted text and bracket directives. Select conditional sections first, then positive/negative/zero/text sections. Ignore quoted literals, escapes, color/condition/locale brackets, and `DBNum` directives while detecting date tokens. Recognize `y`, `m`, `d`, `h`, `s`, `AM/PM`, `A/P`, and elapsed `[h]`, `[m]`, `[s]`. An `m/mm` token after hours or before seconds is minutes; otherwise it is a month.
+  - Split sections only at semicolons outside quoted text and bracket directives. Select conditional sections first, then positive/negative/zero/text sections. Ignore quoted literals and escapes while detecting date fields. Preserve bracket directives separately from field tokens. Recognize `y`, `m`, `d`, `h`, `s`, `AM/PM`, `A/P`, and elapsed `[h]`, `[m]`, `[s]`. In effective `zh-CN`, recognize `aaa` and `aaaa` as short and long weekdays (for example, `周六` and `星期六`). An `m/mm` token after hours or before seconds is minutes; otherwise it is a month.
   - Percent sections multiply the value by 100. Numeric sections apply `0`, `#`, `?`, grouping commas, scaling commas, and decimal rounding. `0` pads a required zero and `?` reserves an insignificant position for alignment. Fraction numerator/denominator alignment is omitted from textual output: saved `0.25` with `# ??/??` produces `1/4`, and `1.25` produces `1 1/4`. Required zeroes in `00/00` remain visible (`01/04`). Quoted literal spaces and the mixed-fraction separator remain intact. Decimal alignment behavior is unchanged. Currency and other literal text are retained from the selected section. Scientific notation requires an uppercase `E+` or `E-` marker; fractions require numeric placeholders around `/`. Unsupported tokens preserve the saved value instead of inventing a display.
   - Named color directives such as `[Red]` are removed from display text and, in semantic XML, expose the selected section color through the cell's semantic `color` attribute. Condition directives select a section by the saved numeric value; if no condition matches, the parser keeps the saved value as a safe display fallback rather than selecting a failed condition.
 
 ### `DBNum`
 
 - **Output**
-  - Chinese counting text for supported numeric sections, with an independently reconstructed numeric `raw` in structural and semantic output.
+  - Chinese counting text for supported numeric sections and Chinese date fields for supported date sections. Numeric `raw` is independent of date display.
 - **OOXML**
   - `[DBNum1]` or `[DBNum2]` in `numFmt/@formatCode`, optionally accompanied by the Simplified Chinese locale directive `[$-804]`.
 - **IR**
-  - Resolved `Cell.text`; `Cell.raw` retains the ordinary numeric edit form.
+  - Resolved `Cell.text`; `Cell.raw` retains an independently supported ordinary numeric edit form. Date serials do not become `raw`.
 - **Parsing**
   - Support `General` integers with absolute value below `1e15`. `DBNum1` uses `〇一二三四五六七八九` and `十百千`; `DBNum2` uses `零壹贰叁肆伍陆柒捌玖` and `拾佰仟`. Split integers into four-digit groups, attach `万`, `亿`, or `万亿`, and insert a single zero across missing positions. Retain the leading one before ten: `10` becomes `一十` or `壹拾`. Saved `1234` becomes `一千二百三十四` or `壹仟贰佰叁拾肆`.
   - An explicit locale ID is authoritative; `804` and `0804` select Simplified Chinese even when the parser locale differs. Without an explicit locale directive, require `zh-CN`. Preserve literal prefixes/suffixes and the selected positive/negative/zero section. Literal bracket text is not a locale directive.
-  - Decimal/scientific General values, other numeric patterns, date patterns, other DBNum variants, and other locales retain the saved value until their display rules are supported. Do not substitute the Word numbering implementation: its glyphs and leading-one rules differ.
+  - Date classification precedes DBNum dispatch. In `zh-CN`, `DBNum1` formats the converted year digit by digit using `○一二三四五六七八九` (U+25CB for zero); month/day use Chinese tens and units, omitting the leading one in ten. Saved `46235` in the 1900 system with `[DBNum1][$-804]yyyy"年"m"月"d"日"` displays `二○二六年八月一日`. Preserve literals; never convert the entire serial into a Chinese integer. Date DBNum2/3 remain unsupported.
+  - Decimal/scientific General values, other numeric patterns, other DBNum variants, and other locales retain the saved value until their display rules are supported. Do not substitute the Word numbering implementation: its glyphs and leading-one rules differ.
+
+### Date locale and system long date
+
+- **Output**
+  - Localized date fields in `Cell.text`, shared across all three densities.
+- **OOXML**
+  - The selected section's `[$<currency>-<language info>]`. ISO/IEC 29500-1 §18.8.30 defines the 32-bit hexadecimal language, calendar and number-system information, with special values F800 (system long date) and F400 (system time).
+- **IR**
+  - A date context retains the effective code, locale and DBNum mode.
+- **Parsing**
+  - Explicit `0409`/`409` selects `en-US`; `0804`/`804` selects `zh-CN`, overriding the parser locale. Normalize locale case and underscores. Pass this context to AM/PM, weekday/month names and DBNum; literal bracket text has no such effect.
+  - In `en-US`, `mmm`, `mmmm`, `mmmmm` produce abbreviated, full and initial English month names; `AM/PM` produces `AM` or `PM`. In `zh-CN`, month names use the month number plus `月`, and AM/PM uses `上午` or `下午`.
+  - F800 replaces the saved following date template with a deterministic locale default: `yyyy"年"m"月"d"日"` for `zh-CN`, and `dddd, mmmm d, yyyy` for `en-US`. For 2026-08-01 these produce `2026年8月1日` and `Saturday, August 1, 2026`. The English pattern is an explicit parser policy, not a claim that ISO mandates one English system setting.
+  - Do not read the host OS regional preferences. The workbook does not preserve the producer's customized system long-date pattern. Other F800 locales, F400, and unsupported explicit language/calendar/number-system combinations retain the saved value; they are not silently interpreted as another locale or calendar.
 
 ### `date1904`
 
@@ -90,7 +105,7 @@ Display formatting applies the effective Excel number format from the cell XF to
   - `Cell.raw: str`
 
 - **Parsing**
-  - Preserve decoded text before applying a supported text section. For ordinary numeric formats, emit the edit-form value only when it is independently recoverable. A supported uppercase scientific display token (`E+`/`E-`) is formatting syntax and does not by itself prevent recovery of the saved ordinary number. Omit it and add `XLSX_FORMULA_BAR_UNAVAILABLE` when the format needs Excel-specific rendering or would require guessing. Formula cells expose their expression through `formula` and do not copy the cached `<v>` into `raw`; this also applies to data-table members whose expression is reconstructed from the master's attributes.
+  - Preserve decoded text before applying a supported text section. For ordinary numeric formats, emit the edit-form value only when it is independently recoverable. A supported uppercase scientific display token (`E+`/`E-`) is formatting syntax and does not by itself prevent recovery of the saved ordinary number. Omit `raw` silently when reconstruction would require guessing; do not emit a formula-bar-unavailable diagnostic. Formula cells expose their expression through `formula` and do not copy the cached `<v>` into `raw`; this also applies to data-table members whose expression is reconstructed from the master's attributes.
   - Numeric reconstruction supports `zh-CN` and `en-US`, up to 15 significant decimal digits, and zero or magnitudes from `1e-9` inclusive to `1e15` exclusive. These limits also apply to scientific display formats. For example, saved `123456` with `0.00E+00` produces `<cell raw="123456">1.23E+05</cell>`; `raw` retains the unrounded number rather than reconstructing it from the rounded display.
   - For `zh-CN` numeric times in `[0, 1)` with `h:mm:ss` or `hh:mm:ss`, optionally followed by one to three fractional-second zeroes, reconstruct the formula bar as `h:mm:ss` without fractional seconds. Resolve serial noise to milliseconds before taking the whole seconds. The cell display is calculated separately at its requested precision. For example, saved `0.52083478009259254` represents `12:30:00.125` to millisecond precision; `h:mm:ss.0` produces `<cell raw="12:30:00">12:30:00.1</cell>`. Here `raw` is an application edit-form rendering, not a lossless representation of the stored serial.
   - Date-bearing serials, negative/elapsed times, AM/PM, explicit locale directives, and other time patterns remain outside this formula-bar reconstruction. The 1900/1904 epoch does not affect supported times within the first day. A rounded serial at the next-day boundary is excluded.
@@ -101,12 +116,14 @@ ISO/IEC 29500-1 §18.17.4.1 defines serial date-times in days, with fractional d
 
 ## Source references
 
-- [FormatIndex.format_value](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/index.py#L80)
+- [FormatIndex.format_value](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/index.py#L92)
 - [parse_styles](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/parser.py#L17)
-- [format_value](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/number_format.py#L17)
+- [format_value](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/number_format.py#L18)
 - [Chinese counting formats](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/number_formats/chinese.py)
 - [Time display and formula-bar reconstruction](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/number_formats/dates.py)
+- [Date locale and system-format defaults](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/number_formats/date_context.py)
+- [Localized date fields](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/number_formats/date_words.py)
 - [ISO/IEC 29500-1:2016, §18.8.31 and §18.17.4.1](https://www.iso.org/standard/71691.html)
 - [Additional Excel user report of fractional display and whole-second formula-bar text](https://www.reddit.com/r/vba/comments/11jv8bb/correctly_splitting_time_stamp_strings_working/)
-- [_parse_cell](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/cells.py#L42)
-- [_cell_attrs](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L156)
+- [_parse_cell](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/cells.py#L41)
+- [_cell_attrs](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L167)

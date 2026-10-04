@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import NamedTuple
 
 
 def _split_format_sections(fmt_code: str) -> list[str]:
@@ -38,11 +39,19 @@ def _split_format_sections(fmt_code: str) -> list[str]:
 _CONDITION_RE = re.compile(r"^(<=|>=|<>|=|<|>)([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?)$")
 
 
-def _section_directives(section: str) -> tuple[list[tuple[str, float]], str | None, str | None]:
-    """Read conditions, locale currency, and DBNum directives from a section."""
+class SectionDirectives(NamedTuple):
+    conditions: list[tuple[str, float]]
+    currency: str | None
+    dbnum: str | None
+    language_info: int | None
+
+
+def _section_directives(section: str) -> SectionDirectives:
+    """Read directives without losing the language/calendar/number-system bits."""
     conditions: list[tuple[str, float]] = []
     currency: str | None = None
     dbnum: str | None = None
+    language_info: int | None = None
     # Ignore bracket-looking text inside quoted or escaped literals.
     directives = re.sub(r'"[^\"]*"|\\.|_.|\*.', lambda match: " " * len(match.group()), section)
     for match in re.finditer(r"\[([^\]]*)\]", directives):
@@ -54,9 +63,13 @@ def _section_directives(section: str) -> tuple[list[tuple[str, float]], str | No
         elif lower.startswith("$"):
             body = value[1:]
             currency = body.split("-", 1)[0] or None
+            if "-" in body:
+                language = body.rsplit("-", 1)[1]
+                if re.fullmatch(r"[0-9a-fA-F]{1,8}", language):
+                    language_info = int(language, 16)
         elif lower.startswith("dbnum"):
             dbnum = lower
-    return conditions, currency, dbnum
+    return SectionDirectives(conditions, currency, dbnum, language_info)
 
 
 def _condition_matches(value: float, condition: tuple[str, float]) -> bool:
@@ -75,7 +88,7 @@ def _select_format_section(value: float, fmt_code: str) -> tuple[str | None, flo
     sections = _split_format_sections(fmt_code)[:3]
     if any(_section_directives(section)[0] for section in sections):
         for section in sections:
-            conditions, _currency, _dbnum = _section_directives(section)
+            conditions = _section_directives(section).conditions
             if not conditions or all(_condition_matches(value, condition) for condition in conditions):
                 return section, value
         # Excel fills the cell with hashes if no condition applies. Width

@@ -13,6 +13,7 @@ from ..models import Cell, ParsedWorkbook, SheetInfo
 from ..parsing.modules.styles.index import FormatIndex
 from ._constants import _CELL_BUDGET, _GRID_BOUND_SENTINEL
 from .dtx_metadata import _add_protection_attrs, _append_sheet_metadata, _append_workbook_metadata
+from .reading_rows import reading_rows
 from .style_ranges import _add_style_attrs, _style_range_records
 
 
@@ -36,7 +37,7 @@ def render_sheet_dtx(
     selected = cast(SheetInfo, dict(sheet))
     if rows is not None:
         selected["rows"] = rows
-    _append_sheet(root, selected, parsed_workbook, density, emit_globals=True, cell_budget=None)
+    _append_sheet(root, selected, parsed_workbook, density, emit_globals=True, cell_budget=None, trim_tail=rows is None)
     return serialize(root)
 
 
@@ -48,6 +49,7 @@ def _append_sheet(
     *,
     emit_globals: bool,
     cell_budget: int | None = _CELL_BUDGET,
+    trim_tail: bool = True,
 ) -> None:
     if sheet.get("kind") == "chartsheet":
         append(parent, "chart-sheet", name=sheet["name"])
@@ -56,7 +58,8 @@ def _append_sheet(
     node = append(parent, "sheet", name=sheet["name"], visibility=visibility if visibility != "visible" else None)
     _append_sheet_metadata(node, sheet, workbook, density, emit_globals)
     if density in {"structural", "semantic"}:
-        _append_grid(node, sheet.get("rows", []), workbook, density, cell_budget=cell_budget)
+        rows = sheet.get("rows", [])
+        _append_grid(node, reading_rows(rows) if trim_tail else rows, workbook, density, cell_budget=cell_budget)
 
 
 def _append_grid(

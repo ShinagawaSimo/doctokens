@@ -37,11 +37,11 @@ def format_value(
         return raw
     is_date, _is_pct = resolve_format(0, section, locale)
     try:
+        if is_date:
+            return _format_date_value(num, section, date_1904, locale)
         if _section_directives(section)[2]:
             rendered = format_chinese_integer(Decimal(raw), section, fmt_code, locale)
             return rendered if rendered is not None else raw
-        if is_date:
-            return _format_date_value(num, section, date_1904, locale)
         return _format_number_value(num, raw, fmt_code, _is_pct, locale)
     except (ArithmeticError, ValueError):
         return raw

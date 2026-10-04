@@ -16,7 +16,7 @@ def _format_number_value(num: float, raw: str, fmt_code: str, is_pct: bool, loca
     if section is None:
         return raw
     magnitude = abs(Decimal(raw))
-    _conditions, _currency, dbnum = _section_directives(section)
+    dbnum = _section_directives(section).dbnum
     syntax = _date_scan_text(section)
     if "@" in syntax and not re.search(r"[0#?]", syntax):
         return raw

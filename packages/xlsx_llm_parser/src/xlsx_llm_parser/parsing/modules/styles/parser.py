@@ -44,6 +44,8 @@ def parse_styles(
         _register_semantic_records(index, root, theme)
 
     style_xfs = _find_xfs(root, "cellStyleXfs")
+    visible_fills = _visible_records(root, "fills", "fill")
+    visible_borders = _visible_records(root, "borders", "border")
     for xf in _find_xfs(root, "cellXfs"):
         num_fmt_id, format_code = _effective_number_format(xf, style_xfs, custom_fmts, locale)
         index.register_cell_format(
@@ -53,8 +55,33 @@ def parse_styles(
             fill_id=_int_attr(xf, "fillId"),
             locked=_protection_flag(xf, "locked", default=True),
             formula_hidden=_protection_flag(xf, "hidden", default=False),
+            visible_blank=(
+                _effective_style_id(xf, style_xfs, "fill") in visible_fills
+                or _effective_style_id(xf, style_xfs, "border") in visible_borders
+            ),
         )
     return index
+
+
+def _effective_style_id(xf: ET.Element, parents: list[ET.Element], kind: str) -> int:
+    parent_index = _int_attr(xf, "xfId", -1)
+    parent = parents[parent_index] if 0 <= parent_index < len(parents) else None
+    if parent is not None and (xf.get(f"apply{kind.title()}") in {"0", "false"} or xf.get(f"{kind}Id") is None):
+        return _int_attr(parent, f"{kind}Id")
+    return _int_attr(xf, f"{kind}Id")
+
+
+def _visible_records(root: ET.Element, group: str, kind: str) -> set[int]:
+    """Read only presence of visible blank formatting, without theme resolution."""
+    visible: set[int] = set()
+    for index, record in enumerate(root.findall(f"{{{NS_S}}}{group}/{{{NS_S}}}{kind}")):
+        for child in record:
+            if kind == "fill":
+                if child.tag == f"{{{NS_S}}}gradientFill" or child.get("patternType", "none") != "none":
+                    visible.add(index)
+            elif child.get("style") not in {None, "none"}:
+                visible.add(index)
+    return visible
 
 
 def _parse_custom_formats(root: ET.Element) -> dict[int, str]:

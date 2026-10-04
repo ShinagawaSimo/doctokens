@@ -6,17 +6,6 @@ Rich values, cell controls, pivot caches and tables, slicers, and timelines use 
 
 ## Warning fields
 
-### `XLSX_FORMULA_BAR_UNAVAILABLE`
-
-- **Output**
-  - `ParseWarning.code = "XLSX_FORMULA_BAR_UNAVAILABLE"`; `locator` is the worksheet part and cell reference.
-- **OOXML**
-  - A non-formula numeric cell has a display format whose formula-bar edit value cannot be reconstructed from the stored value, effective XF, date system, and explicit locale alone.
-- **IR**
-  - The cell keeps its formatted `text`, omits `raw`, and does not copy the cached `<v>` value into the formula-bar field.
-- **Parsing**
-  - Dates, times, percentages, locale-specific numbering, and unsupported custom sections may produce this warning. A supported uppercase scientific display code does not produce the warning solely because it contains `E+`/`E-`; unresolved magnitude or precision limits can still do so. A formula cell does not produce this warning for its cache; it uses `formula` and the cache is only used for display.
-
 ### `XLSX_CATALOG_XML_INVALID`
 
 - **Output**

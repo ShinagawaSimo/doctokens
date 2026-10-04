@@ -28,7 +28,7 @@ A What-If data table substitutes trial values into one or two model input cells 
 - **Notes**
   - No leading `=` or display braces are emitted.
   - Raw `dt2D/dtr/r1/r2/del1/del2` attributes are not duplicated in DTX.
-  - Result members omit `raw`; their cached values are not literal formula-bar content. Any provisional `XLSX_FORMULA_BAR_UNAVAILABLE` warning for such a cache is removed when the group is resolved.
+  - Result members omit `raw`; their cached values are not literal formula-bar content. An unavailable formula-bar reconstruction does not produce a diagnostic.
 
 ### `formulaType`
 

@@ -55,7 +55,7 @@ Plain whole-workbook output uses `<sheet name=...>` / `<chartsheet name=...>` re
 
 ## Source references
 
-- [iter_dtx](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L19)
-- [render_sheet_dtx](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L28)
-- [iter_plain](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/plain.py#L12)
+- [iter_dtx](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L20)
+- [render_sheet_dtx](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L29)
+- [iter_plain](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/plain.py#L13)
 - [_render_selected_plain](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py)

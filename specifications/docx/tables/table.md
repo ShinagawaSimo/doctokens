@@ -79,11 +79,3 @@ Table block identity/page/section fields use [body](../document/body.md), [pagin
 
 - **Parsing**
   - DTX: >30 rows → first 2 rows. Plain: >10 rows → first row. Limits apply per segment. Nested DTX tables use a separate full-row path with no 30-row cutoff.
-
-
-## Source references
-
-- [TableParser.parse](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/tables.py#L18)
-- [TableParser._make_block](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/tables.py#L79)
-- [_append_table](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L205)
-- [_append_table_rows](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L249)

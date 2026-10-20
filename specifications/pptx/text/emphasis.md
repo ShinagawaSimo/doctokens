@@ -65,10 +65,3 @@ Semantic/session inheritance: master and layout style â†’ shape role/type/idx â†
 
 - **Parsing**
   - First resolved non-default color; see [colors](color.md). Near-black direct colors are omitted rather than explicitly clearing inherited colors.
-
-
-## Source references
-
-- [SlideParser._shape_text_styles](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L251)
-- [_format_properties](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/runs.py#L257)
-- [_append_shape_text](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L151)

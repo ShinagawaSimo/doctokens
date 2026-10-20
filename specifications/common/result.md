@@ -93,8 +93,3 @@ Public result of a parse, render, resource, search, or query operation.
 
 - **Parsing**
   - Creates a new dictionary; does not retain a package reader or serialize private format IR.
-
-
-## Source references
-
-- [ParseResult](../../packages/ooxml_llm_core/src/ooxml_llm_core/models.py#L75)

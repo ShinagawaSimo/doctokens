@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import cast
 
 from ..core.metrics import MetricsRecorder
 from ..core.models import (
@@ -16,7 +15,6 @@ from ..core.models import (
     ContentTypes,
     ImageAsset,
     ObjectLookup,
-    OcrStoredResult,
     ParsedDocument,
     ParseOptions,
     ParseWarning,
@@ -25,6 +23,7 @@ from ..core.models import (
 )
 from ..core.package import PackageReader
 from ..core.relationships import RelationshipIndex
+from ..ooxml.compatibility import DocxCompatibility
 from ..ooxml.numbering import NumberingMap, NumberingParser, NumberingState
 from ..ooxml.styles import StyleMap, StylesParser
 from ..plan import DocxFeature, DocxParsePlan
@@ -33,8 +32,7 @@ from .modules.ancillary.parts import AncillaryParser
 from .modules.body.scanner import DocumentBodyParser
 from .modules.resources.assets import AssetExtractor
 from .modules.resources.objects import EmbeddedObjectExtractor
-
-_MAX_OCR_BATCH_BYTES = 64 * 1024 * 1024
+from .ocr import run_ocr
 
 
 class DocxParser:
@@ -75,9 +73,10 @@ class DocxParser:
                 else ([], {})
             )
             object_lookup, charts, smartarts = self._index_objects(package, relationships, warnings, metrics, resolved_plan)
+            compatibility = DocxCompatibility(warnings, asset_lookup)
 
             with metrics.stage("ocr"):
-                ocr_results = self._run_ocr(package, assets, parse_options) if resolved_plan.needs(DocxFeature.OCR) else {}
+                ocr_results = run_ocr(package, assets, parse_options) if resolved_plan.needs(DocxFeature.OCR) else {}
 
             if resolved_plan.needs(DocxFeature.BODY):
                 body_parser, blocks = self._parse_body(
@@ -91,6 +90,7 @@ class DocxParser:
                     numbering,
                     metrics,
                     resolved_plan,
+                    compatibility,
                 )
                 comment_anchors = body_parser.comment_anchors
             else:
@@ -107,6 +107,7 @@ class DocxParser:
                 comment_anchors,
                 metrics,
                 resolved_plan,
+                compatibility,
             )
 
         parse_result = _DocumentParseResult(
@@ -124,6 +125,7 @@ class DocxParser:
             ancillary=ancillary,
             ocr_results=ocr_results,
             revision_view=str(parse_options.revision_mode),
+            alternate_content=compatibility.records,
         )
         return _build_document(parse_result, warnings, metrics)
 
@@ -213,6 +215,7 @@ class DocxParser:
         numbering: NumberingMap,
         metrics: MetricsRecorder,
         plan: DocxParsePlan,
+        compatibility: DocxCompatibility,
     ) -> tuple[DocumentBodyParser, list[Block]]:
         body_parser = DocumentBodyParser(
             package,
@@ -224,6 +227,7 @@ class DocxParser:
             object_lookup=object_lookup,
             numbering_state=NumberingState(numbering, warnings),
             plan=plan,
+            compatibility=compatibility,
         )
         with metrics.stage("body"):
             blocks = body_parser.parse()
@@ -241,6 +245,7 @@ class DocxParser:
         comment_anchors: dict[str, str],
         metrics: MetricsRecorder,
         plan: DocxParsePlan,
+        compatibility: DocxCompatibility,
     ) -> AncillaryResult:
         if not _needs_ancillary_content(plan):
             return {"headers": [], "footers": [], "footnotes": [], "endnotes": [], "comments": []}
@@ -255,74 +260,8 @@ class DocxParser:
                 object_lookup=object_lookup,
                 comment_anchors=comment_anchors,
                 plan=plan,
+                compatibility=compatibility,
             ).parse()
-
-    # OCR pipeline
-
-    @staticmethod
-    def _run_ocr(
-        package: PackageReader,
-        assets: list[ImageAsset],
-        parse_options: ParseOptions,
-    ) -> dict[str, OcrStoredResult]:
-        """Run fail-soft OCR in bounded batches, reusing shared media parts."""
-        provider = getattr(parse_options, "ocr", None)
-        if provider is None:
-            return {}
-
-        asset_ids_by_path: dict[str, list[str]] = {}
-        for asset in assets:
-            if asset["type"] != "image" or asset.get("source") != "embedded":
-                continue
-            zip_path = asset.get("zipPath")
-            if not zip_path:
-                continue
-            asset_ids_by_path.setdefault(zip_path, []).append(asset["id"])
-
-        from ocr_llm_core import OcrResult, run_ocr_batch
-
-        results: dict[str, OcrStoredResult] = {}
-        pending: dict[str, bytes] = {}
-        aliases: dict[str, list[str]] = {}
-        pending_bytes = 0
-        item_limit = max(1, parse_options.ocr_workers * 2)
-
-        def flush() -> None:
-            nonlocal pending_bytes
-            batch_results = run_ocr_batch(
-                pending,
-                provider,
-                max_workers=parse_options.ocr_workers,
-                timeout=parse_options.ocr_timeout,
-            )
-            for primary_id, ocr_result in batch_results.items():
-                record = ocr_result.to_record()
-                for asset_id in aliases[primary_id]:
-                    results[asset_id] = cast(OcrStoredResult, dict(record))
-            pending.clear()
-            aliases.clear()
-            pending_bytes = 0
-
-        for zip_path, asset_ids in asset_ids_by_path.items():
-            try:
-                with package.open_entry(zip_path) as stream:
-                    image_bytes = stream.read()
-            except Exception as exc:
-                record = OcrResult.error("image_read_error", str(exc)).to_record()
-                for asset_id in asset_ids:
-                    results[asset_id] = cast(OcrStoredResult, dict(record))
-                continue
-            if pending and (len(pending) >= item_limit or pending_bytes + len(image_bytes) > _MAX_OCR_BATCH_BYTES):
-                flush()
-            primary_id = asset_ids[0]
-            pending[primary_id] = image_bytes
-            aliases[primary_id] = asset_ids
-            pending_bytes += len(image_bytes)
-        if pending:
-            flush()
-        return results
-
-    # Document assembly
 
 
 def _needs_ancillary_content(plan: DocxParsePlan) -> bool:

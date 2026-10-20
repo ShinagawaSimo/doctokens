@@ -173,9 +173,3 @@ XLSX adapts shared series arrays to point records.
 
 - **Parsing**
   - For each position0..pointCount-1, copy in-bounds array values to [point fields](chart-point.md); omit only an empty dictionary.
-
-
-## Source references
-
-- [_parse_chart_part](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/drawings.py#L142)
-- [_render_chart_resource](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_resources.py#L56)

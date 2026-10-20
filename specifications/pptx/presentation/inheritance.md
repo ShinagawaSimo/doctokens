@@ -70,11 +70,3 @@ The semantic parse plan and sessions resolve template defaults. Template prompt 
 
 - **Diagnostics**
   - `LAYOUT_PART_MISSING` or `LAYOUT_XML_INVALID`: deck theme, default color map, empty placeholder/style maps. `MASTER_PART_MISSING` or `MASTER_XML_INVALID`: keep layout parsing with empty master placeholders/styles and deck theme.
-
-
-## Source references
-
-- [LayoutMasterResolver.resolve](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/inheritance.py#L110)
-- [LayoutMasterResolver._layout_model](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/inheritance.py#L146)
-- [TextStyleParser.parse](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/text_styles.py#L57)
-- [_merge_text_styles](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/text_styles.py#L15)

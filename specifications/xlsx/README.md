@@ -7,6 +7,7 @@ SpreadsheetML retains stored cell values, formula text, and worksheet structure.
 ## Interface
 
 - [Parsing and selection](api.md)
+- [Reading windows and continuation](reading-window.md)
 - [Output profile](output.md)
 - [Parse manifest](manifest.md)
 

@@ -115,6 +115,7 @@ class SheetWorkingSet:
             post.data_validations,
             post.conditional_formats,
             warnings,
+            post.merge_refs,
         )
         self.cells_by_coord.clear()
         self.rows_by_number.clear()

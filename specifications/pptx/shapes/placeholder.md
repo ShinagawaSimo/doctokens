@@ -36,9 +36,3 @@ Placeholder type supplies title identity and inherited defaults.
 
 - **Parsing**
   - Default "0". Layout placeholders can inherit master geometry by type; template text is not inserted into slide content.
-
-
-## Source references
-
-- [SlideGeometry._attach_inheritance](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/geometry.py#L109)
-- [LayoutMasterResolver._layout_model](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/inheritance.py#L146)

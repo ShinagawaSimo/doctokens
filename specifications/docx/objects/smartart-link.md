@@ -47,8 +47,3 @@ Connections address retained node ordinals.
 
 - **Parsing**
   - Copy nonempty value.
-
-
-## Source references
-
-- [parse_smartart_root](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/resources/objects.py#L251)

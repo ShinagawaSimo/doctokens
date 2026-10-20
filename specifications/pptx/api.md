@@ -138,9 +138,3 @@ def _select_slides(
 
 - **Parsing**
   - Common OCR validation.
-
-
-## Source references
-
-- [parse_pptx](../../packages/pptx_llm_parser/src/pptx_llm_parser/api.py)
-- [PptxReadSession](../../packages/pptx_llm_parser/src/pptx_llm_parser/api.py)

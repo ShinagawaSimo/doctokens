@@ -67,9 +67,3 @@ Input is a ZIP/OPC package. No Office application is invoked.
 
 - **Parsing**
   - Positive integer, excluding bool. Enforce over the archive.
-
-
-## Source references
-
-- [PackageOptions](../../packages/ooxml_llm_core/src/ooxml_llm_core/options.py#L10)
-- [PackageReader](../../packages/ooxml_llm_core/src/ooxml_llm_core/package.py#L31)

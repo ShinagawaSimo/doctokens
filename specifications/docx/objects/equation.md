@@ -33,9 +33,3 @@ OMML is converted by the shared expression converter.
 
 - **Parsing**
   - Always latex; conversion does not execute a TeX engine.
-
-
-## Source references
-
-- [equation_object](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/objects.py#L82)
-- [_append_inline_object](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L164)

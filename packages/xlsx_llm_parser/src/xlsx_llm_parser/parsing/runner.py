@@ -116,6 +116,7 @@ def _parse_workbook(
                     cell_window=parse_plan.cell_window,
                 )
                 sheet_info["rows"] = sheet_result.rows
+                sheet_info["merge_refs"] = sheet_result.merge_refs
                 if sheet_result.hidden_cols:
                     sheet_info["hidden_cols"] = sheet_result.hidden_cols
                 if sheet_result.sheet_protection:

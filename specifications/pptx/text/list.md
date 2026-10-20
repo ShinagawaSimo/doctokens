@@ -75,10 +75,3 @@ List labels are inserted into the text and remain visible in every density.
 
 - **Parsing**
   - First use of key → parsed start; later uses increment, even if a new startAt appears. Default/failure → 1 (prefix can use inherited start). No deeper-level reset rule.
-
-
-## Source references
-
-- [_list_prefix](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/runs.py#L184)
-- [_list_metadata](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/runs.py#L213)
-- [format_drawingml_autonumber](../../../packages/ooxml_llm_core/src/ooxml_llm_core/text_numbering.py#L43)

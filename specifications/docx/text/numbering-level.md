@@ -226,10 +226,3 @@ A `NumberingLevel` defines one zero-based level. It is read from `word/numbering
 
 - **Absence and defaults**
   - Absent: `None`.
-
-
-## Source references
-
-- [NumberingLevel](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/models.py#L13)
-- [NumberingParser._parse_level](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/parser.py#L159)
-- [NumberingMap.level_for_style](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/parser.py#L71)

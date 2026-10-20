@@ -19,9 +19,3 @@ The output catalogs selected references found inside defined-name expressions.
 
 - **Parsing**
   - Regex `\[([^\]]+)\]`; keep strings ending case-insensitively in .xlsx/.xlsm/.xlsb/.xls/.xltx/.xltm. Deduplicate in encounter order. This path does not inventory xl/externalLinks parts or refresh external values.
-
-
-## Source references
-
-- [_external_link_targets](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/metadata.py#L129)
-- [_external_links_from_defined_names](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/metadata.py#L120)

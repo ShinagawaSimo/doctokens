@@ -61,8 +61,3 @@ OCR is performed only when an adapter is supplied and the parse plan includes OC
 
 - **Parsing**
   - Emit error marker. Current DOCX DTX OCR emission is not density-gated; a session retaining OCR can emit it at structural density.
-
-
-## Source references
-
-- [_append_ocr](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx_content.py#L49)

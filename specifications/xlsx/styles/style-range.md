@@ -33,9 +33,3 @@ Repeated color/fill styles can be emitted once per rectangular region.
 
 - **Parsing**
   - Sort styles lexically; sort rectangles by first row/column then end row/column. Suppress identical per-cell style attributes for the entire qualifying style group.
-
-
-## Source references
-
-- [_style_range_records](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/style_ranges.py#L12)
-- [_rectangular_ranges](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/style_ranges.py#L38)

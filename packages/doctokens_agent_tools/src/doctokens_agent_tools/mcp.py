@@ -30,7 +30,9 @@ def build_server(runtime: ToolRuntime) -> Server[Any, Any]:
             "Inspect the document, then read explicit page/slide/cell intervals. "
             "DOCX pages are saved-render hints. Use document_id for resource IDs from that snapshot. "
             "Large results return result_id: call read_result until next_offset is null. "
-            "Fragments are not standalone XML; whole_document must be explicitly requested."
+            "Fragments are not standalone XML. DOCX/PPTX whole_document must be explicitly requested. "
+            "XLSX defaults to the first worksheet and a 500-cell preview finishing the last row; "
+            "use sheet and range_spec for exact reads and selection.windows for the next source row."
         ),
     )
 

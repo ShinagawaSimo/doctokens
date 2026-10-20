@@ -135,9 +135,3 @@ Caches supply field names and source metadata without refreshing records.
 
 - **Parsing**
   - True for 1/true/True.
-
-
-## Source references
-
-- [PivotCatalog.from_package](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/pivots.py#L32)
-- [PivotCatalog._parse_cache](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/pivots.py#L83)

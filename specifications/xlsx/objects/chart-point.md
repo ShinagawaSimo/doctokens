@@ -75,8 +75,3 @@ Point records preserve saved string values.
 
 - **Parsing**
   - Copy only when index is within the source list.
-
-
-## Source references
-
-- [_parse_chart_part](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/drawings.py#L142)

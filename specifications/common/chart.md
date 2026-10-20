@@ -96,9 +96,3 @@ Dispatch to ChartEx only for `{http://schemas.microsoft.com/office/drawing/2014/
 
 - **Parsing**
   - Retain only when chart_type == combination. Single-family charts also remove per-series plot_index/chart_type. See [plots](chart-plot.md).
-
-
-## Source references
-
-- [ChartParser.parse](../../packages/ooxml_llm_core/src/ooxml_llm_core/chart_ml.py#L137)
-- [_chart_info](../../packages/ooxml_llm_core/src/ooxml_llm_core/chart_ml.py#L289)

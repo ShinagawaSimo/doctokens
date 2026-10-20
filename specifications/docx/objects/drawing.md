@@ -6,7 +6,14 @@ Metadata is attached to the objects found in a drawing subtree.
 
 ## Processing
 
-Emit chart references, then SmartArt references, then the first embedded-image reference, then nonempty textboxes. If nothing resolves, retain one drawing placeholder. This grouping is not a reconstruction of arbitrary drawing descendant order.
+DrawingML emits chart references, then SmartArt references, then the first embedded-image reference, then nonempty textboxes. If nothing resolves, retain one drawing placeholder. This grouping is not a reconstruction of arbitrary DrawingML descendant order.
+
+VML `w:pict` emits image references and nonempty textboxes in source order.
+Each shape owns its description, so a later shape cannot overwrite an earlier
+image or text box's metadata. An image with an unresolved or missing `r:id`
+retains a drawing placeholder without an id; other objects remain readable.
+Text-box contents keep their existing text projection. A pict with no emitted
+image or nonempty text box retains one drawing placeholder.
 
 ## Fields
 
@@ -30,7 +37,7 @@ Emit chart references, then SmartArt references, then the first embedded-image r
   - Fallback semantic image alternative text; embedded name uses separate rules.
 
 - **OOXML**
-  - `wp:docPr/@name`; VML `v:shape/@id`.
+  - `wp:docPr/@name`; owning VML shape `@id`.
 
 - **IR**
   - `DrawingCommon.name: str`
@@ -44,7 +51,7 @@ Emit chart references, then SmartArt references, then the first embedded-image r
   - Semantic img/textbox alt.
 
 - **OOXML**
-  - `wp:docPr/@descr`; VML `v:shape/@alt`.
+  - `wp:docPr/@descr`; owning VML shape `@alt`.
 
 - **IR**
   - `DrawingCommon.alt: str`
@@ -58,13 +65,14 @@ Emit chart references, then SmartArt references, then the first embedded-image r
   - Chart title can be overwritten by drawing title.
 
 - **OOXML**
-  - `wp:docPr/@title`
+  - `wp:docPr/@title`; owning VML shape `@title` and `v:imagedata/@o:title`.
 
 - **IR**
   - `DrawingCommon.title: str`
 
 - **Parsing**
   - Copy after referenced chart/SmartArt fields; ordinary images do not emit a title attribute.
+  - VML shape @title and imagedata/@o:title participate in the image alt fallback; see [images](image.md).
 
 ### `cx`
 
@@ -93,10 +101,3 @@ Emit chart references, then SmartArt references, then the first embedded-image r
 
 - **Parsing**
   - Keep source string.
-
-
-## Source references
-
-- [DrawingScanResult.scan](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/objects.py#L31)
-- [drawing_objects](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/objects.py#L88)
-- [pict_objects](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/objects.py#L119)

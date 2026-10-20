@@ -47,9 +47,3 @@ Classic array ranges and dynamic spill associations have separate fields.
 
 - **Parsing**
   - Set to source ref only if recipient has neither formula nor si. Do not create missing recipients or erase stored values.
-
-
-## Source references
-
-- [SheetWorkingSet.add_cell](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L54)
-- [apply_spill_sources](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/post.py#L57)

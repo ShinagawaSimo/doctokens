@@ -103,11 +103,3 @@ Semantic styles use cell-XF font/fill references.
 
 - **Parsing**
   - Default false; exact "1" → true. Formula text remains available; parser does not enforce protection.
-
-
-## Source references
-
-- [parse_styles](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/parser.py#L17)
-- [font_info](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/records.py#L79)
-- [fill_info](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/records.py#L96)
-- [_cell_attrs](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L167)

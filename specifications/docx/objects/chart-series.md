@@ -229,9 +229,3 @@ DOCX adapts the shared chart series record.
 
 - **Parsing**
   - Store only true.
-
-
-## Source references
-
-- [parse_chart_root](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/resources/objects.py#L188)
-- [charts.py](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/objects/charts.py)

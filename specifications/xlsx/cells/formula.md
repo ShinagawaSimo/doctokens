@@ -51,9 +51,3 @@ Formula output accompanies the saved display value.
 - **Parsing**
   - Copy nonempty array or data-table result range. A data-table range excludes the trial-value headers and source formulas.
   - Retain the original data-table range when rendering only part of it; the first visible result cell carries the group definition even if the master was excluded.
-
-
-## Source references
-
-- [_formula_metadata](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/cells.py#L195)
-- [_cell_attrs](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L167)

@@ -47,9 +47,3 @@ Predicates are combined with logical AND.
 
 - **Parsing**
   - Default None; numeric conversion failure makes gt/lt false. Missing actual value is None.
-
-
-## Source references
-
-- [_resolve_where_conditions](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L190)
-- [_matches_condition](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_query_operations.py#L23)

@@ -33,8 +33,3 @@ The source modelId is used only during graph resolution.
 
 - **Parsing**
   - Concatenate text including empty/whitespace results.
-
-
-## Source references
-
-- [EmbeddedObjectExtractor._parse_diagram_data](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/resources/objects.py#L295)

@@ -123,10 +123,3 @@ The diagram extractor uses its own node and connection conventions.
 
 - **Parsing**
   - Always true for inline summary.
-
-
-## Source references
-
-- [EmbeddedObjectExtractor._parse_diagram_data](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/resources/objects.py#L295)
-- [SlideObjectParser._smartart_shape](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/objects.py#L181)
-- [_append_shape](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L54)

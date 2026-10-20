@@ -33,8 +33,3 @@ Edges reference retained node ordinals.
 
 - **Parsing**
   - Same prior-node resolution.
-
-
-## Source references
-
-- [EmbeddedObjectExtractor._parse_diagram_data](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/resources/objects.py#L295)

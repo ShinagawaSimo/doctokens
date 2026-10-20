@@ -47,9 +47,3 @@ A shared formula group is scoped to one worksheet. In structural and semantic ou
 - **Diagnostics**
   - `SHARED_FORMULA_UNRESOLVED` when a selected dependent has no master or the sole valid master has empty formula text.
   - `SHARED_FORMULA_INVALID` takes precedence for a conflicting or invalid declaration. One warning is emitted per affected worksheet group and reason; its locator is `worksheet-part!selected-dependent-reference`.
-
-## Source references
-
-- [WorksheetScanner.parse](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L164)
-- [expand_selected_shared_formulas](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/formulas.py)
-- [_offset_formula](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/formulas.py)

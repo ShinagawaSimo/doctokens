@@ -53,16 +53,22 @@ class PptxReadArgs(ReadArgs):
     slide_end: int | None = Field(default=None, ge=1)
 
 
-class XlsxReadArgs(ReadArgs):
-    sheet: str | None = Field(default=None, min_length=1)
-    range_spec: str | None = Field(default=None, description="Inclusive A1:B2 range; one cell is A1:A1.")
+class XlsxReadArgs(SourceArgs):
+    density: Density = "structural"
+    sheet: str | None = Field(default=None, min_length=1, description="Exact sheet name; defaults to the first worksheet.")
+    range_spec: str | None = Field(
+        default=None,
+        description=(
+            "Inclusive rectangle A1:H20, whole rows 10:20, or one cell A1; requires sheet. "
+            "Explicit ranges are exact. Omit to preview 500 emitted cells, finishing the last row. "
+            "Use selection.windows next_row/next_cell to choose the next explicit range."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_selection(self) -> Self:
         if self.range_spec is not None and self.sheet is None:
             raise ValueError("range_spec requires sheet")
-        if self.whole_document and (self.sheet is not None or self.range_spec is not None):
-            raise ValueError("whole_document cannot be combined with sheet or range_spec")
         return self
 
 

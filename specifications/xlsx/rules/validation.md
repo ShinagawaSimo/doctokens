@@ -61,9 +61,3 @@ Validation declarations are extracted without enforcing cell constraints.
 
 - **Parsing**
   - Default true; exactly 1 → true.
-
-
-## Source references
-
-- [_parse_data_validations_element](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/rules.py#L108)
-- [_append_sheet_metadata](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx_metadata.py#L31)

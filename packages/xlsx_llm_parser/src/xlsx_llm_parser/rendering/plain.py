@@ -7,7 +7,7 @@ from html import escape as escape_text
 from typing import cast
 
 from ..models import Cell, ParsedWorkbook, SheetInfo
-from .reading_rows import reading_rows
+from .window import ReadingWindow, reading_window
 
 
 def iter_plain(workbook: ParsedWorkbook) -> Iterator[str]:
@@ -24,6 +24,12 @@ def iter_plain_rows(rows: list[list[Cell]], *, hidden_cols: list[tuple[int, int]
             continue
         values = [_cell_text(cell) for cell in row if not _hidden_column(cell["col"], hidden_cols)]
         yield "\t".join(values) + "\n"
+
+
+def iter_plain_window(window: ReadingWindow, sheet: SheetInfo) -> Iterator[str]:
+    yield from iter_plain_rows(window.rows, hidden_cols=sheet.get("hidden_cols", []))
+    if window.truncated:
+        yield f"[Truncated: next row {window.next_row}]\n"
 
 
 def _iter_sheet(sheet: SheetInfo, workbook: ParsedWorkbook, *, emit_globals: bool) -> Iterator[str]:
@@ -52,7 +58,7 @@ def _iter_sheet(sheet: SheetInfo, workbook: ParsedWorkbook, *, emit_globals: boo
         yield f"[PivotTable{' ' + pivot['name'] if pivot.get('name') else ''}]\n"
     for table in sheet.get("tables", []):
         yield _table_summary(table)
-    yield from iter_plain_rows(reading_rows(sheet.get("rows", [])), hidden_cols=sheet.get("hidden_cols", []))
+    yield from iter_plain_window(reading_window(sheet, "plain"), sheet)
 
 
 def _hidden_column(column: int, ranges: list[tuple[int, int]] | None) -> bool:

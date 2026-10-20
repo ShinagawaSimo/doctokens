@@ -67,9 +67,3 @@ A What-If data table substitutes trial values into one or two model input cells 
 ISO/IEC 29500-1 §18.3.1.40 defines the data-table attributes and §18.3.1.96 defines cached values. [Microsoft's data-table guide](https://support.microsoft.com/en-us/excel/calculate-multiple-results-by-using-a-data-table) describes the layouts and substitution behavior. The two-input argument order and deleted-input spelling are supported by the [ClosedXML formula reconstruction](https://github.com/ClosedXML/ClosedXML/blob/develop/ClosedXML/Excel/Cells/XLCellFormula.cs) and [attribute serialization](https://github.com/ClosedXML/ClosedXML/blob/develop/ClosedXML/Excel/IO/WorksheetPartWriter.cs) implementations; they are not quoted as explicit ISO parameter-order requirements.
 
 The repository's native `xlsx-formula-data-table.xlsx` verifies a column-oriented one-variable group, its saved results, and selections excluding its master. Native horizontal, multiple-formula, two-variable, and deleted-input workbooks remain to be added; the implemented generalizations are not yet verified by those native fixtures.
-
-## Source references
-
-- [Data table decoding and membership](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/data_tables.py)
-- [Worksheet scanning](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py)
-- [DTX group compaction](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py)

@@ -158,7 +158,7 @@ with ToolRuntime(RuntimeConfig(allowed_roots=(Path("documents"),))) as runtime:
     # 异步宿主使用 await runtime.aexecute(name, arguments)。
 ```
 
-三格式正文工具都接受 `density="plain" | "structural" | "semantic"`，默认 `structural`。DOCX 默认逐页读取前 3 个保存分页提示页，PPTX 默认前 3 张；XLSX 未指定选区时只返回轻量工作表目录。全文须显式传入 `whole_document=true`。后续可用 `document_id` 读取原快照；超出默认 12,000 字符预算的内容通过 `result_id` 和 `read_result` 分段取回。片段声明 `fragment=true`，拼接后才是完整 XML。
+三格式正文工具都接受 `density="plain" | "structural" | "semantic"`，默认 `structural`。DOCX 默认逐页读取前 3 个保存分页提示页，PPTX 默认前 3 张；它们的全文读取使用 `whole_document=true`。XLSX 默认读取第一张工作表约 500 格，完成达到预算的最后一整行，同时返回工作表目录；不接受 `whole_document`。例如 `read_xlsx(document_id=..., sheet="Sales", range_spec="101:200")` 完整读取第 101–200 行，也支持 `A1:H20` 和单格 `A1`。默认预览的 `parts[].selection.windows[]` 给出实际范围及 `next_row`，可据此选择下一段；详见 [读取规范](specifications/agent-tools/reading.md)。后续可用 `document_id` 读取原快照；超出默认 12,000 字符预算的内容通过 `result_id` 和 `read_result` 分段取回。片段声明 `fragment=true`，拼接后才是完整 XML。
 
 工具还覆盖资源目录、图片和媒体、格式专属资源解释、XLSX 搜索/查询及文档释放。图片通过 MCP 原生图片内容返回；直接调用得到业务结果及二进制附件。默认最多保留 4 个解析会话，空闲 10 分钟过期；缓存、快照和回复限制均可配置。完整参数、生命周期和错误码见[工具行为参考](specifications/agent-tools/README.md)。
 

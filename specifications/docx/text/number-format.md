@@ -85,12 +85,6 @@ The following upper limits return `""` and `NUMBERING_VALUE_OUT_OF_RANGE` when e
 - **Diagnostics**
   - `UNSUPPORTED_CUSTOM_NUMBER_FORMAT`, deduplicated by pattern and fallback name.
 
-
-## Source references
-
-- [NumberFormatRenderer.format](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L47)
-- [NumberFormatRenderer._format_custom](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L117)
-
 ## Conversion expressions
 
 | `number_format` | Conversion expression |

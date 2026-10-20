@@ -14,6 +14,7 @@ WordprocessingML is read from `word/document.xml` and supporting parts. Body blo
 ## Document
 
 - [Document body](document/body.md)
+- [Alternate content](document/alternate-content.md)
 - [Sections](document/section.md)
 - [Pagination](document/pagination.md)
 

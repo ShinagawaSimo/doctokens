@@ -74,9 +74,3 @@ def element(name: str, text: str | None = None, /, **attrs: object | None) -> ET
 
 - **Parsing**
   - Escape XML metacharacters. Text and tail preserve inline sequence; no generic trimming. Invalid XML characters can fail serialization validation.
-
-
-## Source references
-
-- [serialize](../../packages/ooxml_llm_core/src/ooxml_llm_core/doctokens_xml.py#L36)
-- [validate_xml](../../packages/ooxml_llm_core/src/ooxml_llm_core/doctokens_xml.py#L43)

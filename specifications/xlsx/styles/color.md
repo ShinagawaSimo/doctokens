@@ -61,10 +61,3 @@ Cell fonts and fills use the workbook theme when necessary.
 
 - **Parsing**
   - Indexed palette colors are not resolved in this path.
-
-
-## Source references
-
-- [resolve_color](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/records.py#L149)
-- [parse_theme](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/records.py#L62)
-- [apply_tint](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/records.py#L177)

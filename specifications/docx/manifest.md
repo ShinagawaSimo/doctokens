@@ -6,6 +6,12 @@
 
 ## Fields
 
+### `alternateContent`
+
+- **Output**
+  - Optional array of [compatibility branch selection records](document/alternate-content.md).
+  - Successful selections are recorded without warnings or body markup.
+
 ### `pageCount`
 
 - **Output**
@@ -124,8 +130,3 @@
 
 - **Notes**
   - Parsed comments.
-
-
-## Source references
-
-- [DocxParser.parse](../../packages/docx_llm_parser/src/docx_llm_parser/parsing/runner.py#L43)

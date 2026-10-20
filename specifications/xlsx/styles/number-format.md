@@ -113,17 +113,3 @@ Display formatting applies the effective Excel number format from the cell XF to
 ## Time precision and Excel's formula bar
 
 ISO/IEC 29500-1 §18.17.4.1 defines serial date-times in days, with fractional days carrying the time. §18.8.31 defines the independent display format, including fractional seconds (`h:mm:ss.00`). These storage/display rules do not require the formula bar to reproduce fractional seconds. The saved real-workbook case retains `.125` even though its cell shows `.1` and the user-observed Simplified Chinese Excel formula bar shows whole seconds. Re-entering a time and seeing the formula bar omit the fraction therefore does not establish that the saved value was truncated. A parser reads the saved serial and does not reproduce Excel's editing or saving actions.
-
-## Source references
-
-- [FormatIndex.format_value](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/index.py#L92)
-- [parse_styles](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/parser.py#L17)
-- [format_value](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/number_format.py#L18)
-- [Chinese counting formats](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/number_formats/chinese.py)
-- [Time display and formula-bar reconstruction](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/number_formats/dates.py)
-- [Date locale and system-format defaults](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/number_formats/date_context.py)
-- [Localized date fields](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/styles/number_formats/date_words.py)
-- [ISO/IEC 29500-1:2016, §18.8.31 and §18.17.4.1](https://www.iso.org/standard/71691.html)
-- [Additional Excel user report of fractional display and whole-second formula-bar text](https://www.reddit.com/r/vba/comments/11jv8bb/correctly_splitting_time_stamp_strings_working/)
-- [_parse_cell](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/cells.py#L41)
-- [_cell_attrs](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L167)

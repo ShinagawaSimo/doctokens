@@ -45,6 +45,7 @@ class _DocumentParseResult:
     ancillary: AncillaryResult
     ocr_results: dict[str, OcrStoredResult]
     revision_view: str
+    alternate_content: list[dict[str, object]]
 
 
 def _build_document(
@@ -106,6 +107,7 @@ def _build_document(
             "chartCount": len(parsed_document.charts),
             "smartartCount": len(parsed_document.smartarts),
             "commentCount": len(parsed_document.comments),
+            **({"alternateContent": parse_result.alternate_content} if parse_result.alternate_content else {}),
         },
         tuple(parsed_document.warnings),
         parsed_document.metrics,

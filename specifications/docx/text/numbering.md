@@ -207,11 +207,3 @@ Counters are scoped by numbering instance and advanced while parsing source para
 
 - **Parsing**
   - Legal numbering uses decimal formatting for referenced levels.
-
-
-## Source references
-
-- [ParagraphNumbering.parse](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/numbering.py#L39)
-- [NumberingState](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/state.py#L15)
-- [NumberFormatRenderer](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/formats.py#L32)
-- [NumberingParser](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/parser.py#L97)

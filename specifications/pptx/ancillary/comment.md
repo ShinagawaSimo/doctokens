@@ -150,11 +150,3 @@ Only the comments relationship URI handled by CommentsParser participates. Missi
 
 - **Parsing**
   - Parse integer; missing/malformed omitted. If either absolute coordinate exceeds1000 and slide size exists, normalize both to per-mille for attachment.
-
-
-## Source references
-
-- [CommentsParser.parse](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/ancillary/parts.py#L96)
-- [_CommentAttachmentPlan](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/runner.py#L40)
-- [PptxParser._attach_comments](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/runner.py#L190)
-- [_append_comments](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L207)

@@ -33,9 +33,3 @@ Background extraction requires the internal GEOMETRY feature, absent from all pu
 
 - **Parsing**
   - Resolve asset index. Missing → BACKGROUND_ASSET_MISSING.
-
-
-## Source references
-
-- [SlideGeometry._background](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/geometry.py#L68)
-- [PptxParsePlan.session](../../../packages/pptx_llm_parser/src/pptx_llm_parser/plan.py#L74)

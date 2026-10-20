@@ -39,10 +39,3 @@ A `comment` reference is an inline object attached to its containing run.
 
 - **Diagnostics**
   - No warning is emitted solely for an absent ID or an unresolved note/comment.
-
-
-## Source references
-
-- [RunParser._handle_child](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/runs.py#L107)
-- [_append_inline_object](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L164)
-- [plain_object_placeholder](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/plain/helpers.py#L89)

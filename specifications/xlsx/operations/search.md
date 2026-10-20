@@ -75,10 +75,3 @@ find_cells is a literal search over retained session data.
 
 - **Parsing**
   - Cell matches include quoted `cell="Sheet!A1"` and `field="value|formula|comment|hyperlink"` attributes. Defined-name matches use `field="definedName"` and `name = ref` text. All elements close; XML text and attributes are escaped. `syntax_version=doctokens-xml/1.0`, `media_type=application/xml`, `density=structural`.
-
-
-## Source references
-
-- [XlsxReadSession.find_cells](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py)
-- [_find_cells](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/search.py)
-- [_cell_match](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/search.py)

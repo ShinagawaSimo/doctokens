@@ -61,9 +61,3 @@ Images are referenced by package location without eager binary reads.
 
 - **Parsing**
   - Require nonempty target to index; target existence/type is not validated in _parse_drawing_anchor. Resource descriptor source is embedded; unreadable targets fail when read_resource opens them.
-
-
-## Source references
-
-- [_parse_drawing_anchor](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/drawings.py#L91)
-- [_resource_descriptors](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_resources.py#L12)

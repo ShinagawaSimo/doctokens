@@ -281,7 +281,7 @@ class EndToEndOcrTest(unittest.TestCase):
         from io import BytesIO
 
         from docx_llm_parser.core.models import ImageAsset, ParseOptions
-        from docx_llm_parser.parsing.runner import DocxParser
+        from docx_llm_parser.parsing.ocr import run_ocr
         from ocr_llm_core import OcrProvider
 
         class Provider(OcrProvider):
@@ -309,7 +309,7 @@ class EndToEndOcrTest(unittest.TestCase):
         ]
         provider = Provider()
         package = Package()
-        results = DocxParser._run_ocr(cast(Any, package), assets, ParseOptions(ocr=provider))
+        results = run_ocr(cast(Any, package), assets, ParseOptions(ocr=provider))
         self.assertEqual(package.calls["word/media/shared.png"], 1)
         self.assertEqual(provider.calls, 1)
         self.assertEqual(results["img3"]["error_code"], "image_read_error")

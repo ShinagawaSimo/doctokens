@@ -87,9 +87,3 @@ In the `original` revision view, `w:numberingChange` can provide level definitio
 
 - **Diagnostics**
   - Significant length is prefix plus accepted level placeholders and separators after replacing `%%` with `%`. Length >31: `INVALID_NUMBERING_CHANGE` and discard all overrides.
-
-
-## Source references
-
-- [parse_numbering_change](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/change.py#L12)
-- [ParagraphNumbering.parse](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/numbering.py#L39)

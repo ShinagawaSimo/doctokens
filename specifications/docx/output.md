@@ -14,6 +14,10 @@ DOCX output uses the common [DTX](../common/dtx.md) and [DTP](../common/dtp.md) 
 
 Plain separates retained blocks with blank lines; table summaries, note/comment labels, and object summaries are readable content. Only the DTP header and escaped page markers have the common DTP syntax. Empty XML body emits page 1.
 
+Both XML densities retain bound inline image resource ids. Semantic also retains
+image alternative text; structural omits that description. Drawing placeholders
+without a resolved resource omit id. See [images](objects/image.md).
+
 ## Fields
 
 ### `format`
@@ -99,9 +103,3 @@ Plain separates retained blocks with blank lines; table summaries, note/comment 
 
 - **Parsing**
   - Semantic order: headers, footers, footnotes, endnotes, comments. Structural: footnotes, endnotes, comments. Omit empty groups.
-
-
-## Source references
-
-- [iter_dtx](../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L28)
-- [iter_plain](../../packages/docx_llm_parser/src/docx_llm_parser/rendering/document/pipeline.py#L16)

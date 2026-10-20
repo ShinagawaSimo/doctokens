@@ -2,6 +2,9 @@
 
 [DOCX](../README.md) / Text runs
 
+[Alternate content](../document/alternate-content.md) is resolved before run
+dispatch. Only the selected branch's children reach the ordinary run handlers.
+
 An input run can become multiple IR runs around calculated page boundaries.
 
 ## Processing
@@ -93,11 +96,3 @@ Unknown run children produce `UNSUPPORTED_RUN_CHILD`; unknown paragraph wrappers
 
 - **Parsing**
   - Parse sdtContent first; append the enclosing control to each child run. Nested inline stacks are therefore assembled from inner to outer.
-
-
-## Source references
-
-- [RunParser.parse](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/runs.py#L47)
-- [RunParser._handle_child](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/runs.py#L107)
-- [_append_inline](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L102)
-- [_append_text_with_breaks](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx_content.py#L106)

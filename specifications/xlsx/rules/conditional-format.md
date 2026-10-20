@@ -187,10 +187,3 @@ Rules describe conditions and formatting; they do not calculate effective per-ce
 
 - **Parsing**
   - Resolved compact font/fill/numberFormat/alignment string; available with semantic format index. Lower-density session rendering can retain this string.
-
-
-## Source references
-
-- [_parse_conditional_format_element](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/rules.py#L121)
-- [_append_conditional_formats](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx_metadata.py#L139)
-- [_conditional_details](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx_metadata.py#L214)

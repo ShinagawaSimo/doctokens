@@ -5,13 +5,8 @@ from __future__ import annotations
 from typing import Any, cast
 from xml.etree import ElementTree as ET
 
-from ooxml_llm_core.xml import iterparse
-
 from ....core.constants import (
-    _TAG_W_PARAGRAPH,
-    _TAG_W_TABLE,
     first_child,
-    local_name,
 )
 from ....core.models import (
     AssetLookup,
@@ -27,7 +22,7 @@ from ....core.models import (
 )
 from ....core.package import PackageReader
 from ....core.relationships import RelationshipIndex
-from ....ooxml.content_controls import parse_content_control
+from ....ooxml.compatibility import DocxCompatibility
 from ....ooxml.formatting import (
     merge_paragraph_borders,
     parse_paragraph_alignment,
@@ -40,6 +35,7 @@ from .anchors import BlockIdAllocator, BodyAnchors
 from .inline import InlineParser
 from .numbering import ParagraphNumbering, _paragraph_style_id
 from .sections import BodySections
+from .stream import read_blocks
 from .tables import TableParser
 
 
@@ -57,6 +53,7 @@ class DocumentBodyParser:
         object_lookup: ObjectLookup,
         numbering_state: NumberingState,
         plan: DocxParsePlan | None = None,
+        compatibility: DocxCompatibility | None = None,
     ) -> None:
         self.package = package
         self.styles = styles
@@ -70,6 +67,7 @@ class DocumentBodyParser:
         self.include_character_formatting = self.plan.needs(DocxFeature.CHARACTER_FORMATTING)
         self.include_raw_hints = self.plan.needs(DocxFeature.RAW_HINTS)
         self.asset_lookup = asset_lookup
+        self.compatibility = compatibility or DocxCompatibility(warnings, asset_lookup)
         self._anchors = BodyAnchors()
         self._sections = BodySections()
         self.inline = InlineParser(
@@ -94,64 +92,7 @@ class DocumentBodyParser:
 
     def parse(self) -> list[Block]:
         """Stream-parse word/document.xml, preserving the original paragraph/table order."""
-        blocks: list[Block] = []
-        with self.package.open_entry("word/document.xml") as stream:
-            parser = iterparse(stream, events=("start", "end"))
-            stack: list[str] = []
-            body_depth: int | None = None
-            for event, elem in parser:
-                # Optimization: use local_name to avoid split memory allocation.
-                lname = local_name(elem.tag)
-                if event == "start":
-                    # start events only maintain the position stack; they don't build a full DOM.
-                    stack.append(lname)
-                    if lname == "body":
-                        body_depth = len(stack)
-                    continue
-
-                direct_body_child = (
-                    body_depth is not None and len(stack) == body_depth + 1 and len(stack) >= 2 and stack[-2] == "body"
-                )
-                if direct_body_child and lname == "p":
-                    # Only handle paragraphs that are direct children of body, so table cell content is not hoisted twice.
-                    block = self.parse_paragraph(elem, "word/document.xml")
-                    if block is not None:
-                        blocks.append(block)
-                    elem.clear()
-                elif direct_body_child and lname == "tbl":
-                    # Tables can contain page breaks, so parse_table returns a list (one sub-table block per page).
-                    blocks.extend(self.parse_table(elem, "word/document.xml"))
-                    elem.clear()
-                elif direct_body_child and lname == "sectPr":
-                    # Section break: Word always starts a new section on a new page when rendering.
-                    self._sections._collect_section_refs(elem)
-                    self._pending_page_breaks += 1
-                    self._sections._section_break_pending = True
-                    elem.clear()
-                elif direct_body_child and lname == "sdt":
-                    # Content controls wrap content (e.g. whole documents from
-                    # template tools); parse their w:sdtContent children.
-                    self._parse_sdt(elem, blocks)
-                    elem.clear()
-                elif direct_body_child and lname not in {
-                    "bookmarkStart",
-                    "bookmarkEnd",
-                    "proofErr",
-                    "permStart",
-                    "permEnd",
-                }:
-                    # Content-bearing wrappers we do not support must not be
-                    # dropped silently.
-                    self._warn(
-                        "UNSUPPORTED_BODY_CHILD",
-                        f"Unsupported body-level element: {lname}",
-                        part="word/document.xml",
-                    )
-                    elem.clear()
-
-                if lname == "body":
-                    body_depth = None
-                stack.pop()
+        blocks = read_blocks(self)
         self._anchors._discard_unreferenced_anchors(blocks)
         if self._sections._section_index == 1:
             # A lone default section has no navigation value; omit it from the IR
@@ -159,28 +100,6 @@ class DocumentBodyParser:
             for parsed_block in blocks:
                 cast(dict[str, object], parsed_block).pop("section", None)
         return blocks
-
-    def _parse_sdt(
-        self,
-        sdt: ET.Element,
-        blocks: list[Block],
-        parent_controls: tuple[ContentControl, ...] = (),
-    ) -> None:
-        """Parse a content control while preserving its metadata on its blocks."""
-        controls = (*parent_controls, parse_content_control(sdt))
-        content = first_child(sdt, "w", "sdtContent")
-        if content is None:
-            return
-        for child in content:
-            child_tag = child.tag
-            if child_tag == _TAG_W_PARAGRAPH:
-                block = self.parse_paragraph(child, "word/document.xml", controls)
-                if block is not None:
-                    blocks.append(block)
-            elif child_tag == _TAG_W_TABLE:
-                blocks.extend(self.parse_table(child, "word/document.xml", controls))
-            elif local_name(child_tag) == "sdt":
-                self._parse_sdt(child, blocks, controls)
 
     def parse_paragraph(
         self,

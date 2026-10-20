@@ -156,7 +156,7 @@ def render_image_object(
     """Render an embedded image reference with optional OCR text."""
     asset_id = inline_object.get("assetId", "")
     if density == "structural":
-        img_tag = "<img>"
+        img_tag = f"<img id={escape_text(asset_id, quote=True)}>" if asset_id else "<img>"
     else:
         attrs = f"id={asset_id}"
         if inline_object.get("alt"):

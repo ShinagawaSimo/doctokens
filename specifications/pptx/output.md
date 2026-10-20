@@ -51,9 +51,3 @@ Plain labels each slide `=== Slide N ===`, with section suffix if present; separ
 
 - **Parsing**
   - Both XML densities; plain appends [Comments] with [cmtN: text].
-
-
-## Source references
-
-- [iter_dtx](../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L16)
-- [iter_plain](../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/plain.py#L13)

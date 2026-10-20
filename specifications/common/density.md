@@ -46,10 +46,3 @@ XLSX number-format display processing is available in every density. Resource id
 
 - **Diagnostics**
   - Other values: `ValueError`.
-
-
-## Source references
-
-- [plan.py](../../packages/docx_llm_parser/src/docx_llm_parser/plan.py)
-- [plan.py](../../packages/pptx_llm_parser/src/pptx_llm_parser/plan.py)
-- [plan.py](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/plan.py)

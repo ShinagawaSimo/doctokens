@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from xml.etree import ElementTree as ET
 
-from ....core.constants import attr, child_elements, first_child, local_name, qualified_name
+from ....core.constants import attr, first_child, local_name, qualified_name
 from ....core.models import (
     AssetLookup,
     Chart,
@@ -15,6 +15,8 @@ from ....core.models import (
     SmartArt,
 )
 from ....ooxml.omml_latex import omath_to_latex
+from .object_common import append_image_or_placeholder, copy_drawing_common
+from .textboxes import textbox_objects_from_nodes
 
 
 @dataclass(slots=True)
@@ -105,36 +107,15 @@ def drawing_objects(
 
     image_relationship_id = drawing_scan.image_rel_id
     if image_relationship_id:
-        _append_image_or_placeholder(inline_objects, asset_lookup, part, image_relationship_id, drawing_common)
+        append_image_or_placeholder(inline_objects, asset_lookup, part, image_relationship_id, drawing_common)
 
-    inline_objects.extend(_textbox_objects_from_nodes(drawing_scan.textbox_nodes, drawing_common))
+    inline_objects.extend(textbox_objects_from_nodes(drawing_scan.textbox_nodes, drawing_common))
     if inline_objects:
         return inline_objects
 
     fallback_object: InlineObject = {"type": "drawing"}
-    _copy_drawing_common(fallback_object, drawing_common)
+    copy_drawing_common(fallback_object, drawing_common)
     return [fallback_object]
-
-
-def pict_objects(pict: ET.Element) -> list[InlineObject]:
-    """Extract text boxes from legacy VML pict; keep placeholders for other shapes."""
-    inline_objects: list[InlineObject] = []
-    drawing_common: DrawingCommon = {"placement": "vml"}
-    for shape in pict.iter(qualified_name("v", "shape")):
-        shape_id = shape.get("id")
-        alt = shape.get("alt")
-        if shape_id:
-            drawing_common["name"] = shape_id
-        if alt:
-            drawing_common["alt"] = alt
-
-    inline_objects.extend(_textbox_objects(pict, drawing_common))
-    if inline_objects:
-        return inline_objects
-
-    drawing_object: InlineObject = {"type": "drawing"}
-    _copy_drawing_common(drawing_object, drawing_common)
-    return [drawing_object]
 
 
 def parse_embedded_object(obj_elem: ET.Element) -> InlineObject:
@@ -163,43 +144,6 @@ def parse_embedded_object(obj_elem: ET.Element) -> InlineObject:
     return embedded_object
 
 
-def _append_image_or_placeholder(
-    objects: list[InlineObject],
-    asset_lookup: AssetLookup,
-    part: str,
-    rel_id: str,
-    common: DrawingCommon,
-) -> None:
-    asset = asset_lookup.get((part, rel_id))
-    if asset is None:
-        drawing_object: InlineObject = {"type": "drawing"}
-        _copy_drawing_common(drawing_object, common)
-        objects.append(drawing_object)
-        return
-
-    image: InlineObject = {"type": "image"}
-    _copy_drawing_common(image, common)
-    image["assetId"] = asset["id"]
-    if "href" in asset:
-        image["href"] = asset["href"]
-    objects.append(image)
-
-
-def _textbox_objects(node: ET.Element, common: DrawingCommon) -> list[InlineObject]:
-    return _textbox_objects_from_nodes(_textbox_content_nodes(node), common)
-
-
-def _textbox_objects_from_nodes(nodes: list[ET.Element], common: DrawingCommon) -> list[InlineObject]:
-    objects: list[InlineObject] = []
-    for txbx in nodes:
-        text = _container_plain_text(txbx)
-        if text.strip():
-            textbox: InlineObject = {"type": "textbox", "text": text}
-            _copy_drawing_common(textbox, common)
-            objects.append(textbox)
-    return objects
-
-
 def _referenced_object(
     object_lookup: ObjectLookup,
     part: str,
@@ -210,26 +154,11 @@ def _referenced_object(
     parsed = object_lookup.get((part, rel_id))
     if parsed is None:
         obj: InlineObject = {"type": fallback_type, "id": rel_id}
-        _copy_drawing_common(obj, common)
+        copy_drawing_common(obj, common)
         return obj
     obj = _object_from_lookup(parsed)
-    _copy_drawing_common(obj, common)
+    copy_drawing_common(obj, common)
     return obj
-
-
-def _copy_drawing_common(inline_object: InlineObject, drawing_common: DrawingCommon) -> None:
-    if "placement" in drawing_common:
-        inline_object["placement"] = drawing_common["placement"]
-    if "name" in drawing_common:
-        inline_object["name"] = drawing_common["name"]
-    if "alt" in drawing_common:
-        inline_object["alt"] = drawing_common["alt"]
-    if "title" in drawing_common:
-        inline_object["title"] = drawing_common["title"]
-    if "cx" in drawing_common:
-        inline_object["cx"] = drawing_common["cx"]
-    if "cy" in drawing_common:
-        inline_object["cy"] = drawing_common["cy"]
 
 
 def _object_from_lookup(parsed_object: Chart | SmartArt) -> InlineObject:
@@ -260,86 +189,6 @@ def _object_from_lookup(parsed_object: Chart | SmartArt) -> InlineObject:
     if "relationshipId" in parsed_object:
         inline_object["relationshipId"] = parsed_object["relationshipId"]
     return inline_object
-
-
-def _drawing_container(drawing: ET.Element) -> tuple[str, ET.Element | None]:
-    inline = drawing.find(".//" + qualified_name("wp", "inline"))
-    anchor = drawing.find(".//" + qualified_name("wp", "anchor"))
-    if inline is not None:
-        return ("inline", inline)
-    if anchor is not None:
-        return ("anchor", anchor)
-    return ("drawing", None)
-
-
-def _drawing_common_attrs(container: ET.Element | None, placement: str) -> DrawingCommon:
-    drawing_common: DrawingCommon = {"placement": placement}
-    if container is None:
-        return drawing_common
-
-    doc_pr = container.find(".//" + qualified_name("wp", "docPr"))
-    if doc_pr is not None:
-        name = doc_pr.get("name")
-        descr = doc_pr.get("descr")
-        title = doc_pr.get("title")
-        if name:
-            drawing_common["name"] = name
-        if descr:
-            drawing_common["alt"] = descr
-        if title:
-            drawing_common["title"] = title
-
-    extent = first_child(container, "wp", "extent")
-    if extent is not None:
-        cx = extent.get("cx")
-        cy = extent.get("cy")
-        if cx is not None:
-            drawing_common["cx"] = cx
-        if cy is not None:
-            drawing_common["cy"] = cy
-    return drawing_common
-
-
-def _textbox_content_nodes(node: ET.Element) -> list[ET.Element]:
-    return list(node.iter(qualified_name("w", "txbxContent")))
-
-
-def _container_plain_text(node: ET.Element) -> str:
-    parts: list[str] = []
-    for child in node:
-        lname = local_name(child.tag)
-        if lname == "p":
-            text = _inline_plain_text(child)
-        elif lname == "tbl":
-            text = _table_plain_text(child)
-        else:
-            text = _inline_plain_text(child)
-        if text.strip():
-            parts.append(text)
-    return "\n".join(parts)
-
-
-def _table_plain_text(tbl: ET.Element) -> str:
-    rows: list[str] = []
-    for tr in child_elements(tbl, "w", "tr"):
-        cells = [_container_plain_text(tc) for tc in child_elements(tr, "w", "tc")]
-        row = " | ".join(cell.strip() for cell in cells if cell.strip())
-        if row:
-            rows.append(row)
-    return "\n".join(rows)
-
-
-def _inline_plain_text(node: ET.Element) -> str:
-    parts: list[str] = []
-    for item in node.iter():
-        lname = local_name(item.tag)
-        if lname == "t":
-            parts.append(item.text or "")
-        elif lname == "tab":
-            parts.append("\t")
-        elif lname in {"br", "cr"}:
-            parts.append("\n")
-    return "".join(parts)
 
 
 def _progid_to_type(progid: str) -> str:

@@ -149,10 +149,3 @@ Apply recognized child transforms in XML order. Invalid/non-finite numeric trans
 
 - **Parsing**
   - Transparency is ignored.
-
-
-## Source references
-
-- [resolve_color_element](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/colors.py#L37)
-- [_apply_transforms](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/colors.py#L70)
-- [is_default_text_color](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/colors.py#L24)

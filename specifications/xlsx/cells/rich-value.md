@@ -199,11 +199,3 @@ Cell vm resolves valueMetadata records in xl/metadata.xml through futureMetadata
 
 - **Parsing**
   - `_parse_value` does not assign this per-value IR member. Catalog failures are emitted as parse-report warnings, not stored in `RichCellValue.warning`.
-
-
-## Source references
-
-- [RichValueCatalog.from_package](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/rich_values.py#L38)
-- [RichValueCatalog.resolve](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/rich_values.py#L97)
-- [RichValueCatalog._parse_value](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/rich_values.py#L199)
-- [_append_cell_text](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L215)

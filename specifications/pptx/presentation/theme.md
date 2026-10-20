@@ -43,12 +43,6 @@ Theme slots provide base colors for DrawingML scheme-color resolution.
 - **Absence and defaults**
   - Missing or unrecognized slot color: retain its default.
 
-
-## Source references
-
-- [ThemeParser](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/theme.py#L49)
-- [ThemeParser._slot_value](../../../packages/pptx_llm_parser/src/pptx_llm_parser/ooxml/theme.py#L143)
-
 ## Slots
 
 | Slot | Default |

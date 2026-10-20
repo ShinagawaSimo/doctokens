@@ -30,6 +30,7 @@ class SheetParseResult(NamedTuple):
     data_validations: list[DataValidation]
     conditional_formats: list[ConditionalFormat]
     warnings: list[ParseWarning]
+    merge_refs: list[str]
 
 
 class RowAttrs(NamedTuple):

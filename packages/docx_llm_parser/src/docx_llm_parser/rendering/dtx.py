@@ -172,7 +172,7 @@ def _append_inline_object(
         append(
             parent,
             "img",
-            id=inline_object.get("assetId") if density == "semantic" else None,
+            id=inline_object.get("assetId"),
             alt=inline_object.get("alt") if density == "semantic" else None,
         )
         _append_ocr(parent, inline_object.get("assetId"), ocr_results)

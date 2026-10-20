@@ -187,9 +187,3 @@ Visual-format dictionaries retain source strings.
 
 - **Parsing**
   - Copy complete attribute dictionary; add thresholds. Attribute vocabulary is open and source-defined.
-
-
-## Source references
-
-- [_conditional_format_detail](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/rules.py#L159)
-- [_format_thresholds](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/rules.py#L204)

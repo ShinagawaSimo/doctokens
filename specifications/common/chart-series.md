@@ -225,11 +225,3 @@ Cache points: enumerate direct pt children; int(idx) or enumeration index on mis
 
 - **Parsing**
   - Store true for 1/true/True. ChartML path supplies false, which is omitted.
-
-
-## Source references
-
-- [ChartParser._parse_chartml_series](../../packages/ooxml_llm_core/src/ooxml_llm_core/chart_ml.py#L169)
-- [ChartParser._parse_chartex](../../packages/ooxml_llm_core/src/ooxml_llm_core/chart_ml.py#L207)
-- [_indexed_point_values](../../packages/ooxml_llm_core/src/ooxml_llm_core/_chart_values.py#L102)
-- [_series_row](../../packages/ooxml_llm_core/src/ooxml_llm_core/chart_ml.py#L313)

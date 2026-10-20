@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import cast
 from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.doctokens_xml import append, element, serialize, text
@@ -11,10 +10,9 @@ from ooxml_llm_core.doctokens_xml import append, element, serialize, text
 from .._utils import col_letter
 from ..models import Cell, ParsedWorkbook, SheetInfo
 from ..parsing.modules.styles.index import FormatIndex
-from ._constants import _CELL_BUDGET, _GRID_BOUND_SENTINEL
 from .dtx_metadata import _add_protection_attrs, _append_sheet_metadata, _append_workbook_metadata
-from .reading_rows import reading_rows
 from .style_ranges import _add_style_attrs, _style_range_records
+from .window import ReadingWindow, cell_bounds, reading_window
 
 
 def iter_dtx(parsed_workbook: ParsedWorkbook, density: str) -> Iterator[str]:
@@ -31,13 +29,13 @@ def render_sheet_dtx(
     sheet: SheetInfo,
     density: str,
     rows: list[list[Cell]] | None = None,
+    *,
+    window: ReadingWindow | None = None,
 ) -> str:
     """Render a selected sheet or range as an independent DTX workbook."""
     root = element("workbook", density=density, format="xlsx")
-    selected = cast(SheetInfo, dict(sheet))
-    if rows is not None:
-        selected["rows"] = rows
-    _append_sheet(root, selected, parsed_workbook, density, emit_globals=True, cell_budget=None, trim_tail=rows is None)
+    selected = window if window is not None else reading_window(sheet, density, rows=rows)
+    _append_sheet(root, sheet, parsed_workbook, density, emit_globals=True, window=selected)
     return serialize(root)
 
 
@@ -48,8 +46,7 @@ def _append_sheet(
     density: str,
     *,
     emit_globals: bool,
-    cell_budget: int | None = _CELL_BUDGET,
-    trim_tail: bool = True,
+    window: ReadingWindow | None = None,
 ) -> None:
     if sheet.get("kind") == "chartsheet":
         append(parent, "chart-sheet", name=sheet["name"])
@@ -58,8 +55,8 @@ def _append_sheet(
     node = append(parent, "sheet", name=sheet["name"], visibility=visibility if visibility != "visible" else None)
     _append_sheet_metadata(node, sheet, workbook, density, emit_globals)
     if density in {"structural", "semantic"}:
-        rows = sheet.get("rows", [])
-        _append_grid(node, reading_rows(rows) if trim_tail else rows, workbook, density, cell_budget=cell_budget)
+        selected = window if window is not None else reading_window(sheet, density)
+        _append_grid(node, selected.rows, workbook, density, next_row=selected.next_row)
 
 
 def _append_grid(
@@ -68,24 +65,15 @@ def _append_grid(
     workbook: ParsedWorkbook,
     density: str,
     *,
-    cell_budget: int | None,
+    next_row: int | None,
 ) -> None:
-    bounds = _visible_bounds(rows)
+    bounds = cell_bounds(rows)
     if bounds is None:
         return
     min_col, min_row, max_col, max_row = bounds
-    visible_rows = [row for row in rows if row]
-    emitted: list[list[Cell]] = []
-    cell_count = 0
-    truncated = False
-    for index, row in enumerate(visible_rows):
-        cell_count += len(row)
-        emitted.append(row)
-        if cell_budget is not None and cell_count >= cell_budget:
-            truncated = index + 1 < len(visible_rows)
-            break
+    emitted = [row for row in rows if row]
     ref = f"{col_letter(min_col)}{min_row}:{col_letter(max_col)}{max_row}"
-    grid = append(parent, "grid", ref=ref, truncated=True if truncated else None)
+    grid = append(parent, "grid", ref=ref, truncated=True if next_row is not None else None, next_row=next_row)
     format_index = workbook["fmt_index"] if isinstance(workbook["fmt_index"], FormatIndex) else None
     suppressed_styles: set[str] = set()
     if density == "semantic" and format_index is not None:
@@ -231,22 +219,6 @@ def _append_cell_text(parent: ET.Element, cell: Cell, density: str) -> None:
             text(node, run.get("text", ""))
     else:
         text(content_parent, cell["text"])
-
-
-def _visible_bounds(rows: list[list[Cell]]) -> tuple[int, int, int, int] | None:
-    min_col = _GRID_BOUND_SENTINEL
-    min_row = _GRID_BOUND_SENTINEL
-    max_col = 0
-    max_row = 0
-    for row in rows:
-        for cell in row:
-            min_col = min(min_col, cell["col"])
-            max_col = max(max_col, cell["col"])
-            min_row = min(min_row, cell["row"])
-            max_row = max(max_row, cell["row"])
-    if min_col == _GRID_BOUND_SENTINEL:
-        return None
-    return min_col, min_row, max_col, max_row
 
 
 __all__ = ["iter_dtx", "render_sheet_dtx"]

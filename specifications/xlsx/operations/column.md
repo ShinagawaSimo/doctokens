@@ -61,9 +61,3 @@ Column references resolve against a query-local catalog.
 
 - **Parsing**
   - First exact key or label match; then column letter or ColN. Unknown → ValueError. First matching duplicate label wins.
-
-
-## Source references
-
-- [_columns_from_labels](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L163)
-- [_resolve_column_key](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L249)

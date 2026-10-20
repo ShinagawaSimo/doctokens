@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from ooxml_llm_core.doctokens_plain import render_plain
 from ooxml_llm_core.doctokens_xml import element
 from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.models import ParseReport, ParseResult, ResourceDescriptor
@@ -13,18 +12,15 @@ from ooxml_llm_core.resource_xml import resource_document
 from ooxml_llm_core.session import SessionLifecycle
 
 from ._api_support import Source, _density, _result
+from ._reading import render_selection
 from ._resources import _render_chart_resource, _resource_descriptors
-from .models import Cell, ParsedWorkbook, ParseOptions, SheetInfo
-from .parsing import get_render_pipeline
+from .models import ParsedWorkbook, ParseOptions
 from .parsing.runner import _parse_workbook
 from .plan import XlsxParsePlan
 from .query import AggregateSpec, OrderSpec, WhereCondition
 from .query import query_data as _query_data
-from .rendering.dtx import render_sheet_dtx
-from .rendering.plain import iter_plain_rows
-from .rendering.reading_rows import reading_rows
-from .rendering.selection import filter_rows, parse_range
-from .search import _find_cells, _sheet
+from .rendering.selection import parse_range
+from .search import _find_cells
 
 
 class XlsxReadSession:
@@ -98,31 +94,7 @@ class XlsxReadSession:
     ) -> ParseResult:
         workbook = self._require_open()
         resolved = _density(density)
-        if range_spec is not None and sheet is None:
-            raise ValueError("range_spec requires sheet")
-        if sheet is None:
-            text = "".join(get_render_pipeline(resolved).render(workbook))
-            selection: dict[str, object] = {"kind": "all"}
-        elif range_spec is None:
-            sheet_info = _sheet(workbook, sheet)
-            text = _render_selected_plain(sheet_info) if resolved == "plain" else render_sheet_dtx(workbook, sheet_info, resolved)
-            selection = {"kind": "sheet", "sheet": sheet}
-        else:
-            sheet_info = _sheet(workbook, sheet)
-            start_col, start_row, end_col, end_row = parse_range(range_spec)
-            rows = filter_rows(sheet_info.get("rows", []), start_col, start_row, end_col, end_row)
-            text = (
-                _render_selected_plain(sheet_info, rows)
-                if resolved == "plain"
-                else render_sheet_dtx(
-                    workbook,
-                    sheet_info,
-                    resolved,
-                    rows,
-                )
-            )
-            selection = {"kind": "range", "sheet": sheet, "ref": range_spec}
-        return _result(workbook, text, resolved, selection)
+        return render_selection(workbook, resolved, sheet, range_spec)
 
     def iter_render(
         self,
@@ -131,14 +103,7 @@ class XlsxReadSession:
         sheet: str | None = None,
         range_spec: str | None = None,
     ) -> Iterator[str]:
-        workbook = self._require_open()
-        resolved = _density(density)
-        if range_spec is not None and sheet is None:
-            raise ValueError("range_spec requires sheet")
-        if sheet is None:
-            chunks = get_render_pipeline(resolved).render(workbook)
-        else:
-            chunks = iter((self.render(density=resolved, sheet=sheet, range_spec=range_spec).text,))
+        chunks = iter((self.render(density=density, sheet=sheet, range_spec=range_spec).text,))
 
         def guarded() -> Iterator[str]:
             for chunk in chunks:
@@ -274,31 +239,7 @@ def parse_xlsx(
         start_col, start_row, end_col, end_row = parse_range(range_spec)
         plan = XlsxParsePlan.range(resolved, sheet, (start_col, start_row, end_col, end_row))
     workbook = _parse_workbook(source, options or ParseOptions(), plan=plan)
-    if sheet is None:
-        text = "".join(get_render_pipeline(resolved).render(workbook))
-        selection: dict[str, object] = {"kind": "all"}
-    elif range_spec is None:
-        sheet_info = _sheet(workbook, sheet)
-        text = _render_selected_plain(sheet_info) if resolved == "plain" else render_sheet_dtx(workbook, sheet_info, resolved)
-        selection = {"kind": "sheet", "sheet": sheet}
-    else:
-        sheet_info = _sheet(workbook, sheet)
-        start_col, start_row, end_col, end_row = parse_range(range_spec)
-        rows = filter_rows(sheet_info.get("rows", []), start_col, start_row, end_col, end_row)
-        if resolved == "plain":
-            text = _render_selected_plain(sheet_info, rows)
-        else:
-            text = render_sheet_dtx(workbook, sheet_info, resolved, rows)
-        selection = {"kind": "range", "sheet": sheet, "ref": range_spec}
-    return _result(workbook, text, resolved, selection)
-
-
-def _render_selected_plain(sheet: SheetInfo, rows: list[list[Cell]] | None = None) -> str:
-    selected = reading_rows(sheet.get("rows", [])) if rows is None else rows
-    return render_plain(
-        "density=plain\n" + "".join(iter_plain_rows(selected, hidden_cols=sheet.get("hidden_cols", []))),
-        format_name="xlsx",
-    )
+    return render_selection(workbook, resolved, sheet, range_spec)
 
 
 __all__ = ["XlsxReadSession", "open_xlsx", "parse_xlsx"]

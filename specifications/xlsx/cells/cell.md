@@ -158,12 +158,3 @@ Post-processing order is shared-formula expansion, merged cells, spills, hyperli
 
 - **Parsing**
   - See [controls](control.md).
-
-
-## Source references
-
-- [_parse_cell](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/cells.py#L41)
-- [_cell_text](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/cells.py#L154)
-- [SheetWorkingSet.finalize](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/scanner.py#L67)
-- [_cell_attrs](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L167)
-- [parse_ref](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_utils.py#L9)

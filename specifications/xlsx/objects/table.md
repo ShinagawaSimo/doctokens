@@ -79,9 +79,3 @@ Missing target → TABLE_PART_MISSING; XML error → TABLE_XML_INVALID; failed t
 
 - **Parsing**
   - int>=1; missing/invalid → false. totalsRowShown is not used.
-
-
-## Source references
-
-- [parse_tables](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/post.py#L125)
-- [_append_sheet_metadata](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx_metadata.py#L31)

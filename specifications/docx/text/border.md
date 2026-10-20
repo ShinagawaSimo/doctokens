@@ -67,10 +67,3 @@ Border properties are extracted for semantic formatting.
 
 - **Parsing**
   - Retain nonempty source string; not used for page layout.
-
-
-## Source references
-
-- [parse_paragraph_borders](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/formatting.py#L55)
-- [merge_paragraph_borders](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/formatting.py#L81)
-- [_add_semantic_block_attrs](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L88)

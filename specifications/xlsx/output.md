@@ -6,7 +6,7 @@ XLSX uses [DTX](../common/dtx.md) and [DTP](../common/dtp.md).
 
 ## Processing
 
-Plain whole-workbook output uses `<sheet name=...>` / `<chartsheet name=...>` readable labels, metadata summaries, and TAB-separated parsed cells. It is not an XML document. Selected plain output consists of the DTP header and selected rows only.
+Plain whole-workbook output uses `<sheet name=...>` / `<chartsheet name=...>` readable labels, metadata summaries, and TAB-separated parsed cells. It is not an XML document. Selected plain output consists of the DTP header and selected rows, followed by `[Truncated: next row N]` when a default preview withholds rows. Exact explicit ranges have no preview cutoff. See [reading windows](reading-window.md).
 
 ## Fields
 
@@ -51,11 +51,3 @@ Plain whole-workbook output uses `<sheet name=...>` / `<chartsheet name=...>` re
 
 - **Parsing**
   - Order: hidden columns, protection, local names, filter, validation, conditional formatting, images, charts, pivots, tables, grid. Range output keeps this sheet metadata even when objects lie outside selected cells.
-
-
-## Source references
-
-- [iter_dtx](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L20)
-- [render_sheet_dtx](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L29)
-- [iter_plain](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/plain.py#L13)
-- [_render_selected_plain](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py)

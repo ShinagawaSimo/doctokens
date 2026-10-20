@@ -270,6 +270,7 @@ class SheetInfo(TypedDict, total=False):
     rows: list[list[Cell]]
     state: str  # "visible" | "hidden" | "veryHidden"
     hidden_cols: list[tuple[int, int]]  # (min_col, max_col) ranges from <cols>
+    merge_refs: list[str]  # Saved merge regions, including anchors outside selected ranges.
     sheet_protection: bool  # True when <sheetProtection> is present
     tables: list[TableInfo]  # [{id, name, ref, columns, totalsRow}]
     filter_range: str  # A1 range from <autoFilter> (structural only)

@@ -106,8 +106,3 @@ Images and media are indexed separately without eager binary extraction.
 
 - **Parsing**
   - Not populated by current extractor.
-
-
-## Source references
-
-- [AssetExtractor](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/resources/assets.py#L22)

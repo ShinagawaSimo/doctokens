@@ -50,7 +50,7 @@ Source → typed row materialization → where → group/aggregate → select �
   - `str | None`
 
 - **Parsing**
-  - Requires colon A1:B2; no synthetic source rows.
+  - Accepts a rectangle (`A1:B2`), whole rows (`1:20`), or one cell (`A1`) with ordered endpoints within Excel limits; no synthetic source rows. Query limits are separate from body preview windows.
 
 ### `header_row`
 
@@ -164,11 +164,3 @@ Source → typed row materialization → where → group/aggregate → select �
 - **Parsing**
   - `<workbook density="structural" format="xlsx"><query><table>…</table></query></workbook>`. Headers use `tr/th`; result rows use `tr/td`. Empty records produce an empty table inside the same complete envelope.
   - Labels and values retain their existing query conversion and are XML-escaped. `syntax_version=doctokens-xml/1.0`, `media_type=application/xml`, `density=structural`.
-
-
-## Source references
-
-- [query_data](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py)
-- [_resolve_query_source](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py)
-- [_coerce_cell_value](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_query_operations.py#L8)
-- [_render_query_result](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py)

@@ -124,8 +124,3 @@
 
 - **Notes**
   - Parsed comments.
-
-
-## Source references
-
-- [PptxParser.parse](../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/runner.py#L76)

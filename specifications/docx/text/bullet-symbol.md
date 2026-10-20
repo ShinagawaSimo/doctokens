@@ -60,8 +60,3 @@ def bullet_symbol(template: str | None, marker_font: str | None = None) -> str:
 
 - **Parsing**
   - Use `(marker_font or "").strip().lower()`. Font-specific mapping takes precedence over the generic mapping. Unknown private-use characters from U+E000 through U+F8FF become `"•"`.
-
-
-## Source references
-
-- [bullet_symbol](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/models.py#L45)

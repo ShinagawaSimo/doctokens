@@ -37,9 +37,3 @@ Missing drawing → DRAWING_PART_MISSING. Invalid relationship XML → DRAWING_R
 
 - **Parsing**
   - Process all twoCellAnchor nodes, then oneCellAnchor, then absoluteAnchor; preserve order within each kind. This is grouped traversal rather than arbitrary document order.
-
-
-## Source references
-
-- [parse_drawings](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/drawings.py#L35)
-- [_parse_drawing_anchor](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/drawings.py#L91)

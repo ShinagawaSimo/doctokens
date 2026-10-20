@@ -25,8 +25,3 @@ Notes are attached to their source slide.
 
 - **Diagnostics**
   - NOTES_PART_MISSING or NOTES_XML_INVALID → None.
-
-
-## Source references
-
-- [NotesParser.notes_for](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/ancillary/parts.py#L34)

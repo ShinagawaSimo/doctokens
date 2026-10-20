@@ -47,9 +47,3 @@ DTP 1.0 consists of a header followed by format-specific readable content.
 
 - **Parsing**
   - No general Markdown conversion. Tabs/newlines and summary conventions are defined per format; ordinary source text is not a universal markup language.
-
-
-## Source references
-
-- [render_plain](../../packages/ooxml_llm_core/src/ooxml_llm_core/doctokens_plain.py#L20)
-- [_escape_user_page_markers](../../packages/ooxml_llm_core/src/ooxml_llm_core/doctokens_plain.py#L70)

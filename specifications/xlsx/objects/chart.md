@@ -131,9 +131,3 @@ Chart summaries attach to the worksheet independently of grid truncation.
 
 - **Parsing**
   - Always true.
-
-
-## Source references
-
-- [_parse_chart_part](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/drawings.py#L142)
-- [_append_sheet_metadata](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx_metadata.py#L31)

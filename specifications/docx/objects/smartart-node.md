@@ -47,8 +47,3 @@ Node ordinals are 1-based positions in the retained label list.
 
 - **Parsing**
   - Copy nonempty string.
-
-
-## Source references
-
-- [parse_smartart_root](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/resources/objects.py#L251)

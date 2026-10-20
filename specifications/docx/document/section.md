@@ -25,10 +25,3 @@ Section membership follows section boundaries in document order.
 
 - **Notes**
   - Current pagination advances at section breaks without distinguishing `continuous`, odd-page, and even-page layout semantics.
-
-
-## Source references
-
-- [BodySections._begin_section](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/sections.py#L35)
-- [DocumentBodyParser.parse_paragraph](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/scanner.py#L185)
-- [_append_body](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L45)

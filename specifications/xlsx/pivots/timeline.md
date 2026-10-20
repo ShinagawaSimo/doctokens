@@ -81,9 +81,3 @@ Scan XML paths containing timeline; first timelineCacheDefinition/timeline desce
 
 - **Parsing**
   - Copy nonempty.
-
-
-## Source references
-
-- [PivotCatalog._parse_timelines](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/pivots.py#L197)
-- [_append_pivot_context](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx_metadata.py#L164)

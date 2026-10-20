@@ -219,9 +219,3 @@ Missing styles.xml: `MISSING_STYLES`, empty map. Heading, numbering, and format 
 
 - **Parsing**
   - First resolved outline < 9 yields outline+1. An explicit 9 still follows basedOn in the current resolver.
-
-
-## Source references
-
-- [StylesParser.parse](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/styles.py#L210)
-- [StyleMap](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/styles.py#L20)

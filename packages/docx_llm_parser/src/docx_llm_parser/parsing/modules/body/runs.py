@@ -35,7 +35,8 @@ from ....core.constants import (
 )
 from ....core.models import InlineObject, LinkInfo, RawHint, Run
 from ....ooxml.formatting import merge_run_formats, parse_run_format, visible_run_format
-from .objects import drawing_objects, equation_object, parse_embedded_object, pict_objects
+from .objects import drawing_objects, equation_object, parse_embedded_object
+from .vml import pict_objects
 
 
 class RunParser:
@@ -138,7 +139,7 @@ class RunParser:
             if self.owner.include_raw_hints:
                 raw_hints.extend({"type": "drawing", **obj} for obj in drawing)
         elif child_tag == _TAG_W_PICTURE:
-            pict = pict_objects(child)
+            pict = pict_objects(child, part, self.owner.asset_lookup)
             objects.extend(pict)
             if self.owner.include_raw_hints:
                 raw_hints.extend({"type": "pict", **obj} for obj in pict)

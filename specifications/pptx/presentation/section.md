@@ -33,8 +33,3 @@ Section membership uses source slide IDs.
 
 - **Parsing**
   - Keep source order. The first section containing a given source slide ID supplies its name.
-
-
-## Source references
-
-- [PptxParser._parse_sections](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/runner.py#L325)

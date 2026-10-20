@@ -33,10 +33,3 @@ Targets are preserved as strings; no navigation action is executed.
 
 - **Parsing**
   - Resolve part through validated presentation references. nextslide/previousslide clamp at ends; firstslide/lastslide resolve similarly. Invalid slide XML can leave reference-based target numbering different from accepted-slide numbering.
-
-
-## Source references
-
-- [_run_link](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/runs.py#L299)
-- [SlideParser._attach_shape_navigation](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L173)
-- [_normalize_slide_navigation](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/slide_sequence.py#L64)

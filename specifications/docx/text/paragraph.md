@@ -115,10 +115,3 @@ A visible paragraph becomes one paragraph block before page-window projection.
 
 - **Parsing**
   - Retain only with RAW_HINTS plan, `include_raw_hints=True`, and nonempty collected hints.
-
-
-## Source references
-
-- [DocumentBodyParser.parse_paragraph](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/scanner.py#L185)
-- [_append_block](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L65)
-- [_add_semantic_block_attrs](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L88)

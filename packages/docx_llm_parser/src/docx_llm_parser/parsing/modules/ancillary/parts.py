@@ -33,6 +33,7 @@ from ....core.models import (
 )
 from ....core.package import PackageReader
 from ....core.relationships import RelationshipIndex
+from ....ooxml.compatibility import DocxCompatibility
 from ....ooxml.content_controls import parse_content_control
 from ....ooxml.styles import StyleMap
 from ....plan import DocxFeature, DocxParsePlan
@@ -53,11 +54,13 @@ class AncillaryParser:
         object_lookup: ObjectLookup,
         comment_anchors: Mapping[str, str] | None = None,
         plan: DocxParsePlan | None = None,
+        compatibility: DocxCompatibility | None = None,
     ) -> None:
         self.package = package
         self.options = options
         self.plan = plan or DocxParsePlan.session()
         self.warnings = warnings
+        self.compatibility = compatibility or DocxCompatibility(warnings, asset_lookup)
         self.inline = InlineParser(
             styles=styles,
             options=options,
@@ -234,7 +237,8 @@ class AncillaryParser:
     def _parse_xml_part(self, part_name: str) -> ET.Element | None:
         """Read an XML part; log a warning and return None on failure."""
         try:
-            return self.package.read_xml(part_name)
+            with self.package.open_entry(part_name) as stream:
+                return self.compatibility.read(stream, part_name)
         except Exception as exc:
             append_warning(
                 self.warnings,

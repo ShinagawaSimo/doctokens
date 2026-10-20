@@ -155,10 +155,3 @@ XML read failure: `ANCILLARY_XML_PARSE_FAILED`; omit the failed part. DTX includ
 
 - **Parsing**
   - Store true when Word bool helper accepts done; false is not stored. Thread metadata requires COMMENT_THREADING.
-
-
-## Source references
-
-- [AncillaryParser._parse_comments](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/ancillary/parts.py#L120)
-- [AncillaryParser._container_content](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/ancillary/parts.py#L247)
-- [_append_supplemental](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L272)

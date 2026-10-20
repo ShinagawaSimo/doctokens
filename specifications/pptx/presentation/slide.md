@@ -162,10 +162,3 @@ Slides follow the relationship sequence in ppt/presentation.xml.
 
 - **Parsing**
   - See [background](background.md). Public plans leave it None.
-
-
-## Source references
-
-- [_SlideSequence](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/slide_sequence.py#L113)
-- [SlideParser._shapes](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L104)
-- [_append_slide](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L26)

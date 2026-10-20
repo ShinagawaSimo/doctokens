@@ -50,9 +50,3 @@ Pictures resolve the first descendant blip against the asset index.
 
 - **Parsing**
   - Copy only for external assets; no download.
-
-
-## Source references
-
-- [SlideObjectParser._picture_shape](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/objects.py#L41)
-- [_append_shape](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L54)

@@ -6,7 +6,7 @@ parse_xlsx/open_xlsx use [common sessions](../common/session.md) and return [Par
 
 ## Processing
 
-One-shot sheet/range selection narrows cell materialization while retaining minimal shared-formula master declarations from the same worksheet when formulas are requested. Session rendering selects from an already parsed workbook. Window parsing does not create missing annotation cells. The resource directory reflects the parsed scope, not only emitted grid rows.
+One-shot explicit ranges narrow cell materialization while retaining minimal shared-formula master declarations from the same worksheet when formulas are requested. Default sheet/workbook previews still parse the selected sheets before rendering a bounded cell window; an output threshold does not promise streaming parsing or bounded memory. Session rendering selects from an already parsed workbook. Window parsing does not create missing annotation cells. The resource directory reflects the parsed scope, not only emitted grid rows.
 
 ## Fields
 
@@ -50,7 +50,7 @@ One-shot sheet/range selection narrows cell materialization while retaining mini
   - `str | None = None`
 
 - **Parsing**
-  - Exact case-sensitive display-name match; missing name → KeyError. None selects all.
+  - Exact case-sensitive display-name match; missing name → KeyError. None selects all sheets in the parser API, with a separate default cell window for each. The MCP tool selects the first worksheet by default and reads only one sheet per call.
 
 ### `range_spec`
 
@@ -64,8 +64,10 @@ One-shot sheet/range selection narrows cell materialization while retaining mini
   - `str | None = None`
 
 - **Parsing**
-  - Requires sheet. Must contain colon and two parseable A1 references; single cell can be written A1:A1. Keep cells whose coordinates are inside inclusive bounds; no blank filling. Reversed bounds are not normalized.
+  - Requires sheet. Accept `A1:H20` rectangles, `10:20` whole rows, and single `A1` cells (also `A1:A1`). Cell references accept upper/lowercase columns and optional `$` markers. Rows and columns are one-based and endpoints inclusive; require ascending bounds within A1:XFD1048576. Reject reversed, zero, malformed, qualified/multiple-sheet or out-of-range coordinates with ValueError. Whole-row ranges use columns A:XFD without blank filling. Chartsheets reject cell ranges.
+  - An explicit range includes all saved selected cells without the default 500-cell threshold. Omitted ranges use a [reading window](reading-window.md) in all densities, finishing the row that reaches 500 emitted cells. A selected sheet alone is a preview, not an unlimited full-sheet request.
   - In structural and semantic output, shared-formula dependents inside the range can resolve a master outside it; that master does not enter the selected grid. See [shared formulas](cells/shared-formula.md).
+  - A merge crossing the requested boundary does not expand the selection. `selection.windows[].merged_ranges` identifies the saved merge range, anchor and whether that anchor lies within the request, even if no saved cells occur inside the requested portion.
 
 ### `options`
 
@@ -91,10 +93,3 @@ One-shot sheet/range selection narrows cell materialization while retaining mini
 - **Parsing**
   - Reuses workbook metadata and relationship reading with the same package limits. Opens and closes its own package reader; does not load worksheets, shared strings, styles, or cell data.
   - Cell and resource counts are not inferred. Normal parse/session entry points retain their existing default body behavior.
-
-## Source references
-
-- [parse_xlsx](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/api.py)
-- [inspect_xlsx](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/inspection.py)
-- [parse_range](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/selection.py#L17)
-- [filter_rows](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/selection.py#L27)

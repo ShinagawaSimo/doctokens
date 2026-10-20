@@ -97,10 +97,3 @@ A `w:num` instance selects an abstract definition and owns an independent set of
 
 - **Absence and defaults**
   - Unresolved style: no link.
-
-
-## Source references
-
-- [NumberingParser](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/parser.py#L97)
-- [NumberingMap._level_for](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/parser.py#L42)
-- [NumberingInstance](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/numbering/models.py#L32)

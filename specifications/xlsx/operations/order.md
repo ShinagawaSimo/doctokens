@@ -33,10 +33,3 @@ Sort runs after selection, against the resulting column catalog.
 
 - **Parsing**
   - asc/desc only when supplied; default ascending. Ascending numbers precede strings; descending reverses both category and value. Sort keys are stable in request priority order.
-
-
-## Source references
-
-- [_resolve_order_specs](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L231)
-- [_apply_order_by](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_query_operations.py#L121)
-- [_order_key](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_query_operations.py#L133)

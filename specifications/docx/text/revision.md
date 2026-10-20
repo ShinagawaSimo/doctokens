@@ -76,10 +76,3 @@ The selected view determines which saved revision text participates in output.
 
 - **Absence and defaults**
   - Omitted.
-
-
-## Source references
-
-- [InlineParser._append_inserted_runs](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/inline.py#L223)
-- [InlineParser._append_deleted_run](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/inline.py#L249)
-- [_append_run_text](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx.py#L119)

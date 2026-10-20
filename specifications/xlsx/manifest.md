@@ -107,8 +107,3 @@
 
 - **Notes**
   - Parsed pivot tables.
-
-
-## Source references
-
-- [_parse_workbook](../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/runner.py#L34)

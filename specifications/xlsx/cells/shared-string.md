@@ -33,9 +33,3 @@ The shared-string index is the source si ordinal.
 
 - **Parsing**
   - Accept only 0 <= index < len(strings); invalid integer or bounds yields empty display text.
-
-
-## Source references
-
-- [_parse_shared_strings](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/metadata.py#L142)
-- [_cell_text](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/cells.py#L154)

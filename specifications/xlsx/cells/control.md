@@ -67,10 +67,3 @@ Discover XML bags in styles.xml and paths containing featurepropertybag; use bag
 
 - **Parsing**
   - Saved display text `TRUE` → state `true`; `FALSE` → state `false`; empty or other → state `empty`. The value retains the uppercase display text. Does not toggle or evaluate control.
-
-
-## Source references
-
-- [CellControlCatalog.from_package](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/features.py#L29)
-- [_parse_cell](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/cells.py#L41)
-- [_cell_text](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/plain.py#L62)

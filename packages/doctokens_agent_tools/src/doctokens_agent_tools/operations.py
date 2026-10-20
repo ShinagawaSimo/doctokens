@@ -189,18 +189,24 @@ class Operations:
         )
 
     def read_xlsx(self, document: Document, args: XlsxReadArgs) -> ToolResponse:
-        if not args.whole_document and args.sheet is None:
-            return self.presenter.metadata(document, self.inspect(document))
+        orientation = self.inspect(document)
+        sheets = cast(list[dict[str, Any]], orientation["sheets"])
+        sheet = args.sheet
+        if sheet is None:
+            sheet = next((item["name"] for item in sheets if item.get("kind", "worksheet") == "worksheet"), None)
+        extra = {"sheets": sheets, "selected_sheet": sheet}
+        if sheet is None:
+            return self.presenter.metadata(document, {"parts": [], **extra})
         key = document.id + ":" + json.dumps(args.model_dump(exclude={"path", "document_id", "options"}), sort_keys=True)
         cached = self.presenter.results.cached(key)
         if cached is not None:
-            return self.presenter.entries(document, [cached], extra={"cache_hit": True})
+            return self.presenter.entries(document, [cached], extra={**extra, "cache_hit": True})
         if isinstance(document.session, XlsxReadSession):
             session = self.xlsx_session(document)
-            result = session.render(density=args.density, sheet=args.sheet, range_spec=args.range_spec)
+            result = session.render(density=args.density, sheet=sheet, range_spec=args.range_spec)
         else:
             assert isinstance(document.options, XlsxOptions)
             result = parse_xlsx(
-                document.snapshot, density=args.density, sheet=args.sheet, range_spec=args.range_spec, options=document.options
+                document.snapshot, density=args.density, sheet=sheet, range_spec=args.range_spec, options=document.options
             )
-        return self.presenter.parsed(document, [result], cache_key=key, extra={"cache_hit": False})
+        return self.presenter.parsed(document, [result], cache_key=key, extra={**extra, "cache_hit": False})

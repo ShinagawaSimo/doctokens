@@ -47,8 +47,3 @@ Mention offsets are retained without editing comment text.
 
 - **Parsing**
   - Parse integer; missing/invalid omitted.
-
-
-## Source references
-
-- [_threaded_mentions](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/comments.py#L191)

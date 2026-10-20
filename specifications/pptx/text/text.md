@@ -65,10 +65,3 @@ Fields recurse into their children; they are not evaluated. A direct a:t under a
 
 - **Parsing**
   - Use [OMML conversion](../../common/equation.md); also store LaTeX as text for plain output. Empty conversion yields no run.
-
-
-## Source references
-
-- [shape_runs](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/runs.py#L52)
-- [paragraph_runs](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/runs.py#L106)
-- [_append_shape_text](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L151)

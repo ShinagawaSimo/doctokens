@@ -7,6 +7,7 @@ from xlsx_llm_parser import parse_xlsx
 from xlsx_llm_parser.plan import XlsxFeature, XlsxParsePlan
 
 FIXTURE = Path(__file__).resolve().parents[3] / "test_support/fixtures/xlsx/xlsx-empty.xlsx"
+VALUES = FIXTURE.with_name("xlsx-sparse.xlsx")
 
 
 class RangeReadingTests(unittest.TestCase):
@@ -23,8 +24,19 @@ class RangeReadingTests(unittest.TestCase):
             parse_xlsx(FIXTURE, sheet="NoSuch", range_spec="A1:B2")
 
     def test_invalid_range_raises(self) -> None:
-        with self.assertRaises(ValueError):
-            parse_xlsx(FIXTURE, sheet="Sheet1", range_spec="A1")  # no colon
+        for spec in ("", "A0", "A2:A1", "B1:A1", "20:10", "0:1", "A1:B", "XFE1", "A1048577", "Sheet1!A1"):
+            with self.subTest(spec=spec), self.assertRaises(ValueError):
+                parse_xlsx(FIXTURE, sheet="Sheet1", range_spec=spec)
+
+    def test_single_cell_and_rectangle_are_equivalent(self) -> None:
+        single = parse_xlsx(VALUES, sheet="Sheet1", range_spec="B2")
+        rectangle = parse_xlsx(VALUES, sheet="Sheet1", range_spec="B2:B2")
+        self.assertEqual(single.text, rectangle.text)
+
+    def test_whole_rows_and_full_width_rectangle_are_equivalent(self) -> None:
+        rows = parse_xlsx(VALUES, sheet="Sheet1", range_spec="2:5")
+        rectangle = parse_xlsx(VALUES, sheet="Sheet1", range_spec="A2:XFD5")
+        self.assertEqual(rows.text, rectangle.text)
 
 
 if __name__ == "__main__":

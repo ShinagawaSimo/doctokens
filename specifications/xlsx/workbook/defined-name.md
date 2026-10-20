@@ -61,11 +61,3 @@ Names retain their saved reference expressions without evaluation.
 
 - **Parsing**
   - Exactly "1" → true; otherwise false.
-
-
-## Source references
-
-- [_parse_workbook_xml](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/metadata.py#L32)
-- [_scope_sheet_name](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/metadata.py#L108)
-- [_append_workbook_metadata](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx_metadata.py#L14)
-- [_append_sheet_metadata](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx_metadata.py#L31)

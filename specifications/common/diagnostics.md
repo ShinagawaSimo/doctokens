@@ -108,10 +108,3 @@ Diagnostics are returned separately from document content.
 
 - **Absence and defaults**
   - `None` if no location is supplied.
-
-
-## Source references
-
-- [ParseReport](../../packages/ooxml_llm_core/src/ooxml_llm_core/models.py#L88)
-- [ParseWarning](../../packages/ooxml_llm_core/src/ooxml_llm_core/models.py#L47)
-- [locator.py](../../packages/ooxml_llm_core/src/ooxml_llm_core/locator.py)

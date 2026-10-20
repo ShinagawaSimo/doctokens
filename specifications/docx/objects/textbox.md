@@ -33,10 +33,3 @@ Text boxes preserve readable text without an internal paragraph/table tree.
 
 - **Parsing**
   - Copy drawing alt; structural omits it.
-
-
-## Source references
-
-- [_textbox_objects_from_nodes](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/objects.py#L192)
-- [_container_plain_text](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/objects.py#L307)
-- [_table_plain_text](../../../packages/docx_llm_parser/src/docx_llm_parser/parsing/modules/body/objects.py#L322)

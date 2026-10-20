@@ -46,17 +46,22 @@
 ### `sheet` and `range_spec`
 
 - **Processing**
-  - Without a selection, `read_xlsx` returns workbook orientation, not all cells.
-  - The initial index uses `inspect_xlsx`: workbook XML and its relationships, sheet names/kinds/visibility, date system, defined names, and external-link descriptions. It does not load shared strings, styles, or worksheets, and does not claim cell/resource counts.
-  - A sheet alone explicitly reads that whole sheet. A range requires a sheet; endpoints use the existing `A1:B2` syntax, including `A1:A1` for one cell.
+  - Without `sheet`, `read_xlsx` selects the first worksheet in saved workbook order and includes the sheet directory. Chartsheets are listed but skipped when choosing this default. A workbook without worksheets returns an empty `parts` list and `selected_sheet=null`. Explicit sheet names are exact and case-sensitive; reads never automatically cross into another sheet.
+  - Without `range_spec`, read a default preview: count emitted cells until reaching 500, finish that entire row, then stop. The final row may exceed 500 cells; a single row wider than 500 is returned in full. This applies to plain, structural and semantic. See [XLSX windows](../xlsx/reading-window.md) for density-specific counting and continuation.
+  - A range requires a sheet. Accept an inclusive rectangle (`A1:H20`), inclusive whole rows (`10:20`), or one cell (`A1`, also `A1:A1`). Whole rows cover all source columns without manufacturing missing cells. Explicit ranges are exact and bypass the default preview threshold; oversized text uses the existing result transport and storage limits.
+  - `inspect_document` remains the lightweight orientation operation before a full session is opened. It uses `inspect_xlsx`: workbook XML and its relationships, sheet names/kinds/visibility, date system, defined names, and external-link descriptions. It does not load shared strings, styles, or worksheets, and does not claim cell/resource counts.
   - Use a full session when already available; otherwise preserve the public one-shot sheet/range parse plan. Repeated identical selections use the byte-bounded result cache. Different ranges do not implicitly upgrade to a full workbook session.
+- **Output**
+  - `sheets` and `selected_sheet` accompany `parts`. Each part's `selection.windows` describes the requested range, returned coordinate bounds, emitted cell count, threshold, truncation, next source row/cell and crossing merged regions. These fields also accompany cached results and character fragments.
+  - For example, `next_row=73`, `next_cell="A73"` means the preview ended before source row 73. Continue explicitly with the same `document_id`, `sheet` and density, such as `range_spec="73:144"`. The caller chooses each interval; there is no opaque data cursor or implicit cross-call position.
+  - `read_result.next_offset` retrieves characters of the already selected result. It does not select additional rows. A complete explicit range has `truncated=false` and `next_row=null`, even when other rows exist outside that request.
 
 ### `whole_document`
 
 - **Default**
-  - `false`.
+  - `false` for DOCX/PPTX. This parameter does not exist for XLSX.
 - **Processing**
-  - `true` explicitly requests the full body. XLSX rejects a simultaneous sheet/range selection. DOCX/PPTX ignore their default window when this flag is true.
+  - `true` explicitly requests the DOCX/PPTX full body, ignoring their default window. XLSX rejects this argument as unknown; select one sheet and an explicit range instead.
 
 ### `options`
 

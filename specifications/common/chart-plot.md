@@ -47,9 +47,3 @@ Plot membership is retained for combination charts.
 
 - **Parsing**
   - Global series indices in traversal order. ChartEx series with the same layoutId share one plot record.
-
-
-## Source references
-
-- [ChartParser._parse_chartml](../../packages/ooxml_llm_core/src/ooxml_llm_core/chart_ml.py#L142)
-- [ChartParser._parse_chartex](../../packages/ooxml_llm_core/src/ooxml_llm_core/chart_ml.py#L207)

@@ -50,8 +50,3 @@ Media placeholders do not decode audio or video.
 
 - **Parsing**
   - Copy target string; no playback.
-
-
-## Source references
-
-- [SlideObjectParser._media_shape](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/objects.py#L73)

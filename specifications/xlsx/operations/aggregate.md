@@ -49,10 +49,3 @@ Aggregates run only inside a requested grouping operation.
 
 - **Parsing**
   - Truthy alias wins; otherwise op_column. Colliding aliases can overwrite results.
-
-
-## Source references
-
-- [_resolve_aggregates](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/query.py#L211)
-- [_update_group](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_query_operations.py#L60)
-- [_finalize_averages](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/_query_operations.py#L95)

@@ -33,10 +33,3 @@ Connectors describe relationships between retained slide shapes.
 
 - **Parsing**
   - Same resolution as fromShape.
-
-
-## Source references
-
-- [SlideParser._connector_shape](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/scanner.py#L231)
-- [_resolve_connector_endpoints](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/modules/slides/shape_details.py#L17)
-- [_append_shape](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L54)

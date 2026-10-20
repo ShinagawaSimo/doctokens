@@ -61,10 +61,3 @@ Row properties are copied to parsed cells and projected from the first cell of e
 
 - **Parsing**
   - Store only if outlineLevel is nonzero and collapsed == "1".
-
-
-## Source references
-
-- [_row_attrs](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/cells.py#L30)
-- [_apply_row_attrs](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/worksheets/cells.py#L228)
-- [_append_grid](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L65)

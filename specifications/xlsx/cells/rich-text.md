@@ -79,9 +79,3 @@ Retain all runs only when at least one has formatting. Wrapper order is hyperlin
 
 - **Parsing**
   - Skip empty or 00000000; strip first 2 characters from 8-character values; add #. No theme/indexed/tint resolution on rich runs.
-
-
-## Source references
-
-- [_parse_shared_strings](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/parsing/modules/workbook/metadata.py#L142)
-- [_append_cell_text](../../../packages/xlsx_llm_parser/src/xlsx_llm_parser/rendering/dtx.py#L215)

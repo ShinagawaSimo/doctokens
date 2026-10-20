@@ -39,7 +39,7 @@ class StreamingTests(unittest.TestCase):
 
 
 class TruncationTests(unittest.TestCase):
-    """Large sheets produce head+tail with truncated attribute."""
+    """Legacy threshold fixture pending the listed real xlsx-preview.xlsx."""
 
     def _make_sheet(self, num_rows: int) -> bytes:
         rows_xml = [f'<row r="{r}"><c r="A{r}" t="inlineStr"><is><t>Row{r}</t></is></c></row>' for r in range(1, num_rows + 1)]
@@ -81,11 +81,27 @@ class TruncationTests(unittest.TestCase):
     def test_large_sheet_windowed(self) -> None:
         """600 rows exceeds cell budget: window plus truncated marker."""
         data = self._make_sheet(600)
-        output = parse_xlsx(data).text
-        # Shows first rows (within budget) and marks the grid as truncated.
-        self.assertIn('<tr number="1">', output)
-        self.assertNotIn('<tr number="600">', output)
-        self.assertIn("truncated", output)
+        for density in ("plain", "structural", "semantic"):
+            with self.subTest(density=density):
+                result = parse_xlsx(data, density=density, sheet="Data")
+                self.assertEqual(
+                    result.selection["windows"],
+                    [
+                        {
+                            "sheet": "Data",
+                            "requested_range": None,
+                            "returned_range": "A1:A500",
+                            "cell_count": 500,
+                            "cell_limit": 500,
+                            "truncated": True,
+                            "next_row": 501,
+                            "next_cell": "A501",
+                            "merged_ranges": [],
+                        }
+                    ],
+                )
+                self.assertNotIn("Row600", result.text)
+                self.assertIn("501", result.text)  # continuation is visible even without result metadata
 
     def test_range_reading_not_truncated(self) -> None:
         """render_range always shows full results, no truncation."""

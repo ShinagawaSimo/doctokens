@@ -213,10 +213,3 @@ A control supplies metadata around its saved content; it does not perform bindin
 
 - **Parsing**
   - Current bool helper returns false for absent val and false tokens; no editing action.
-
-
-## Source references
-
-- [parse_content_control](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/content_controls.py#L28)
-- [_parse_options](../../../packages/docx_llm_parser/src/docx_llm_parser/ooxml/content_controls.py#L97)
-- [_append_controls](../../../packages/docx_llm_parser/src/docx_llm_parser/rendering/dtx_content.py#L62)

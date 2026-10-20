@@ -61,9 +61,3 @@ Semantic parsing/session can OCR referenced embedded image assets when an adapte
 
 - **Parsing**
   - Emit error marker; provider diagnostics remain in IR. See [OCR](../../common/ocr.md).
-
-
-## Source references
-
-- [PptxParser._run_ocr](../../../packages/pptx_llm_parser/src/pptx_llm_parser/parsing/runner.py#L231)
-- [_append_ocr](../../../packages/pptx_llm_parser/src/pptx_llm_parser/rendering/dtx.py#L225)

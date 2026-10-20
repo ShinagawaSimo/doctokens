@@ -14,12 +14,13 @@ from pydantic import ValidationError
 
 from .catalog import OPERATIONS, definitions
 from .config import RuntimeConfig
+from .contracts import result_limits
 from .documents import DocumentStore
-from .models import ToolDefinition, ToolError, ToolResponse
+from .models import BinaryAttachment, ToolDefinition, ToolError, ToolResponse
 from .operations import Operations
 from .presentation import Presenter
 from .results import ResultStore
-from .schemas import ResultArgs, SourceArgs
+from .schemas import BaseSourceArgs, ResultArgs, RuntimeInfoArgs
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ class ToolRuntime:
         self.close()
 
     def list_tools(self) -> list[ToolDefinition]:
-        return definitions()
+        return definitions(self.config)
 
     def execute(self, tool_name: str, arguments: dict[str, Any]) -> ToolResponse:
         with self._lock:
@@ -72,12 +73,25 @@ class ToolRuntime:
                 args = definition[0].model_validate(arguments)
                 self._documents.expire()
                 self._results.expire(set(self._documents.documents))
+                if isinstance(args, RuntimeInfoArgs):
+                    return ToolResponse(
+                        {
+                            "allowed_roots": [str(root) for root in self.config.allowed_roots],
+                            "result_limits": result_limits(self.config),
+                            "ocr_available": self.config.ocr_provider is not None,
+                            "documents": len(self._documents.documents),
+                            "sessions": sum(d.session is not None for d in self._documents.documents.values()),
+                            "snapshot_bytes": self._documents.bytes,
+                            "result_bytes": self._results.bytes,
+                            "configuration": "fixed for this runtime; restart to apply host configuration changes",
+                        }
+                    )
                 if isinstance(args, ResultArgs):
                     response = self._presenter.fragment(args.result_id, args.offset, args.length)
                     identifier = response.data["document_id"]
                     self._documents.documents[identifier].touched = time.monotonic()
                     return response
-                assert isinstance(args, SourceArgs)
+                assert isinstance(args, BaseSourceArgs)
                 if tool_name == "release_document":
                     document = self._documents.lookup(args)
                     if document is None:
@@ -89,7 +103,10 @@ class ToolRuntime:
                 with self._documents.acquire(args) as document:
                     return self._operations.run(tool_name, document, args)
             except ValidationError as exc:
-                return ToolResponse(error={"code": "INVALID_ARGUMENT", "message": str(exc)})
+                errors = exc.errors(include_url=False, include_input=False, include_context=False)
+                details = [{"field": ".".join(map(str, error["loc"])), "message": error["msg"]} for error in errors[:8]]
+                message = "; ".join(f"{item['field'] or 'arguments'}: {item['message']}" for item in details[:3])
+                return ToolResponse(error={"code": "INVALID_ARGUMENT", "message": message, "details": details})
             except ToolError as exc:
                 return ToolResponse(error={"code": exc.code, "message": str(exc)})
             except PackageError as exc:
@@ -110,6 +127,24 @@ class ToolRuntime:
         if self._closed:
             return ToolResponse(error={"code": "RUNTIME_CLOSED", "message": "tool runtime is closed"})
         return await asyncio.get_running_loop().run_in_executor(self._executor, self.execute, tool_name, arguments)
+
+    def read_result_resource(self, identifier: str) -> BinaryAttachment:
+        """Explicit binary-resource transport sharing result and document lifetimes."""
+        with self._lock:
+            if self._closed:
+                raise ToolError("RUNTIME_CLOSED", "tool runtime is closed")
+            self._documents.expire()
+            self._results.expire(set(self._documents.documents))
+            result = self._results.get(identifier)
+            if not isinstance(result.value, bytes):
+                raise ToolError("INVALID_ARGUMENT", "resource URI requires a binary result")
+            self._documents.documents[result.document_id].touched = time.monotonic()
+            return BinaryAttachment(result.value, result.metadata.get("media_type", "application/octet-stream"))
+
+    async def aread_result_resource(self, identifier: str) -> BinaryAttachment:
+        if self._closed:
+            raise ToolError("RUNTIME_CLOSED", "tool runtime is closed")
+        return await asyncio.get_running_loop().run_in_executor(self._executor, self.read_result_resource, identifier)
 
     def close(self) -> None:
         with self._lock:

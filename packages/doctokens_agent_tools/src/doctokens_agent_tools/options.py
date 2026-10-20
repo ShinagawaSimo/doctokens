@@ -11,10 +11,10 @@ from xlsx_llm_parser import ParseOptions as XlsxOptions
 
 from .config import RuntimeConfig
 from .models import ToolError
-from .schemas import DocumentOptions
+from .schemas import BaseOptions
 
 
-def parser_options(format_name: str, options: DocumentOptions, config: RuntimeConfig) -> DocxOptions | PptxOptions | XlsxOptions:
+def parser_options(format_name: str, options: BaseOptions, config: RuntimeConfig) -> DocxOptions | PptxOptions | XlsxOptions:
     values: dict[str, Any] = asdict(config.package_options)
     selected = options.model_dump(exclude_none=True)
     enabled = selected.pop("enable_ocr")

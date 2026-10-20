@@ -16,6 +16,9 @@ MEDIA_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relation
 _INDEX_TYPES = {
     IMAGE_REL_TYPE: ("image", "img"),
     MEDIA_REL_TYPE: ("media", "media"),
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video": ("media", "media"),
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio": ("media", "media"),
+    "http://schemas.microsoft.com/office/2007/relationships/media": ("media", "media"),
 }
 
 
@@ -37,6 +40,7 @@ class AssetExtractor:
         assets: list[ImageAsset] = []
         lookup: AssetLookup = {}
         counters: dict[str, int] = {}
+        media_targets: dict[tuple[str, str], ImageAsset] = {}
         for rel_type, (asset_type, id_prefix) in _INDEX_TYPES.items():
             for record in self._relationships.by_type(rel_type):
                 counters[id_prefix] = counters.get(id_prefix, 0) + 1
@@ -66,6 +70,16 @@ class AssetExtractor:
                         "zipPath": zip_path,
                         "contentType": self._content_type_for_part(zip_path),
                     }
+                if asset_type == "media":
+                    key = (asset["source"], asset.get("zipPath") or asset.get("href", ""))
+                    previous = media_targets.get(key)
+                    if previous is not None:
+                        counters[id_prefix] -= 1
+                        previous["relationshipCount"] += 1
+                        lookup[(record.source_part, record.id)] = previous
+                        continue
+                    asset["relationshipCount"] = 1
+                    media_targets[key] = asset
                 assets.append(asset)
                 lookup[(record.source_part, record.id)] = asset
         return assets, lookup

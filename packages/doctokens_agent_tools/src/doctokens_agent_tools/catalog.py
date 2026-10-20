@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from . import schemas as s
+from .config import RuntimeConfig
+from .contracts import input_schema, result_limits
 from .models import ToolDefinition
 
 OPERATIONS: dict[str, tuple[type[s.Arguments], str]] = {
-    "inspect_document": (s.SourceArgs, "Inspect saved-page hints, slides, or a lightweight workbook sheet index."),
+    "get_runtime_info": (s.RuntimeInfoArgs, "Inspect active allowed roots, result budgets, OCR availability and cache usage."),
+    "inspect_document": (s.InspectArgs, "Inspect saved-page hints, slides, or a stable lightweight workbook sheet index."),
     "read_docx": (
         s.DocxReadArgs,
         "Read a saved-page hint interval, default first 3 pages. These are not newly computed Word layout pages.",
@@ -59,8 +62,23 @@ OUTPUT_SCHEMA: dict[str, object] = {
 }
 
 
-def definitions() -> list[ToolDefinition]:
-    return [
-        ToolDefinition(name, description, model.model_json_schema(), dict(OUTPUT_SCHEMA))
-        for name, (model, description) in OPERATIONS.items()
-    ]
+def definitions(config: RuntimeConfig) -> list[ToolDefinition]:
+    tools = []
+    for name, (model, description) in OPERATIONS.items():
+        if issubclass(model, s.BaseSourceArgs):
+            description += (
+                " Provide exactly one of path/document_id. With document_id options are pinned; omit options or use {}."
+            )
+        if name == "query_xlsx_data":
+            description += (
+                " Provide table_id OR all of sheet + range_spec + header_row. Example: "
+                '{"path":"book.xlsx","sheet":"Data","range_spec":"A1:C20","header_row":1}. '
+                "Headers are never guessed."
+            )
+        if name == "read_result":
+            limits = result_limits(config)
+            description += " Current host limits: " + ", ".join(f"{key}={value}" for key, value in limits.items()) + "."
+        if name.startswith("render_"):
+            description += " Returns object data, not a visual image."
+        tools.append(ToolDefinition(name, description, input_schema(model, config), dict(OUTPUT_SCHEMA)))
+    return tools

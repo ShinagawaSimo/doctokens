@@ -13,19 +13,36 @@ class Arguments(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
 
-class DocumentOptions(Arguments):
+class BaseOptions(Arguments):
+    enable_ocr: bool = False
+
+
+class DocxOptions(BaseOptions):
     revision_mode: Literal["final", "original", "review"] | None = None
     preserve_empty_paragraphs: bool | None = None
     include_runs: bool | None = None
     include_raw_hints: bool | None = None
+
+
+class XlsxOptions(BaseOptions):
     locale: str | None = Field(default=None, min_length=1)
-    enable_ocr: bool = False
+    enable_ocr: Literal[False] = False
 
 
-class SourceArgs(Arguments):
+class PptxOptions(BaseOptions):
+    pass
+
+
+class DocumentOptions(DocxOptions):
+    """Options for tools accepting all three formats; applicability is checked by suffix."""
+
+    locale: str | None = Field(default=None, min_length=1)
+
+
+class BaseSourceArgs(Arguments):
     path: str | None = Field(default=None, min_length=1, description="Local Office file within an allowed root.")
     document_id: str | None = Field(default=None, min_length=1, description="Pinned snapshot ID returned by a previous call.")
-    options: DocumentOptions = Field(default_factory=DocumentOptions)
+    options: BaseOptions = Field(default_factory=BaseOptions)
 
     @model_validator(mode="after")
     def validate_source(self) -> Self:
@@ -36,7 +53,22 @@ class SourceArgs(Arguments):
         return self
 
 
-class ReadArgs(SourceArgs):
+class SourceArgs(BaseSourceArgs):
+    options: DocumentOptions = Field(
+        default_factory=DocumentOptions,
+        description="DOCX: revision_mode, preserve_empty_paragraphs, include_runs, include_raw_hints, enable_ocr; "
+        "XLSX: locale; PPTX: enable_ocr. OCR needs a host provider. document_id pins options; use path to change them.",
+    )
+
+
+class InspectArgs(SourceArgs):
+    full_parse: bool = Field(
+        default=False,
+        description="XLSX: explicitly load the full session and report. Default always returns the lightweight index.",
+    )
+
+
+class ReadArgs(BaseSourceArgs):
     density: Density = "structural"
     whole_document: bool = Field(
         default=False, description="Explicitly read all content; large results are retrieved separately."
@@ -44,16 +76,19 @@ class ReadArgs(SourceArgs):
 
 
 class DocxReadArgs(ReadArgs):
+    options: DocxOptions = Field(default_factory=DocxOptions)
     page_start: int = Field(default=1, ge=1)
     page_end: int | None = Field(default=None, ge=1, description="Inclusive end; defaults to start + 2.")
 
 
 class PptxReadArgs(ReadArgs):
+    options: PptxOptions = Field(default_factory=PptxOptions)
     slide_start: int = Field(default=1, ge=1)
     slide_end: int | None = Field(default=None, ge=1)
 
 
-class XlsxReadArgs(SourceArgs):
+class XlsxReadArgs(BaseSourceArgs):
+    options: XlsxOptions = Field(default_factory=XlsxOptions)
     density: Density = "structural"
     sheet: str | None = Field(default=None, min_length=1, description="Exact sheet name; defaults to the first worksheet.")
     range_spec: str | None = Field(
@@ -77,7 +112,7 @@ class BinaryArgs(SourceArgs):
     resource_id: str = Field(min_length=1)
 
 
-class ResourceArgs(SourceArgs):
+class ResourceArgs(BaseSourceArgs):
     resource_id: str = Field(min_length=1)
 
 
@@ -85,6 +120,7 @@ Aggregate = Literal["sum", "count", "avg", "min", "max"]
 
 
 class DocxResourceArgs(ResourceArgs):
+    options: DocxOptions = Field(default_factory=DocxOptions)
     kind: Literal["table", "chart", "smartart"]
     rows: str | None = None
     columns: list[str] | None = None
@@ -93,6 +129,7 @@ class DocxResourceArgs(ResourceArgs):
 
 
 class PptxResourceArgs(ResourceArgs):
+    options: PptxOptions = Field(default_factory=PptxOptions)
     kind: Literal["table", "chart", "smartart"]
     rows: str | None = None
     columns: list[int] | None = None
@@ -101,10 +138,12 @@ class PptxResourceArgs(ResourceArgs):
 
 
 class XlsxResourceArgs(ResourceArgs):
+    options: XlsxOptions = Field(default_factory=XlsxOptions)
     kind: Literal["chart", "pivot_table"]
 
 
-class FindArgs(SourceArgs):
+class FindArgs(BaseSourceArgs):
+    options: XlsxOptions = Field(default_factory=XlsxOptions)
     query: str
     sheets: list[str] | None = None
     kind: Literal["value", "formula", "comment", "hyperlink", "definedName"] | None = None
@@ -128,10 +167,11 @@ class Order(Arguments):
     direction: Literal["asc", "desc"] = "asc"
 
 
-class QueryArgs(SourceArgs):
-    table_id: str | None = None
-    sheet: str | None = None
-    range_spec: str | None = None
+class QueryArgs(BaseSourceArgs):
+    options: XlsxOptions = Field(default_factory=XlsxOptions)
+    table_id: str | None = Field(default=None, min_length=1)
+    sheet: str | None = Field(default=None, min_length=1)
+    range_spec: str | None = Field(default=None, min_length=1)
     header_row: int | None = Field(default=None, ge=1)
     select: list[str] | None = None
     where: list[Where] | None = None
@@ -155,3 +195,7 @@ class ResultArgs(Arguments):
     result_id: str = Field(min_length=1)
     offset: int = Field(default=0, ge=0)
     length: int | None = Field(default=None, gt=0)
+
+
+class RuntimeInfoArgs(Arguments):
+    pass

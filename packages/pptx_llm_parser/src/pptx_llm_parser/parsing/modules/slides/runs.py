@@ -119,7 +119,7 @@ def paragraph_runs(
     pending = ""
     for child in p:
         name = local_name(child.tag)
-        if name == "r":
+        if name in {"r", "fld"}:
             if pending:
                 runs.append({"text": pending})
                 pending = ""
@@ -141,25 +141,12 @@ def paragraph_runs(
             pending += "\n"
         elif name == "tab":
             pending += "\t"
-        elif name == "fld":
-            if pending:
-                runs.append({"text": pending})
-                pending = ""
-            runs.extend(
-                paragraph_runs(
-                    child,
-                    part,
-                    warnings,
-                    theme,
-                    color_map,
-                    links,
-                    base_format,
-                    include_formatting=include_formatting,
-                )
-            )
         elif name in {"pPr", "endParaRPr"}:
             continue
         elif name in {"oMath", "oMathPara"}:
+            if pending:
+                runs.append({"text": pending})
+                pending = ""
             latex = omath_to_latex(child)
             if latex:
                 runs.append({"text": latex, "equation": latex})

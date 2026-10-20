@@ -31,10 +31,11 @@ with ToolRuntime(RuntimeConfig(allowed_roots=(Path("documents"),))) as runtime:
 
 | Tool | Operation |
 | --- | --- |
-| `inspect_document` | Public navigation or the lightweight workbook index |
+| `get_runtime_info` | Active roots, result budgets, OCR availability and cache usage |
+| `inspect_document` | Public navigation; stable lightweight XLSX index or explicit full_parse report |
 | `read_docx` | Saved-page hint interval or explicit full document |
 | `read_pptx` | Slide interval or explicit full presentation |
-| `read_xlsx` | Workbook index, sheet, range, or explicit full workbook |
+| `read_xlsx` | One worksheet; bounded default preview or exact cell/row range with sheet index |
 | `list_document_resources` | Full-session descriptors and supported operations |
 | `read_resource` | Original embedded image/media bytes |
 | `render_docx_resource` | Table, chart, or SmartArt DTX; table columns use header text |

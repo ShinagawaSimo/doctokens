@@ -98,22 +98,28 @@ class Presenter:
     def binary(self, document: Document, value: bytes, media_type: str) -> ToolResponse:
         metadata = {"media_type": media_type, "unit": "bytes"}
         entry = self.results.put(document.id, value, metadata)
-        data = {**identity(document), **metadata, "result_id": entry.id, "length": len(value)}
+        data = {
+            **identity(document),
+            **metadata,
+            "result_id": entry.id,
+            "length": len(value),
+            "resource_uri": f"doctokens://result/{entry.id}",
+        }
         if len(value) <= self.config.max_inline_binary_bytes:
             return ToolResponse(data, attachments=(BinaryAttachment(value, media_type),))
         data["next_action"] = "read_result"
         return ToolResponse(data)
 
     def fragment(self, identifier: str, offset: int, length: int | None) -> ToolResponse:
-        entry = self.results.get(identifier)
-        amount = self.config.result_chunk_chars if length is None else length
+        amount = min(self.config.result_chunk_chars, self.config.max_chunk_size) if length is None else length
         if amount > self.config.max_chunk_size:
             raise ToolError("INVALID_ARGUMENT", f"length cannot exceed {self.config.max_chunk_size}")
+        entry = self.results.get(identifier)
         if offset > len(entry.value):
             raise ToolError("INVALID_ARGUMENT", "offset exceeds the result length")
         amount = min(amount, self.config.reply_chars)
         if isinstance(entry.value, bytes):
-            amount = min(amount, max(1, self.config.reply_chars * 3 // 4))
+            amount = min(amount, self.config.reply_chars // 4 * 3)
         value = entry.value[offset : offset + amount]
         next_offset = offset + len(value)
         data = {

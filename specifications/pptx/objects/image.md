@@ -4,6 +4,13 @@
 
 Pictures resolve the first descendant blip against the asset index.
 
+OLE graphic frames retain their saved `p:oleObj/p:pic` preview, using a direct
+representation or `mc:Fallback` for the OLE/VML compatibility form. Preview
+images add `kind="ole-preview"` and `progid` from `progId`, falling back to the
+object name or OLE. If no picture is saved, retain a descriptive embedded shape.
+Emit `OLE_OBJECT_NOT_PARSED` because the embedded program/legacy equation itself
+is not decoded or executed. A preview is not reconstructed equation text.
+
 ## Fields
 
 ### `assetId`

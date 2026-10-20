@@ -19,6 +19,9 @@ Images and media are indexed separately without eager binary extraction.
 
 - **Parsing**
   - img1... / media1...; increment before validation, so missing parts leave gaps.
+  - Preserve relationship-based image ids. For media, map repeated internal parts
+    or exact external targets to the first allocated media id and share that id
+    across their owning-part/relationship lookup entries.
 
 ### `type`
 
@@ -26,7 +29,8 @@ Images and media are indexed separately without eager binary extraction.
   - Resource kind.
 
 - **OOXML**
-  - Relationship type image/media.
+  - Image or legacy media relationships; standard audio/video relationships and
+    `http://schemas.microsoft.com/office/2007/relationships/media` are also media.
 
 - **IR**
   - `str`

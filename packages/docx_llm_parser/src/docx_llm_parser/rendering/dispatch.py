@@ -9,6 +9,7 @@ from ..core.enums import Density
 from ..core.models import DocumentManifest, ParsedDocument
 from .common.pages import iter_page_blocks
 from .objects.resources import render_resource, table_groups
+from .window_assets import referenced_image_ids
 
 __all__ = [
     "build_manifest",
@@ -50,7 +51,7 @@ def render_page_window(
         start_page = total_pages
     elif page > total_pages:
         empty_document = dataclasses.replace(parsed_document, blocks=[], headers=[], footers=[], comments=[])
-        return "".join(iter_output(empty_document, resolved_density))
+        return _window_output(empty_document, resolved_density)
     else:
         start_page = page
 
@@ -59,7 +60,7 @@ def render_page_window(
         # Hole pages (multiple consecutive breaks) contain no blocks; return
         # an empty window instead of silently falling back to the whole document.
         empty_document = dataclasses.replace(parsed_document, blocks=[], headers=[], footers=[], comments=[])
-        return "".join(iter_output(empty_document, resolved_density))
+        return _window_output(empty_document, resolved_density)
 
     page_blocks = list(iter_page_blocks(parsed_document))
     selected_pages = set(range(start_page, end_page + 1))
@@ -77,7 +78,13 @@ def render_page_window(
         footers=[],
         comments=[],
     )
-    return "".join(iter_output(selected_document, resolved_density))
+    return _window_output(selected_document, resolved_density)
+
+
+def _window_output(document: ParsedDocument, density: Density) -> str:
+    used = referenced_image_ids(document)
+    selected = dataclasses.replace(document, assets=[asset for asset in document.assets if asset["id"] in used])
+    return "".join(iter_output(selected, density))
 
 
 def build_manifest(parsed_document: ParsedDocument) -> DocumentManifest:

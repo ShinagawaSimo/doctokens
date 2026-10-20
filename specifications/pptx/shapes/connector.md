@@ -19,6 +19,8 @@ Connectors describe relationships between retained slide shapes.
 
 - **Parsing**
   - Resolve source drawing cNvPr ID to parsed shape ID; remove unresolved endpoint; update after final renumbering.
+  - Match the target primary element's `shape-id` in the same slide. Do not
+    resolve this field against an image/chart/media resource `id`.
 
 ### `toShape`
 

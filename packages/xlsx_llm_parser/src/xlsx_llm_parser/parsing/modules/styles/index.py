@@ -120,12 +120,12 @@ class FormatIndex:
 
     def style_attrs(self, style_index: int | None) -> str:
         """Return semantic font/fill attributes for a cell."""
-        if style_index is None or style_index >= len(self._cell_formats):
+        if style_index is None or not 0 <= style_index < len(self._cell_formats):
             return ""
         if style_index not in self._style_attrs_cache:
             _num_fmt_id, _fmt_code, font_id, fill_id, _locked, _hidden = self._cell_formats[style_index]
             parts: list[str] = []
-            if font_id < len(self._fonts):
+            if 0 <= font_id < len(self._fonts):
                 font = self._fonts[font_id]
                 if font.get("bold"):
                     parts.append("bold")
@@ -136,7 +136,7 @@ class FormatIndex:
                 color = font.get("color")
                 if color and color.upper() != "#000000":
                     parts.append(f"color={color}")
-            if fill_id < len(self._fills):
+            if 0 <= fill_id < len(self._fills):
                 fill = self._fills[fill_id]
                 if fill.get("fill"):
                     parts.append(f"fill={fill['fill']}")
@@ -145,7 +145,7 @@ class FormatIndex:
 
     def protection_attrs(self, style_index: int | None) -> str:
         """Return non-default protection attributes for a cell style."""
-        if style_index is None or style_index >= len(self._cell_formats):
+        if style_index is None or not 0 <= style_index < len(self._cell_formats):
             return ""
         _num_fmt_id, _fmt_code, _font_id, _fill_id, locked, formula_hidden = self._cell_formats[style_index]
         parts: list[str] = []

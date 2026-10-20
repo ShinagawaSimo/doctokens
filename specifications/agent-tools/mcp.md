@@ -16,9 +16,15 @@ The equivalent module command is `python -m doctokens_agent_tools.mcp --root ...
 
 - **Discovery**
   - `tools/list` exposes the shared catalog and generated input JSON Schemas. Body tools expose the `plain`, `structural`, and `semantic` density enum.
+  - Schemas include source/query combinations, format-specific options and the
+    active host's result budget. `get_runtime_info` provides active configuration.
 - **Calls**
   - `tools/call` uses the same strict validation and execution as `ToolRuntime.execute`, including stable error codes.
   - JSON responses are returned as both `structuredContent` and a compatibility text content block. Inline binary bytes appear separately as native content, not inside structured JSON.
+  - Large binary responses provide resource links. `resources/read` accepts only
+    issued binary-result URIs and returns the original bytes on explicit request;
+    URI lifetime follows the stored result and snapshot. The shared resource list
+    is empty: callers discover URIs from their own binary tool responses.
 - **Ownership**
   - One server connection owns one runtime. EOF, shutdown, or interruption releases its sessions and temporary snapshots. Logs go to stderr; stdout contains protocol messages only.
 - **Transport**

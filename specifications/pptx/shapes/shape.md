@@ -41,6 +41,24 @@ Retain textless shapes when they have alt, title, link, fromShape, or toShape; a
 - **Diagnostics**
   - `UNSUPPORTED_SHAPE_TYPE`, `GRAPHIC_FRAME_MISSING_DATA` skip unsupported frames/shapes.
 
+### `shape-id`
+
+- **Output**
+  - `@shape-id` on every retained source shape's primary element in structural
+    and semantic output, including text, pictures, tables, charts, SmartArt,
+    standalone media and descriptive shapes.
+- **IR**
+  - `ShapeBlock.id: str`; the same compact slide-local id used by connectors.
+- **Parsing**
+  - Keep the existing per-slide allocation. This id is scoped by its slide and
+    is not a document resource id. Existing `@id` values retain their previous
+    behavior: object elements may use image/chart/SmartArt/media resource ids.
+  - A picture's companion media element refers to the primary shape through
+    `@owner-shape`; it does not create a second source shape or duplicate `shape-id`.
+- **References**
+  - Connector `from-shape`/`to-shape` identify `shape-id`, even when the target's
+    `id` contains a resource id or the target's structural text has no `id`.
+
 ### `name`
 
 - **Output**

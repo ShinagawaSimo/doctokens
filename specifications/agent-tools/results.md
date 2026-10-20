@@ -27,10 +27,16 @@
   - Offset is zero-based and nonnegative; length is positive.
 - **Default**
   - Requested chunk length: 8,000. Maximum requested length: 32,000, further bounded by reply budget.
+  - These are host defaults. `tools/list` publishes the current maximum in the
+    length schema and description and the current default/effective budgets in
+    `x-doctokens-result-limits`; `get_runtime_info` returns the same values.
 - **Processing**
   - Text uses Python Unicode characters; binary uses bytes. Text chunks may split XML tags and always declare `fragment=true`, retaining the original syntax metadata.
   - `next_offset=null` marks the end. Joining text chunks in offset order reproduces the complete stored text without normalization.
   - Binary fragments declare `encoding="base64"`; decode each fragment then join bytes. Bounds beyond the result end are rejected; an offset exactly at end returns an empty final fragment.
+  - An omitted length is clamped to the configured maximum. Effective text length
+    is at most `min(max_chunk_size, reply_chars)`. Effective binary length is at
+    most `min(max_chunk_size, floor(reply_chars/4)*3)`, preserving Base64's four-character groups.
 
 ### Binary attachments
 
@@ -41,11 +47,18 @@
 - **Processing**
   - Prefer descriptor content type, then the package-part extension, then `application/octet-stream`.
   - MCP emits supported PNG/JPEG/WebP/GIF as native image content and other small binary values as embedded blob resources. Direct callers receive `BinaryAttachment` objects.
+  - Binary descriptors also return a `doctokens://result/<result_id>` URI. Large
+    binary responses include an MCP resource link; an explicit resource read
+    retrieves original bytes in one transfer. `read_result` remains available
+    for bounded transfer. URI reads share the same byte-bounded storage, expiry
+    and document lifetime; they never resolve arbitrary paths or download external targets.
 
 ### Errors
 
 - **Output**
   - Stable `error.code` and explanatory `error.message`; MCP also sets `isError=true`.
+  - Argument validation gives a concise message and up to eight field/message
+    `details` records, without echoing submitted input values or a Pydantic traceback.
 - **Codes**
   - `INVALID_ARGUMENT`, `UNKNOWN_TOOL`, `PATH_NOT_ALLOWED`, `DOCUMENT_NOT_FOUND`, `UNSUPPORTED_FORMAT`, `FORMAT_MISMATCH`.
   - `SOURCE_CHANGED`, `DOCUMENT_EXPIRED`, `RESULT_EXPIRED`, `DOCUMENT_TOO_LARGE`, `RESULT_TOO_LARGE`, `CAPACITY_EXCEEDED`.

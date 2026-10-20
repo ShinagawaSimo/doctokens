@@ -86,6 +86,8 @@ class SlideTextParsingTests(unittest.TestCase):
             (connector_node.get("id"), connector_node.get("from-shape"), connector_node.get("to-shape")),
             ("s3", "s1", "s2"),
         )
+        for root in (structural_root, semantic_root):
+            self.assertEqual([node.get("shape-id") for node in root.find("slide")], ["s1", "s2", "s3"])
 
 
 if __name__ == "__main__":

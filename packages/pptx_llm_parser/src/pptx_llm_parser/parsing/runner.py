@@ -28,6 +28,7 @@ from ..diagnostics import record_metrics
 from ..ooxml.inheritance import LayoutMasterResolver
 from ..ooxml.theme import ThemeParser
 from ..plan import PptxFeature, PptxParsePlan
+from .manifest import presentation_manifest
 from .modules.ancillary.parts import CommentsParser, NotesParser
 from .modules.resources.assets import AssetExtractor
 from .modules.resources.objects import EmbeddedObjectExtractor
@@ -119,15 +120,7 @@ class PptxParser:
         parsed_presentation.report = ParseReport(
             "pptx",
             1,
-            {
-                "slideCount": len(parsed_presentation.slides),
-                "shapeCount": sum(len(slide["shapes"]) for slide in parsed_presentation.slides),
-                "imageCount": sum(1 for asset in parsed_presentation.assets if asset.get("type") == "image"),
-                "mediaCount": sum(1 for asset in parsed_presentation.assets if asset.get("type") == "media"),
-                "chartCount": len(parsed_presentation.charts),
-                "smartartCount": len(parsed_presentation.smartarts),
-                "commentCount": len(parsed_presentation.comments),
-            },
+            presentation_manifest(parsed_presentation),
             tuple(parsed_presentation.warnings),
             parsed_presentation.metrics,
         )

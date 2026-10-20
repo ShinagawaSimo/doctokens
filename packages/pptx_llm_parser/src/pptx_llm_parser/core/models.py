@@ -87,6 +87,9 @@ class ShapeBlock(TypedDict, total=False):
     name: str
     text: str
     assetId: str
+    mediaId: str
+    mediaKind: str
+    embeddedType: str
     alt: str
     title: str
     href: str
@@ -127,6 +130,7 @@ class ImageAsset(TypedDict, total=False):
     contentType: str
     zipPath: str
     file: str
+    relationshipCount: int
 
 
 AssetLookup = dict[tuple[str, str], ImageAsset]

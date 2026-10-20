@@ -6,7 +6,11 @@ A text shape flattens its DrawingML paragraphs into one readable text body.
 
 ## Processing
 
-Fields recurse into their children; they are not evaluated. A direct a:t under a:fld is not handled as a run and reports UNSUPPORTED_PARAGRAPH_CHILD. Unknown paragraph children emit the same warning; pPr/endParaRPr are skipped. Pending breaks/tabs are flushed before ordinary runs and fields and at paragraph end; equation insertion does not flush them.
+An `a:fld` uses its saved direct `a:t` and `a:rPr` through the ordinary run
+reader, including inherited formatting and hyperlinks. Fields are not evaluated
+or renumbered; a missing cached text does not produce a guessed value. Unknown
+paragraph children emit `UNSUPPORTED_PARAGRAPH_CHILD`; pPr/endParaRPr are skipped.
+Pending breaks/tabs are flushed before runs, fields and equations and at paragraph end.
 
 ## Fields
 

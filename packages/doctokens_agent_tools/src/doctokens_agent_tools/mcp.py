@@ -7,6 +7,7 @@ import asyncio
 import base64
 import json
 import logging
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
 def build_server(runtime: ToolRuntime) -> Server[Any, Any]:
     from mcp import types
     from mcp.server import Server
+    from mcp.server.lowlevel.helper_types import ReadResourceContents
 
     server: Server[Any, Any] = Server(
         "doctokens",
@@ -32,7 +34,8 @@ def build_server(runtime: ToolRuntime) -> Server[Any, Any]:
             "Large results return result_id: call read_result until next_offset is null. "
             "Fragments are not standalone XML. DOCX/PPTX whole_document must be explicitly requested. "
             "XLSX defaults to the first worksheet and a 500-cell preview finishing the last row; "
-            "use sheet and range_spec for exact reads and selection.windows for the next source row."
+            "use sheet and range_spec for exact reads and selection.windows for the next source row. "
+            "Binary resource links support explicit full-byte MCP resource reads; read_result remains the chunked fallback."
         ),
     )
 
@@ -56,6 +59,17 @@ def build_server(runtime: ToolRuntime) -> Server[Any, Any]:
         content: list[
             types.TextContent | types.ImageContent | types.AudioContent | types.ResourceLink | types.EmbeddedResource
         ] = [types.TextContent(type="text", text=json.dumps(structured, ensure_ascii=False))]
+        if not response.attachments and (uri := response.data.get("resource_uri")):
+            content.append(
+                types.ResourceLink(
+                    type="resource_link",
+                    uri=AnyUrl(uri),
+                    name=response.data["result_id"],
+                    mimeType=response.data["media_type"],
+                    size=response.data["length"],
+                    description="Original binary bytes; expires with the result or document snapshot.",
+                )
+            )
         for attachment in response.attachments:
             data = base64.b64encode(attachment.data).decode("ascii")
             if attachment.media_type in {"image/png", "image/jpeg", "image/webp", "image/gif"}:
@@ -72,9 +86,23 @@ def build_server(runtime: ToolRuntime) -> Server[Any, Any]:
                 )
         return types.CallToolResult(content=content, structuredContent=structured, isError=response.is_error)
 
+    async def list_resources() -> list[types.Resource]:
+        # Resource links are issued by binary tool responses, rather than exposing
+        # an inventory of cached results belonging to unrelated selections.
+        return []
+
+    async def read_result_resource(uri: AnyUrl) -> list[ReadResourceContents]:
+        match = re.fullmatch(r"doctokens://result/([0-9a-f]{32})", str(uri))
+        if match is None:
+            raise ValueError("unsupported doctokens result URI")
+        attachment = await runtime.aread_result_resource(match.group(1))
+        return [ReadResourceContents(content=attachment.data, mime_type=attachment.media_type)]
+
     # The SDK list_tools registration decorator is currently untyped.
     server.list_tools()(list_tools)  # type: ignore[no-untyped-call]
     server.call_tool(validate_input=False)(call_tool)
+    server.list_resources()(list_resources)  # type: ignore[no-untyped-call]
+    server.read_resource()(read_result_resource)  # type: ignore[no-untyped-call]
     return server
 
 

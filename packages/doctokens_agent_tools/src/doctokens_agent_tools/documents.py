@@ -11,6 +11,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from docx_llm_parser import DocxReadSession, open_docx
 from docx_llm_parser import ParseOptions as DocxOptions
@@ -22,7 +23,7 @@ from xlsx_llm_parser import XlsxReadSession, open_xlsx
 from .config import RuntimeConfig
 from .models import ToolError
 from .options import parser_options
-from .schemas import DocumentOptions, SourceArgs
+from .schemas import BaseOptions, BaseSourceArgs, DocumentOptions
 
 Session = DocxReadSession | PptxReadSession | XlsxReadSession
 Options = DocxOptions | PptxOptions | XlsxOptions
@@ -42,6 +43,7 @@ class Document:
     session: Session | None = None
     session_touched: float = 0
     active: int = 0
+    index: dict[str, Any] | None = None
 
     @property
     def format(self) -> str:
@@ -99,7 +101,7 @@ class DocumentStore:
         document.snapshot.unlink(missing_ok=True)
         self.bytes -= document.size
 
-    def lookup(self, args: SourceArgs) -> Document | None:
+    def lookup(self, args: BaseSourceArgs) -> Document | None:
         if args.document_id is not None:
             document = self.documents.get(args.document_id)
             if document is None:
@@ -108,7 +110,7 @@ class DocumentStore:
         assert args.path is not None
         original = self.path(args.path)
         fingerprint = self.fingerprint(original)
-        key = args.options.model_dump_json()
+        key = _options_key(args.options)
         return next(
             (
                 d
@@ -118,7 +120,7 @@ class DocumentStore:
             None,
         )
 
-    def create(self, value: str, options: DocumentOptions) -> Document:
+    def create(self, value: str, options: BaseOptions) -> Document:
         original = self.path(value)
         fingerprint = self.fingerprint(original)
         size = fingerprint[0]
@@ -153,7 +155,7 @@ class DocumentStore:
             snapshot,
             digest.hexdigest(),
             fingerprint,
-            options.model_dump_json(),
+            _options_key(options),
             selected,
             copied,
             time.monotonic(),
@@ -163,7 +165,7 @@ class DocumentStore:
         return document
 
     @contextmanager
-    def acquire(self, args: SourceArgs) -> Iterator[Document]:
+    def acquire(self, args: BaseSourceArgs) -> Iterator[Document]:
         document = self.lookup(args)
         if document is None:
             assert args.path is not None
@@ -200,3 +202,7 @@ class DocumentStore:
         for document in list(self.documents.values()):
             self.remove(document.id)
         self.directory.cleanup()
+
+
+def _options_key(options: BaseOptions) -> str:
+    return DocumentOptions.model_validate(options.model_dump()).model_dump_json()

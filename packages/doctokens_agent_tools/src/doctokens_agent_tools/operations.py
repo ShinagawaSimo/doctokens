@@ -16,14 +16,15 @@ from .documents import Document, DocumentStore
 from .models import ToolError, ToolResponse
 from .presentation import Presenter
 from .schemas import (
+    BaseSourceArgs,
     BinaryArgs,
     DocxReadArgs,
     DocxResourceArgs,
     FindArgs,
+    InspectArgs,
     PptxReadArgs,
     PptxResourceArgs,
     QueryArgs,
-    SourceArgs,
     XlsxReadArgs,
     XlsxResourceArgs,
 )
@@ -34,14 +35,17 @@ class Operations:
         self.documents = documents
         self.presenter = presenter
 
-    def inspect(self, document: Document) -> dict[str, Any]:
-        if isinstance(document.options, XlsxOptions) and document.session is None:
-            return inspect_xlsx(document.snapshot, options=document.options)
+    def inspect(self, document: Document, *, full_parse: bool = False) -> dict[str, Any]:
+        if isinstance(document.options, XlsxOptions) and not full_parse:
+            if document.index is None:
+                document.index = inspect_xlsx(document.snapshot, options=document.options)
+            return document.index
         return self.documents.session(document).describe()
 
-    def run(self, name: str, document: Document, args: SourceArgs) -> ToolResponse:
+    def run(self, name: str, document: Document, args: BaseSourceArgs) -> ToolResponse:
         if name == "inspect_document":
-            return self.presenter.metadata(document, self.inspect(document))
+            assert isinstance(args, InspectArgs)
+            return self.presenter.metadata(document, self.inspect(document, full_parse=args.full_parse))
         if isinstance(args, DocxReadArgs):
             self.require_format(document, "docx")
             return self.read_docx(document, args)

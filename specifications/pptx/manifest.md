@@ -55,7 +55,8 @@
   - `sum(1 for asset in parsed_presentation.assets if asset.get("type") == "image")`
 
 - **Notes**
-  - Image assets.
+  - Accepted image relationship records, not unique image parts or visible appearances.
+    Existing image ids remain unchanged.
 
 ### `mediaCount`
 
@@ -72,7 +73,24 @@
   - `sum(1 for asset in parsed_presentation.assets if asset.get("type") == "media")`
 
 - **Notes**
-  - Media assets.
+  - Unique accepted embedded media parts or exact external targets.
+
+### `imageRelationshipCount` and `imageUniqueTargetCount`
+
+- **Output**
+  - Integer counts in `report.manifest`.
+- **Parsing**
+  - `imageRelationshipCount` equals the accepted image relationship count (`imageCount`).
+  - `imageUniqueTargetCount` counts distinct `(source, zipPath or href)` targets.
+  - Neither count represents visible occurrences; shapes may reuse a relationship.
+
+### `mediaRelationshipCount`
+
+- **Output**
+  - Integer count in `report.manifest`.
+- **Parsing**
+  - Count accepted media relationships before target deduplication. The same media
+    resource may have both a standard file reference and an Office extension reference.
 
 ### `chartCount`
 

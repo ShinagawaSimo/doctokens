@@ -7,7 +7,7 @@ from xml.etree import ElementTree as ET
 from ooxml_llm_core.chart_ml import CHART_EX_GRAPHIC_DATA_URI
 from ooxml_llm_core.models import ParseWarning
 
-from ....core.constants import attr, first_child, local_name
+from ....core.constants import attr, first_child, local_name, qualified_name
 from ....core.models import (
     AssetLookup,
     ChartLookup,
@@ -16,6 +16,7 @@ from ....core.models import (
     SmartArtLookup,
     TableCell,
 )
+from .media import media_shape
 from .runs import _drawingml_bool, _parse_int, tx_body_text
 from .shape_details import _find_descendant, _shape_alt, _shape_name
 
@@ -39,8 +40,11 @@ class SlideObjectParser:
         self._table_index = 0
 
     def _picture_shape(self, pic: ET.Element, part: str, ordinal: int) -> ShapeBlock | None:
+        media = media_shape(pic, part, ordinal, self._asset_lookup, self._warnings)
         blip = _find_descendant(pic, "blip")
         if blip is None:
+            if media is not None:
+                return media
             self._warnings.append(ParseWarning(code="PICTURE_MISSING_BLIP", message="p:pic without a:blip", locator=part))
             return None
         rid = attr(blip, "r", "embed") or attr(blip, "r", "link")
@@ -49,6 +53,10 @@ class SlideObjectParser:
             "type": "picture",
             "name": _shape_name(pic) or "",
         }
+        if media is not None:
+            shape["mediaKind"] = media["kind"]
+            if media.get("assetId"):
+                shape["mediaId"] = media["assetId"]
         alt = _shape_alt(pic)
         if alt:
             shape["alt"] = alt
@@ -56,7 +64,7 @@ class SlideObjectParser:
             self._warnings.append(ParseWarning(code="PICTURE_MISSING_RID", message="a:blip without r:embed/r:link", locator=part))
             return shape
         asset = self._asset_lookup.get((part, rid))
-        if asset is None:
+        if asset is None or asset.get("type") != "image":
             self._warnings.append(
                 ParseWarning(
                     code="PICTURE_ASSET_MISSING",
@@ -71,39 +79,7 @@ class SlideObjectParser:
         return shape
 
     def _media_shape(self, media: ET.Element, part: str, ordinal: int) -> ShapeBlock | None:
-        rid = attr(media, "r", "embed")
-        kind = "media"
-        for element in media.iter():
-            child_name = local_name(element.tag)
-            if child_name == "videoFile":
-                kind = "video"
-                break
-            if child_name == "audioFile":
-                kind = "audio"
-                break
-        shape: ShapeBlock = {
-            "id": f"s{ordinal}",
-            "type": "media",
-            "name": _shape_name(media) or "",
-            "kind": kind,
-        }
-        if rid is None:
-            self._warnings.append(ParseWarning(code="MEDIA_MISSING_RID", message="p14:media without r:embed", locator=part))
-            return shape
-        asset = self._asset_lookup.get((part, rid))
-        if asset is None:
-            self._warnings.append(
-                ParseWarning(
-                    code="MEDIA_ASSET_MISSING",
-                    message=f"No media relationship for {rid}",
-                    locator=part,
-                )
-            )
-            return shape
-        shape["assetId"] = asset["id"]
-        if asset.get("source") == "external":
-            shape["href"] = asset.get("href", "")
-        return shape
+        return media_shape(media, part, ordinal, self._asset_lookup, self._warnings, standalone=True)
 
     def _graphic_frame_shape(self, frame: ET.Element, part: str, ordinal: int) -> ShapeBlock | None:
         graphic_data = _find_descendant(frame, "graphicData")
@@ -125,6 +101,8 @@ class SlideObjectParser:
             return self._chart_shape(frame, part, ordinal)
         if uri == "http://schemas.openxmlformats.org/drawingml/2006/diagram":
             return self._smartart_shape(frame, part, ordinal)
+        if uri == "http://schemas.openxmlformats.org/presentationml/2006/ole":
+            return self._ole_preview(frame, graphic_data, part, ordinal)
         self._warnings.append(
             ParseWarning(
                 code="UNSUPPORTED_SHAPE_TYPE",
@@ -133,6 +111,33 @@ class SlideObjectParser:
             )
         )
         return None
+
+    def _ole_preview(self, frame: ET.Element, data: ET.Element, part: str, ordinal: int) -> ShapeBlock:
+        # OLE/VML objects cannot be evaluated here. Read only the saved PresentationML
+        # preview from the direct representation or the explicit compatibility fallback.
+        ole = first_child(data, "p", "oleObj")
+        if ole is None:
+            for alternate in data.findall(qualified_name("mc", "AlternateContent")):
+                fallback = first_child(alternate, "mc", "Fallback")
+                if fallback is not None:
+                    ole = first_child(fallback, "p", "oleObj")
+                    if ole is not None:
+                        break
+        self._warnings.append(
+            ParseWarning(
+                code="OLE_OBJECT_NOT_PARSED",
+                message="Embedded OLE content is not decoded; saved preview is used when available",
+                locator=part,
+            )
+        )
+        kind = (ole.get("progId") or ole.get("name")) if ole is not None else "OLE"
+        picture = first_child(ole, "p", "pic") if ole is not None else None
+        shape = self._picture_shape(picture, part, ordinal) if picture is not None else None
+        if shape is None:
+            shape = {"id": f"s{ordinal}", "type": "shape", "kind": "embedded", "name": _shape_name(frame) or ""}
+            shape["alt"] = _shape_alt(frame) or kind or "OLE"
+        shape["embeddedType"] = kind or "OLE"
+        return shape
 
     def _chart_shape(self, frame: ET.Element, part: str, ordinal: int) -> ShapeBlock | None:
         chart_ref = _find_descendant(frame, "chart")

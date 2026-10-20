@@ -55,5 +55,7 @@ class RuntimeConfig:
             value = getattr(self, name)
             if isinstance(value, bool) or not math.isfinite(value) or value <= 0:
                 raise ValueError(f"{name} must be finite and positive")
+        if self.reply_chars < 4:
+            raise ValueError("reply_chars must be at least 4 to encode binary fragments")
         self.package_options.validate_package_options()
         self.package_options.validate_ocr_options(self.ocr_provider, self.ocr_workers, self.ocr_timeout)

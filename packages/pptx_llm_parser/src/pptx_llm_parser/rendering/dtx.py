@@ -70,9 +70,21 @@ def _append_shape(
         attrs["id"] = shape.get("assetId") or shape["id"]
         if shape.get("alt"):
             attrs["alt"] = shape["alt"]
+        if shape.get("embeddedType"):
+            attrs["kind"] = "ole-preview"
+            attrs["progid"] = shape["embeddedType"]
         append(parent, "img", **attrs)
         if density == "semantic":
             _append_ocr(parent, shape.get("assetId") or shape["id"], ocr_results)
+        if shape.get("mediaKind"):
+            append(
+                parent,
+                "media",
+                id=shape.get("mediaId"),
+                kind=shape["mediaKind"],
+                poster=shape.get("assetId"),
+                owner_shape=shape["id"],
+            )
         return
     if shape_type == "table":
         _append_table(parent, shape, density)
@@ -121,6 +133,7 @@ def _append_shape(
                 "title": shape.get("title"),
                 "from_shape": shape.get("fromShape"),
                 "to_shape": shape.get("toShape"),
+                "progid": shape.get("embeddedType"),
             }
         )
         append(parent, "shape", **attrs)
@@ -131,14 +144,14 @@ def _append_shape(
 def _text_shape_attrs(shape: ShapeBlock, density: str) -> dict[str, object]:
     if density == "semantic":
         return _shape_attrs(shape, density)
-    attrs: dict[str, object] = {"placeholder": shape.get("placeholderType") or None}
+    attrs: dict[str, object] = {"shape_id": shape["id"], "placeholder": shape.get("placeholderType") or None}
     if shape.get("link"):
         attrs["link"] = shape["link"]
     return attrs
 
 
 def _shape_attrs(shape: ShapeBlock, density: str) -> dict[str, object]:
-    attrs: dict[str, object] = {"id": shape["id"], "link": shape.get("link")}
+    attrs: dict[str, object] = {"id": shape["id"], "shape_id": shape["id"], "link": shape.get("link")}
     if density != "semantic":
         return attrs
     if shape.get("placeholderType"):

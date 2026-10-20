@@ -18,6 +18,11 @@ Both XML densities retain bound inline image resource ids. Semantic also retains
 image alternative text; structural omits that description. Drawing placeholders
 without a resolved resource omit id. See [images](objects/image.md).
 
+Page-window XML includes asset declarations only for images referenced by its
+visible body/table projection and retained supplemental content. Resource ids
+are unchanged; the session-wide resource catalog remains available separately.
+Full-document output retains its complete asset declarations.
+
 ## Fields
 
 ### `format`

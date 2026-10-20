@@ -38,7 +38,7 @@ class BinaryAttachment:
 @dataclass
 class ToolResponse:
     data: dict[str, Any] = field(default_factory=dict)
-    error: dict[str, str] | None = None
+    error: dict[str, Any] | None = None
     attachments: tuple[BinaryAttachment, ...] = ()
 
     @property

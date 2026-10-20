@@ -36,7 +36,12 @@ def _shape_text(shape: ShapeBlock) -> str:
     if shape["type"] == "text":
         return shape["text"]
     if shape["type"] == "picture":
-        return f"[Image: {shape['alt']}]" if shape.get("alt") else "[Image]"
+        poster = f"[Image: {shape['alt']}]" if shape.get("alt") else "[Image]"
+        if shape.get("embeddedType"):
+            poster = f"[OLE preview: {shape['embeddedType']}]"
+        if shape.get("mediaKind"):
+            return poster + "\n\n" + _MEDIA_PLACEHOLDERS.get(shape["mediaKind"], "[Media]")
+        return poster
     if shape["type"] == "media":
         return _MEDIA_PLACEHOLDERS.get(shape.get("kind", ""), "[Media]")
     if shape["type"] == "table":

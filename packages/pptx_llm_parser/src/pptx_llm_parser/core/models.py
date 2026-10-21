@@ -56,8 +56,12 @@ class Paragraph(TypedDict, total=False):
     text: str
     level: int
     bullet: str
+    bulletSource: str
+    bulletFont: str
     numberType: str
     startAt: int
+    number: int
+    runs: list[Run]
 
 
 class ParagraphStyle(TypedDict, total=False):
@@ -65,6 +69,10 @@ class ParagraphStyle(TypedDict, total=False):
 
     runFormat: RunFormat
     bullet: str
+    bulletFont: str
+    bulletFontSymbol: bool
+    textFont: str
+    textFontSymbol: bool
     numberType: str
     startAt: int
     listNone: bool

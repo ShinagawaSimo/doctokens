@@ -58,6 +58,14 @@ def pict_objects(
 
 def _shape_common(shape: ET.Element) -> DrawingCommon:
     common: DrawingCommon = {"placement": "vml"}
+    style = {
+        key.strip().lower(): value.strip().lower()
+        for item in (shape.get("style") or "").split(";")
+        if ":" in item
+        for key, value in [item.split(":", 1)]
+    }
+    if style.get("position", "").strip().lower() in {"absolute", "relative"}:
+        common["placement"] = "anchor"
     for key, value in (("name", shape.get("id")), ("alt", shape.get("alt")), ("title", shape.get("title"))):
         if value:
             if key == "name":

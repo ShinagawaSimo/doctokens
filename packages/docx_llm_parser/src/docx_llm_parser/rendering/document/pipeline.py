@@ -7,7 +7,7 @@ from collections.abc import Iterator
 from ooxml_llm_core.doctokens_plain import page_marker
 
 from ...core.models import ParsedDocument
-from ..common.pages import iter_page_blocks
+from ..common.floating import floating_textboxes, iter_flow_page_blocks
 from ..plain import block_text_only, inline_text_only
 
 # ── plain rendering ──
@@ -38,7 +38,7 @@ def iter_plain(parsed_document: ParsedDocument, *, first_page: int | None = None
         if comment_text and comment_id is not None:
             comment_map[comment_id] = comment_text
 
-    page_segments = list(iter_page_blocks(parsed_document))
+    page_segments = list(iter_flow_page_blocks(parsed_document))
     initial_page = first_page or (page_segments[0][0] if page_segments else 1)
     parts: list[str] = [page_marker(initial_page)]
     current_page = initial_page
@@ -55,6 +55,8 @@ def iter_plain(parsed_document: ParsedDocument, *, first_page: int | None = None
         block_text = block_text_only(block, footnote_map, endnote_order, comment_order, ocr_results)
         if block_text:
             parts.append(block_text)
+        if block["type"] != "table" and floating_textboxes(block):
+            current_page = block.get("pageEnd", block_page)
 
     for block in parsed_document.blocks:
         page_end = int(block.get("pageEnd", block.get("page", 1)))

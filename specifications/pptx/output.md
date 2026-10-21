@@ -6,7 +6,7 @@ PPTX uses [DTX](../common/dtx.md) or [DTP](../common/dtp.md).
 
 ## Processing
 
-Plain labels each slide `=== Slide N ===`, with section suffix if present; separates visible shapes by blank lines. Notes follow shapes. XML text shape tags derive only from placeholder type. The public XML format contains no shape coordinates.
+Plain labels each slide `=== Slide N ===`, with section suffix if present; separates visible shapes by blank lines. Notes follow shapes. XML uses `p`/`title` for a single paragraph and `textbox` with child paragraphs for a multi-paragraph text object; title containers use `role="title"`. The public XML format contains no shape coordinates.
 
 Both XML densities retain a slide-local `shape-id` for each primary source
 shape. Connector endpoints reference that field. Resource `id` values remain

@@ -16,8 +16,9 @@ from ....core.models import (
     SmartArtLookup,
     TableCell,
 )
+from .lists import integer as _parse_int
 from .media import media_shape
-from .runs import _drawingml_bool, _parse_int, tx_body_text
+from .runs import _drawingml_bool, tx_body_text
 from .shape_details import _find_descendant, _shape_alt, _shape_name
 
 

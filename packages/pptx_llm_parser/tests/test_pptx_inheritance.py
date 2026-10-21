@@ -79,6 +79,28 @@ def _resolver(deck: bytes) -> tuple[LayoutMasterResolver, PackageReader, ET.Elem
 
 
 class LayoutMasterResolverTests(unittest.TestCase):
+    def test_unavailable_symbol_encoding_keeps_source_and_can_be_overridden_by_text_font(self) -> None:
+        # A producer-specific symbol font is unavailable; the package contains no
+        # glyph mapping. Do not mistake its ASCII code for visible prose.
+        master = (
+            '<p:txStyles><p:bodyStyle><a:lvl1pPr><a:buChar char="n"/>'
+            '<a:buFont typeface="UnavailableVendorSymbols" charset="02"/>'
+            "</a:lvl1pPr></p:bodyStyle></p:txStyles>"
+        )
+        shape = text_shape_xml([[("t", "One")], [("t", "Two")]], ph="body")
+        shape = shape.replace(
+            "<a:p><a:r><a:t>Two",
+            '<a:p><a:pPr><a:buFontTx/><a:defRPr><a:latin typeface="Arial"/></a:defRPr></a:pPr><a:r><a:t>Two',
+        )
+        source = _deck(master_clr_map=master, slide_xml=slide_xml_shapes(shape))
+        self.assertEqual(
+            parse_pptx(source, density="structural").text,
+            '<presentation density="structural" format="pptx"><slide number="1">'
+            '<textbox placeholder="body" shape-id="s1"><p bullet="•" bullet-font="UnavailableVendorSymbols" '
+            'bullet-source="n" level="0">• One</p><p bullet="n" level="0">n Two</p>'
+            "</textbox></slide></presentation>",
+        )
+
     def test_list_inheritance_does_not_parse_malformed_visual_defaults_in_low_densities(self) -> None:
         # The invalid master RGB is a producer-corruption case. List content
         # remains readable without enabling the semantic color decoder.
@@ -87,9 +109,14 @@ class LayoutMasterResolverTests(unittest.TestCase):
             '<a:defRPr><a:solidFill><a:srgbClr val="invalid"/></a:solidFill></a:defRPr>'
             "</a:lvl1pPr></p:bodyStyle></p:txStyles>"
         )
-        for declaration, expected in (
-            ('<a:buAutoNum type="romanLcParenR" startAt="3"/>', "iii) One\niv) Two"),
-            ("<a:buNone/>", "One\nTwo"),
+        for declaration, expected, paragraph_xml in (
+            (
+                '<a:buAutoNum type="romanLcParenR" startAt="3"/>',
+                "iii) One\niv) Two",
+                '<p level="0" number="3" number-type="romanLcParenR" start-at="3">iii) One</p>'
+                '<p level="0" number="4" number-type="romanLcParenR" start-at="3">iv) Two</p>',
+            ),
+            ("<a:buNone/>", "One\nTwo", '<p level="0">One</p><p level="0">Two</p>'),
         ):
             layout = text_shape_xml([], ph="body").replace(
                 "<a:lstStyle/>", f"<a:lstStyle><a:lvl1pPr>{declaration}</a:lvl1pPr></a:lstStyle>"
@@ -110,9 +137,9 @@ class LayoutMasterResolverTests(unittest.TestCase):
                             attrs = 'id="s1" name="TextBox 1" ' + attrs
                         self.assertEqual(
                             result.text,
-                            f'<presentation density="{density}" format="pptx"><slide number="1"><p {attrs}>'
-                            + expected
-                            + "</p></slide></presentation>",
+                            f'<presentation density="{density}" format="pptx"><slide number="1"><textbox {attrs}>'
+                            + paragraph_xml
+                            + "</textbox></slide></presentation>",
                         )
                     if density != "semantic":
                         self.assertNotIn("COLOR_VALUE_INVALID", [warning.code for warning in result.report.warnings])

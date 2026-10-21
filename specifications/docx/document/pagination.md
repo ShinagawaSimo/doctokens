@@ -25,6 +25,11 @@ Page numbers describe stored pagination hints. They are not calculated by laying
 
 - **Notes**
   - Manual breaks currently shift the paragraph as a whole and add a newline; calculated breaks retain an inline boundary.
+  - A paragraph containing a retained floating text-box reference remains one
+    paragraph in XML, with calculated `page` milestones inside its inline
+    sequence. Its independent story follows the paragraph. Selected consecutive
+    fragments of that same paragraph are rejoined without restoring unselected
+    text or text-box anchors. Plain still uses isolated, increasing page lines.
 
 ### `pageBreak`
 

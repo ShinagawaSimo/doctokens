@@ -79,7 +79,10 @@ Full-document output retains its complete asset declarations.
   - `ParsedDocument.blocks`
 
 - **Parsing**
-  - Emit pages, optional sections, and block content in source order.
+  - Emit pages, optional sections, and block content in source order. Floating
+    text-box stories follow their owning source paragraph and retain explicit
+    references at the anchors; their definition order does not imply a visual
+    position or a caption/image relationship.
 
 ### `assets`
 

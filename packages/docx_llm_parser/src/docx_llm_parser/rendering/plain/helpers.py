@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from typing import cast
 
+from ooxml_llm_core.doctokens_plain import page_marker
+
 from ...core.models import Block, ContentControl, InlineContainer, InlineObject, OcrStoredResult, TableBlock
 from ...core.traversal import iter_blocks
 from ..common import constants as _constants
 from ..common.controls import wrap_plain_control
+from ..common.floating import floating_textboxes, is_floating_textbox
 from ..common.ocr import ocr_text
+from ..common.pages import iter_block_page_segments
 from ..common.text import merge_text_runs
 
 
@@ -30,7 +34,20 @@ def block_text_only(
         controls = _controls(block.get("contentControls"))
         return wrap_plain_control(text, controls) if controls else text
 
-    text = inline_text_only(block, ocr_results)
+    if floating_textboxes(block):
+        parts: list[str] = []
+        previous_page = block["page"]
+        for page, fragment in iter_block_page_segments(block):
+            while previous_page < page:
+                previous_page += 1
+                parts.append("\n\n" + page_marker(previous_page) + "\n\n")
+            parts.append(inline_text_only(cast(InlineContainer, fragment), ocr_results, include_floating=False))
+        while previous_page < block.get("pageEnd", previous_page):
+            previous_page += 1
+            parts.append("\n\n" + page_marker(previous_page) + "\n\n")
+        text = _with_floating_stories("".join(parts), block, ocr_results)
+    else:
+        text = inline_text_only(block, ocr_results)
 
     for footnote_id in collect_refs(block, "footnoteRef"):
         footnote_text = footnote_map.get(footnote_id, "")
@@ -51,6 +68,8 @@ def block_text_only(
 def inline_text_only(
     block: InlineContainer,
     ocr_results: dict[str, OcrStoredResult] | None = None,
+    *,
+    include_floating: bool = True,
 ) -> str:
     """Extract plain text from a block-like object that carries inline runs."""
     if "runs" not in block:
@@ -72,13 +91,26 @@ def inline_text_only(
             run_parts.append(text)
 
         if "objects" in run:
-            run_parts.extend(plain_object_placeholder(inline_object, ocr_results) for inline_object in run["objects"])
+            run_parts.extend(
+                plain_object_placeholder(item, ocr_results) for item in run["objects"] if not is_floating_textbox(item)
+            )
         run_content = "".join(run_parts)
         controls = _controls(run.get("contentControls"))
         parts.append(wrap_plain_control(run_content, controls) if controls else run_content)
     content = "".join(parts)
     controls = _controls(block.get("contentControls"))
-    return wrap_plain_control(content, controls) if controls else content
+    content = wrap_plain_control(content, controls) if controls else content
+    return _with_floating_stories(content, block, ocr_results) if include_floating else content
+
+
+def _with_floating_stories(content: str, block: InlineContainer, ocr_results: dict[str, OcrStoredResult] | None) -> str:
+    stories = floating_textboxes(block)
+    if not stories:
+        return content
+    references = ", ".join(str(item["id"]) for item in stories)
+    parts = [content, f"[Textboxes: {references}]"]
+    parts.extend(f"[Textbox {item['id']}]\n{plain_object_placeholder(item, ocr_results)}" for item in stories)
+    return "\n\n".join(part for part in parts if part)
 
 
 def _controls(value: object) -> list[ContentControl]:

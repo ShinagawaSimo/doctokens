@@ -2,7 +2,7 @@
 
 [PPTX](../README.md) / Text bodies
 
-A text shape flattens its DrawingML paragraphs into one readable text body.
+A text shape retains its DrawingML paragraph boundaries and inline reading content.
 
 ## Processing
 
@@ -23,7 +23,11 @@ inherited numbering instead of letting the master label reappear.
 ### `text`
 
 - **Output**
-  - Text inside p/title; plain text.
+  - A single retained paragraph uses `p`/`title`. Multiple retained paragraphs use
+    one `textbox` with the object's `shape-id`, group and navigation attributes;
+    each source paragraph is a child `p`. A title textbox has `role="title"`.
+  - Plain output separates paragraphs with LF and uses two spaces per list level
+    (clamped to 0..8); soft-break continuations retain that indentation.
 
 - **OOXML**
   - p:txBody/a:p/a:r/a:t, breaks, tabs, fields, equations.
@@ -51,7 +55,9 @@ inherited numbering instead of letting the master label reappear.
 ### `paragraphs`
 
 - **Output**
-  - Internal list metadata.
+  - Child paragraphs inside a multi-paragraph `textbox`, with `level` and any
+    effective list metadata. A single list paragraph carries these attributes
+    on its existing `p`/`title`.
 
 - **OOXML**
   - a:p.
@@ -60,7 +66,10 @@ inherited numbering instead of letting the master label reappear.
   - `list[Paragraph]`
 
 - **Parsing**
-  - Retain on shape only if at least one paragraph has bullet/numberType. No separate paragraph metadata elements in DTX.
+  - Retain every nonempty parsed paragraph with its own text and runs, including
+    non-list paragraphs. Runs preserve links, formatting and equations across
+    paragraph boundaries. A list declaration without visible paragraph content
+    does not create a visible marker or consume an automatic number.
 
 ### `equation`
 

@@ -93,6 +93,13 @@ class InlineParser:
                 self._extract_inline_runs(child, part, block_id, paragraph_style_id, raw_hints, runs)
         finally:
             self._field_stack = []
+        ordinal = 0
+        for run in runs:
+            for item in run.get("objects", []):
+                if item["type"] == "textbox" and item.get("placement") == "anchor":
+                    ordinal += 1
+                    scope = "" if part == "word/document.xml" else f"{part}-"
+                    item["id"] = f"tb-{scope}{block_id}-{ordinal}"
         return runs, raw_hints
 
     def _extract_inline_runs(

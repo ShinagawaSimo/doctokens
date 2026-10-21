@@ -69,3 +69,35 @@ def test_excessive_textbox_nesting_has_an_explicit_diagnostic() -> None:
         )
     result = parse_docx(_abnormal_docx(story, {}, with_image=False))
     assert [warning.code for warning in result.report.warnings] == ["TEXTBOX_NESTING_LIMIT"]
+
+
+def test_floating_story_with_dangling_image_keeps_prose_and_window_references() -> None:
+    # The missing image relationship is a producer-corruption case; Word cannot
+    # save it reliably. Page 2 contains only the anchored story, between text.
+    body = (
+        "<w:p><w:r><w:t>Before</w:t><w:lastRenderedPageBreak/></w:r>"
+        '<w:r><w:drawing xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
+        'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">'
+        "<wp:anchor><wps:txbx><w:txbxContent>"
+        + _paragraph("Note")
+        + f'<w:p><w:r><w:pict {DECLARATIONS}><v:shape><v:imagedata r:id="missing"/>'
+        "</v:shape></w:pict></w:r></w:p></w:txbxContent></wps:txbx></wp:anchor></w:drawing></w:r>"
+        "<w:r><w:lastRenderedPageBreak/><w:t>After</w:t></w:r></w:p>" + _paragraph("Tail")
+    )
+    source = _abnormal_docx(body, {}, with_image=False)
+    with open_docx(source) as document:
+        for density in ("structural", "semantic"):
+            beginning = f'<document density="{density}" format="docx" pagination="last-rendered-hints" revision-view="final">'
+            story = '<textbox id="tb-b1-1"><p>Note</p><p><img /></p></textbox>'
+            expected = (
+                beginning + '<body><page number="1" /><p>Before<page number="2" />'
+                '<textbox-ref id="tb-b1-1" /><page number="3" />After</p>' + story + "<p>Tail</p></body></document>"
+            )
+            assert parse_docx(source, density=density).text == expected
+            assert document.render(page_hint=1, span=3, density=density).text == expected
+            assert document.render(page_hint=2, density=density).text == (
+                beginning + '<body><page number="2" /><p><textbox-ref id="tb-b1-1" /></p>' + story + "</body></document>"
+            )
+            assert document.render(page_hint=3, density=density).text == (
+                beginning + '<body><page number="3" /><p>After</p><p>Tail</p></body></document>'
+            )

@@ -11,7 +11,12 @@ table parsers. DrawingML and VML bind the outer object separately from its conte
 
 - **Output**
   - XML contains paragraphs/headings, tables and inline content inside `textbox`.
-    Plain output keeps readable text and tab-separated table cells, including empty cells.
+    Floating text boxes are independent stories following their owning paragraph;
+    an empty `textbox-ref` at the source anchor links to their id. Actual inline
+    text boxes remain inside the original inline sequence.
+  - Plain output keeps readable text and tab-separated table cells, including
+    empty cells. Floating references and labelled stories follow the complete
+    owning paragraph, so their contents do not interrupt its prose.
 
 - **OOXML**
   - `w:txbxContent` under DrawingML or VML.
@@ -61,3 +66,37 @@ table parsers. DrawingML and VML bind the outer object separately from its conte
 
 - **Parsing**
   - Copy drawing alt; structural omits it.
+
+### `id`
+
+- **Output**
+  - Both XML densities: floating `textbox/@id` and matching `textbox-ref/@id`.
+    Plain uses `[Textboxes: ids]`, then one `[Textbox id]` block per story.
+- **OOXML**
+  - Owning part, source paragraph allocator id and retained floating-object ordinal.
+- **IR**
+  - `InlineObject.id: str`.
+- **Parsing**
+  - Assign `tb-{block_id}-{ordinal}` in `word/document.xml`; elsewhere include
+    `{part}-` before the block id. Ordinals start at 1 per source paragraph.
+    Treat ids as opaque values. Nested stories use their own paragraph ids.
+  - Assign before page selection. Reusing a parsed snapshot does not change ids
+    across densities or windows. A window includes a story only when the source
+    anchor/reference is selected; do not copy it to every continuation fragment.
+
+### `placement`
+
+- **Output**
+  - Controls inline versus independent-story projection; not a visual layout claim.
+- **OOXML**
+  - DrawingML `wp:anchor` versus `wp:inline`; VML shape `style` position.
+- **IR**
+  - `InlineObject.placement`.
+- **Parsing**
+  - `anchor` is floating. VML `position:absolute` or `position:relative`, ignoring
+    case and surrounding whitespace, is also floating. Unknown VML placement and
+    malformed drawings without an explicit anchor retain the inline fallback.
+  - Preserve source anchors without guessing an image/caption relationship from
+    proximity. A floating story follows its complete owning source paragraph;
+    inline page milestones can remain inside that paragraph in XML. Definitions
+    follow source anchor order and are not reordered by visual position.

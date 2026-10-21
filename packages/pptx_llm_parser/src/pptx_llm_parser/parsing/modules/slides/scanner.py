@@ -220,7 +220,7 @@ class SlideParser:
         }
         if runs and any(set(run) != {"text"} for run in runs):
             shape["runs"] = runs
-        if paragraphs and any("bullet" in paragraph or "numberType" in paragraph for paragraph in paragraphs):
+        if paragraphs:
             shape["paragraphs"] = paragraphs
         return shape
 

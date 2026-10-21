@@ -36,6 +36,12 @@ def _slide_body(slide: SlideBlock, smartarts: dict[str, SmartArtRecord]) -> str:
 
 def _shape_text(shape: ShapeBlock, smartarts: dict[str, SmartArtRecord]) -> str:
     if shape["type"] == "text":
+        if paragraphs := shape.get("paragraphs"):
+            lines = []
+            for paragraph in paragraphs:
+                indent = "  " * max(0, min(8, paragraph.get("level", 0)))
+                lines.append(indent + paragraph.get("text", "").replace("\n", "\n" + indent))
+            return "\n".join(lines)
         return shape["text"]
     if shape["type"] == "picture":
         poster = f"[Image: {shape['alt']}]" if shape.get("alt") else "[Image]"

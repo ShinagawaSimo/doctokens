@@ -7,7 +7,17 @@ from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.doctokens_xml import append, element, serialize, text
 
-from ..core.models import ChartRecord, CommentItem, OcrStoredResult, ParsedPresentation, ShapeBlock, SlideBlock, SmartArtRecord
+from ..core.models import (
+    ChartRecord,
+    CommentItem,
+    OcrStoredResult,
+    Paragraph,
+    ParsedPresentation,
+    Run,
+    ShapeBlock,
+    SlideBlock,
+    SmartArtRecord,
+)
 from .charts import append_chart_preview
 from .diagrams import append_diagram
 
@@ -72,8 +82,17 @@ def _append_shape(
     if shape_type == "text":
         title = shape.get("placeholderType") in _TITLE_PLACEHOLDERS
         attrs = _text_shape_attrs(shape, density)
-        node = append(parent, "title" if title else "p", **attrs)
-        _append_shape_text(node, shape, density)
+        paragraphs = shape.get("paragraphs", [])
+        if len(paragraphs) > 1:
+            node = append(parent, "textbox", role="title" if title else None, **attrs)
+            for paragraph in paragraphs:
+                child = append(node, "p", **_paragraph_attrs(paragraph, nested=True))
+                _append_runs(child, paragraph.get("runs", []), paragraph.get("text", ""), density)
+        else:
+            if paragraphs:
+                attrs.update(_paragraph_attrs(paragraphs[0], nested=False))
+            node = append(parent, "title" if title else "p", **attrs)
+            _append_shape_text(node, shape, density)
         return
     if shape_type == "picture":
         attrs = _shape_attrs(shape, density)
@@ -181,9 +200,29 @@ def _shape_attrs(shape: ShapeBlock, density: str) -> dict[str, object]:
 
 
 def _append_shape_text(parent: ET.Element, shape: ShapeBlock, density: str) -> None:
-    runs = shape.get("runs")
+    _append_runs(parent, shape.get("runs", []), shape["text"], density)
+
+
+def _paragraph_attrs(paragraph: Paragraph, *, nested: bool) -> dict[str, object]:
+    attrs: dict[str, object] = {}
+    if nested or "bullet" in paragraph or "numberType" in paragraph or paragraph.get("level"):
+        attrs["level"] = paragraph.get("level", 0)
+    for key, name in (
+        ("bullet", "bullet"),
+        ("bulletSource", "bullet_source"),
+        ("bulletFont", "bullet_font"),
+        ("numberType", "number_type"),
+        ("startAt", "start_at"),
+        ("number", "number"),
+    ):
+        if key in paragraph:
+            attrs[name] = paragraph[key]  # type: ignore[literal-required]
+    return attrs
+
+
+def _append_runs(parent: ET.Element, runs: list[Run], fallback: str, density: str) -> None:
     if not runs:
-        text(parent, shape["text"])
+        text(parent, fallback)
         return
     for run in runs:
         node = parent

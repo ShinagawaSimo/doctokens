@@ -9,6 +9,7 @@ from ooxml_llm_core.models import ParseWarning
 
 from ..core.constants import first_child, local_name
 from ..core.models import ParagraphStyle, RunFormat
+from .bullet_fonts import font_declaration, text_font
 from .colors import is_default_text_color, resolve_color_element
 
 
@@ -109,6 +110,12 @@ class TextStyleParser:
             else:
                 continue
             style: ParagraphStyle = {}
+            font = first_child(child, "a", "buFont")
+            if font is not None:
+                style["bulletFont"], style["bulletFontSymbol"] = font_declaration(font)
+            elif first_child(child, "a", "buFontTx") is not None:
+                style["bulletFont"] = ""
+                style["bulletFontSymbol"] = False
             bullet = first_child(child, "a", "buChar")
             auto = first_child(child, "a", "buAutoNum")
             if first_child(child, "a", "buNone") is not None:
@@ -122,6 +129,8 @@ class TextStyleParser:
                 except ValueError:
                     style["startAt"] = 1
             def_r_pr = first_child(child, "a", "defRPr")
+            if declaration := text_font(def_r_pr):
+                style["textFont"], style["textFontSymbol"] = declaration
             if self._include_formatting and def_r_pr is not None:
                 run_format = self._run_defaults(def_r_pr, color_map, theme=theme)
                 if run_format:

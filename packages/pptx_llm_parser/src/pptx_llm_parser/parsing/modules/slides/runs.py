@@ -7,7 +7,6 @@ from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.models import ParseWarning
 from ooxml_llm_core.omml_latex import omath_to_latex
-from ooxml_llm_core.text_numbering import format_drawingml_autonumber
 
 from ....core.constants import attr, first_child, local_name
 from ....core.models import (
@@ -17,6 +16,8 @@ from ....core.models import (
     RunFormat,
 )
 from ....ooxml.colors import is_default_text_color, resolve_color_element
+from .lists import integer as _parse_int
+from .lists import list_metadata, list_prefix
 from .text import HyperlinkLookup
 
 
@@ -45,7 +46,13 @@ def paragraph_text(
 ) -> str:
     """Flatten a paragraph's runs/breaks/tabs/fields into plain text."""
     runs = paragraph_runs(p, part, warnings, {}, {}, {})
-    prefix = _list_prefix(p, counters if counters is not None else {})
+    metadata = list_metadata(p, {})
+    if not any(run.get("text", "").strip() for run in runs):
+        return ""
+    pr = first_child(p, "a", "pPr")
+    prefix = list_prefix(
+        metadata, _parse_int(pr.get("lvl") if pr is not None else None, 0), counters if counters is not None else {}
+    )
     return prefix + "".join(run.get("text", "") for run in runs)
 
 
@@ -86,16 +93,17 @@ def shape_runs(
             base_format,
             include_formatting=include_formatting,
         )
-        prefix = _list_prefix(child, counters, style)
+        metadata = list_metadata(child, style)
+        if metadata and not any(run.get("text", "").strip() for run in paragraph):
+            continue
+        prefix = list_prefix(metadata, level, counters)
         if prefix:
             paragraph.insert(0, {"text": prefix})
         if paragraph:
             if paragraphs_out is not None:
-                metadata: Paragraph = {
-                    "text": "".join(run.get("text", "") for run in paragraph),
-                    "level": level,
-                }
-                metadata.update(_list_metadata(child, style))
+                metadata["text"] = "".join(run.get("text", "") for run in paragraph)
+                metadata["level"] = level
+                metadata["runs"] = paragraph
                 paragraphs_out.append(metadata)
             if runs:
                 runs.append({"text": "\n"})
@@ -166,70 +174,6 @@ def paragraph_runs(
 def _run_text(r: ET.Element) -> str:
     t = first_child(r, "a", "t")
     return t.text if t is not None and t.text else ""
-
-
-def _list_prefix(
-    p: ET.Element,
-    counters: dict[tuple[str, int], int],
-    inherited: ParagraphStyle | None = None,
-) -> str:
-    """Return the visible bullet/number prefix for a paragraph."""
-    p_pr = first_child(p, "a", "pPr")
-    level = _parse_int(p_pr.get("lvl") if p_pr is not None else None, 0)
-    if p_pr is not None and first_child(p_pr, "a", "buNone") is not None:
-        return ""
-    bullet = first_child(p_pr, "a", "buChar") if p_pr is not None else None
-    if bullet is not None:
-        return (bullet.get("char") or "•") + " "
-    auto = first_child(p_pr, "a", "buAutoNum") if p_pr is not None else None
-    inherited = inherited or {}
-    if bullet is None and auto is None and inherited.get("listNone"):
-        return ""
-    if auto is None and inherited.get("bullet"):
-        return inherited["bullet"] + " "
-    if auto is None and not inherited.get("numberType"):
-        return ""
-    number_type = auto.get("type", "arabicPeriod") if auto is not None else inherited["numberType"]
-    key = (number_type, level)
-    start = _parse_int(auto.get("startAt") if auto is not None else None, inherited.get("startAt", 1))
-    if key not in counters:
-        counters[key] = start
-    else:
-        counters[key] += 1
-    return f"{_format_list_number(counters[key], number_type)} "
-
-
-def _list_metadata(p: ET.Element, inherited: ParagraphStyle) -> Paragraph:
-    result: Paragraph = {}
-    p_pr = first_child(p, "a", "pPr")
-    if p_pr is not None and first_child(p_pr, "a", "buNone") is not None:
-        return result
-    bullet = first_child(p_pr, "a", "buChar") if p_pr is not None else None
-    auto = first_child(p_pr, "a", "buAutoNum") if p_pr is not None else None
-    if bullet is None and auto is None and inherited.get("listNone"):
-        return result
-    if bullet is not None:
-        result["bullet"] = bullet.get("char") or "•"
-    elif auto is not None:
-        result["numberType"] = auto.get("type", "arabicPeriod")
-        result["startAt"] = _parse_int(auto.get("startAt"), 1)
-    elif inherited.get("bullet"):
-        result["bullet"] = inherited["bullet"]
-    elif inherited.get("numberType"):
-        result["numberType"] = inherited["numberType"]
-        result["startAt"] = inherited.get("startAt", 1)
-    return result
-
-
-def _parse_int(value: str | None, default: int) -> int:
-    try:
-        return int(value) if value is not None else default
-    except (TypeError, ValueError):
-        return default
-
-
-def _format_list_number(number: int, number_type: str) -> str:
-    return format_drawingml_autonumber(number, number_type)
 
 
 def _run_format(

@@ -47,6 +47,7 @@ class ThemeParserTests(unittest.TestCase):
     def test_plain_plan_avoids_theme_and_layout_resolution(self) -> None:
         plan = PptxParsePlan.render("plain")
         self.assertFalse(plan.needs(PptxFeature.THEME_AND_LAYOUT))
+        self.assertTrue(plan.needs(PptxFeature.PARAGRAPH_INHERITANCE))
 
     def test_missing_theme_part_falls_back_to_default_with_warning(self) -> None:
         parsed = PptxParser().parse(_theme_deck(with_theme=False), ParseOptions())

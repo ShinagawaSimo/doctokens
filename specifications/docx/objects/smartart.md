@@ -88,7 +88,8 @@ SmartArt preserves nonempty labels and connections between those retained labels
 ### `nodes`
 
 - **Output**
-  - Space-joined inline labels; detailed resource nodes.
+  - Explicit body `node` elements and detailed resource nodes. Body and resource
+    links reference one-based node ordinals.
 
 - **OOXML**
   - `dgm:pt` descendants.
@@ -97,7 +98,9 @@ SmartArt preserves nonempty labels and connections between those retained labels
   - `list[SmartArtNode]`
 
 - **Parsing**
-  - Keep only points with nonempty stripped concatenation of a:t; preserve point order.
+  - Preserve every point, including empty/root/transition nodes, in source order.
+    Empty labels do not remove connection endpoints. All reading plans retain the
+    parsed edges; low-density summaries do not discard the graph.
 
 ### `nodeCount`
 
@@ -116,7 +119,7 @@ SmartArt preserves nonempty labels and connections between those retained labels
 ### `links`
 
 - **Output**
-  - Resource edges; no inline edge elements.
+  - Explicit body/resource edges referring to local node ordinals.
 
 - **OOXML**
   - `dgm:cxn` descendants.
@@ -125,7 +128,9 @@ SmartArt preserves nonempty labels and connections between those retained labels
   - `list[SmartArtLink]`
 
 - **Parsing**
-  - Retain only edges whose srcId and destId both resolve to retained nodes. Summary plan discards the list.
+  - Retain edges whose standard srcId/destId or supported producer aliases both
+    resolve to retained nodes. All reading plans retain the graph. Duplicate
+    source node ids bind references to their first occurrence.
 
 ### `linkCount`
 
@@ -139,7 +144,7 @@ SmartArt preserves nonempty labels and connections between those retained labels
   - `SmartArt.linkCount: int`
 
 - **Parsing**
-  - `len(links)` before summary reduction.
+  - `len(links)`; reading summaries do not reduce the edge list.
 
 ### `rawLinkCount`
 
@@ -167,4 +172,6 @@ SmartArt preserves nonempty labels and connections between those retained labels
   - Derived.
 
 - **Parsing**
-  - Always true on inline summary.
+  - Omitted for a retained graph; true for an unresolved object placeholder.
+  - Body/resource `incomplete=true` indicates saved connections whose endpoints
+    could not be resolved; this is distinct from output-budget truncation.

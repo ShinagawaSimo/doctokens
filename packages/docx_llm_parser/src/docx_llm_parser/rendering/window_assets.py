@@ -13,15 +13,18 @@ def referenced_image_ids(document: ParsedDocument) -> set[str]:
             for item in run.get("objects", []):
                 if item["type"] == "image" and item.get("assetId"):
                     used.add(item["assetId"])
+                for child in item.get("blocks", []):
+                    block(child)
 
-    def block(item: Block) -> None:
+    def block(item: Block, *, nested_table: bool = False) -> None:
         if item["type"] == "table":
             # Match the current DTX table projection; full rows remain available
             # through the resource API, whose global catalog is not filtered.
-            for row in item["rows"][:30]:
+            rows = item["rows"]
+            for row in rows[:2] if not nested_table and len(rows) > 30 else rows:
                 for cell in row["cells"]:
                     for child in cell["blocks"]:
-                        block(child)
+                        block(child, nested_table=child["type"] == "table")
         else:
             inline(item)
 

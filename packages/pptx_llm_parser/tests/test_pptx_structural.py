@@ -21,7 +21,10 @@ class StructuralRenderingTests(unittest.TestCase):
         self.assertEqual(slide_one.find("img").get("id"), "img1")
         self.assertEqual([[cell.text for cell in row] for row in slide_one.findall("table/tr")], [["A", "B"], ["C", "D"]])
         self.assertEqual(slide_one.find("chart").get("truncated"), "true")
-        self.assertEqual(slide_one.findtext("smartart"), "Start Middle End")
+        self.assertEqual([node.text for node in slide_one.findall("smartart/node")], ["Start", "Middle", "End"])
+        self.assertEqual(
+            [(edge.get("from"), edge.get("to")) for edge in slide_one.findall("smartart/link")], [("1", "2"), ("2", "3")]
+        )
         self.assertEqual(slide_one.findtext("speaker-notes"), "Talk")
         self.assertEqual(slide_two.get("hidden"), "true")
         self.assertEqual([item.get("id") for item in root.findall("comments/comment")], ["cmt1", "cmt2"])

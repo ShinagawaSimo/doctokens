@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import cast
 from xml.etree import ElementTree as ET
 
+from ooxml_llm_core.chart_axes import append_chart_axes
 from ooxml_llm_core.doctokens_xml import append
 
 from .._utils import col_letter
@@ -92,7 +93,7 @@ def _append_sheet_metadata(
     for image in sheet.get("images", []):
         append(parent, "img", id=image.get("id"), ref=image.get("ref"))
     for chart in sheet.get("charts", []):
-        append(
+        chart_node = append(
             parent,
             "chart",
             id=chart.get("id"),
@@ -104,6 +105,7 @@ def _append_sheet_metadata(
             title=chart.get("title"),
             truncated=True,
         )
+        append_chart_axes(chart_node, chart.get("axes", []))
     for pivot in sheet.get("pivot_tables", []):
         pivot_attrs: dict[str, object] = {
             "id": pivot.get("id"),

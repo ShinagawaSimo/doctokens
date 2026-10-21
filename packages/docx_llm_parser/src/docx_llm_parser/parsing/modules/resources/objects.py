@@ -154,9 +154,9 @@ class EmbeddedObjectExtractor:
 
 
 def _chart_summary(chart: Chart) -> Chart:
-    """Keep the fields used by inline summaries and discard point arrays."""
+    """Keep a bounded point preview in every reading density."""
     series: list[ChartSeries] = []
-    for item in chart.get("series", []):
+    for ordinal, item in enumerate(chart.get("series", [])):
         summary: ChartSeries = {
             "index": item["index"],
             "pointCount": item.get("pointCount", 0),
@@ -164,6 +164,10 @@ def _chart_summary(chart: Chart) -> Chart:
         }
         if item.get("name"):
             summary["name"] = item["name"]
+        if ordinal < 8:
+            for key in ("categories", "values", "xValues", "yValues", "bubbleSizes"):
+                if key in item:
+                    cast(dict[str, object], summary)[key] = item[key][:8]
         series.append(summary)
     result = cast(Chart, dict(chart))
     result["series"] = series
@@ -172,7 +176,7 @@ def _chart_summary(chart: Chart) -> Chart:
 
 
 def _smartart_summary(smartart: SmartArt) -> SmartArt:
-    """Keep node labels and counts; full links remain resource-only data."""
+    """Copy the complete reading graph without discarding structural edges."""
     result = cast(SmartArt, dict(smartart))
     nodes: list[SmartArtNode] = []
     for node in smartart.get("nodes", []):
@@ -181,7 +185,7 @@ def _smartart_summary(smartart: SmartArt) -> SmartArt:
             summary_node["kind"] = node["kind"]
         nodes.append(summary_node)
     result["nodes"] = nodes
-    result["links"] = []
+    result["links"] = [link.copy() for link in smartart.get("links", [])]
     return result
 
 
@@ -233,6 +237,8 @@ def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> Chart:
         "series": series,
     }
     title = info.get("title", "")
+    if info.get("axes"):
+        chart["axes"] = info["axes"]
     if title:
         chart["title"] = title
     plots: list[ChartPlot] = []
@@ -253,23 +259,22 @@ def parse_smartart_root(root: ET.Element, smartart_id: str, part_name: str) -> S
     nodes: list[SmartArtNode] = []
     node_index_by_model_id: dict[str, int] = {}
     for point in root.iter(qualified_name("dgm", "pt")):
-        model_id = point.attrib["modelId"]
+        model_id = point.get("modelId", "")
         text = _node_text(point)
-        if not text:
-            continue
         node: SmartArtNode = {"modelId": model_id, "text": text}
         point_type = point.get("type")
         if point_type:
             node["kind"] = point_type
-        node_index_by_model_id[model_id] = len(nodes) + 1
+        if model_id:
+            node_index_by_model_id.setdefault(model_id, len(nodes) + 1)
         nodes.append(node)
 
     links: list[SmartArtLink] = []
     raw_link_count = 0
     for connection in root.iter(qualified_name("dgm", "cxn")):
         raw_link_count += 1
-        source = connection.get("srcId")
-        target = connection.get("destId")
+        source = connection.get("srcId") or connection.get("fromModelId")
+        target = connection.get("destId") or connection.get("toModelId")
         if source is not None and target is not None and source in node_index_by_model_id and target in node_index_by_model_id:
             # The final XML references nodes by short ordinal numbers to avoid exposing
             # lengthy modelIds.

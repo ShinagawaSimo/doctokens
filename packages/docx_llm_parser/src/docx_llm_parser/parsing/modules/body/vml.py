@@ -7,7 +7,7 @@ from xml.etree import ElementTree as ET
 from ....core.constants import attr, qualified_name
 from ....core.models import AssetLookup, DrawingCommon, InlineObject
 from .object_common import append_image_or_placeholder, copy_drawing_common
-from .textboxes import textbox_objects_from_nodes
+from .textboxes import TextboxReader, textbox_objects_from_nodes
 
 _SHAPES = frozenset(
     qualified_name("v", name) for name in ("shape", "rect", "roundrect", "oval", "line", "polyline", "arc", "curve", "image")
@@ -16,7 +16,9 @@ _IMAGE_DATA = qualified_name("v", "imagedata")
 _TEXTBOX = qualified_name("w", "txbxContent")
 
 
-def pict_objects(pict: ET.Element, part: str, asset_lookup: AssetLookup) -> list[InlineObject]:
+def pict_objects(
+    pict: ET.Element, part: str, asset_lookup: AssetLookup, textbox_reader: TextboxReader | None = None
+) -> list[InlineObject]:
     """Bind each image using its owner part and retain the shape's description.
 
     Traversal stops at text-box content: the existing text-box projection owns
@@ -41,7 +43,7 @@ def pict_objects(pict: ET.Element, part: str, asset_lookup: AssetLookup) -> list
             append_image_or_placeholder(objects, asset_lookup, part, attr(node, "r", "id") or "", image_common)
             return
         if node.tag == _TEXTBOX:
-            objects.extend(textbox_objects_from_nodes([node], common))
+            objects.extend(textbox_objects_from_nodes([node], common, part, textbox_reader))
             return
         for child in node:
             walk(child, common)

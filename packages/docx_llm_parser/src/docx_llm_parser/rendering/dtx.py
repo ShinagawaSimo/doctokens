@@ -18,6 +18,7 @@ from ..core.models import (
     Run,
     TableBlock,
 )
+from ..core.traversal import iter_blocks
 from .common.pages import iter_block_page_segments, iter_page_blocks
 from .common.text import filter_format, merge_text_runs
 from .dtx_content import _append_chart, _append_controls, _append_ocr, _append_smartart, _append_text_with_breaks
@@ -181,7 +182,13 @@ def _append_inline_object(
         append(parent, "img", alt=alt if density == "semantic" else None)
     elif object_type == "textbox":
         node = append(parent, "textbox", alt=inline_object.get("alt") if density == "semantic" else None)
-        _append_text_with_breaks(node, inline_object.get("text", ""))
+        if "blocks" in inline_object:
+            blocks = inline_object["blocks"]
+            anchors = {name for child in iter_blocks(blocks) if child["type"] != "table" for name in child.get("anchors", [])}
+            for block in blocks:
+                _append_block(node, block, density, ocr_results, anchors)
+        else:
+            _append_text_with_breaks(node, inline_object.get("text", ""))
     elif object_type == "equation":
         append(parent, "equation", inline_object.get("text") or "", notation="latex")
     elif object_type == "chart":
@@ -302,7 +309,7 @@ def _append_supplemental(parent: ET.Element, parsed_document: ParsedDocument, de
 
 def _used_anchors(parsed_document: ParsedDocument) -> set[str]:
     anchors: set[str] = set()
-    for block in parsed_document.blocks:
+    for block in iter_blocks(parsed_document.blocks):
         if block["type"] not in {"paragraph", "heading"}:
             continue
         for run in block.get("runs", []):

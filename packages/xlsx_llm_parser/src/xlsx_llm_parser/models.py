@@ -199,6 +199,7 @@ class DrawingChart(TypedDict, total=False):
     part: str
     series: list[DrawingChartSeries]
     plotTypes: list[str]
+    axes: list[dict[str, str]]
 
 
 class PivotTableInfo(TypedDict, total=False):

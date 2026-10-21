@@ -8,6 +8,7 @@ import unittest
 from xml.etree import ElementTree as ET
 
 from ooxml_llm_core._chart_values import _flatten_category_levels, _safe_int, _to_float
+from ooxml_llm_core.chart_axes import append_chart_axes
 from ooxml_llm_core.chart_ml import (
     ChartParser,
     _first_dimension,
@@ -15,6 +16,8 @@ from ooxml_llm_core.chart_ml import (
     _summary_chart_type,
     _true_value,
 )
+from ooxml_llm_core.doctokens_xml import element
+from ooxml_llm_core.resource_xml import resource_document
 
 NS_C = "http://schemas.openxmlformats.org/drawingml/2006/chart"
 NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -41,6 +44,11 @@ class ChartParserTests(unittest.TestCase):
                 </c:ser><c:axId val="1"/><c:axId val="3"/></c:lineChart>
                 <c:catAx><c:axId val="1"/><c:title><c:tx><c:rich><a:p><a:r><a:t>Quarter</a:t></a:r></a:p>
                 </c:rich></c:tx></c:title></c:catAx>
+                <c:valAx><c:axId val="2"/><c:crossAx val="1"/><c:axPos val="l"/>
+                  <c:scaling><c:min val="0"/><c:max val="100"/><c:orientation val="minMax"/></c:scaling>
+                  <c:dispUnits><c:builtInUnit val="thousands"/></c:dispUnits><c:numFmt formatCode="#,##0"/>
+                  <c:title><c:tx><c:rich><a:p><a:r><a:t>USD</a:t></a:r></a:p></c:rich></c:tx></c:title>
+                </c:valAx>
               </c:plotArea><c:legend><c:legendPos val="b"/></c:legend></c:chart>
             </c:chartSpace>"""
         )
@@ -50,6 +58,14 @@ class ChartParserTests(unittest.TestCase):
         self.assertEqual(chart["series"][0]["chart_type"], "bar")
         self.assertEqual(chart["series"][1]["chart_type"], "line")
         self.assertEqual(chart["series"][0]["categories"], ["2025 / Q1", "2025 / Q2"])
+        output = element("chart")
+        append_chart_axes(output, chart["axes"])
+        self.assertEqual(
+            resource_document("pptx", output),
+            '<presentation density="semantic" format="pptx"><resources><chart><axis id="1" kind="catAx" title="Quarter" />'
+            '<axis cross-axis="1" display-unit="thousands" id="2" kind="valAx" maximum="100" minimum="0" '
+            'num-format="#,##0" orientation="minMax" position="l" title="USD" /></chart></resources></presentation>',
+        )
 
     def test_chart_helpers_and_empty_chart_paths(self) -> None:
         self.assertEqual(ChartParser().parse(ET.Element("chartSpace"))["chart_type"], "unknown")

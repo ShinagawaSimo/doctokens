@@ -4,6 +4,11 @@
 
 Shape IDs are local to a slide. Output type depends on the retained content.
 
+Explicit groups are retained as a compact `slide/groups` directory. Its ids are
+slide-local `g1`, `g2`, ... in source traversal order. Only groups containing
+retained source shapes and their ancestors are emitted. Grouping does not reorder
+the source shape sequence or activate public geometry output.
+
 ## Processing
 
 Retain textless shapes when they have alt, title, link, fromShape, or toShape; also retain any shape addressed by a retained connector. The name alone does not retain decoration.
@@ -142,3 +147,13 @@ Retain textless shapes when they have alt, title, link, fromShape, or toShape; a
 
 - **Parsing**
   - Increment before parsing each candidate; unsupported/skipped shapes can leave gaps.
+
+### `group`
+
+- **Output**
+  - Primary shape `@group` in both XML densities references its immediate group.
+  - `groups/group/@parent` preserves nested containment and `@name` preserves a saved name.
+- **IR**
+  - `ShapeBlock.groups: list[ShapeGroup]` is the source ancestor path.
+- **Parsing**
+  - Preserve explicit `p:grpSp` containment. Do not infer groups from visual proximity.

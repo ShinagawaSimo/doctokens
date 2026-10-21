@@ -38,6 +38,7 @@ from ....ooxml.content_controls import parse_content_control
 from ....ooxml.styles import StyleMap
 from ....plan import DocxFeature, DocxParsePlan
 from ..body.inline import InlineParser
+from ..body.textboxes import TextboxReader
 
 
 class AncillaryParser:
@@ -55,6 +56,7 @@ class AncillaryParser:
         comment_anchors: Mapping[str, str] | None = None,
         plan: DocxParsePlan | None = None,
         compatibility: DocxCompatibility | None = None,
+        textbox_reader: TextboxReader | None = None,
     ) -> None:
         self.package = package
         self.options = options
@@ -70,6 +72,7 @@ class AncillaryParser:
             object_lookup=object_lookup,
             plan=self.plan,
         )
+        self.inline.textbox_reader = textbox_reader
         self._block_index = 0
         self._comment_anchors = dict(comment_anchors or {})
 

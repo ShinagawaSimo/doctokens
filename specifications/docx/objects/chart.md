@@ -95,7 +95,10 @@ Series conversion: shared snake_case keys become DOCX camelCase keys. See [serie
   - `list[ChartSeries]`
 
 - **Parsing**
-  - Map shared series fields as described below. Summary plan retains only index, pointCount, preview, optional name.
+  - Map shared series fields as described below. Low-density plans retain names
+    and counts plus up to eight saved points for each of the first eight series;
+    full series remain available through the resource API. Preview data is not
+    discarded merely because character formatting is disabled.
 
 ### `plots`
 

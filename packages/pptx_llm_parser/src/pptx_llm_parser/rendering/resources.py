@@ -5,12 +5,14 @@ from __future__ import annotations
 import base64
 import re
 
+from ooxml_llm_core.chart_axes import append_chart_axes
 from ooxml_llm_core.doctokens_xml import append, element
 from ooxml_llm_core.resource_xml import resource_document
 
 from ..core.enums import ResourceType
 from ..core.models import ParsedPresentation
 from ..core.package import PackageReader
+from .diagrams import append_diagram
 
 _AGGREGATE_OPS = {"sum", "count", "avg", "min", "max"}
 
@@ -78,8 +80,9 @@ def _render_chart(parsed_presentation: ParsedPresentation, resource_id: str) -> 
         points=point_count if point_count is not None else 0,
         plots=",".join(plot.get("chart_type", "unknown") for plot in plots) if is_combination and plots else None,
     )
+    append_chart_axes(node, chart.get("axes", []))
     for series_index, series_item in enumerate(series, start=1):
-        append(
+        child = append(
             node,
             "series",
             id=series_index,
@@ -94,6 +97,15 @@ def _render_chart(parsed_presentation: ParsedPresentation, resource_id: str) -> 
             min=f"{series_item['min']:g}" if series_item.get("min") is not None else None,
             max=f"{series_item['max']:g}" if series_item.get("max") is not None else None,
         )
+        arrays = [
+            ("category", series_item.get("categories", [])),
+            ("value", series_item.get("values", [])),
+            ("x", series_item.get("x_values", [])),
+            ("y", series_item.get("y_values", [])),
+            ("bubbleSize", series_item.get("bubble_sizes", [])),
+        ]
+        for index in range(max((len(values) for _, values in arrays), default=0)):
+            append(child, "point", index=index, **{key: values[index] for key, values in arrays if index < len(values)})
     return resource_document("pptx", node)
 
 
@@ -115,10 +127,7 @@ def _render_smartart(parsed_presentation: ParsedPresentation, resource_id: str) 
     nodes = smartart_record.get("nodes", [])
     links = smartart_record.get("links", [])
     root = element("smartart", id=resource_id, type=layout_type, nodes=len(nodes), links=len(links))
-    for node in nodes:
-        append(root, "node", node["text"], id=node["id"])
-    for link in links:
-        append(root, "link", **{"from": link["from"], "to": link["to"]})
+    append_diagram(root, smartart_record, include_source_ids=True)
     return resource_document("pptx", root)
 
 

@@ -37,6 +37,7 @@ from .numbering import ParagraphNumbering, _paragraph_style_id
 from .sections import BodySections
 from .stream import read_blocks
 from .tables import TableParser
+from .textboxes import parse_textbox_blocks
 
 
 class DocumentBodyParser:
@@ -84,11 +85,13 @@ class DocumentBodyParser:
         )
         self.block_ids = BlockIdAllocator()
         self._order = 0
-        self._table_index = 0
+        self.table_ids = BlockIdAllocator("t")
         self._page_hint = 1
         # Counter instead of boolean: a paragraph/table can contain multiple lastRenderedPageBreak elements.
         self._pending_page_breaks = 0
         self._table_parser = TableParser(self)
+        self._textbox_depth = 0
+        self.inline.textbox_reader = lambda node, part: parse_textbox_blocks(self, node, part)
 
     def parse(self) -> list[Block]:
         """Stream-parse word/document.xml, preserving the original paragraph/table order."""

@@ -32,6 +32,7 @@ def render_smartart_resource(s: SmartArt) -> str:
         type=s.get("layoutType") or None,
         nodes=s.get("nodeCount", 0),
         links=s.get("linkCount", 0),
+        incomplete=True if s.get("rawLinkCount", 0) > len(s.get("links", [])) else None,
     )
     for index, item in enumerate(s.get("nodes") or [], start=1):
         append(node, "node", index=index, text=item.get("text", ""), kind=item.get("kind") or None)

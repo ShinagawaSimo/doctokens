@@ -22,9 +22,17 @@ class PptxFeature(Flag):
     OBJECT_DETAILS = auto()
     OCR = auto()
     NAVIGATION = auto()
+    PARAGRAPH_INHERITANCE = auto()
 
 
-_BASE = PptxFeature.NOTES | PptxFeature.COMMENTS | PptxFeature.OBJECT_DETAILS | PptxFeature.ASSET_INDEX | PptxFeature.NAVIGATION
+_BASE = (
+    PptxFeature.NOTES
+    | PptxFeature.COMMENTS
+    | PptxFeature.OBJECT_DETAILS
+    | PptxFeature.ASSET_INDEX
+    | PptxFeature.NAVIGATION
+    | PptxFeature.PARAGRAPH_INHERITANCE
+)
 _FULL = _BASE | PptxFeature.TEXT_FORMATTING | PptxFeature.THEME_AND_LAYOUT | PptxFeature.OCR
 
 

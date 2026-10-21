@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ooxml_llm_core.chart_axes import append_chart_axes
 from ooxml_llm_core.doctokens_xml import append, element
 from ooxml_llm_core.models import ResourceDescriptor
 from ooxml_llm_core.resource_xml import resource_document
@@ -63,6 +64,7 @@ def _render_chart_resource(chart: DrawingChart) -> str:
         series=chart.get("series_count", 0),
         title=chart.get("title") or None,
     )
+    append_chart_axes(node, chart.get("axes", []))
     for series in chart.get("series", []):
         child = append(
             node,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from html import escape as escape_text
 
+from ooxml_llm_core.chart_axes import append_chart_axes
 from ooxml_llm_core.doctokens_xml import append, element
 from ooxml_llm_core.resource_xml import resource_document
 
@@ -47,6 +48,7 @@ def render_chart_resource(chart: Chart) -> str:
         points=chart.get("pointCount", 0),
     )
     combination = chart.get("chartType") == "combination"
+    append_chart_axes(node, chart.get("axes", []))
     if chart.get("plots"):
         node.set("plots", ",".join(str(p.get("chartType", "unknown")) for p in chart["plots"]))
     if combination:

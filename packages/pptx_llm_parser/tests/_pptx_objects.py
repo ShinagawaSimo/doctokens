@@ -81,7 +81,7 @@ def diagram_data_xml() -> str:
         )
 
     def cxn(model_id: str, from_id: str, to_id: str) -> str:
-        return f'<dgm:cxn modelId="{model_id}" fromModelId="{from_id}" toModelId="{to_id}"/>'
+        return f'<dgm:cxn modelId="{model_id}" srcId="{from_id}" destId="{to_id}"/>'
 
     return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <dgm:dataModel xmlns:dgm="{dgm}" xmlns:a="{a}">

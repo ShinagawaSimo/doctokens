@@ -10,9 +10,12 @@ that can be attached to DOCX, XLSX, or PPTX resources without retaining XML.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypedDict
 from xml.etree import ElementTree as ET
 
+from ._chart_models import ChartInfo as ChartInfo
+from ._chart_models import ChartPlotInfo as ChartPlotInfo
+from ._chart_models import ChartPoint as ChartPoint
+from ._chart_models import ChartSeriesInfo as ChartSeriesInfo
 from ._chart_values import (
     NS_C,
     NS_CX,
@@ -37,6 +40,7 @@ from ._chart_values import (
     _true_value,
     _unique_in_order,
 )
+from .chart_axes import parse_chart_axes
 
 CHART_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
 CHART_EX_REL_TYPE = "http://schemas.microsoft.com/office/2014/relationships/chartEx"
@@ -68,55 +72,6 @@ MAX_PREVIEW_POINTS = 8
 # ── Output types ──
 
 
-class ChartPoint(TypedDict, total=False):
-    """A single data point with category label and numeric value."""
-
-    category: str
-    value: str
-    x: str
-    y: str
-    bubble_size: str
-
-
-class ChartSeriesInfo(TypedDict, total=False):
-    """Full data and ownership information for one chart series."""
-
-    index: int
-    plot_index: int
-    chart_type: str
-    name: str
-    categories: list[str]
-    values: list[str]
-    x_values: list[str]
-    y_values: list[str]
-    bubble_sizes: list[str]
-    preview: str
-    min: float
-    max: float
-    formula: str
-    category_formula: str
-    hidden: bool
-
-
-class ChartPlotInfo(TypedDict, total=False):
-    """One plot family within a chart, including combination-chart ownership."""
-
-    index: int
-    chart_type: str
-    series_indices: list[int]
-
-
-class ChartInfo(TypedDict, total=False):
-    """Complete format-neutral chart metadata and cached data."""
-
-    chart_type: str
-    title: str
-    series: list[ChartSeriesInfo]
-    series_count: int
-    point_count: int
-    plots: list[ChartPlotInfo]
-
-
 @dataclass(slots=True)
 class _ChartExData:
     """The dimensions addressed by one ChartEx ``dataId``.
@@ -137,7 +92,10 @@ class ChartParser:
     def parse(self, root: ET.Element) -> ChartInfo:
         if _namespace(root.tag) == NS_CX and _local_name(root.tag) == "chartSpace":
             return self._parse_chartex(root)
-        return self._parse_chartml(root)
+        result = self._parse_chartml(root)
+        if axes := parse_chart_axes(root):
+            result["axes"] = axes
+        return result
 
     def _parse_chartml(self, root: ET.Element) -> ChartInfo:
         plot_area = root.find(f".//{{{NS_C}}}plotArea")

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import cast
 
 from ...core.models import Block, ContentControl, InlineContainer, InlineObject, OcrStoredResult, TableBlock
+from ...core.traversal import iter_blocks
 from ..common import constants as _constants
 from ..common.controls import wrap_plain_control
 from ..common.ocr import ocr_text
@@ -107,6 +108,11 @@ def plain_object_placeholder(
     if object_type == "equation":
         return _string_field(inline_object.get("text", ""))
     if object_type == "textbox":
+        if "blocks" in inline_object:
+            return "\n".join(
+                table_text_only(block, ocr_results) if block["type"] == "table" else inline_text_only(block, ocr_results)
+                for block in inline_object["blocks"]
+            )
         return _string_field(inline_object.get("text", ""))
     if object_type == "fieldInstruction":
         return ""
@@ -164,14 +170,21 @@ def collect_refs(block: InlineContainer, ref_type: str) -> list[str]:
     reference_ids: list[str] = []
     if "runs" not in block:
         return reference_ids
-    for run in block["runs"]:
-        if "objects" not in run:
-            continue
-        for inline_object in run["objects"]:
-            ref_id = inline_object.get("id")
-            if inline_object["type"] == ref_type and ref_id is not None:
-                reference_ids.append(ref_id)
-    return reference_ids
+    containers: list[InlineContainer] = [block]
+    containers.extend(
+        child
+        for run in block["runs"]
+        for item in run.get("objects", [])
+        for child in iter_blocks(item.get("blocks", []))
+        if child["type"] in {"paragraph", "heading"}
+    )
+    return [
+        ref_id
+        for container in containers
+        for run in container.get("runs", [])
+        for item in run.get("objects", [])
+        if item["type"] == ref_type and (ref_id := item.get("id")) is not None
+    ]
 
 
 def table_text_only(block: TableBlock, ocr_results: dict[str, OcrStoredResult] | None = None) -> str:
@@ -192,8 +205,6 @@ def _plain_cell_text(cell: object, ocr_results: dict[str, OcrStoredResult] | Non
     if not isinstance(cell, dict):
         return ""
     fallback = _string_field(cell.get("text"))
-    if not ocr_results:
-        return fallback
     blocks = cell.get("blocks")
     if not isinstance(blocks, list) or not blocks:
         return fallback

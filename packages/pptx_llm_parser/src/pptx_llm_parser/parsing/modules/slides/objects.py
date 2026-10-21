@@ -172,6 +172,8 @@ class SlideObjectParser:
         chart_id = chart.get("id")
         if chart_id:
             shape["chartId"] = chart_id
+        if chart.get("title"):
+            shape["chartTitle"] = chart["title"]
         chart_type = chart.get("chart_type")
         if chart_type:
             shape["chartType"] = chart_type

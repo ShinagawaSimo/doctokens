@@ -15,7 +15,8 @@ Density selects a format-specific extraction plan and output projection.
 | Feature | PPTX plain / structural | PPTX semantic / session |
 | --- | --- | --- |
 | Slide index, text, images, notes, comments, navigation, objects | Yes | Yes |
-| Text formatting, theme/layout, optional OCR | No | Yes |
+| Inherited list defaults and placeholder roles | Yes | Yes |
+| Character formatting, theme colors, optional OCR | No | Yes |
 | Geometry sorting and background extraction | No | No |
 
 | Feature | XLSX plain | XLSX structural | XLSX semantic / session |

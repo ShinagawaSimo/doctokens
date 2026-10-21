@@ -21,6 +21,7 @@ from _pptx_fixtures import (
     text_shape_xml,
 )
 from ooxml_llm_core.relationships import RelationshipIndex
+from pptx_llm_parser import parse_pptx
 from pptx_llm_parser.core.models import ParseOptions
 from pptx_llm_parser.core.package import PackageReader
 from pptx_llm_parser.ooxml.inheritance import LayoutMasterResolver
@@ -78,6 +79,44 @@ def _resolver(deck: bytes) -> tuple[LayoutMasterResolver, PackageReader, ET.Elem
 
 
 class LayoutMasterResolverTests(unittest.TestCase):
+    def test_list_inheritance_does_not_parse_malformed_visual_defaults_in_low_densities(self) -> None:
+        # The invalid master RGB is a producer-corruption case. List content
+        # remains readable without enabling the semantic color decoder.
+        master = (
+            '<p:txStyles><p:bodyStyle><a:lvl1pPr><a:buChar char="M"/>'
+            '<a:defRPr><a:solidFill><a:srgbClr val="invalid"/></a:solidFill></a:defRPr>'
+            "</a:lvl1pPr></p:bodyStyle></p:txStyles>"
+        )
+        for declaration, expected in (
+            ('<a:buAutoNum type="romanLcParenR" startAt="3"/>', "iii) One\niv) Two"),
+            ("<a:buNone/>", "One\nTwo"),
+        ):
+            layout = text_shape_xml([], ph="body").replace(
+                "<a:lstStyle/>", f"<a:lstStyle><a:lvl1pPr>{declaration}</a:lvl1pPr></a:lstStyle>"
+            )
+            source = _deck(
+                layout_shapes=layout,
+                master_clr_map=master,
+                slide_xml=slide_xml_shapes(text_shape_xml([[("t", "One")], [("t", "Two")]], ph="body")),
+            )
+            for density in ("plain", "structural", "semantic"):
+                with self.subTest(declaration=declaration, density=density):
+                    result = parse_pptx(source, density=density)
+                    if density == "plain":
+                        self.assertEqual(result.text, "density=plain format=pptx\n=== Slide 1 ===\n" + expected)
+                    else:
+                        attrs = 'placeholder="body" shape-id="s1"'
+                        if density == "semantic":
+                            attrs = 'id="s1" name="TextBox 1" ' + attrs
+                        self.assertEqual(
+                            result.text,
+                            f'<presentation density="{density}" format="pptx"><slide number="1"><p {attrs}>'
+                            + expected
+                            + "</p></slide></presentation>",
+                        )
+                    if density != "semantic":
+                        self.assertNotIn("COLOR_VALUE_INVALID", [warning.code for warning in result.report.warnings])
+
     def test_missing_layout_yields_warning_and_empty_context(self) -> None:
         entries: dict[str, str | bytes] = {
             "[Content_Types].xml": content_types_xml(1),

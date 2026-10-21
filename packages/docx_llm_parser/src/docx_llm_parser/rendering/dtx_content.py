@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from xml.etree import ElementTree as ET
 
+from ooxml_llm_core.chart_axes import append_chart_axes
 from ooxml_llm_core.doctokens_xml import append, text
 
 from ..core.models import (
@@ -30,7 +31,19 @@ def _append_chart(parent: ET.Element, chart: InlineObject) -> None:
         attrs["categories"] = ",".join(categories[:8])
     if names:
         attrs["names"] = ",".join(names)
-    append(parent, "chart", **attrs)
+    node = append(parent, "chart", **attrs)
+    append_chart_axes(node, chart.get("axes", []))
+    for ordinal, item in enumerate(series[:8]):
+        child = append(node, "series", index=item.get("index", ordinal), name=item.get("name"))
+        arrays = [
+            ("category", item.get("categories", [])),
+            ("value", item.get("values", [])),
+            ("x", item.get("xValues", [])),
+            ("y", item.get("yValues", [])),
+            ("bubbleSize", item.get("bubbleSizes", [])),
+        ]
+        for index in range(min(8, max((len(values) for _, values in arrays), default=0))):
+            append(child, "point", index=index, **{key: values[index] for key, values in arrays if index < len(values)})
 
 
 def _append_smartart(parent: ET.Element, smartart: InlineObject) -> None:
@@ -41,9 +54,13 @@ def _append_smartart(parent: ET.Element, smartart: InlineObject) -> None:
         type=smartart.get("layoutType"),
         nodes=smartart.get("nodeCount", 0),
         links=smartart.get("linkCount", 0),
-        truncated=True,
+        truncated=True if "nodes" not in smartart else None,
+        incomplete=True if smartart.get("rawLinkCount", 0) > smartart.get("linkCount", 0) else None,
     )
-    _append_text_with_breaks(node, " ".join(str(item.get("text", "")) for item in smartart.get("nodes", [])))
+    for index, item in enumerate(smartart.get("nodes", []), start=1):
+        append(node, "node", item["text"], id=index, kind=item.get("kind"))
+    for edge in smartart.get("links", []):
+        append(node, "link", **{"from": edge["from"], "to": edge["to"], "kind": edge.get("kind")})
 
 
 def _append_ocr(parent: ET.Element, asset_id: str | None, results: dict[str, OcrStoredResult]) -> None:

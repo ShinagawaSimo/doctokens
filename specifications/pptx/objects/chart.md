@@ -2,7 +2,9 @@
 
 [PPTX](../README.md) / Charts
 
-Main output contains chart identity, family, and counts.
+Main output contains chart identity, title, family, counts, explicit saved-axis
+metadata and a bounded point preview. Complete series remain available through
+the resource operation.
 
 ## Fields
 
@@ -54,7 +56,7 @@ Main output contains chart identity, family, and counts.
 ### `title`
 
 - **Output**
-  - Resource title; no inline chart title attribute.
+  - Body/resource chart title.
 
 - **OOXML**
   - Shared ChartInfo.title.
@@ -63,7 +65,7 @@ Main output contains chart identity, family, and counts.
   - `ChartRecord.title: str`
 
 - **Parsing**
-  - Retain resource value; not copied to shape.
+  - Copy the saved title to the shape's reading summary without evaluating it.
 
 ### `series_count`
 

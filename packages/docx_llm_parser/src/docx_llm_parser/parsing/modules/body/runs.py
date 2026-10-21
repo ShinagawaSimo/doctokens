@@ -134,12 +134,12 @@ class RunParser:
             self.owner._mark_page_break()
             split_segment()
         elif child_tag == _TAG_W_DRAWING:
-            drawing = drawing_objects(child, part, self.owner.asset_lookup, self.owner.object_lookup)
+            drawing = drawing_objects(child, part, self.owner.asset_lookup, self.owner.object_lookup, self.owner.textbox_reader)
             objects.extend(drawing)
             if self.owner.include_raw_hints:
                 raw_hints.extend({"type": "drawing", **obj} for obj in drawing)
         elif child_tag == _TAG_W_PICTURE:
-            pict = pict_objects(child, part, self.owner.asset_lookup)
+            pict = pict_objects(child, part, self.owner.asset_lookup, self.owner.textbox_reader)
             objects.extend(pict)
             if self.owner.include_raw_hints:
                 raw_hints.extend({"type": "pict", **obj} for obj in pict)

@@ -183,6 +183,8 @@ def _list_prefix(
         return (bullet.get("char") or "•") + " "
     auto = first_child(p_pr, "a", "buAutoNum") if p_pr is not None else None
     inherited = inherited or {}
+    if bullet is None and auto is None and inherited.get("listNone"):
+        return ""
     if auto is None and inherited.get("bullet"):
         return inherited["bullet"] + " "
     if auto is None and not inherited.get("numberType"):
@@ -204,6 +206,8 @@ def _list_metadata(p: ET.Element, inherited: ParagraphStyle) -> Paragraph:
         return result
     bullet = first_child(p_pr, "a", "buChar") if p_pr is not None else None
     auto = first_child(p_pr, "a", "buAutoNum") if p_pr is not None else None
+    if bullet is None and auto is None and inherited.get("listNone"):
+        return result
     if bullet is not None:
         result["bullet"] = bullet.get("char") or "•"
     elif auto is not None:

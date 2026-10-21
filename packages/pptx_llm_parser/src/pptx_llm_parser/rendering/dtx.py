@@ -7,7 +7,9 @@ from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.doctokens_xml import append, element, serialize, text
 
-from ..core.models import CommentItem, OcrStoredResult, ParsedPresentation, ShapeBlock, SlideBlock, SmartArtRecord
+from ..core.models import ChartRecord, CommentItem, OcrStoredResult, ParsedPresentation, ShapeBlock, SlideBlock, SmartArtRecord
+from .charts import append_chart_preview
+from .diagrams import append_diagram
 
 _TABLE_ROW_LIMIT = 30
 _TITLE_PLACEHOLDERS = {"title", "ctrTitle"}
@@ -17,8 +19,9 @@ def iter_dtx(presentation: ParsedPresentation, density: str) -> Iterator[str]:
     """Yield one well-formed DTX presentation directly from PPTX IR."""
     root = element("presentation", density=density, format="pptx")
     smartarts = {item["id"]: item for item in presentation.smartarts}
+    charts = {item["id"]: item for item in presentation.charts}
     for slide in presentation.slides:
-        _append_slide(root, slide, density, smartarts, presentation.ocr_results)
+        _append_slide(root, slide, density, smartarts, charts, presentation.ocr_results)
     _append_comments(root, presentation.comments)
     yield serialize(root)
 
@@ -28,6 +31,7 @@ def _append_slide(
     slide: SlideBlock,
     density: str,
     smartarts: dict[str, SmartArtRecord],
+    charts: dict[str, ChartRecord],
     ocr_results: Mapping[str, OcrStoredResult],
 ) -> None:
     slide_attrs: dict[str, object] = {"number": slide["n"], "hidden": True if slide["hidden"] else None}
@@ -39,6 +43,11 @@ def _append_slide(
         slide_attrs["background_color"] = background.get("color")
         slide_attrs["background_image"] = background.get("assetId")
     node = append(parent, "slide", **slide_attrs)
+    groups = {group["id"]: group for shape in slide["shapes"] for group in shape.get("groups", [])}
+    if groups:
+        directory = append(node, "groups")
+        for group in groups.values():
+            append(directory, "group", id=group["id"], name=group.get("name"), parent=group.get("parent"))
     for reference in slide.get("commentRefs", []):
         append(node, "comment-ref", id=reference["id"], shape=reference.get("shapeId"))
     if density == "semantic" and slide.get("background"):
@@ -46,7 +55,7 @@ def _append_slide(
         assert background is not None
         _append_ocr(node, background.get("assetId"), ocr_results)
     for shape in slide["shapes"]:
-        _append_shape(node, shape, density, smartarts, ocr_results)
+        _append_shape(node, shape, density, smartarts, charts, ocr_results)
     if slide["notes"]:
         append(node, "speaker-notes", slide["notes"])
 
@@ -56,6 +65,7 @@ def _append_shape(
     shape: ShapeBlock,
     density: str,
     smartarts: dict[str, SmartArtRecord],
+    charts: dict[str, ChartRecord],
     ocr_results: Mapping[str, OcrStoredResult],
 ) -> None:
     shape_type = shape["type"]
@@ -97,10 +107,13 @@ def _append_shape(
                 "type": shape.get("chartType"),
                 "series": shape.get("seriesCount"),
                 "points": shape.get("pointCount"),
+                "title": shape.get("chartTitle"),
                 "truncated": True,
             }
         )
-        append(parent, "chart", **attrs)
+        node = append(parent, "chart", **attrs)
+        if chart := charts.get(shape.get("chartId", "")):
+            append_chart_preview(node, chart)
         return
     if shape_type == "smartart":
         smartart_id = shape.get("smartartId") or shape["id"]
@@ -111,13 +124,13 @@ def _append_shape(
                 "type": shape.get("layoutType"),
                 "nodes": shape.get("nodeCount"),
                 "links": shape.get("linkCount"),
-                "truncated": True,
+                "truncated": True if smartart_id not in smartarts else None,
             }
         )
         node = append(parent, "smartart", **attrs)
         record = smartarts.get(smartart_id)
         if record is not None:
-            text(node, " ".join(item["text"] for item in record["nodes"]))
+            append_diagram(node, record)
         return
     if shape_type == "media":
         attrs = _shape_attrs(shape, density)
@@ -134,6 +147,8 @@ def _append_shape(
                 "from_shape": shape.get("fromShape"),
                 "to_shape": shape.get("toShape"),
                 "progid": shape.get("embeddedType"),
+                "head_end": shape.get("headEnd"),
+                "tail_end": shape.get("tailEnd"),
             }
         )
         append(parent, "shape", **attrs)
@@ -145,6 +160,8 @@ def _text_shape_attrs(shape: ShapeBlock, density: str) -> dict[str, object]:
     if density == "semantic":
         return _shape_attrs(shape, density)
     attrs: dict[str, object] = {"shape_id": shape["id"], "placeholder": shape.get("placeholderType") or None}
+    if groups := shape.get("groups"):
+        attrs["group"] = groups[-1]["id"]
     if shape.get("link"):
         attrs["link"] = shape["link"]
     return attrs
@@ -152,6 +169,8 @@ def _text_shape_attrs(shape: ShapeBlock, density: str) -> dict[str, object]:
 
 def _shape_attrs(shape: ShapeBlock, density: str) -> dict[str, object]:
     attrs: dict[str, object] = {"id": shape["id"], "shape_id": shape["id"], "link": shape.get("link")}
+    if groups := shape.get("groups"):
+        attrs["group"] = groups[-1]["id"]
     if density != "semantic":
         return attrs
     if shape.get("placeholderType"):

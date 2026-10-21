@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import cast
 from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.models import ParseWarning
@@ -15,14 +14,16 @@ from ....core.models import (
     LayoutLookup,
     ParagraphStyle,
     ShapeBlock,
+    ShapeGroup,
     SlideBackground,
     SmartArtLookup,
 )
 from ....ooxml.inheritance import LayoutMasterResolver
+from ....ooxml.text_styles import TextStyleParser, merge_paragraph_style
 from ....plan import PptxFeature, PptxParsePlan
 from .geometry import SlideGeometry, _GroupTransform
 from .objects import SlideObjectParser
-from .runs import _format_properties, _parse_int, shape_runs
+from .runs import shape_runs
 from .shape_details import (
     _attach_accessibility,
     _drawing_id,
@@ -68,13 +69,14 @@ class SlideParser:
         self.include_navigation = self._plan.needs(PptxFeature.NAVIGATION)
         self.include_geometry = self._plan.needs(PptxFeature.GEOMETRY)
         self.include_theme_layout = self._plan.needs(PptxFeature.THEME_AND_LAYOUT)
+        self.include_paragraph_inheritance = self._plan.needs(PptxFeature.PARAGRAPH_INHERITANCE)
         self.include_formatting = self._plan.needs(PptxFeature.TEXT_FORMATTING)
         self._geometry = SlideGeometry(
             warnings,
             asset_lookup,
             slide_size,
             include_geometry=self.include_geometry,
-            include_theme_layout=self.include_theme_layout,
+            include_theme_layout=self.include_theme_layout or self.include_paragraph_inheritance,
         )
         self._theme = theme
         self._hyperlink_lookup = hyperlink_lookup
@@ -117,16 +119,23 @@ class SlideParser:
         drawing_id_to_shape_id: dict[str, str] = {}
         ordinal = 0
         z_index = 0
+        group_count = 0
 
-        def visit(node: ET.Element, transform: _GroupTransform) -> None:
-            nonlocal ordinal, z_index
+        def visit(node: ET.Element, transform: _GroupTransform, groups: tuple[ShapeGroup, ...] = ()) -> None:
+            nonlocal ordinal, z_index, group_count
             name = local_name(node.tag)
             if name in {"nvGrpSpPr", "grpSpPr"}:
                 return
             if name == "grpSp":
+                group_count += 1
+                group: ShapeGroup = {"id": f"g{group_count}"}
+                if group_name := _shape_name(node):
+                    group["name"] = group_name
+                if groups:
+                    group["parent"] = groups[-1]["id"]
                 group_transform = self._geometry._group_transform(node, transform, part) if self.include_geometry else transform
                 for child in node:
-                    visit(child, group_transform)
+                    visit(child, group_transform, (*groups, group))
                 return
             z_index += 1
             candidate_ordinal = ordinal + 1
@@ -153,6 +162,8 @@ class SlideParser:
                 return
             ordinal += 1
             shape["z"] = z_index
+            if groups:
+                shape["groups"] = list(groups)
             self._geometry._attach_inheritance(shape, node, context, transform)
             if self.include_navigation:
                 self._attach_shape_navigation(shape, node, part)
@@ -194,7 +205,7 @@ class SlideParser:
             part=part,
             theme=context["theme"],
             color_map=context["color_map"],
-            inherited_styles=(self._shape_text_styles(sp, context, part) if self.include_theme_layout else None),
+            inherited_styles=(self._shape_text_styles(sp, context, part) if self.include_paragraph_inheritance else None),
         )
         if text_result.text is None:
             return self._descriptive_shape(sp, ordinal)
@@ -246,6 +257,13 @@ class SlideParser:
             shape["fromShape"] = start_id
         if end is not None and (end_id := end.get("id")):
             shape["toShape"] = end_id
+        for tag, key in (("headEnd", "headEnd"), ("tailEnd", "tailEnd")):
+            arrow = _find_descendant(connector, tag)
+            if arrow is not None and (kind := arrow.get("type")) and kind != "none":
+                if key == "headEnd":
+                    shape["headEnd"] = kind
+                else:
+                    shape["tailEnd"] = kind
         return shape
 
     def _shape_text_styles(
@@ -255,8 +273,8 @@ class SlideParser:
         part: str,
     ) -> dict[int, ParagraphStyle]:
         ph = _find_descendant(shape, "ph")
-        ph_type = ph.get("type", "obj") if ph is not None else "other"
         idx = ph.get("idx", "0") if ph is not None else None
+        ph_type = ph.get("type") or context["placeholders"].get(idx or "", {}).get("type", "obj") if ph is not None else "other"
         role = "title" if ph_type in {"title", "ctrTitle"} else "body" if ph_type in {"body", "subTitle", "obj"} else "other"
         result: dict[int, ParagraphStyle] = {}
         keys = [role, f"type:{ph_type}"]
@@ -264,48 +282,11 @@ class SlideParser:
             keys.append(f"idx:{idx}")
         for key in keys:
             for level, style in context["text_styles"].get(key, {}).items():
-                merged = cast(ParagraphStyle, dict(result.get(level, {})))
-                if style.get("runFormat"):
-                    merged["runFormat"] = {**merged.get("runFormat", {}), **style["runFormat"]}
-                for name in ("bullet", "numberType", "startAt"):
-                    if name in style:
-                        merged[name] = style[name]
-                result[level] = merged
+                result[level] = merge_paragraph_style(result.get(level, {}), style)
         tx_body = first_child(shape, "p", "txBody")
         lst_style = first_child(tx_body, "a", "lstStyle") if tx_body is not None else None
         if lst_style is not None:
-            for child in lst_style:
-                name = local_name(child.tag)
-                if not (name.startswith("lvl") and name.endswith("pPr")):
-                    continue
-                try:
-                    level = max(0, int(name[3:-3]) - 1)
-                except ValueError:
-                    continue
-                style = cast(ParagraphStyle, dict(result.get(level, {})))
-                bullet = first_child(child, "a", "buChar")
-                auto = first_child(child, "a", "buAutoNum")
-                if first_child(child, "a", "buNone") is not None:
-                    style.pop("bullet", None)
-                    style.pop("numberType", None)
-                elif bullet is not None and bullet.get("char"):
-                    style["bullet"] = bullet.get("char", "")
-                    style.pop("numberType", None)
-                elif auto is not None:
-                    style["numberType"] = auto.get("type", "arabicPeriod")
-                    style["startAt"] = _parse_int(auto.get("startAt"), 1)
-                    style.pop("bullet", None)
-                def_r_pr = first_child(child, "a", "defRPr")
-                if def_r_pr is not None:
-                    style["runFormat"] = {
-                        **style.get("runFormat", {}),
-                        **_format_properties(
-                            def_r_pr,
-                            context["theme"],
-                            context["color_map"],
-                            self._warnings,
-                            part,
-                        ),
-                    }
-                result[level] = style
+            parser = TextStyleParser(context["theme"], self._warnings, include_formatting=self.include_formatting)
+            for level, style in parser.paragraph_defaults(lst_style, context["color_map"]).items():
+                result[level] = merge_paragraph_style(result.get(level, {}), style)
         return result

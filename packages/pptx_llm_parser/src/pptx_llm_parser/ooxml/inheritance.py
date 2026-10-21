@@ -95,12 +95,16 @@ class LayoutMasterResolver:
         warnings: list[ParseWarning],
         theme: dict[str, str] | None = None,
         theme_parser: ThemeParser | None = None,
+        *,
+        include_formatting: bool = True,
+        include_geometry: bool = True,
     ) -> None:
         self._pkg = pkg
         self._relationships = relationships
         self._warnings = warnings
         self._theme = theme or {}
-        self._text_styles = TextStyleParser(self._theme, warnings)
+        self._text_styles = TextStyleParser(self._theme, warnings, include_formatting=include_formatting)
+        self._include_geometry = include_geometry
         self._theme_parser = theme_parser
         self._cache: dict[str, LayoutContext] = {}
         self._layout_cache: dict[str, _TemplateModel] = {}
@@ -191,7 +195,7 @@ class LayoutMasterResolver:
             info: PlaceholderInfo = {}
             if ph_type:
                 info["type"] = ph_type
-            geometry = shape_geometry(shape, self._warnings)
+            geometry = shape_geometry(shape, self._warnings) if self._include_geometry else None
             if geometry is None and ph_type:
                 geometry = master_by_type.get(ph_type)
             if geometry is not None:
@@ -242,7 +246,7 @@ class LayoutMasterResolver:
             if ph is None:
                 continue
             ph_type = ph.get("type", "obj")
-            geometry = shape_geometry(shape, self._warnings)
+            geometry = shape_geometry(shape, self._warnings) if self._include_geometry else None
             info: PlaceholderInfo = {"type": ph_type} if ph_type else {}
             if geometry is not None:
                 info["x"], info["y"], info["w"], info["h"] = geometry

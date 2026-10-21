@@ -32,7 +32,9 @@ Session binary reads and explanatory renderings have distinct result types.
   - `str`
 
 - **Parsing**
-  - Exact matching. Table grouping includes top-level table segments only; nested tables can have IDs without a standalone table-directory entry.
+  - Exact matching. Group logical table segments throughout the retained block
+    tree, including nested cells and text-box stories in body and ancillary content.
+    Their ids use the same document-level allocator and have standalone directory entries.
 
 ### `rows`
 

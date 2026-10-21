@@ -33,6 +33,13 @@ class DocxPipelineTests(unittest.TestCase):
         plain_text = parse_docx(docx_path, density=Density.PLAIN).text
         structural_root = ET.fromstring(structural_output)
         self.assertEqual(structural_root.find(".//chart").get("id"), "chart1")
+        self.assertEqual(
+            [(point.get("category"), point.get("value")) for point in structural_root.findall(".//chart/series/point")],
+            [("Q1", "2"), ("Q2", "5")],
+        )
+        self.assertEqual(
+            [(edge.get("from"), edge.get("to")) for edge in structural_root.findall(".//smartart/link")], [("1", "2")]
+        )
         self.assertEqual(structural_root.find(".//body//img").get("id"), "img1")
         self.assertIn("Footnote text", plain_text)
         self.assertIn("Last page", parse_docx(docx_path, page_hint=-1).text)

@@ -28,6 +28,7 @@ from ....ooxml.styles import StyleMap
 from ....plan import DocxFeature, DocxParsePlan
 from .objects import equation_object, parse_embedded_object
 from .runs import RunParser
+from .textboxes import TextboxReader
 
 PageBreakCallback = Callable[[], None]
 NavigationMarkerCallback = Callable[[str, str], None]
@@ -71,6 +72,7 @@ class InlineParser:
         self.on_comment_anchor = on_comment_anchor
         self._field_stack: list[_FieldContext] = []
         self._run_parser = RunParser(self)
+        self.textbox_reader: TextboxReader | None = None
 
     def field_context_type(self) -> _FieldContext:
         return _FieldContext()

@@ -16,7 +16,7 @@ from ....core.models import (
 )
 from ....ooxml.omml_latex import omath_to_latex
 from .object_common import append_image_or_placeholder, copy_drawing_common
-from .textboxes import textbox_objects_from_nodes
+from .textboxes import TextboxReader, textbox_objects_from_nodes
 
 
 @dataclass(slots=True)
@@ -51,6 +51,7 @@ class DrawingScanResult:
                 scan_result.image_rel_id = attr(node, "r", "embed")
             elif local == "txbxContent":
                 scan_result.textbox_nodes.append(node)
+                return
             if active is not None:
                 if local == "docPr":
                     name = node.get("name")
@@ -92,6 +93,7 @@ def drawing_objects(
     part: str,
     asset_lookup: AssetLookup,
     object_lookup: ObjectLookup,
+    textbox_reader: TextboxReader | None = None,
 ) -> list[InlineObject]:
     """Extract image references, text boxes, charts, SmartArt, and placeholders."""
     drawing_scan = DrawingScanResult.scan(drawing)
@@ -109,7 +111,7 @@ def drawing_objects(
     if image_relationship_id:
         append_image_or_placeholder(inline_objects, asset_lookup, part, image_relationship_id, drawing_common)
 
-    inline_objects.extend(textbox_objects_from_nodes(drawing_scan.textbox_nodes, drawing_common))
+    inline_objects.extend(textbox_objects_from_nodes(drawing_scan.textbox_nodes, drawing_common, part, textbox_reader))
     if inline_objects:
         return inline_objects
 
@@ -176,6 +178,8 @@ def _object_from_lookup(parsed_object: Chart | SmartArt) -> InlineObject:
             inline_object["title"] = parsed_object["title"]
         if "plots" in parsed_object:
             inline_object["plots"] = parsed_object["plots"]
+        if "axes" in parsed_object:
+            inline_object["axes"] = parsed_object["axes"]
     else:
         inline_object["nodeCount"] = parsed_object["nodeCount"]
         inline_object["linkCount"] = parsed_object["linkCount"]

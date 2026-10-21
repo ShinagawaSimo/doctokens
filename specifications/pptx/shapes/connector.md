@@ -4,6 +4,10 @@
 
 Connectors describe relationships between retained slide shapes.
 
+`from-shape` and `to-shape` describe saved start/end attachments. They do not by
+themselves assert a business-flow direction. Missing attachments are not guessed
+from nearby shapes.
+
 ## Fields
 
 ### `fromShape`
@@ -35,3 +39,16 @@ Connectors describe relationships between retained slide shapes.
 
 - **Parsing**
   - Same resolution as fromShape.
+
+### `head-end` and `tail-end`
+
+- **Output**
+  - Connector attributes in structural and semantic output.
+- **OOXML**
+  - Non-`none` `a:headEnd/@type` and `a:tailEnd/@type` respectively.
+- **IR**
+  - `ShapeBlock.headEnd` and `ShapeBlock.tailEnd`.
+- **Parsing**
+  - Copy the source end-style declarations. Preserve arrow-bearing connectors
+    even when an endpoint is unattached. Do not translate these fields into
+    inferred relationships or apply a visual direction without its geometry.

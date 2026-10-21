@@ -48,6 +48,31 @@ class SlideTextParsingTests(unittest.TestCase):
         shapes = bare + text_shape_xml([[("t", "Keep")]])
         self.assertEqual(self._plain(shapes), "density=plain format=pptx\n=== Slide 1 ===\nKeep")
 
+    def test_dangling_connector_keeps_group_ownership_and_arrow_declarations(self) -> None:
+        # A deleted source endpoint makes this a dangling producer relationship.
+        first = text_shape_xml([[("t", "A")]], shape_id=2)
+        second = text_shape_xml([[("t", "B")]], shape_id=3)
+        connector = (
+            '<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="4" name="Edge"/><p:cNvCxnSpPr>'
+            '<a:stCxn id="999"/><a:endCxn id="3"/></p:cNvCxnSpPr><p:nvPr/></p:nvCxnSpPr>'
+            '<p:spPr><a:ln><a:headEnd type="triangle"/><a:tailEnd type="diamond"/></a:ln></p:spPr></p:cxnSp>'
+        )
+
+        def group(identifier: int, name: str, content: str) -> str:
+            return (
+                f'<p:grpSp><p:nvGrpSpPr><p:cNvPr id="{identifier}" name="{name}"/></p:nvGrpSpPr><p:grpSpPr/>{content}</p:grpSp>'
+            )
+
+        source = self._deck(group(10, "Outer", first + group(11, "Inner", second) + connector))
+        self.assertEqual(
+            parse_pptx(source, density="structural").text,
+            '<presentation density="structural" format="pptx"><slide number="1"><groups>'
+            '<group id="g1" name="Outer" /><group id="g2" name="Inner" parent="g1" /></groups>'
+            '<p group="g1" shape-id="s1">A</p><p group="g2" shape-id="s2">B</p>'
+            '<shape group="g1" head-end="triangle" id="s3" kind="connector" shape-id="s3" '
+            'tail-end="diamond" to-shape="s2" /></slide></presentation>',
+        )
+
     def test_accessible_shape_and_connector_are_retained_in_xml_order(self) -> None:
         def shape_xml(shape_id: int, description: str) -> str:
             return (

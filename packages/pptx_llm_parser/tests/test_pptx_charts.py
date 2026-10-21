@@ -84,7 +84,7 @@ def _chart_ex_deck() -> bytes:
 class ChartShapeTests(unittest.TestCase):
     def test_plain_chart_placeholder(self) -> None:
         text = parse_pptx(_chart_deck(), density=Density.PLAIN).text
-        self.assertIn("[Chart: bar, 2 series]", text)
+        self.assertIn("[Chart Sales: bar, 2 series]", text)
 
     def test_chart_ex_output_and_resource(self) -> None:
         source = _chart_ex_deck()

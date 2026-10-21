@@ -67,6 +67,7 @@ class ParagraphStyle(TypedDict, total=False):
     bullet: str
     numberType: str
     startAt: int
+    listNone: bool
 
 
 class TableCell(TypedDict, total=False):
@@ -79,6 +80,12 @@ class TableCell(TypedDict, total=False):
     vMerge: bool
 
 
+class ShapeGroup(TypedDict, total=False):
+    id: str
+    name: str
+    parent: str
+
+
 class ShapeBlock(TypedDict, total=False):
     """One shape on a slide; ``z`` records XML stacking order."""
 
@@ -89,6 +96,10 @@ class ShapeBlock(TypedDict, total=False):
     assetId: str
     mediaId: str
     mediaKind: str
+    groups: list[ShapeGroup]
+    headEnd: str
+    tailEnd: str
+    chartTitle: str
     embeddedType: str
     alt: str
     title: str
@@ -148,12 +159,21 @@ class OcrResultRecord(TypedDict, total=False):
 OcrStoredResult = str | OcrResultRecord
 
 
-class SmartArtNode(TypedDict):
+class SmartArtNodeRequired(TypedDict):
     id: int
     text: str
 
 
-SmartArtLink = TypedDict("SmartArtLink", {"from": int, "to": int})
+class SmartArtNode(SmartArtNodeRequired, total=False):
+    sourceId: str
+    kind: str
+
+
+SmartArtLinkRequired = TypedDict("SmartArtLinkRequired", {"from": int, "to": int})
+
+
+class SmartArtLink(SmartArtLinkRequired, total=False):
+    kind: str
 
 
 class ChartRecord(TypedDict, total=False):
@@ -167,6 +187,7 @@ class ChartRecord(TypedDict, total=False):
     series_count: int
     point_count: int
     plots: list[ChartPlotInfo]
+    axes: list[dict[str, str]]
 
 
 class SmartArtRecord(TypedDict, total=False):
@@ -178,6 +199,7 @@ class SmartArtRecord(TypedDict, total=False):
     links: list[SmartArtLink]
     nodeCount: int
     linkCount: int
+    rawLinkCount: int
     layoutType: str
 
 

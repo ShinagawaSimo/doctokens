@@ -12,6 +12,12 @@ or renumbered; a missing cached text does not produce a guessed value. Unknown
 paragraph children emit `UNSUPPORTED_PARAGRAPH_CHILD`; pPr/endParaRPr are skipped.
 Pending breaks/tabs are flushed before runs, fields and equations and at paragraph end.
 
+List labels and placeholder roles are reading content in every density.
+Resolve paragraph defaults through master, layout and shape declarations without
+enabling character-color/geometry work in plain or structural plans. A replacement
+bullet/number style removes the previous list kind; explicit `buNone` cancels
+inherited numbering instead of letting the master label reappear.
+
 ## Fields
 
 ### `text`

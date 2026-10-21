@@ -154,7 +154,7 @@ def test_unknown_drawing_extension_falls_back_inside_textbox_without_duplication
     result = parse_docx(_make_docx("<w:p>" + _run(outer) + "</w:p>"))
     assert result.text == (
         '<document density="semantic" format="docx" pagination="last-rendered-hints" revision-view="final">'
-        '<body><page number="1" /><p><textbox>caption</textbox></p></body></document>'
+        '<body><page number="1" /><p><textbox><p>caption</p></textbox></p></body></document>'
     )
     assert [(r["index"], r["branch"]) for r in result.report.manifest["alternateContent"]] == [(1, "Choice"), (2, "Fallback")]
 

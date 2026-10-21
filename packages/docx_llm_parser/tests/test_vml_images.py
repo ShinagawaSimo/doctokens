@@ -66,10 +66,10 @@ def test_dangling_images_do_not_drop_valid_siblings_or_mix_shape_descriptions(de
     )
     result = parse_docx(data, density=density)
     visible = (
-        '<img alt="A &amp; B" id="img1" /><img alt="Missing" /><textbox alt="Caption">Note</textbox>'
+        '<img alt="A &amp; B" id="img1" /><img alt="Missing" /><textbox alt="Caption"><p>Note</p></textbox>'
         '<img alt="Title" id="img1" /><img alt="Image title" id="img1" /><img alt="name4" id="img1" /><img alt="empty" />'
         if density == "semantic"
-        else '<img id="img1" /><img /><textbox>Note</textbox><img id="img1" /><img id="img1" /><img id="img1" /><img />'
+        else '<img id="img1" /><img /><textbox><p>Note</p></textbox><img id="img1" /><img id="img1" /><img id="img1" /><img />'
     )
     assert result.text == _expected(density, visible)
     assert result.report.warnings == ()

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import TYPE_CHECKING, Literal, TypedDict
+
+if TYPE_CHECKING:
+    from .blocks import Block
 
 RunFormat = dict[str, bool | str | None]
 
@@ -104,6 +107,7 @@ class Chart(ChartRequired, total=False):
     sourcePart: str
     relationshipId: str
     plots: list[ChartPlot]
+    axes: list[dict[str, str]]
 
 
 class SmartArtNodeRequired(TypedDict):
@@ -185,6 +189,8 @@ class InlineObject(InlineObjectRequired, total=False):
     layoutType: str
     sourcePart: str
     relationshipId: str
+    blocks: list[Block]
+    axes: list[dict[str, str]]
 
 
 class RunRequired(TypedDict):

@@ -11,6 +11,7 @@ from ooxml_llm_core.resource_xml import resource_document
 
 from ...core.enums import ResourceType
 from ...core.models import ParsedDocument, TableBlock, TableRow
+from ...core.traversal import document_blocks
 from ..common.ocr import render_ocr_result
 from .charts import render_chart_resource
 from .smartarts import render_smartart_resource
@@ -68,7 +69,7 @@ def render_resource(
 def table_groups(parsed_document: ParsedDocument) -> dict[str, list[TableBlock]]:
     """Group top-level table segments by their stable logical table ID."""
     groups: dict[str, list[TableBlock]] = {}
-    for block in parsed_document.blocks:
+    for block in document_blocks(parsed_document):
         if block["type"] != "table":
             continue
         groups.setdefault(block["tableId"], []).append(block)

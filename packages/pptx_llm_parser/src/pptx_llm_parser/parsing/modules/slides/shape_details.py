@@ -11,7 +11,15 @@ from ....core.models import (
 
 
 def _is_meaningful_shape(shape: ShapeBlock) -> bool:
-    return bool(shape.get("alt") or shape.get("title") or shape.get("link") or shape.get("fromShape") or shape.get("toShape"))
+    return bool(
+        shape.get("alt")
+        or shape.get("title")
+        or shape.get("link")
+        or shape.get("fromShape")
+        or shape.get("toShape")
+        or shape.get("headEnd")
+        or shape.get("tailEnd")
+    )
 
 
 def _resolve_connector_endpoints(

@@ -12,7 +12,7 @@ VML `w:pict` emits image references and nonempty textboxes in source order.
 Each shape owns its description, so a later shape cannot overwrite an earlier
 image or text box's metadata. An image with an unresolved or missing `r:id`
 retains a drawing placeholder without an id; other objects remain readable.
-Text-box contents keep their existing text projection. A pict with no emitted
+Text-box contents retain paragraph/table structure. A pict with no emitted
 image or nonempty text box retains one drawing placeholder.
 
 ## Fields

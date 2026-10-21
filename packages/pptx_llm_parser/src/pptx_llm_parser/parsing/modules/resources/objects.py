@@ -16,12 +16,11 @@ from ....core.models import (
     ChartLookup,
     ChartRecord,
     LayoutLookup,
-    SmartArtLink,
     SmartArtLookup,
-    SmartArtNode,
     SmartArtRecord,
 )
 from ....core.package import PackageReader
+from .diagrams import parse_diagram_data
 
 DIAGRAM_DATA_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData"
 DIAGRAM_LAYOUT_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout"
@@ -189,7 +188,8 @@ class EmbeddedObjectExtractor:
             )
             return None
         try:
-            nodes, links = self._parse_diagram_data(self._read_xml(spec.part), spec.part)
+            root = self._read_xml(spec.part)
+            nodes, links = parse_diagram_data(root, spec.part, self._warnings)
             smartart_record: SmartArtRecord = {
                 "id": spec.object_id,
                 "part": spec.part,
@@ -197,6 +197,7 @@ class EmbeddedObjectExtractor:
                 "links": links,
                 "nodeCount": len(nodes),
                 "linkCount": len(links),
+                "rawLinkCount": sum(1 for node in root.iter() if local_name(node.tag) == "cxn"),
             }
             category = self._layout_categories_by_source.get(spec.source_part)
             if category:
@@ -271,7 +272,7 @@ class EmbeddedObjectExtractor:
                 )
                 continue
             diagram_root = self._read_xml(part)
-            nodes, links = self._parse_diagram_data(diagram_root, part)
+            nodes, links = parse_diagram_data(diagram_root, part, self._warnings)
             smartart: SmartArtRecord = {
                 "id": smartart_id,
                 "part": part,
@@ -279,6 +280,7 @@ class EmbeddedObjectExtractor:
                 "links": links,
                 "nodeCount": len(nodes),
                 "linkCount": len(links),
+                "rawLinkCount": sum(1 for node in diagram_root.iter() if local_name(node.tag) == "cxn"),
             }
             smartarts.append(smartart)
             data_lookup[(record.source_part, record.id)] = smartart
@@ -291,36 +293,6 @@ class EmbeddedObjectExtractor:
             if category:
                 layout_lookup[(record.source_part, record.id)] = category
         return smartarts, data_lookup, layout_lookup
-
-    def _parse_diagram_data(self, diagram_root: ET.Element, part: str) -> tuple[list[SmartArtNode], list[SmartArtLink]]:
-        nodes: list[SmartArtNode] = []
-        node_map: dict[str, int] = {}
-        links: list[SmartArtLink] = []
-        for element in diagram_root.iter():
-            name = local_name(element.tag)
-            if name == "pt":
-                ordinal = len(nodes) + 1
-                node_map[element.get("modelId", "")] = ordinal
-                nodes.append({"id": ordinal, "text": self._node_text(element)})
-            elif name == "cxn":
-                from_id = node_map.get(element.get("fromModelId", ""))
-                to_id = node_map.get(element.get("toModelId", ""))
-                if from_id is None or to_id is None:
-                    self._warnings.append(
-                        ParseWarning(
-                            code="SMARTART_UNRESOLVED_LINK",
-                            message="dgm:cxn references unknown modelId",
-                            locator=part,
-                        )
-                    )
-                    continue
-                links.append({"from": from_id, "to": to_id})
-        return nodes, links
-
-    @staticmethod
-    def _node_text(pt: ET.Element) -> str:
-        parts = [element.text for element in pt.iter() if local_name(element.tag) == "t" and element.text is not None]
-        return "".join(parts)
 
     @staticmethod
     def _parse_layout_category(layout_root: ET.Element) -> str | None:

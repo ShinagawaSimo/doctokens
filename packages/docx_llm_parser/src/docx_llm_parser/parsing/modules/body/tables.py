@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import Any
 from xml.etree import ElementTree as ET
 
-from ....core.constants import _TAG_W_PARAGRAPH, _TAG_W_TABLE, attr, child_elements, first_child, local_name
+from ....core.constants import attr, child_elements, first_child
 from ....core.models import Block, ContentControl, TableBlock, TableCell, TableRow
+from .containers import container_blocks
 
 
 class TableParser:
@@ -24,7 +25,7 @@ class TableParser:
         """Parse a table into one block per row-level page segment."""
         self.owner._order += 1
         section_index = self.owner._sections._begin_section()
-        table_id = self._next_table_id()
+        table_id = self.owner.table_ids.allocate()
         segment_page = self.owner._flush_pending_page_breaks()
 
         sub_tables: list[TableBlock] = []
@@ -126,7 +127,7 @@ class TableParser:
         for cell_element in child_elements(row_element, "w", "tc"):
             col_span = self._cell_col_span(cell_element)
             vertical_merge = self._cell_v_merge(cell_element)
-            cell_blocks = self._parse_cell_blocks(cell_element, part)
+            cell_blocks = container_blocks(self.owner, cell_element, part)
             cell: TableCell = {
                 "rowIndex": row_index,
                 "colIndex": next_column,
@@ -143,24 +144,6 @@ class TableParser:
         if is_header:
             row["isHeader"] = True
         return row, next_column
-
-    def _next_table_id(self) -> str:
-        self.owner._table_index += 1
-        return f"t{self.owner._table_index}"
-
-    def _parse_cell_blocks(self, cell: ET.Element, part: str) -> list[Block]:
-        blocks: list[Block] = []
-        for child in cell:
-            child_tag = child.tag
-            if child_tag == _TAG_W_PARAGRAPH:
-                block = self.owner.parse_paragraph(child, part)
-                if block is not None:
-                    blocks.append(block)
-            elif child_tag == _TAG_W_TABLE:
-                blocks.extend(self.owner.parse_table(child, part))
-            elif local_name(child_tag) == "sdt":
-                self.owner._parse_sdt(child, blocks)
-        return blocks
 
     def _cell_col_span(self, cell: ET.Element) -> int:
         grid_span = first_child(first_child(cell, "w", "tcPr"), "w", "gridSpan")

@@ -8,17 +8,19 @@ from ....core.models import (
     Block,
     TextBlock,
 )
+from ....core.traversal import iter_blocks
 
 
 class BlockIdAllocator:
     """Assign stable internal IDs to body blocks."""
 
-    def __init__(self) -> None:
+    def __init__(self, prefix: str = "b") -> None:
         self._next = 1
+        self._prefix = prefix
 
     def allocate(self) -> str:
         # Count independently per document to avoid shared state across concurrent parses.
-        block_id = f"b{self._next}"
+        block_id = f"{self._prefix}{self._next}"
         self._next += 1
         return block_id
 
@@ -47,7 +49,7 @@ class BodyAnchors:
         used: set[str] = set()
 
         def visit(items: list[Block]) -> None:
-            for item in items:
+            for item in iter_blocks(items):
                 if item["type"] in {"paragraph", "heading"}:
                     if item.get("anchors"):
                         anchored_blocks.append(item)
@@ -55,10 +57,6 @@ class BodyAnchors:
                         link = run.get("link")
                         if link and link.get("anchor"):
                             used.add(link["anchor"])
-                if item["type"] == "table":
-                    for row in item["rows"]:
-                        for cell in row["cells"]:
-                            visit(cell["blocks"])
 
         visit(blocks)
         for item in anchored_blocks:

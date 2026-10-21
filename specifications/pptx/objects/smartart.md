@@ -54,16 +54,18 @@ The diagram extractor uses its own node and connection conventions.
 ### `nodes`
 
 - **Output**
-  - Space-joined DTX text; resource nodes.
+  - Explicit `node` elements in the body and resource data. Plain includes indexed labels.
 
 - **OOXML**
-  - Descendants with local name pt.
+  - DrawingML diagram `dgm:pt` descendants.
 
 - **IR**
   - `list[SmartArtNode]`
 
 - **Parsing**
-  - Keep every pt, including empty labels; node id is 1-based position; text concatenates descendant local-name t without stripping. Plain outputs type/count only.
+  - Keep every pt, including empty/root/transition labels, in source order. Node
+    ids are one-based positions; preserve source model ids in resource `source-id`
+    and explicit node types in `kind`. Do not guess business-node roles.
 
 ### `nodeCount`
 
@@ -82,19 +84,24 @@ The diagram extractor uses its own node and connection conventions.
 ### `links`
 
 - **Output**
-  - Resource graph connections.
+  - Explicit body/resource `link` elements; plain lists saved endpoint pairs.
 
 - **OOXML**
-  - cxn/@fromModelId and @toModelId.
+  - Standard `dgm:cxn/@srcId` and `@destId`; retain the previously supported
+    producer aliases `fromModelId`/`toModelId` when standard fields are absent.
 
 - **IR**
   - `list[SmartArtLink]`
 
 - **Parsing**
-  - Resolve only nodes already seen in the same traversal. Current PPTX extractor does not read srcId/destId.
+  - Build the complete node index before resolving edges. Empty node ids do not
+    bind a missing endpoint. On duplicate source ids, retain nodes but bind
+    references to the first indexed occurrence.
 
 - **Diagnostics**
   - SMARTART_UNRESOLVED_LINK when either endpoint is unresolved; connection skipped.
+  - SMARTART_DUPLICATE_MODEL_ID for repeated source ids. Body/resource output
+    declares `incomplete=true` when a saved connection cannot be retained.
 
 ### `linkCount`
 
@@ -122,4 +129,5 @@ The diagram extractor uses its own node and connection conventions.
   - Derived.
 
 - **Parsing**
-  - Always true for inline summary.
+  - Omitted when the complete parsed graph is present; true for an unresolved
+    inline placeholder. Parsing failure is distinguished from budget truncation.

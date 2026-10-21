@@ -213,6 +213,8 @@ def _parse_chart_part(pkg: PackageReader, chart_part: str, warnings: list[ParseW
         "series_count": chart_info.get("series_count", 0),
         "series": series_list,
     }
+    if chart_info.get("axes"):
+        result["axes"] = chart_info["axes"]
     plot_types = [plot.get("chart_type", "unknown") for plot in chart_info.get("plots", [])]
     if chart_info.get("chart_type") == "combination" and plot_types:
         result["plotTypes"] = plot_types

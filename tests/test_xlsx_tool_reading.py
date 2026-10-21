@@ -20,7 +20,7 @@ def test_default_routes_to_first_worksheet_without_opening_full_session() -> Non
         assert response.error is None
         assert parse.call_args.kwargs["sheet"] == "Data"
         assert parse.call_args.kwargs["range_spec"] is None
-        assert response.data["selected_sheet"] == "Data"
+        assert response.data["parts"][0]["selection"]["sheet"] == "Data"
         assert [sheet["name"] for sheet in response.data["sheets"]] == ["Data", "Source"]
 
 
@@ -36,37 +36,44 @@ def test_ranges_reuse_results_and_full_sessions(density: str) -> None:
         identifier = first.data["document_id"]
         selected = {"document_id": identifier, "sheet": "Sheet1", "range_spec": "2:5", "density": density}
         cached = runtime.execute("read_xlsx", selected)
-        assert cached.error is None and cached.data["cache_hit"] is True
+        assert cached.error is None
         assert parse.call_count == 1
         assert cached.data["parts"] == first.data["parts"]
         assert runtime.execute("list_document_resources", {"document_id": identifier}).error is None
         # A different spelling avoids the result cache and exercises session rendering.
         via_session = runtime.execute("read_xlsx", {**selected, "range_spec": "A2:XFD5"})
-        assert via_session.error is None and via_session.data["cache_hit"] is False
+        assert via_session.error is None
         assert parse.call_count == 1
         assert via_session.data["parts"][0]["text"] == first.data["parts"][0]["text"]
 
 
 def test_character_fragments_do_not_change_data_window_metadata() -> None:
-    with ToolRuntime(RuntimeConfig(allowed_roots=(FIXTURES,), reply_chars=2400)) as runtime:
+    from dataclasses import replace
+
+    # Only transport is under test: enlarge an already parsed native result to
+    # force continuation without manufacturing an Office file or parsing golden.
+    original = parse_xlsx(FIXTURES / "xlsx-format-currency-common.xlsx", sheet="Sheet1", density="structural")
+    expected = original.text * 30
+    with (
+        ToolRuntime(RuntimeConfig(allowed_roots=(FIXTURES,), reply_chars=2400)) as runtime,
+        patch("doctokens_agent_tools.operations.parse_xlsx", return_value=replace(original, text=expected)),
+    ):
         response = runtime.execute("read_xlsx", {"path": "xlsx-format-currency-common.xlsx"})
         assert response.error is None
         # Use a real result with a deliberately small host transport budget.
         part = response.data["parts"][0]
         identifier = part["result_id"]
-        offset = 0
-        fragments: list[str] = []
+        offset = part["next_offset"]
+        fragments: list[str] = [part.get("text", "")]
         while True:
             fragment = runtime.execute("read_result", {"result_id": identifier, "offset": offset, "length": 13})
             assert fragment.error is None
-            assert fragment.data["selection"] == part["selection"]
+            assert set(fragment.data) == {"text", "next_offset"}
             fragments.append(fragment.data["text"])
             if fragment.data["next_offset"] is None:
                 break
             offset = fragment.data["next_offset"]
-        assert len("".join(fragments)) == part["length"]
-        if part["content_included"]:
-            assert "".join(fragments) == part["text"]
+        assert "".join(fragments) == expected
 
 
 def test_xlsx_schema_removes_full_document_but_other_formats_keep_it() -> None:

@@ -85,7 +85,7 @@ def test_custom_chunk_defaults_and_base64_budget_match_discovery() -> None:
     assert presenter.fragment(text.id, 0, None).data["text"] == "abcde"
     binary = store.put("document", b"abcdefghijk", {})
     assert len(presenter.fragment(binary.id, 0, None).data["data"]) <= config.reply_chars
-    assert presenter.fragment(binary.id, 0, None).data["length"] == limits["effective_binary_bytes"]
+    assert len(base64.b64decode(presenter.fragment(binary.id, 0, None).data["data"])) == limits["effective_binary_bytes"]
     assert presenter.fragment(text.id, len(text.value), None).data["next_offset"] is None
 
 
@@ -128,6 +128,10 @@ def test_mcp_binary_uri_and_chunk_fallback_share_lifetime() -> None:
                 assert base64.b64decode(resource.contents[0].blob) == original
                 fragment = await client.call_tool("read_result", {"result_id": result_id})
                 assert fragment.structuredContent["ok"]
+                fragment_data = fragment.structuredContent["data"]
+                assert "data" not in fragment_data
+                decoded = base64.b64decode(fragment.content[fragment_data["content_index"]].text)
+                assert decoded == original[: len(decoded)]
                 await client.call_tool("release_document", {"document_id": identifier})
                 with pytest.raises(Exception, match="expired"):
                     await client.read_resource(AnyUrl(uri))
@@ -135,3 +139,120 @@ def test_mcp_binary_uri_and_chunk_fallback_share_lifetime() -> None:
                     await client.read_resource(AnyUrl("doctokens://result/../../private"))
 
     asyncio.run(verify())
+
+
+def test_mcp_small_non_image_binary_is_linked_without_automatic_base64() -> None:
+    pytest.importorskip("mcp")
+    from unittest.mock import AsyncMock, patch
+
+    from doctokens_agent_tools.mcp import build_server
+    from doctokens_agent_tools.schemas import SourceArgs
+    from mcp.shared.memory import create_connected_server_and_client_session
+    from pydantic import AnyUrl
+
+    async def verify() -> None:
+        with ToolRuntime(RuntimeConfig(allowed_roots=(FIXTURES,))) as runtime:
+            # Only the MCP presentation policy is under test; bytes and snapshot
+            # come from a valid native file, without manufacturing Office content.
+            with runtime._documents.acquire(SourceArgs(path="xlsx/xlsx-empty.xlsx")) as document:
+                original = document.snapshot.read_bytes()
+                response = runtime._presenter.binary(document, original, "application/octet-stream")
+                assert response.attachments[0].data == original  # Direct callers retain inline attachments.
+            async with create_connected_server_and_client_session(build_server(runtime)) as client:
+                with patch.object(runtime, "aexecute", AsyncMock(return_value=response)):
+                    result = await client.call_tool(
+                        "read_resource", {"document_id": document.id, "kind": "image", "resource_id": "binary"}
+                    )
+                assert [content.type for content in result.content] == ["resource_link"]
+                assert result.content[0].mimeType == "application/octet-stream"
+                assert str(result.content[0].uri) == response.data["resource_uri"]
+                assert result.content[0].size == len(original)
+                resource = await client.read_resource(AnyUrl(response.data["resource_uri"]))
+                assert base64.b64decode(resource.contents[0].blob) == original
+                await client.call_tool("release_document", {"document_id": document.id})
+
+    asyncio.run(verify())
+
+
+def test_mcp_delivers_native_first_text_once_and_continues_without_repeating_metadata() -> None:
+    pytest.importorskip("mcp")
+    from dataclasses import replace
+    from unittest.mock import patch
+
+    from doctokens_agent_tools.mcp import build_server
+    from mcp.shared.memory import create_connected_server_and_client_session
+    from xlsx_llm_parser import parse_xlsx
+
+    native = parse_xlsx(FIXTURES / "xlsx/xlsx-sparse.xlsx", sheet="Sheet1", density="structural")
+    # Artificial length tests only opaque transport; the Office parser and its
+    # reviewed output remain supplied by a native fixture.
+    expected = native.text * 20
+
+    async def verify() -> None:
+        with (
+            ToolRuntime(RuntimeConfig(allowed_roots=(FIXTURES,), reply_chars=700)) as runtime,
+            patch("doctokens_agent_tools.operations.parse_xlsx", return_value=replace(native, text=expected)),
+        ):
+            async with create_connected_server_and_client_session(build_server(runtime)) as client:
+                response = await client.call_tool("read_xlsx", {"path": "xlsx/xlsx-sparse.xlsx", "sheet": "Sheet1"})
+                data = response.structuredContent["data"]
+                assert not {"path", "revision", "cache_hit", "sheets", "selected_sheet"} & data.keys()
+                part = data["parts"][0]
+                assert "text" not in part
+                assert len(response.content) == 1
+                text = response.content[part["content_index"]].text
+                assert text == expected[:700]
+                offset = part["next_offset"]
+                while offset is not None:
+                    response = await client.call_tool(
+                        "read_result", {"result_id": part["result_id"], "offset": offset, "length": 32000}
+                    )
+                    cursor = response.structuredContent["data"]
+                    assert set(cursor) == {"content_index", "next_offset"}
+                    text += response.content[cursor["content_index"]].text
+                    offset = cursor["next_offset"]
+                assert text == expected
+                await client.call_tool("release_document", {"document_id": data["document_id"]})
+
+    asyncio.run(verify())
+
+
+def test_first_reply_budget_covers_multiple_text_parts_without_losing_unstarted_parts() -> None:
+    from doctokens_agent_tools.schemas import SourceArgs
+
+    with (
+        ToolRuntime(RuntimeConfig(allowed_roots=(FIXTURES,), reply_chars=650)) as runtime,
+        runtime._documents.acquire(SourceArgs(path="xlsx/xlsx-empty.xlsx")) as document,
+    ):
+        # Unicode payloads verify character offsets independently of byte storage.
+        first = runtime._results.put(document.id, "甲" * 700, {"selection": {"page": 1}, "media_type": "text/plain"})
+        second = runtime._results.put(document.id, "乙" * 10, {"selection": {"page": 2}, "media_type": "text/plain"})
+        parts = runtime._presenter.entries(document, [first, second]).data["parts"]
+        assert parts[0]["text"] == "甲" * 650
+        assert parts[0]["next_offset"] == 650
+        assert "text" not in parts[1] and parts[1]["next_offset"] == 0
+        for part, expected in zip(parts, [first.value, second.value], strict=True):
+            tail = runtime.execute("read_result", {"result_id": part["result_id"], "offset": part["next_offset"]})
+            assert tail.error is None and tail.data["next_offset"] is None
+            assert part.get("text", "") + tail.data["text"] == expected
+
+
+def test_large_metadata_includes_a_first_json_fragment_and_reassembles_without_extra_envelopes() -> None:
+    import json
+
+    from doctokens_agent_tools.schemas import SourceArgs
+
+    with (
+        ToolRuntime(RuntimeConfig(allowed_roots=(FIXTURES,), reply_chars=650)) as runtime,
+        runtime._documents.acquire(SourceArgs(path="xlsx/xlsx-empty.xlsx")) as document,
+    ):
+        data = runtime._presenter.metadata(document, {"items": list(range(500))}).data
+        assert data["media_type"] == "application/json"
+        chunks = [data["text"]]
+        offset = data["next_offset"]
+        while offset is not None:
+            fragment = runtime.execute("read_result", {"result_id": data["result_id"], "offset": offset})
+            assert fragment.error is None
+            chunks.append(fragment.data["text"])
+            offset = fragment.data["next_offset"]
+        assert json.loads("".join(chunks)) == {"document_id": document.id, "items": list(range(500))}

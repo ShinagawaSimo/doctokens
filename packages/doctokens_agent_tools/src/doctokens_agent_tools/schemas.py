@@ -8,6 +8,11 @@ from ooxml_llm_core.models import Density
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing_extensions import Self
 
+_DENSITY_HELP = (
+    "Use plain for text-only questions, structural for coordinates/resource links and explicit relationships, "
+    "semantic when emphasis, color or review context affects the answer."
+)
+
 
 class Arguments(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
@@ -64,12 +69,12 @@ class SourceArgs(BaseSourceArgs):
 class InspectArgs(SourceArgs):
     full_parse: bool = Field(
         default=False,
-        description="XLSX: explicitly load the full session and report. Default always returns the lightweight index.",
+        description="Explicitly return the full parse report, source revision and diagnostics. Default returns navigation only.",
     )
 
 
 class ReadArgs(BaseSourceArgs):
-    density: Density = "structural"
+    density: Density = Field(default="structural", description=_DENSITY_HELP)
     whole_document: bool = Field(
         default=False, description="Explicitly read all content; large results are retrieved separately."
     )
@@ -89,7 +94,7 @@ class PptxReadArgs(ReadArgs):
 
 class XlsxReadArgs(BaseSourceArgs):
     options: XlsxOptions = Field(default_factory=XlsxOptions)
-    density: Density = "structural"
+    density: Density = Field(default="structural", description=_DENSITY_HELP)
     sheet: str | None = Field(default=None, min_length=1, description="Exact sheet name; defaults to the first worksheet.")
     range_spec: str | None = Field(
         default=None,
@@ -193,7 +198,9 @@ class QueryArgs(BaseSourceArgs):
 
 class ResultArgs(Arguments):
     result_id: str = Field(min_length=1)
-    offset: int = Field(default=0, ge=0)
+    offset: int = Field(
+        default=0, ge=0, description="Continue at the previous next_offset; zero deliberately rereads the beginning."
+    )
     length: int | None = Field(default=None, gt=0)
 
 

@@ -39,8 +39,28 @@ class Operations:
         if isinstance(document.options, XlsxOptions) and not full_parse:
             if document.index is None:
                 document.index = inspect_xlsx(document.snapshot, options=document.options)
-            return document.index
-        return self.documents.session(document).describe()
+            index = cast(dict[str, Any], document.index)
+            names = index.get("defined_names", [])
+            value = {"format": "xlsx", "scope": "workbook-index", "sheet_count": index["sheet_count"], "sheets": index["sheets"]}
+            if names:
+                value["defined_names"] = names
+            if index.get("external_links"):
+                value["external_links"] = index["external_links"]
+            return value
+        described = cast(dict[str, Any], self.documents.session(document).describe())
+        if full_parse:
+            return {"path": str(document.original), "revision": document.revision, **described}
+        navigation = dict(described["navigation"])
+        if document.format == "pptx":
+            slides = [
+                {key: value for key, value in item.items() if value is not None and value is not False}
+                for item in navigation.get("slides", [])
+                if item.get("hidden") or item.get("section")
+            ]
+            navigation.pop("slides", None)
+            if slides:
+                navigation["slides"] = slides
+        return {"format": document.format, "navigation": navigation}
 
     def run(self, name: str, document: Document, args: BaseSourceArgs) -> ToolResponse:
         if name == "inspect_document":
@@ -170,10 +190,7 @@ class Operations:
             parsed,
             extra={
                 "page_count": total,
-                "requested": {"start": args.page_start, "end": requested_end},
-                "effective": {"start": args.page_start, "end": end} if args.page_start <= total else None,
-                "next_page": end + 1 if end < total else None,
-                "pagination": "saved-page-hints",
+                **({"next_page": end + 1} if end < total else {}),
             },
         )
 
@@ -189,7 +206,7 @@ class Operations:
         total = cast(int, navigation["slide_count"])
         result = session.render(density=args.density, slide=args.slide_start, span=end - args.slide_start + 1)
         return self.presenter.parsed(
-            document, [result], extra={"slide_count": total, "next_slide": min(end, total) + 1 if end < total else None}
+            document, [result], extra={"slide_count": total, **({"next_slide": min(end, total) + 1} if end < total else {})}
         )
 
     def read_xlsx(self, document: Document, args: XlsxReadArgs) -> ToolResponse:
@@ -198,13 +215,13 @@ class Operations:
         sheet = args.sheet
         if sheet is None:
             sheet = next((item["name"] for item in sheets if item.get("kind", "worksheet") == "worksheet"), None)
-        extra = {"sheets": sheets, "selected_sheet": sheet}
+        extra = {"sheets": sheets} if args.sheet is None else {}
         if sheet is None:
             return self.presenter.metadata(document, {"parts": [], **extra})
         key = document.id + ":" + json.dumps(args.model_dump(exclude={"path", "document_id", "options"}), sort_keys=True)
         cached = self.presenter.results.cached(key)
         if cached is not None:
-            return self.presenter.entries(document, [cached], extra={**extra, "cache_hit": True})
+            return self.presenter.entries(document, [cached], extra=extra)
         if isinstance(document.session, XlsxReadSession):
             session = self.xlsx_session(document)
             result = session.render(density=args.density, sheet=sheet, range_spec=args.range_spec)
@@ -213,4 +230,4 @@ class Operations:
             result = parse_xlsx(
                 document.snapshot, density=args.density, sheet=sheet, range_spec=args.range_spec, options=document.options
             )
-        return self.presenter.parsed(document, [result], cache_key=key, extra={**extra, "cache_hit": False})
+        return self.presenter.parsed(document, [result], cache_key=key, extra=extra)

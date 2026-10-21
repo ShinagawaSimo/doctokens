@@ -4,6 +4,13 @@
 
 Density selects a format-specific extraction plan and output projection.
 
+Public reading output prioritizes information needed to answer document tasks:
+content, hierarchy, meaningful emphasis, source coordinates, resource lookup and
+explicit relationships. It is not an exhaustive source or visual projection.
+Redundant attributes, implicit defaults and decoder provenance are omitted when
+they do not add reading information. Exact source/layout projection belongs to
+the future, non-public `full` density; no `full` API is introduced here.
+
 ## Processing
 
 | Feature | DOCX plain / structural | DOCX semantic / session |

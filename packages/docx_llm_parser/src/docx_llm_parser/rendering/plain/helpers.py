@@ -107,9 +107,8 @@ def _with_floating_stories(content: str, block: InlineContainer, ocr_results: di
     stories = floating_textboxes(block)
     if not stories:
         return content
-    references = ", ".join(str(item["id"]) for item in stories)
-    parts = [content, f"[Textboxes: {references}]"]
-    parts.extend(f"[Textbox {item['id']}]\n{plain_object_placeholder(item, ocr_results)}" for item in stories)
+    parts = [content]
+    parts.extend(f"[Textbox]\n{plain_object_placeholder(item, ocr_results)}" for item in stories)
     return "\n\n".join(part for part in parts if part)
 
 

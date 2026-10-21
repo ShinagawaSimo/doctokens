@@ -71,7 +71,9 @@ table parsers. DrawingML and VML bind the outer object separately from its conte
 
 - **Output**
   - Both XML densities: floating `textbox/@id` and matching `textbox-ref/@id`.
-    Plain uses `[Textboxes: ids]`, then one `[Textbox id]` block per story.
+    Plain uses one `[Textbox]` label per story immediately after the owning
+    paragraph, with no duplicate id or reference list. XML retains explicit ids
+    because they identify the source anchor relationship.
 - **OOXML**
   - Owning part, source paragraph allocator id and retained floating-object ordinal.
 - **IR**

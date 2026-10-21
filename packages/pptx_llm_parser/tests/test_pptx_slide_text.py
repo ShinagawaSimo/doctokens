@@ -69,7 +69,7 @@ class SlideTextParsingTests(unittest.TestCase):
             '<presentation density="structural" format="pptx"><slide number="1"><groups>'
             '<group id="g1" name="Outer" /><group id="g2" name="Inner" parent="g1" /></groups>'
             '<p group="g1" shape-id="s1">A</p><p group="g2" shape-id="s2">B</p>'
-            '<shape group="g1" head-end="triangle" id="s3" kind="connector" shape-id="s3" '
+            '<shape group="g1" head-end="triangle" kind="connector" shape-id="s3" '
             'tail-end="diamond" to-shape="s2" /></slide></presentation>',
         )
 
@@ -108,7 +108,7 @@ class SlideTextParsingTests(unittest.TestCase):
         connector_node = structural_root.find(".//shape[@kind='connector']")
         assert connector_node is not None
         self.assertEqual(
-            (connector_node.get("id"), connector_node.get("from-shape"), connector_node.get("to-shape")),
+            (connector_node.get("shape-id"), connector_node.get("from-shape"), connector_node.get("to-shape")),
             ("s3", "s1", "s2"),
         )
         for root in (structural_root, semantic_root):

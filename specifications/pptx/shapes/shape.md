@@ -18,7 +18,8 @@ Retain textless shapes when they have alt, title, link, fromShape, or toShape; a
 ### `id`
 
 - **Output**
-  - Semantic text `p|title/@id`; other shape elements also carry IDs in structural output.
+  - Resource-bearing objects expose `@id` for resource lookup. Text and
+    descriptive shapes use only `@shape-id`; no duplicate `@id` alias.
 
 - **OOXML**
   - Shape-tree traversal.
@@ -32,7 +33,7 @@ Retain textless shapes when they have alt, title, link, fromShape, or toShape; a
 ### `type`
 
 - **Output**
-  - `p|title`, `img`, `table`, `chart`, `smartart`, `media`, or `shape`.
+  - `p|title|textbox`, `img`, `table`, `chart`, `smartart`, `media`, or `shape`.
 
 - **OOXML**
   - sp/pic/graphicFrame/media/cxnSp.
@@ -56,8 +57,8 @@ Retain textless shapes when they have alt, title, link, fromShape, or toShape; a
   - `ShapeBlock.id: str`; the same compact slide-local id used by connectors.
 - **Parsing**
   - Keep the existing per-slide allocation. This id is scoped by its slide and
-    is not a document resource id. Existing `@id` values retain their previous
-    behavior: object elements may use image/chart/SmartArt/media resource ids.
+    is not a document resource id. Resource-bearing elements separately expose
+    image/table/chart/SmartArt/media resource ids through `@id`.
   - A picture's companion media element refers to the primary shape through
     `@owner-shape`; it does not create a second source shape or duplicate `shape-id`.
 - **References**

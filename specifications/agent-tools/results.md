@@ -7,17 +7,32 @@
 ### Envelope
 
 - **Output**
-  - `ok`, `data`, and optional `error`. Document results carry `document_id`, SHA-256 `revision`, original `path`, and `format`.
-  - Text parts identify `density`, `selection`, `syntax_version`, `media_type`, warning count, length, and completeness/fragment status. Parser diagnostics remain available through document inspection.
+  - `ok`, `data`, and optional `error`. Reading results carry `document_id` for
+    the pinned snapshot, selected intervals and text parts. Do not repeat input
+    paths, hashes, density/version declarations, cache-hit flags or default/null
+    state. Explicit full inspection supplies source revision/path and diagnostics.
+  - A text part identifies `selection` and `media_type`. The envelope includes
+    unique warning codes only when present; full diagnostics are opt-in.
 - **Processing**
-  - Large JSON metadata is itself stored as `application/json`; the response points to `read_result`.
+  - Large JSON metadata is stored as `application/json`; its first fragment is
+    returned immediately with an actionable result id and next offset.
 
 ### `text` and `result_id`
 
 - **Default**
-  - Body text budget: 12,000 characters, not a token estimate. Fixed identifiers/metadata and MCP compatibility projections add protocol overhead.
+  - Body text budget: 12,000 Unicode characters, not a token estimate. Bounded
+    selection metadata and native MCP framing add protocol overhead.
 - **Processing**
-  - Include complete selected text when the selection fits the budget; otherwise return stored result IDs and `next_action="read_result"`.
+  - Return complete selected text when it fits; otherwise return a first prefix
+    and `result_id`/`next_offset` for each incomplete part. Distribute one body
+    budget across parts in order; a later unstarted part has next_offset=0 and
+    no text. A complete part omits continuation fields and does not advertise an
+    unused result id. The first-content budget is bounded by reply_chars and
+    max_chunk_size.
+  - Direct `ToolRuntime` calls put text in `parts[].text` (or root `text` for a
+    continuation/JSON fragment). MCP puts it only in native `TextContent`; the
+    structured counterpart supplies `content_index`. Neither `content_included`,
+    `fragment` nor `next_action` is needed to discover continuation.
   - Each DOCX page remains an independent document. Do not concatenate XML roots and interpret the result as one XML document.
   - Stored IDs may expire or be evicted. Repeat the original read to regenerate a missing result.
 
@@ -30,8 +45,16 @@
   - These are host defaults. `tools/list` publishes the current maximum in the
     length schema and description and the current default/effective budgets in
     `x-doctokens-result-limits`; `get_runtime_info` returns the same values.
+  - For complete retrieval, request the published maximum and let the host cap
+    the reply; for a short excerpt, request only the needed character budget.
 - **Processing**
-  - Text uses Python Unicode characters; binary uses bytes. Text chunks may split XML tags and always declare `fragment=true`, retaining the original syntax metadata.
+  - Text uses Python Unicode characters; binary uses bytes. Fragments may split
+    XML tags or JSON tokens. Their MIME type and selection are supplied initially,
+    rather than repeated on every continuation.
+  - Continue at the returned `next_offset`; offset 0 deliberately rereads the
+    beginning. A continuation returns only text and next_offset, with native
+    content_index replacing the text field over MCP. Binary fragments additionally
+    identify Base64 encoding and byte units.
   - `next_offset=null` marks the end. Joining text chunks in offset order reproduces the complete stored text without normalization.
   - Binary fragments declare `encoding="base64"`; decode each fragment then join bytes. Bounds beyond the result end are rejected; an offset exactly at end returns an empty final fragment.
   - An omitted length is clamped to the configured maximum. Effective text length
@@ -43,13 +66,18 @@
 - **Output**
   - Original embedded bytes and a MIME type. External resources are not fetched.
 - **Default**
-  - At most 256 KiB inline; larger values use `result_id`.
+  - At most 256 KiB inline for direct callers and supported MCP images; larger
+    values use `result_id` and a resource URI.
 - **Processing**
   - Prefer descriptor content type, then the package-part extension, then `application/octet-stream`.
-  - MCP emits supported PNG/JPEG/WebP/GIF as native image content and other small binary values as embedded blob resources. Direct callers receive `BinaryAttachment` objects.
+  - MCP emits PNG/JPEG/WebP/GIF within the inline size cap as native image
+    content. Other MIME types, including EMF and audio/video, return only a
+    resource link regardless of size; binary data is not automatically embedded
+    or Base64-expanded into the tool reply. Direct callers continue to receive
+    `BinaryAttachment` objects within the cap.
   - Binary descriptors also return a `doctokens://result/<result_id>` URI. Large
-    binary responses include an MCP resource link; an explicit resource read
-    retrieves original bytes in one transfer. `read_result` remains available
+    or non-displayable binary responses include an MCP resource link; an explicit
+    resource read retrieves original bytes in one transfer. `read_result` remains available
     for bounded transfer. URI reads share the same byte-bounded storage, expiry
     and document lifetime; they never resolve arbitrary paths or download external targets.
 

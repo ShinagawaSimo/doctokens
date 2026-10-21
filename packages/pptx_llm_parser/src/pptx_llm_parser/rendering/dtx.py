@@ -86,13 +86,13 @@ def _append_shape(
         if len(paragraphs) > 1:
             node = append(parent, "textbox", role="title" if title else None, **attrs)
             for paragraph in paragraphs:
-                child = append(node, "p", **_paragraph_attrs(paragraph, nested=True))
+                child = append(node, "p", **_paragraph_attrs(paragraph))
                 _append_runs(child, paragraph.get("runs", []), paragraph.get("text", ""), density)
         else:
             if paragraphs:
-                attrs.update(_paragraph_attrs(paragraphs[0], nested=False))
+                attrs.update(_paragraph_attrs(paragraphs[0]))
             node = append(parent, "title" if title else "p", **attrs)
-            _append_shape_text(node, shape, density)
+            _append_runs(node, shape.get("runs", []), shape["text"], density)
         return
     if shape_type == "picture":
         attrs = _shape_attrs(shape, density)
@@ -187,7 +187,7 @@ def _text_shape_attrs(shape: ShapeBlock, density: str) -> dict[str, object]:
 
 
 def _shape_attrs(shape: ShapeBlock, density: str) -> dict[str, object]:
-    attrs: dict[str, object] = {"id": shape["id"], "shape_id": shape["id"], "link": shape.get("link")}
+    attrs: dict[str, object] = {"shape_id": shape["id"], "link": shape.get("link")}
     if groups := shape.get("groups"):
         attrs["group"] = groups[-1]["id"]
     if density != "semantic":
@@ -199,35 +199,35 @@ def _shape_attrs(shape: ShapeBlock, density: str) -> dict[str, object]:
     return attrs
 
 
-def _append_shape_text(parent: ET.Element, shape: ShapeBlock, density: str) -> None:
-    _append_runs(parent, shape.get("runs", []), shape["text"], density)
-
-
-def _paragraph_attrs(paragraph: Paragraph, *, nested: bool) -> dict[str, object]:
-    attrs: dict[str, object] = {}
-    if nested or "bullet" in paragraph or "numberType" in paragraph or paragraph.get("level"):
-        attrs["level"] = paragraph.get("level", 0)
-    for key, name in (
-        ("bullet", "bullet"),
-        ("bulletSource", "bullet_source"),
-        ("bulletFont", "bullet_font"),
-        ("numberType", "number_type"),
-        ("startAt", "start_at"),
-        ("number", "number"),
-    ):
-        if key in paragraph:
-            attrs[name] = paragraph[key]  # type: ignore[literal-required]
-    return attrs
+def _paragraph_attrs(paragraph: Paragraph) -> dict[str, object]:
+    level = paragraph.get("level", 0)
+    return {"level": level} if level else {}
 
 
 def _append_runs(parent: ET.Element, runs: list[Run], fallback: str, density: str) -> None:
     if not runs:
         text(parent, fallback)
         return
+    previous: tuple[object, ...] | None = None
+    leaf = parent
     for run in runs:
+        equation = run.get("equation")
+        value = run.get("text", "")
+        if not value and not equation:
+            continue
+        formatting = (run.get("format") or {}) if density == "semantic" else {}
+        signature = (
+            formatting.get("color") or None,
+            bool(formatting.get("underline")),
+            bool(formatting.get("italic")),
+            bool(formatting.get("bold")),
+            run.get("link") or None,
+        )
+        if not equation and signature == previous:
+            text(leaf, value)
+            continue
         node = parent
         if density == "semantic":
-            formatting = run.get("format") or {}
             if formatting.get("color"):
                 node = append(node, "color", value=formatting["color"])
             if formatting.get("underline"):
@@ -238,11 +238,12 @@ def _append_runs(parent: ET.Element, runs: list[Run], fallback: str, density: st
                 node = append(node, "b")
         if run.get("link"):
             node = append(node, "a", href=run["link"])
-        equation = run.get("equation")
         if equation:
             append(node, "equation", str(equation), notation="latex")
+            previous = None
         else:
-            text(node, run.get("text", ""))
+            text(node, value)
+            leaf, previous = node, signature
 
 
 def _append_table(parent: ET.Element, shape: ShapeBlock, density: str) -> None:

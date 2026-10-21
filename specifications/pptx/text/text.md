@@ -55,9 +55,9 @@ inherited numbering instead of letting the master label reappear.
 ### `paragraphs`
 
 - **Output**
-  - Child paragraphs inside a multi-paragraph `textbox`, with `level` and any
-    effective list metadata. A single list paragraph carries these attributes
-    on its existing `p`/`title`.
+  - Child paragraphs inside a multi-paragraph `textbox`, with nonzero `level`.
+    A single paragraph uses the same level rule on its existing `p`/`title`.
+    Visible labels preserve numbering; source list attributes remain internal.
 
 - **OOXML**
   - a:p.
@@ -70,6 +70,9 @@ inherited numbering instead of letting the master label reappear.
     non-list paragraphs. Runs preserve links, formatting and equations across
     paragraph boundaries. A list declaration without visible paragraph content
     does not create a visible marker or consume an automatic number.
+  - Adjacent runs with the same effective public formatting and hyperlink share
+    their XML wrappers. Equations remain separate. This changes neither text nor
+    effective emphasis/color/link semantics and does not mutate the retained IR.
 
 ### `equation`
 

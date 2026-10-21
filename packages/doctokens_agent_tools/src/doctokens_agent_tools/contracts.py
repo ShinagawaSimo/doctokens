@@ -76,7 +76,8 @@ def input_schema(model: type[Arguments], config: RuntimeConfig) -> dict[str, Any
                 variant["maximum"] = config.max_chunk_size
         length["description"] = (
             "Requested characters for text or bytes for binary; null/omitted uses the published default. "
-            "The host reply budget can reduce the actual length. Continue using next_offset."
+            "The host reply budget can reduce the actual length. Continue using next_offset. "
+            "For complete retrieval request the maximum to avoid extra calls; request less for a short snippet."
         )
         schema["x-doctokens-result-limits"] = result_limits(config)
     return schema

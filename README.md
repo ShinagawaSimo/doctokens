@@ -158,9 +158,11 @@ with ToolRuntime(RuntimeConfig(allowed_roots=(Path("documents"),))) as runtime:
     # 异步宿主使用 await runtime.aexecute(name, arguments)。
 ```
 
-三格式正文工具都接受 `density="plain" | "structural" | "semantic"`，默认 `structural`。DOCX 默认逐页读取前 3 个保存分页提示页，PPTX 默认前 3 张；它们的全文读取使用 `whole_document=true`。XLSX 默认读取第一张工作表约 500 格，完成达到预算的最后一整行，同时返回工作表目录；不接受 `whole_document`。例如 `read_xlsx(document_id=..., sheet="Sales", range_spec="101:200")` 完整读取第 101–200 行，也支持 `A1:H20` 和单格 `A1`。默认预览的 `parts[].selection.windows[]` 给出实际范围及 `next_row`，可据此选择下一段；详见 [读取规范](specifications/agent-tools/reading.md)。后续可用 `document_id` 读取原快照；超出默认 12,000 字符预算的内容通过 `result_id` 和 `read_result` 分段取回。片段声明 `fragment=true`，拼接后才是完整 XML。
+正文工具默认使用 `structural`。已知目标范围时可直接给出 `path`，需要发现页、幻灯片或工作表目录时再调用 `inspect_document`。例如 `read_xlsx(document_id=..., sheet="Sales", range_spec="101:200")` 读取指定行；默认预览的 `parts[].selection.windows[]` 提供实际范围和可用的 `next_row`。选区规则见[读取规范](specifications/agent-tools/reading.md)。
 
-工具还覆盖资源目录、图片和媒体、格式专属资源解释、XLSX 搜索/查询及文档释放。图片通过 MCP 原生图片内容返回；直接调用得到业务结果及二进制附件。默认最多保留 4 个解析会话，空闲 10 分钟过期；缓存、快照和回复限制均可配置。完整参数、生命周期和错误码见[工具行为参考](specifications/agent-tools/README.md)。
+大文本首次调用直接返回首块；后续使用 `result_id` 和返回的 `next_offset` 继续读取。直接调用 `ToolRuntime` 时正文在 `text` 字段；MCP 将正文只放在原生文本内容中，结构化结果用 `content_index` 关联，并提供必要的快照、范围和续读信息。调用示例见[MCP 连接与续读](specifications/agent-tools/mcp.md)。
+
+工具还覆盖资源目录、图片和媒体、格式专属资源解释、XLSX 搜索/查询及文档释放。MCP 在大小上限内将 PNG/JPEG/WebP/GIF 作为原生图片返回，其他二进制或超限图片返回按需读取的资源 URI；仍可用 read_result 分块取回。直接调用按大小上限返回二进制附件。默认最多保留 4 个解析会话，空闲 10 分钟过期；缓存、快照和回复限制均可配置。完整参数、生命周期和错误码见[工具行为参考](specifications/agent-tools/README.md)。
 
 ### 架构边界
 
@@ -285,7 +287,7 @@ PPTX 和 XLSX 的结构示例：
 </workbook>
 ```
 
-从解析包 `0.2.0` 起，`render_resource()`、`find_cells()`、`query_data()` 的解释性输出也是完整 DTX：资源位于格式根节点的 `<resources>` 内，搜索为 `<workbook><matches>…</matches></workbook>`，查询为 `<workbook><query><table>…</table></query></workbook>`。空结果同样是完整 XML。此变更替换了旧旁路文本语法，方法名与参数保持不变；以 `ParseResult.syntax_version` 和 `media_type` 判断语法。二进制资源由 `read_resource()` 直接返回 bytes。
+`render_resource()`、`find_cells()`、`query_data()` 的解释性输出为完整 DTX：资源位于格式根节点的 `<resources>` 内，搜索为 `<workbook><matches>…</matches></workbook>`，查询为 `<workbook><query><table>…</table></query></workbook>`。空结果同样是完整 XML；以 `ParseResult.syntax_version` 和 `media_type` 判断语法。二进制资源由 `read_resource()` 直接返回 bytes。
 
 #### API 速查
 
@@ -353,10 +355,7 @@ print(result.text)
 
 ### 路线图
 
-- [x] DOCX、PPTX、XLSX 的三档 DTP/DTX 正文输出与显式读取会话
-- [x] 可选 OCR 适配、资源读取和实验性工作簿查询
 - [ ] 用小型真实 Office 文件逐步替代正常内容的手工 XML 测试，人工审查 golden
-- [x] 资源、搜索和查询的完整 DTX 输出，共享工具运行层与 MCP stdio 接入
 - [ ] PDF 解析器
 - [ ] 更细的只读排版信息及可编辑投影；`typography`、`geometry`、`full` 尚非公开 API
 
@@ -369,7 +368,7 @@ python -m pip install -e ".[dev]" -e ./packages/ocr_llm_core
 python -m pytest -q
 ```
 
-真实 Office 文件位于 `test_support/fixtures/`，对应三档输出位于 `test_support/golden/`；手工创建清单见[Office 真实测试文件清单](docs/测试夹具与文件输出契约.md)。开发时比较当前输出与旧 golden；预期行为变化后，人工对照 Office 显示确认，再更新相应基线。单个文件的更新命令：
+真实 Office 文件位于 `test_support/fixtures/`，对应三档输出位于 `test_support/golden/`；手工创建清单见[Office 真实测试文件清单](docs/真实测试文件清单.md)。开发时比较当前输出与旧 golden；预期行为变化后，人工对照 Office 显示确认，再更新相应基线。单个文件的更新命令：
 
 ```sh
 python test_support/update_goldens.py --only docx-list-decimal.docx

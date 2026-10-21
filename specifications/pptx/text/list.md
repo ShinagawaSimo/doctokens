@@ -10,8 +10,8 @@ levels; a marker's font is interpreted only to recover reading content.
 ### `text`
 
 - **Output**
-  - Visible list prefix, one space, then source paragraph text. XML attributes
-    describe that existing prefix; they do not request a second rendered label.
+  - Visible list prefix, one space, then source paragraph text. Do not duplicate
+    the marker or counter as XML attributes.
 - **OOXML**
   - `a:p` list declarations, runs, fields, breaks and equations.
 - **IR**
@@ -24,8 +24,8 @@ levels; a marker's font is interpreted only to recover reading content.
 ### `level`
 
 - **Output**
-  - XML paragraph `@level`; always present inside multi-paragraph `textbox`.
-    On single-paragraph objects, omit zero only when no list kind exists.
+  - XML paragraph `@level` only when nonzero, including inside multi-paragraph
+    `textbox`. Its absence means level 0.
   - Plain: two spaces per level, clamped to 0..8 for indentation.
 - **OOXML**
   - `a:pPr/@lvl`.
@@ -38,7 +38,7 @@ levels; a marker's font is interpreted only to recover reading content.
 ### `bullet`
 
 - **Output**
-  - Visible prefix and XML `@bullet`.
+  - Visible prefix only; no redundant `@bullet` attribute.
 - **OOXML**
   - Direct `a:buChar/@char` or inherited bullet.
 - **IR**
@@ -49,14 +49,13 @@ levels; a marker's font is interpreted only to recover reading content.
     replaces an inherited bullet. Inherited `listNone` suppresses inherited labels.
   - Interpret known symbol-font codes through the mappings below. For a known
     symbol font, an explicitly declared symbol charset, or a private-use code
-    without a reliable mapping, emit neutral `•` and retain source evidence.
+    without a reliable mapping, emit neutral `•`. Keep source evidence internally.
   - Other ordinary Unicode bullet text remains unchanged.
 
 ### `bulletSource`
 
 - **Output**
-  - Both XML densities: `@bullet-source` when symbol/private-use interpretation
-    was required; plain emits only the resolved or neutral marker.
+  - Internal decoding evidence, omitted from all public reading densities.
 - **OOXML**
   - The original effective `buChar/@char`.
 - **IR**
@@ -68,9 +67,7 @@ levels; a marker's font is interpreted only to recover reading content.
 ### `bulletFont`
 
 - **Output**
-  - Both XML densities: `@bullet-font` with `bullet-source`, when a nonempty
-    effective font declaration is available. This is decoding provenance, not
-    a general typography projection.
+  - Internal decoding evidence, omitted from all public reading densities.
 - **OOXML**
   - `a:buFont/@typeface` and `@charset`, or the font selected by `buFontTx`.
 - **IR**
@@ -92,7 +89,8 @@ levels; a marker's font is interpreted only to recover reading content.
 ### `numberType`
 
 - **Output**
-  - Visible formatted counter and XML `@number-type`.
+  - Visible formatted counter only. The source numbering scheme is not repeated
+    as an XML attribute.
 - **OOXML**
   - Direct `a:buAutoNum/@type` or inherited numbering type.
 - **IR**
@@ -104,7 +102,7 @@ levels; a marker's font is interpreted only to recover reading content.
 ### `startAt`
 
 - **Output**
-  - XML `@start-at` for automatic numbering.
+  - Used to compute the visible initial counter; no `@start-at` attribute.
 - **OOXML**
   - Direct `a:buAutoNum/@startAt` or inherited value.
 - **IR**
@@ -117,7 +115,7 @@ levels; a marker's font is interpreted only to recover reading content.
 ### `number`
 
 - **Output**
-  - XML `@number` for the actual counter used by this paragraph's visible label.
+  - Used in the visible label; no redundant `@number` attribute.
 - **IR**
   - `Paragraph.number: int`.
 - **Parsing**

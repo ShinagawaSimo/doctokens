@@ -79,7 +79,7 @@ def _resolver(deck: bytes) -> tuple[LayoutMasterResolver, PackageReader, ET.Elem
 
 
 class LayoutMasterResolverTests(unittest.TestCase):
-    def test_unavailable_symbol_encoding_keeps_source_and_can_be_overridden_by_text_font(self) -> None:
+    def test_unavailable_symbol_encoding_uses_neutral_marker_and_respects_text_font_override(self) -> None:
         # A producer-specific symbol font is unavailable; the package contains no
         # glyph mapping. Do not mistake its ASCII code for visible prose.
         master = (
@@ -96,8 +96,7 @@ class LayoutMasterResolverTests(unittest.TestCase):
         self.assertEqual(
             parse_pptx(source, density="structural").text,
             '<presentation density="structural" format="pptx"><slide number="1">'
-            '<textbox placeholder="body" shape-id="s1"><p bullet="•" bullet-font="UnavailableVendorSymbols" '
-            'bullet-source="n" level="0">• One</p><p bullet="n" level="0">n Two</p>'
+            '<textbox placeholder="body" shape-id="s1"><p>• One</p><p>n Two</p>'
             "</textbox></slide></presentation>",
         )
 
@@ -113,10 +112,9 @@ class LayoutMasterResolverTests(unittest.TestCase):
             (
                 '<a:buAutoNum type="romanLcParenR" startAt="3"/>',
                 "iii) One\niv) Two",
-                '<p level="0" number="3" number-type="romanLcParenR" start-at="3">iii) One</p>'
-                '<p level="0" number="4" number-type="romanLcParenR" start-at="3">iv) Two</p>',
+                "<p>iii) One</p><p>iv) Two</p>",
             ),
-            ("<a:buNone/>", "One\nTwo", '<p level="0">One</p><p level="0">Two</p>'),
+            ("<a:buNone/>", "One\nTwo", "<p>One</p><p>Two</p>"),
         ):
             layout = text_shape_xml([], ph="body").replace(
                 "<a:lstStyle/>", f"<a:lstStyle><a:lvl1pPr>{declaration}</a:lvl1pPr></a:lstStyle>"
@@ -134,7 +132,7 @@ class LayoutMasterResolverTests(unittest.TestCase):
                     else:
                         attrs = 'placeholder="body" shape-id="s1"'
                         if density == "semantic":
-                            attrs = 'id="s1" name="TextBox 1" ' + attrs
+                            attrs = 'name="TextBox 1" ' + attrs
                         self.assertEqual(
                             result.text,
                             f'<presentation density="{density}" format="pptx"><slide number="1"><textbox {attrs}>'

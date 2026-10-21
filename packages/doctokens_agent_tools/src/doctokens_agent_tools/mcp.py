@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
-import json
 import logging
 import re
 from pathlib import Path
@@ -29,13 +28,11 @@ def build_server(runtime: ToolRuntime) -> Server[Any, Any]:
         "doctokens",
         version="0.1.0",
         instructions=(
-            "Inspect the document, then read explicit page/slide/cell intervals. "
-            "DOCX pages are saved-render hints. Use document_id for resource IDs from that snapshot. "
-            "Large results return result_id: call read_result until next_offset is null. "
-            "Fragments are not standalone XML. DOCX/PPTX whole_document must be explicitly requested. "
-            "XLSX defaults to the first worksheet and a 500-cell preview finishing the last row; "
-            "use sheet and range_spec for exact reads and selection.windows for the next source row. "
-            "Binary resource links support explicit full-byte MCP resource reads; read_result remains the chunked fallback."
+            "Read paths directly; inspect only to discover navigation. DOCX pages are saved-render hints. "
+            "Text appears once in content; structuredContent gives selection and content_index. "
+            "Incomplete parts return result_id and next_offset: continue with read_result at that offset. "
+            "Continuation next_offset=null ends the result; XML fragments are not standalone documents. "
+            "DOCX/PPTX whole_document must be explicit. Use document_id for snapshot resource IDs."
         ),
     )
 
@@ -56,10 +53,27 @@ def build_server(runtime: ToolRuntime) -> Server[Any, Any]:
     async def call_tool(name: str, arguments: dict[str, Any]) -> types.CallToolResult:
         response = await runtime.aexecute(name, arguments)
         structured = response.to_dict(include_attachments=False)
+        data = dict(response.data)
+        parts = [dict(part) for part in data.get("parts", [])]
+        if "parts" in data:
+            data["parts"] = parts
+        structured["data"] = data
         content: list[
             types.TextContent | types.ImageContent | types.AudioContent | types.ResourceLink | types.EmbeddedResource
-        ] = [types.TextContent(type="text", text=json.dumps(structured, ensure_ascii=False))]
-        if not response.attachments and (uri := response.data.get("resource_uri")):
+        ] = []
+        for payload in [data, *parts]:
+            value = payload.pop("text", None)
+            if value is None and payload.get("encoding") == "base64":
+                value = payload.pop("data", None)
+            if isinstance(value, str):
+                payload["content_index"] = len(content)
+                content.append(types.TextContent(type="text", text=value))
+        images = [
+            attachment
+            for attachment in response.attachments
+            if attachment.media_type in {"image/png", "image/jpeg", "image/webp", "image/gif"}
+        ]
+        if not images and (uri := response.data.get("resource_uri")):
             content.append(
                 types.ResourceLink(
                     type="resource_link",
@@ -70,20 +84,9 @@ def build_server(runtime: ToolRuntime) -> Server[Any, Any]:
                     description="Original binary bytes; expires with the result or document snapshot.",
                 )
             )
-        for attachment in response.attachments:
-            data = base64.b64encode(attachment.data).decode("ascii")
-            if attachment.media_type in {"image/png", "image/jpeg", "image/webp", "image/gif"}:
-                content.append(types.ImageContent(type="image", data=data, mimeType=attachment.media_type))
-            else:
-                identifier = response.data["result_id"]
-                content.append(
-                    types.EmbeddedResource(
-                        type="resource",
-                        resource=types.BlobResourceContents(
-                            uri=AnyUrl(f"doctokens://result/{identifier}"), mimeType=attachment.media_type, blob=data
-                        ),
-                    )
-                )
+        for attachment in images:
+            encoded = base64.b64encode(attachment.data).decode("ascii")
+            content.append(types.ImageContent(type="image", data=encoded, mimeType=attachment.media_type))
         return types.CallToolResult(content=content, structuredContent=structured, isError=response.is_error)
 
     async def list_resources() -> list[types.Resource]:

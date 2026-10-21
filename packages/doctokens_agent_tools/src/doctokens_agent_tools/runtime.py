@@ -88,7 +88,7 @@ class ToolRuntime:
                     )
                 if isinstance(args, ResultArgs):
                     response = self._presenter.fragment(args.result_id, args.offset, args.length)
-                    identifier = response.data["document_id"]
+                    identifier = self._results.get(args.result_id).document_id
                     self._documents.documents[identifier].touched = time.monotonic()
                     return response
                 assert isinstance(args, BaseSourceArgs)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+from functools import partial
 from typing import Any, cast
 
 from docx_llm_parser import DocxReadSession
@@ -16,9 +17,11 @@ from xlsx_llm_parser import (
     WhereCondition,
     XlsxReadSession,
     XlsxResourceCatalog,
+    find_xlsx_cells,
     find_xlsx_text,
     inspect_xlsx,
     parse_xlsx,
+    query_xlsx,
 )
 from xlsx_llm_parser import ParseOptions as XlsxOptions
 
@@ -89,11 +92,17 @@ class Operations:
         if isinstance(args, TextFindArgs):
             return self.find_text(document, args)
         if isinstance(args, FindArgs):
-            workbook = self.xlsx_session(document)
-            result = workbook.find_cells(args.query, sheets=args.sheets, kind=args.kind, limit=args.limit)
+            self.require_format(document, "xlsx")
+            if isinstance(document.session, XlsxReadSession):
+                result = document.session.find_cells(args.query, sheets=args.sheets, kind=args.kind, limit=args.limit)
+            else:
+                assert isinstance(document.options, XlsxOptions)
+                result = find_xlsx_cells(
+                    document.snapshot, args.query, options=document.options, sheets=args.sheets, kind=args.kind, limit=args.limit
+                )
             return self.presenter.parsed(document, [result])
         if isinstance(args, QueryArgs):
-            workbook = self.xlsx_session(document)
+            self.require_format(document, "xlsx")
             where = cast(list[WhereCondition], [v.model_dump() for v in args.where]) if args.where is not None else None
             aggregates = (
                 cast(list[AggregateSpec], [v.model_dump(by_alias=True, exclude_none=True) for v in args.aggregates])
@@ -101,7 +110,12 @@ class Operations:
                 else None
             )
             order = cast(list[OrderSpec], [v.model_dump() for v in args.order_by]) if args.order_by is not None else None
-            result = workbook.query_data(
+            if isinstance(document.session, XlsxReadSession):
+                execute_query = document.session.query_data
+            else:
+                assert isinstance(document.options, XlsxOptions)
+                execute_query = partial(query_xlsx, document.snapshot, options=document.options)
+            result = execute_query(
                 table_id=args.table_id,
                 sheet=args.sheet,
                 range_spec=args.range_spec,
@@ -200,7 +214,7 @@ class Operations:
         if args.sheets is not None and document.format != "xlsx":
             raise ToolError("INVALID_ARGUMENT", "sheets is supported only for XLSX")
         options = TextSearchOptions(args.case_sensitive, args.offset, args.limit, args.context_before, args.context_after)
-        if isinstance(document.options, XlsxOptions) and document.session is None and args.sheets is not None:
+        if isinstance(document.options, XlsxOptions) and document.session is None:
             result = find_xlsx_text(
                 document.snapshot, args.query, options=document.options, search_options=options, sheets=args.sheets
             )

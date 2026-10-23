@@ -5,7 +5,7 @@ import unittest
 import zipfile
 from xml.etree import ElementTree as ET
 
-from xlsx_llm_parser import parse_xlsx
+from xlsx_llm_parser import open_xlsx, parse_xlsx, query_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -92,6 +92,11 @@ class TableTests(unittest.TestCase):
         self.assertNotIn("columns", structural_table.attrib)
         # semantic: adds column names
         self.assertEqual(semantic_table.get("columns"), "Product,Q1,Q2")
+        # Compare the public source-query route with session ownership on this
+        # existing migration case; native table coverage remains in the checklist.
+        with open_xlsx(data) as session:
+            expected = session.query_data(table_id="table-0").text
+        self.assertEqual(query_xlsx(data, table_id="table-0").text, expected)
 
 
 if __name__ == "__main__":

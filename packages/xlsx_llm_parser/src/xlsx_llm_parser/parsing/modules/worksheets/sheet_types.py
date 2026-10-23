@@ -31,6 +31,7 @@ class SheetParseResult(NamedTuple):
     conditional_formats: list[ConditionalFormat]
     warnings: list[ParseWarning]
     merge_refs: list[str]
+    ordered_rows: bool = True
 
 
 class RowAttrs(NamedTuple):
@@ -53,6 +54,7 @@ class SheetParseFlags:
     style_index: bool
     semantic_style: bool
     cell_controls: bool
+    display_text: bool
 
     @classmethod
     def from_plan(cls, plan: XlsxParsePlan) -> SheetParseFlags:
@@ -65,4 +67,5 @@ class SheetParseFlags:
             style_index=plan.needs(XlsxFeature.STYLE_INDEX),
             semantic_style=plan.needs(XlsxFeature.SEMANTIC_STYLES),
             cell_controls=plan.needs(XlsxFeature.CELL_CONTROLS),
+            display_text=plan.display_text,
         )

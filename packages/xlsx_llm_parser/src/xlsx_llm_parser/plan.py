@@ -61,6 +61,12 @@ class XlsxParsePlan:
     features: XlsxFeature
     sheet_names: frozenset[str] | None = None
     cell_window: tuple[int, int, int, int] | None = None
+    columns: frozenset[int] | None = None
+    annotation_cells: bool | None = None
+    display_text: bool = True
+    scan_cells: bool = True
+    retain_cells: bool = True
+    formula_only: bool = False
 
     @property
     def module_keys(self) -> tuple[str, ...]:
@@ -129,6 +135,40 @@ class XlsxParsePlan:
         if resource_type in {"image", "chart", "pivot_table", "embedded_object"}:
             return cls(ParsePurpose.RESOURCE, "structural", XlsxFeature.DRAWINGS | XlsxFeature.PIVOTS | XlsxFeature.TABLES)
         return cls.session()
+
+    @classmethod
+    def values(
+        cls,
+        sheet_name: str,
+        *,
+        window: tuple[int, int, int, int] | None = None,
+        columns: frozenset[int] | None = None,
+        annotations: bool = False,
+    ) -> XlsxParsePlan:
+        features = XlsxFeature.COMMENTS | XlsxFeature.HYPERLINKS if annotations else XlsxFeature(0)
+        return cls(ParsePurpose.RENDER, "plain", features, frozenset((sheet_name,)), window, columns, annotations)
+
+    @classmethod
+    def search(cls, kind: str | None, sheets: list[str] | None) -> XlsxParsePlan:
+        features = XlsxFeature(0)
+        if kind in {None, "formula"}:
+            features |= XlsxFeature.FORMULAS
+        if kind in {None, "comment"}:
+            features |= XlsxFeature.COMMENTS
+        if kind in {None, "hyperlink"}:
+            features |= XlsxFeature.HYPERLINKS
+        if kind in {None, "definedName"}:
+            features |= XlsxFeature.DEFINED_NAMES
+        return cls(
+            ParsePurpose.RENDER,
+            "plain",
+            features,
+            frozenset(sheets) if sheets else None,
+            display_text=kind in {None, "value"},
+            scan_cells=kind != "definedName",
+            retain_cells=kind not in {"comment", "hyperlink", "definedName"},
+            formula_only=kind == "formula",
+        )
 
 
 __all__ = ["XlsxFeature", "XlsxParsePlan"]

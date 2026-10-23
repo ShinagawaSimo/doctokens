@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass, field
+from collections.abc import Callable, Mapping
+from dataclasses import replace
 from functools import partial
 from xml.etree import ElementTree as ET
 
@@ -11,7 +11,7 @@ from ooxml_llm_core.models import ParseWarning, RelationshipRecord
 from ooxml_llm_core.package import PackageError, PackageReader
 from ooxml_llm_core.xml import iterparse
 
-from ...._utils import col_letter, coord_key, parse_ref
+from ...._utils import col_letter, parse_ref
 from ....models import (
     Cell,
     RichTextRun,
@@ -19,117 +19,17 @@ from ....models import (
 from ....plan import XlsxParsePlan
 from ..styles.index import FormatIndex
 from ..workbook.rich_values import RichValueCatalog
-from .blank_cells import preserve_blank_ranges
 from .cells import _parse_cell, _row_attrs
-from .comments import apply_comments
-from .data_tables import DataTableFormula, apply_data_tables, read_data_table
-from .formulas import SharedFormulaMaster, expand_selected_shared_formulas
-from .post import (
-    apply_hyperlink_specs,
-    apply_merge_refs,
-    apply_spill_sources,
-)
+from .data_tables import read_data_table
+from .formulas import SharedFormulaMaster
 from .sheet_post_index import SheetPostIndex
 from .sheet_types import NS_S, RowAttrs, SheetParseFlags, SheetParseResult
+from .working_set import SheetWorkingSet
 
 _ROW = f"{{{NS_S}}}row"
 _CELL = f"{{{NS_S}}}c"
 _FORMULA = f"{{{NS_S}}}f"
 _CELL_VALUES = frozenset(f"{{{NS_S}}}{name}" for name in ("v", "t", "f"))
-
-
-@dataclass(slots=True)
-class SheetWorkingSet:
-    """Row-level IR and indexes accumulated while worksheet XML is streamed."""
-
-    flags: SheetParseFlags
-    rows: list[list[Cell]] = field(default_factory=list)
-    rows_by_number: dict[int, list[Cell]] = field(default_factory=dict)
-    cells_by_coord: dict[int, Cell] = field(default_factory=dict)
-    shared_formula_groups: dict[str, list[Cell]] = field(default_factory=dict)
-    shared_formula_masters: dict[str, list[SharedFormulaMaster]] = field(default_factory=dict)
-    data_tables: list[DataTableFormula] = field(default_factory=list)
-    spill_sources: list[Cell] = field(default_factory=list)
-
-    def add_row(self, row_number: int, cells: list[Cell]) -> None:
-        if not cells:
-            return
-        self.rows.append(cells)
-        self.rows_by_number[row_number] = cells
-
-    def add_cell(self, cell: Cell) -> None:
-        self.cells_by_coord[coord_key(cell["col"], cell["row"])] = cell
-        si = cell.get("si")
-        if self.flags.formulas and si is not None:
-            self.shared_formula_groups.setdefault(si, []).append(cell)
-        if self.flags.formulas and cell.get("formulaRange") and cell.get("dynamicArray"):
-            self.spill_sources.append(cell)
-
-    def add_shared_master(self, master: SharedFormulaMaster) -> None:
-        candidates = self.shared_formula_masters.setdefault(master.si, [])
-        if master not in candidates and len(candidates) < 2:
-            candidates.append(master)
-
-    def finalize(
-        self,
-        post: SheetPostIndex,
-        package: PackageReader,
-        sheet_relationships: list[RelationshipRecord],
-        threaded_comment_people: Mapping[str, str],
-        format_index: FormatIndex | None,
-        sheet_part: str,
-        *,
-        allow_annotation_cells: bool,
-        warnings: list[ParseWarning],
-    ) -> SheetParseResult:
-        if self.flags.formulas:
-            expand_selected_shared_formulas(self.shared_formula_groups, self.shared_formula_masters, warnings, sheet_part)
-            apply_data_tables(self.data_tables, self.rows_by_number, warnings, sheet_part)
-        apply_merge_refs(post.merge_refs, self.cells_by_coord)
-        if self.flags.formulas:
-            apply_spill_sources(self.spill_sources, self.cells_by_coord)
-        annotation_rows = self.rows if allow_annotation_cells else None
-        if self.flags.hyperlinks:
-            apply_hyperlink_specs(
-                post.hyperlinks,
-                self.cells_by_coord,
-                sheet_relationships,
-                annotation_rows,
-                self.rows_by_number if allow_annotation_cells else None,
-            )
-        if self.flags.comments:
-            apply_comments(
-                self.cells_by_coord,
-                package,
-                sheet_relationships,
-                annotation_rows,
-                self.rows_by_number if allow_annotation_cells else None,
-                threaded_comment_people,
-                warnings,
-            )
-        if allow_annotation_cells:
-            self.rows.sort(key=lambda row_cells: row_cells[0]["row"] if row_cells else 0)
-            for row_cells in self.rows:
-                row_cells.sort(key=lambda cell: cell["col"])
-        preserve_blank_ranges(self.rows, post.blank_content_refs)
-        result = SheetParseResult(
-            self.rows,
-            post.hidden_cols,
-            post.sheet_protection,
-            post.filter_range,
-            post.filter_cols,
-            post.data_validations,
-            post.conditional_formats,
-            warnings,
-            post.merge_refs,
-        )
-        self.cells_by_coord.clear()
-        self.rows_by_number.clear()
-        self.shared_formula_groups.clear()
-        self.shared_formula_masters.clear()
-        self.data_tables.clear()
-        self.spill_sources.clear()
-        return result
 
 
 class WorksheetScanner:
@@ -147,6 +47,7 @@ class WorksheetScanner:
         rich_values: RichValueCatalog,
         plan: XlsxParsePlan,
         cell_window: tuple[int, int, int, int] | None,
+        row_sink: Callable[[int, list[Cell]], bool] | None = None,
     ) -> None:
         self.package = package
         self.sheet_part = sheet_part
@@ -157,6 +58,7 @@ class WorksheetScanner:
         self.threaded_comment_people = threaded_comment_people
         self.rich_values = rich_values
         self.flags = SheetParseFlags.from_plan(plan)
+        self.plan = plan
         self.warnings: list[ParseWarning] = []
         self._parse_cell = partial(
             _parse_cell,
@@ -165,8 +67,13 @@ class WorksheetScanner:
             include_semantic_style=self.flags.semantic_style,
             include_formulas=self.flags.formulas,
             include_cell_controls=self.flags.cell_controls,
+            include_display_text=self.flags.display_text,
         )
         self.cell_window = cell_window
+        self.columns = plan.columns
+        self.annotation_cells = plan.annotation_cells
+        self.row_sink = row_sink
+        self.accept_rows = True
 
     def parse(self) -> SheetParseResult:
         if not self.package.exists(self.sheet_part):
@@ -176,6 +83,7 @@ class WorksheetScanner:
         saw_root = False
         post = SheetPostIndex(self.flags)
         previous_row = 0
+        ordered_rows = True
         with self.package.open_entry(self.sheet_part) as stream:
             # All cell children remain alive until their row ends. Start
             # events carry no additional information and double large-sheet
@@ -185,7 +93,9 @@ class WorksheetScanner:
                 saw_root = True
                 if element.tag == _ROW:
                     attrs = _row_attrs(element)
-                    previous_row = attrs.number or previous_row + 1
+                    number = attrs.number or previous_row + 1
+                    ordered_rows = ordered_rows and number > previous_row
+                    previous_row = number
                     self._read_row(element, attrs._replace(number=previous_row), working, post)
                     element.clear()
                     continue
@@ -194,20 +104,66 @@ class WorksheetScanner:
                 post.collect(element, format_index=self.format_index)
         if not saw_root:
             raise PackageError(f"Empty worksheet part: {self.sheet_part}")
-        return working.finalize(
+        if self.plan.formula_only and not ordered_rows:
+            return WorksheetScanner(
+                self.package,
+                self.sheet_part,
+                self.shared_strings,
+                self.rich_text_map,
+                self.format_index,
+                self.sheet_relationships,
+                self.threaded_comment_people,
+                self.rich_values,
+                replace(self.plan, formula_only=False),
+                self.cell_window,
+            ).parse()
+        if self.row_sink is not None:
+            return SheetParseResult(
+                [],
+                post.hidden_cols,
+                post.sheet_protection,
+                post.filter_range,
+                post.filter_cols,
+                post.data_validations,
+                post.conditional_formats,
+                self.warnings,
+                post.merge_refs,
+                ordered_rows,
+            )
+        result = working.finalize(
             post,
             self.package,
             self.sheet_relationships,
             self.threaded_comment_people,
             self.format_index,
             self.sheet_part,
-            allow_annotation_cells=self.cell_window is None,
+            allow_annotation_cells=self.cell_window is None if self.annotation_cells is None else self.annotation_cells,
             warnings=self.warnings,
         )
+        return result._replace(ordered_rows=ordered_rows)
 
     def _read_row(self, row: ET.Element, attrs: RowAttrs, working: SheetWorkingSet, post: SheetPostIndex) -> None:
-        cells: list[Cell] | None = [] if self._includes_row(attrs.number) else None
+        cells: list[Cell] | None = [] if self.accept_rows and self._includes_row(attrs.number) else None
         previous_ref = ""
+        has_position = False
+        if self.plan.formula_only:
+            # A valid TABLE range begins at its master. Read declarations for
+            # this row first so column order cannot hide cached TABLE members.
+            for element in row:
+                formula = element.find(_FORMULA)
+                if formula is not None and formula.get("t") == "dataTable":
+                    master_ref = element.get("r", "")
+                    if not master_ref:
+                        last_ref = ""
+                        for sibling in row:
+                            if sibling.tag != _CELL:
+                                continue
+                            column = parse_ref(last_ref)[0] if last_ref else 0
+                            last_ref = sibling.get("r") or f"{col_letter(column + 1)}{attrs.number}"
+                            if sibling is element:
+                                master_ref = last_ref
+                                break
+                    working.data_tables.append(read_data_table(formula, master_ref))
         for element in row:
             if element.tag != _CELL:
                 continue
@@ -224,28 +180,47 @@ class WorksheetScanner:
                     si, shared_ref = formula.get("si"), formula.get("ref")
                     if si is not None and shared_ref is not None:
                         working.add_shared_master(SharedFormulaMaster(si, ref, shared_ref, formula.text or ""))
-                elif formula.get("t") == "dataTable":
+                elif formula.get("t") == "dataTable" and not self.plan.formula_only:
                     working.data_tables.append(read_data_table(formula, ref))
-            if cells is not None and (self.cell_window is None or self._includes_cell(*parse_ref(ref))):
-                cell = self._parse_cell(
-                    element, attrs, self.shared_strings, self.rich_text_map, self.format_index, ref, self.rich_values
-                )
-                cells.append(cell)
+            if cells is None or not self.plan.retain_cells:
+                continue
+            if self.plan.formula_only and formula is None:
+                col, number = parse_ref(ref)
+                if not any(
+                    table.bounds is not None
+                    and table.bounds[0] <= col <= table.bounds[2]
+                    and table.bounds[1] <= attrs.number <= table.bounds[3]
+                    for table in working.data_tables
+                ):
+                    continue
+            if self.cell_window is not None or self.columns is not None:
+                col, number = parse_ref(ref)
+                if self.cell_window is not None:
+                    left, top, right, bottom = self.cell_window
+                    if not (left <= col <= right and top <= number <= bottom):
+                        continue
+                has_position = True
+                if self.columns is not None and col not in self.columns:
+                    continue
+            else:
+                has_position = True
+            cell = self._parse_cell(
+                element, attrs, self.shared_strings, self.rich_text_map, self.format_index, ref, self.rich_values
+            )
+            cells.append(cell)
+            if self.row_sink is None:
                 working.add_cell(cell)
         if cells is not None:
-            working.add_row(attrs.number, cells)
+            if self.row_sink is None:
+                working.add_row(attrs.number, cells)
+            elif has_position:
+                self.accept_rows = self.row_sink(attrs.number, cells)
 
     def _includes_row(self, row: int) -> bool:
         if self.cell_window is None:
             return True
         _start_col, start_row, _end_col, end_row = self.cell_window
         return start_row <= row <= end_row
-
-    def _includes_cell(self, col: int, row: int) -> bool:
-        if self.cell_window is None:
-            return True
-        start_col, start_row, end_col, end_row = self.cell_window
-        return start_col <= col <= end_col and start_row <= row <= end_row
 
 
 def parse_sheet(
@@ -259,6 +234,7 @@ def parse_sheet(
     rich_values: RichValueCatalog | None = None,
     plan: XlsxParsePlan | None = None,
     cell_window: tuple[int, int, int, int] | None = None,
+    row_sink: Callable[[int, list[Cell]], bool] | None = None,
 ) -> SheetParseResult:
     """Parse a worksheet XML part into typed cell rows and sheet-level metadata."""
     return WorksheetScanner(
@@ -272,4 +248,5 @@ def parse_sheet(
         rich_values or RichValueCatalog(),
         plan or XlsxParsePlan.session(),
         cell_window,
+        row_sink,
     ).parse()

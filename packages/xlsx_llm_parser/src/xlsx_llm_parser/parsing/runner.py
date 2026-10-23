@@ -64,7 +64,7 @@ def _parse_workbook(
         resource_only = parse_plan.purpose is ParsePurpose.RESOURCE
         shared_strings, rich_text_map = (
             ([], {})
-            if resource_only
+            if resource_only or not parse_plan.display_text
             else _parse_shared_strings(package_reader, include_rich_text=parse_plan.needs(XlsxFeature.RICH_TEXT))
         )
         rich_values = (
@@ -84,7 +84,7 @@ def _parse_workbook(
         )
         format_index = (
             FormatIndex(locale=parse_options.locale)
-            if resource_only
+            if resource_only or not parse_plan.display_text
             else parse_styles(
                 package_reader,
                 detail=parse_plan.style_detail,  # type: ignore[arg-type]
@@ -113,7 +113,7 @@ def _parse_workbook(
 
                 sheet_result = (
                     SheetParseResult([], [], False, "", [], [], [], [], [])
-                    if resource_only
+                    if resource_only or not parse_plan.scan_cells
                     else parse_sheet(
                         package_reader,
                         sheet_info["part"],

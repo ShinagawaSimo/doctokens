@@ -55,28 +55,50 @@ class TextSearchResult:
     next_offset: int | None = None
 
 
-def search_text(units: Iterable[TextUnit], query: str, options: TextSearchOptions) -> TextSearchResult:
-    if not isinstance(query, str) or not query or len(query) > 4000:
-        raise ValueError("query must contain 1 to 4000 characters")
-    pattern = re.compile(re.escape(query), 0 if options.case_sensitive else re.IGNORECASE)
-    matches: list[TextMatch] = []
-    seen: set[str] = set()
-    skipped = 0
-    for unit in units:
-        if unit.group and unit.group in seen:
-            continue
-        match = pattern.search(unit.text)
+class TextSearchCollector:
+    """Bounded push-based matching, shared with iterable search traversal."""
+
+    def __init__(self, query: str, options: TextSearchOptions) -> None:
+        if not isinstance(query, str) or not query or len(query) > 4000:
+            raise ValueError("query must contain 1 to 4000 characters")
+        self.options = options
+        self.pattern = re.compile(re.escape(query), 0 if options.case_sensitive else re.IGNORECASE)
+        self.matches: list[TextMatch] = []
+        self.seen: set[str] = set()
+        self.skipped = 0
+        self.complete = False
+        self.next_offset: int | None = None
+
+    def consume(self, unit: TextUnit) -> bool:
+        if self.complete:
+            return False
+        if unit.group and unit.group in self.seen:
+            return True
+        match = self.pattern.search(unit.text)
         if match is None:
-            continue
+            return True
         if unit.group:
-            seen.add(unit.group)
-        if skipped < options.offset:
-            skipped += 1
-            continue
-        if len(matches) == options.limit:
-            return TextSearchResult(tuple(matches), options.offset + len(matches))
-        start = max(0, match.start() - options.context_before)
-        end = min(len(unit.text), match.end() + options.context_after)
+            self.seen.add(unit.group)
+        if self.skipped < self.options.offset:
+            self.skipped += 1
+            return True
+        if len(self.matches) == self.options.limit:
+            self.next_offset = self.options.offset + len(self.matches)
+            self.complete = True
+            return False
+        start = max(0, match.start() - self.options.context_before)
+        end = min(len(unit.text), match.end() + self.options.context_after)
         excerpt = ("…" if start else "") + unit.text[start:end] + ("…" if end < len(unit.text) else "")
-        matches.append(TextMatch(excerpt, dict(unit.locator)))
-    return TextSearchResult(tuple(matches))
+        self.matches.append(TextMatch(excerpt, dict(unit.locator)))
+        return True
+
+    def result(self) -> TextSearchResult:
+        return TextSearchResult(tuple(self.matches), self.next_offset)
+
+
+def search_text(units: Iterable[TextUnit], query: str, options: TextSearchOptions) -> TextSearchResult:
+    collector = TextSearchCollector(query, options)
+    for unit in units:
+        if not collector.consume(unit):
+            break
+    return collector.result()

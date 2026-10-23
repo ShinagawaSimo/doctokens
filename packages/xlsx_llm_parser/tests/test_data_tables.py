@@ -6,7 +6,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 import pytest
-from xlsx_llm_parser import open_xlsx, parse_xlsx
+from xlsx_llm_parser import find_xlsx_cells, open_xlsx, parse_xlsx
 
 FIXTURE = Path(__file__).resolve().parents[3] / "test_support/fixtures/xlsx/xlsx-formula-data-table.xlsx"
 MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -91,3 +91,7 @@ def test_conflicting_formula_is_not_overwritten() -> None:
     assert cell is not None and cell.get("formula") == "1+7" and cell.text == "8"
     assert cell.get("formula-type") is None
     assert [warning.code for warning in result.report.warnings] == ["DATA_TABLE_FORMULA_INVALID"]
+    source = _malformed_master({}, conflicting_formula=True)
+    with open_xlsx(source) as session:
+        expected = session.find_cells("1+7", kind="formula").text
+    assert find_xlsx_cells(source, "1+7", kind="formula").text == expected

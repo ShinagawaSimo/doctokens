@@ -13,13 +13,6 @@ def _coerce_cell_value(raw: object) -> object:
         return text
 
 
-def _apply_where(
-    rows: list[dict[str, object]],
-    conditions: list[WhereCondition],
-) -> list[dict[str, object]]:
-    return [row for row in rows if all(_matches_condition(row, condition) for condition in conditions)]
-
-
 def _matches_condition(row: dict[str, object], condition: WhereCondition) -> bool:
     col = str(condition.get("column", ""))
     op = condition.get("op", "eq")
@@ -39,22 +32,6 @@ def _matches_condition(row: dict[str, object], condition: WhereCondition) -> boo
             return False
         return actual > expected_num if op == "gt" else actual < expected_num
     return False
-
-
-def _apply_aggregation(
-    rows: list[dict[str, object]],
-    group_by: list[str],
-    aggregates: list[AggregateSpec],
-) -> list[dict[str, object]]:
-    groups: dict[tuple[object, ...], dict[str, object]] = {}
-    for row in rows:
-        key = tuple(row.get(group, "") for group in group_by)
-        groups.setdefault(key, {group: row.get(group, "") for group in group_by})
-        _update_group(groups[key], row, aggregates)
-
-    for row in groups.values():
-        _finalize_averages(row, aggregates)
-    return list(groups.values())
 
 
 def _update_group(

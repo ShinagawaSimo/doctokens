@@ -6,10 +6,29 @@ import re
 from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.doctokens_xml import append, element, serialize
+from ooxml_llm_core.models import ParseResult
 from ooxml_llm_core.resource_xml import operation_root
 
-from .models import Cell, ParsedWorkbook, SheetInfo
+from ._api_support import Source, _result
+from .models import Cell, ParsedWorkbook, ParseOptions, SheetInfo
+from .parsing.runner import _parse_workbook
+from .plan import XlsxParsePlan
 from .rendering.selection import find_sheet
+
+
+def find_xlsx_cells(
+    source: Source,
+    query: str,
+    *,
+    options: ParseOptions | None = None,
+    sheets: list[str] | None = None,
+    kind: str | None = None,
+    limit: int = 50,
+) -> ParseResult:
+    workbook = _parse_workbook(source, options, plan=XlsxParsePlan.search(kind, sheets))
+    return _result(
+        workbook, _find_cells(workbook, query, sheets=sheets, kind=kind, limit=limit), "structural", {"kind": "search"}
+    )
 
 
 def _sheet(workbook: ParsedWorkbook, name: str) -> SheetInfo:

@@ -52,13 +52,15 @@ def _parse_cell(
     include_semantic_style: bool,
     include_formulas: bool,
     include_cell_controls: bool,
+    include_display_text: bool = True,
 ) -> Cell:
     col, row = parse_ref(ref)
     cell_type = cell_elem.get("t", "n")
-    text, value_elem = _cell_text(cell_elem, cell_type, shared_strings)
+    text, value_elem = _cell_text(cell_elem, cell_type, shared_strings) if include_display_text else ("", None)
     formula, formula_meta = _formula_metadata(cell_elem) if include_formulas else (None, {})
     source_text = text
-    text = _formatted_text(cell_elem, cell_type, text, format_index)
+    if include_display_text:
+        text = _formatted_text(cell_elem, cell_type, text, format_index)
 
     cell: Cell = {"ref": ref, "row": row_attrs.number or row, "col": col, "text": text}
     if (
@@ -75,7 +77,7 @@ def _parse_cell(
     _apply_row_attrs(cell, row_attrs)
     if include_rich_text:
         _attach_rich_text(cell, cell_type, value_elem, rich_text_map)
-    if cell_type in {"s", "str", "inlineStr"} and format_index is not None:
+    if include_display_text and cell_type in {"s", "str", "inlineStr"} and format_index is not None:
         _format_text_cell(cell, source_text, format_index.text_format_parts(_style_index(cell_elem)))
     if include_style_index and cell_elem.find(f"{{{NS_S}}}f") is None:
         _attach_formula_bar_value(cell, cell_elem, cell_type, source_text, format_index)

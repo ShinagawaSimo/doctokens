@@ -2,21 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 from ooxml_llm_core.doctokens_xml import append, serialize
 from ooxml_llm_core.resource_xml import operation_root
 
-from ._query_operations import _aggregate_name, _apply_aggregation, _apply_order_by, _apply_where, _coerce_cell_value
+from ._query_columns import _columns_from_header, _columns_from_labels
+from ._query_pipeline import QueryPipeline
 from ._query_types import AggregateSpec as AggregateSpec
 from ._query_types import OrderSpec as OrderSpec
 from ._query_types import QueryColumn as QueryColumn
 from ._query_types import WhereCondition as WhereCondition
-from ._utils import col_letter
 from .models import Cell, ParsedWorkbook, SheetInfo
 from .rendering.selection import find_sheet, parse_range
-
-_WHERE_OPS = {"eq", "contains", "gt", "lt"}
-_AGGREGATE_OPS = {"sum", "count", "avg", "min", "max"}
-_ORDER_DIRECTIONS = {"asc", "desc"}
 
 
 def query_data(
@@ -42,34 +40,21 @@ def query_data(
         header_row=header_row,
     )
     start_col, start_row, end_col, end_row = range_bounds
-    query_rows = _rows_in_range(query_sheet, start_col, start_row, end_col, end_row)
-    query_columns = _columns_from_optional_header(query_rows, query_columns, header_row, start_col, end_col)
-    result_rows = _materialize_rows(query_rows, query_columns, start_col, end_col, header_row_to_skip)
-
-    if where:
-        result_rows = _apply_where(result_rows, _resolve_where_conditions(where, query_columns))
-
-    if group_by and aggregates:
-        resolved_group_by = [_resolve_column_key(group_name, query_columns) for group_name in group_by]
-        resolved_aggregates = _resolve_aggregates(aggregates, query_columns)
-        result_rows = _apply_aggregation(result_rows, resolved_group_by, resolved_aggregates)
-        query_columns = _aggregation_columns(resolved_group_by, resolved_aggregates, query_columns)
-
-    if select and result_rows:
-        query_columns = _select_columns(select, query_columns)
-        selected_column_keys = [column["key"] for column in query_columns]
-        result_rows = [
-            {column_key: row.get(column_key, "") for column_key in selected_column_keys if column_key in row}
-            for row in result_rows
-        ]
-
-    if order_by:
-        result_rows = _apply_order_by(result_rows, _resolve_order_specs(order_by, query_columns))
-
-    if limit and limit > 0:
-        result_rows = result_rows[:limit]
-
-    return _render_query_result(result_rows, query_columns)
+    if not query_columns and header_row is not None and start_row <= header_row <= end_row:
+        header = next((row for row in query_sheet.get("rows", []) if row and row[0]["row"] == header_row), None)
+        if header is not None:
+            query_columns = _columns_from_header(header, start_col, end_col)
+    pipeline = QueryPipeline(
+        query_columns, where=where, group_by=group_by, aggregates=aggregates, select=select, order_by=order_by, limit=limit
+    )
+    for cells in _rows_in_range(query_sheet, start_row, end_row):
+        row_number = cells[0]["row"]
+        if header_row_to_skip is not None and row_number <= header_row_to_skip:
+            continue
+        selected = [cell for cell in cells if start_col <= cell["col"] <= end_col]
+        if selected and not pipeline.consume(row_number, selected):
+            break
+    return _render_query_result(*pipeline.finish())
 
 
 def _resolve_query_source(
@@ -98,48 +83,11 @@ def _resolve_query_source(
     raise ValueError("Provide table_id or (sheet + range_spec + header_row)")
 
 
-def _columns_from_optional_header(
-    source_rows: list[list[Cell]],
-    columns: list[QueryColumn],
-    header_row: int | None,
-    start_col: int,
-    end_col: int,
-) -> list[QueryColumn]:
-    if columns or header_row is None:
-        return columns
-    for row_cells in source_rows:
-        if row_cells[0]["row"] == header_row:
-            return _columns_from_header(row_cells, start_col, end_col)
-    return columns
-
-
-def _materialize_rows(
-    source_rows: list[list[Cell]],
-    columns: list[QueryColumn],
-    start_col: int,
-    end_col: int,
-    skip_rows_through: int | None,
-) -> list[dict[str, object]]:
-    rows: list[dict[str, object]] = []
-    for row_cells in source_rows:
-        row_number = row_cells[0]["row"]
-        if skip_rows_through is not None and row_number <= skip_rows_through:
-            continue
-        row = _row_to_dict(row_cells, columns, start_col, end_col)
-        if row:
-            row["__row"] = row_number
-            rows.append(row)
-    return rows
-
-
 def _rows_in_range(
     sheet_obj: SheetInfo,
-    start_col: int,
     start_row: int,
-    end_col: int,
     end_row: int,
-) -> list[list[Cell]]:
-    rows: list[list[Cell]] = []
+) -> Iterator[list[Cell]]:
     for row_cells in sheet_obj.get("rows", []):
         if not row_cells:
             continue
@@ -148,148 +96,7 @@ def _rows_in_range(
             continue
         if row_num > end_row:
             break
-        rows.append(row_cells)
-    return rows
-
-
-def _columns_from_header(row_cells: list[Cell], start_col: int, end_col: int) -> list[QueryColumn]:
-    labels = ["" for _col in range(start_col, end_col + 1)]
-    for cell in row_cells:
-        if start_col <= cell["col"] <= end_col:
-            text = str(cell.get("text", "")).strip()
-            labels[cell["col"] - start_col] = text
-    return _columns_from_labels(labels, start_col, end_col)
-
-
-def _columns_from_labels(labels: list[str], start_col: int, end_col: int) -> list[QueryColumn]:
-    columns: list[QueryColumn] = []
-    seen: dict[str, int] = {}
-    for col in range(start_col, end_col + 1):
-        label = labels[col - start_col].strip() if col - start_col < len(labels) else ""
-        key_base = label or f"__col{col}"
-        seen[key_base] = seen.get(key_base, 0) + 1
-        key = key_base if seen[key_base] == 1 else f"{key_base}_{seen[key_base]}"
-        columns.append({"key": key, "label": label, "col": col})
-    return columns
-
-
-def _row_to_dict(
-    row_cells: list[Cell],
-    columns: list[QueryColumn],
-    start_col: int,
-    end_col: int,
-) -> dict[str, object]:
-    row_dict: dict[str, object] = {}
-    for cell in row_cells:
-        if start_col <= cell["col"] <= end_col:
-            col_idx = cell["col"] - start_col
-            col_name = columns[col_idx]["key"] if col_idx < len(columns) else f"__col{cell['col']}"
-            row_dict[col_name] = _coerce_cell_value(cell.get("text", ""))
-    return row_dict
-
-
-def _resolve_where_conditions(
-    conditions: list[WhereCondition],
-    columns: list[QueryColumn],
-) -> list[WhereCondition]:
-    resolved: list[WhereCondition] = []
-    for condition in conditions:
-        item: WhereCondition = {}
-        if "column" not in condition:
-            raise ValueError("where condition requires a 'column'")
-        item["column"] = _resolve_column_key(condition["column"], columns)
-        if "op" in condition:
-            op = str(condition["op"])
-            if op not in _WHERE_OPS:
-                raise ValueError(f"Unsupported where operator {op!r}; expected one of {sorted(_WHERE_OPS)}")
-            item["op"] = op
-        if "value" in condition:
-            item["value"] = condition["value"]
-        resolved.append(item)
-    return resolved
-
-
-def _resolve_aggregates(
-    aggregates: list[AggregateSpec],
-    columns: list[QueryColumn],
-) -> list[AggregateSpec]:
-    resolved: list[AggregateSpec] = []
-    for aggregate in aggregates:
-        item: AggregateSpec = {}
-        if "op" in aggregate:
-            op = str(aggregate["op"])
-            if op not in _AGGREGATE_OPS:
-                raise ValueError(f"Unsupported aggregate operator {op!r}; expected one of {sorted(_AGGREGATE_OPS)}")
-            item["op"] = op
-        if "column" in aggregate:
-            item["column"] = _resolve_column_key(aggregate["column"], columns)
-        if "as" in aggregate:
-            item["as"] = aggregate["as"]
-        resolved.append(item)
-    return resolved
-
-
-def _resolve_order_specs(
-    order_specs: list[OrderSpec],
-    columns: list[QueryColumn],
-) -> list[OrderSpec]:
-    resolved: list[OrderSpec] = []
-    for order_spec in order_specs:
-        item: OrderSpec = {}
-        if "column" in order_spec:
-            item["column"] = _resolve_column_key(order_spec["column"], columns)
-        if "direction" in order_spec:
-            direction = str(order_spec["direction"])
-            if direction not in _ORDER_DIRECTIONS:
-                raise ValueError(f"Unsupported sort direction {direction!r}; expected one of {sorted(_ORDER_DIRECTIONS)}")
-            item["direction"] = direction
-        resolved.append(item)
-    return resolved
-
-
-def _resolve_column_key(name: str, columns: list[QueryColumn]) -> str:
-    value = str(name)
-    for column in columns:
-        if value in {column["key"], column["label"]}:
-            return column["key"]
-    for column in columns:
-        if value in {col_letter(column["col"]), f"Col{column['col']}"}:
-            return column["key"]
-    available = ", ".join(repr(column["key"]) for column in columns) or "none"
-    raise ValueError(f"Column {value!r} not found; available columns: {available}")
-
-
-def _select_columns(select: list[str], columns: list[QueryColumn]) -> list[QueryColumn]:
-    selected: list[QueryColumn] = []
-    for item in select:
-        key = _resolve_column_key(item, columns)
-        column = _find_column(key, columns)
-        selected.append(column if column is not None else {"key": key, "label": key, "col": 0})
-    return selected
-
-
-def _find_column(key: str, columns: list[QueryColumn]) -> QueryColumn | None:
-    for column in columns:
-        if column["key"] == key:
-            return column
-    return None
-
-
-def _aggregation_columns(
-    group_by: list[str],
-    aggregates: list[AggregateSpec],
-    source_columns: list[QueryColumn],
-) -> list[QueryColumn]:
-    columns: list[QueryColumn] = []
-    for key in group_by:
-        source = _find_column(key, source_columns)
-        columns.append(source if source is not None else {"key": key, "label": key, "col": 0})
-    for aggregate in aggregates:
-        op = aggregate.get("op", "sum")
-        col = str(aggregate.get("column", ""))
-        output_name = _aggregate_name(aggregate, op, col)
-        columns.append({"key": output_name, "label": output_name, "col": 0})
-    return columns
+        yield row_cells
 
 
 def _render_query_result(rows: list[dict[str, object]], columns: list[QueryColumn] | None = None) -> str:

@@ -8,14 +8,8 @@ from xml.etree import ElementTree as ET
 from ooxml_llm_core.xml import local_attr
 
 from ....core.constants import (
-    _TAG_W_PARAGRAPH,
-    _TAG_W_SDT_CONTENT,
-    _TAG_W_SMART_TAG,
-    _TAG_W_STRUCTURED_DOCUMENT_TAG,
-    _TAG_W_TABLE,
     attr,
     child_elements,
-    first_child,
     local_name,
 )
 from ....core.models import (
@@ -23,22 +17,19 @@ from ....core.models import (
     AncillaryItem,
     AncillaryResult,
     AssetLookup,
-    ContentControl,
     ObjectLookup,
     ParseOptions,
     ParseWarning,
-    RawHint,
-    Run,
     append_warning,
 )
 from ....core.package import PackageReader
 from ....core.relationships import RelationshipIndex
 from ....ooxml.compatibility import DocxCompatibility
-from ....ooxml.content_controls import parse_content_control
 from ....ooxml.styles import StyleMap
 from ....plan import DocxFeature, DocxParsePlan
 from ..body.inline import InlineParser
 from ..body.textboxes import TextboxReader
+from .content import AncillaryContentParser, has_objects
 
 
 class AncillaryParser:
@@ -74,6 +65,7 @@ class AncillaryParser:
         )
         self.inline.textbox_reader = textbox_reader
         self._block_index = 0
+        self.content = AncillaryContentParser(self.inline, self._next_block_id)
         self._comment_anchors = dict(comment_anchors or {})
 
     def parse(self) -> AncillaryResult:
@@ -98,7 +90,7 @@ class AncillaryParser:
             root = self._parse_xml_part(name)
             if root is None:
                 continue
-            content = self._container_content(root, name)
+            content = self.content.read(root, name)
             item_id = name.rsplit("/", 1)[-1].removesuffix(".xml")
             self._try_emit_item(item_id, f"{kind}s.{item_id}", content, rows)
         return rows
@@ -119,7 +111,7 @@ class AncillaryParser:
             note_id = attr(note, "w", "id")
             if not note_id:
                 continue
-            content = self._container_content(note, part_name)
+            content = self.content.read(note, part_name)
             self._try_emit_item(note_id, f"{group}.{note_id}", content, rows)
         return rows
 
@@ -137,7 +129,7 @@ class AncillaryParser:
             comment_id = attr(comment, "w", "id")
             if not comment_id:
                 continue
-            content = self._container_content(comment, part_name)
+            content = self.content.read(comment, part_name)
             row = self._try_emit_item(
                 comment_id,
                 f"comments.{comment_id}",
@@ -170,13 +162,14 @@ class AncillaryParser:
         date: str = "",
     ) -> AncillaryItem | None:
         """Build and append an AncillaryItem if the content is non-empty."""
-        if not (content["text"].strip() or self._has_objects(content["runs"])):
+        if not (content["text"].strip() or has_objects(content["runs"])):
             return None
         row: AncillaryItem = {
             "id": item_id,
             "loc": loc,
             "text": content["text"],
             "runs": content["runs"],
+            "searchUnits": content.get("searchUnits", []),
         }
         if author:
             row["author"] = author
@@ -251,96 +244,10 @@ class AncillaryParser:
             )
             return None
 
-    def _container_content(self, node: ET.Element, part: str) -> AncillaryContent:
-        """Extract paragraphs, tables, and inline objects from a container element.
-
-        Uses pre-computed tag names for direct comparison to avoid qualified_name()
-        / local_name() calls in the hot path.
-        """
-        text_parts: list[str] = []
-        runs: list[Run] = []
-        raw_hints: list[RawHint] = []
-        for child in node:
-            child_tag = child.tag
-            if child_tag == _TAG_W_PARAGRAPH:
-                p_runs, p_hints = self.inline.paragraph_runs(
-                    child, part, self._next_block_id(part), self._paragraph_style_id(child)
-                )
-                p_text = "".join(run["text"] for run in p_runs)
-                if p_text.strip() or self._has_objects(p_runs):
-                    if runs:
-                        runs.append({"text": "\n"})
-                    runs.extend(p_runs)
-                    text_parts.append(p_text)
-                    raw_hints.extend(p_hints)
-            elif child_tag == _TAG_W_TABLE:
-                table_content = self._table_content(child, part)
-                if table_content["text"].strip() or self._has_objects(table_content["runs"]):
-                    if runs:
-                        runs.append({"text": "\n"})
-                    runs.extend(table_content["runs"])
-                    text_parts.append(table_content["text"])
-                    raw_hints.extend(table_content["rawHints"])
-            elif child_tag in (
-                _TAG_W_STRUCTURED_DOCUMENT_TAG,
-                _TAG_W_SDT_CONTENT,
-                _TAG_W_SMART_TAG,
-            ):
-                nested = self._container_content(child, part)
-                if child_tag == _TAG_W_STRUCTURED_DOCUMENT_TAG:
-                    control = parse_content_control(child)
-                    self._attach_control(nested["runs"], control)
-                    raw_hints.append(dict(control))
-                if nested["text"].strip() or self._has_objects(nested["runs"]):
-                    if runs:
-                        runs.append({"text": "\n"})
-                    runs.extend(nested["runs"])
-                    text_parts.append(nested["text"])
-                    raw_hints.extend(nested["rawHints"])
-        return {"text": "\n".join(text_parts), "runs": runs, "rawHints": raw_hints}
-
-    @staticmethod
-    def _attach_control(runs: list[Run], control: ContentControl) -> None:
-        """Attach one block-level ancillary control to its already-parsed runs."""
-        for run in runs:
-            run.setdefault("contentControls", []).append(control)
-
-    def _table_content(self, tbl: ET.Element, part: str) -> AncillaryContent:
-        """Flatten a table in ancillary content to row text while preserving inline runs."""
-        text_rows: list[str] = []
-        runs: list[Run] = []
-        raw_hints: list[RawHint] = []
-        for tr in child_elements(tbl, "w", "tr"):
-            cell_contents = [self._container_content(tc, part) for tc in child_elements(tr, "w", "tc")]
-            visible_cells = [cell for cell in cell_contents if cell["text"].strip() or self._has_objects(cell["runs"])]
-            if not visible_cells:
-                continue
-            if runs:
-                runs.append({"text": "\n"})
-            row_texts: list[str] = []
-            for cell_index, cell in enumerate(visible_cells):
-                if cell_index:
-                    runs.append({"text": " | "})
-                runs.extend(cell["runs"])
-                row_texts.append(cell["text"].strip())
-                raw_hints.extend(cell["rawHints"])
-            text_rows.append(" | ".join(text for text in row_texts if text))
-        return {"text": "\n".join(text_rows), "runs": runs, "rawHints": raw_hints}
-
-    def _paragraph_style_id(self, p: ET.Element) -> str | None:
-        """Read the paragraph style id from paragraph properties."""
-        paragraph_properties = first_child(p, "w", "pPr")
-        pstyle = first_child(paragraph_properties, "w", "pStyle")
-        return attr(pstyle, "w", "val") if pstyle is not None else None
-
     def _next_block_id(self, part: str) -> str:
         """Generate a lightweight locator id for ancillary inline warnings."""
         self._block_index += 1
         return f"{part}#{self._block_index}"
-
-    def _has_objects(self, runs: list[Run]) -> bool:
-        """Check whether any run carries non-text objects (images, footnotes, equations)."""
-        return any("objects" in run for run in runs)
 
 
 def _word_bool(value: str | None) -> bool:

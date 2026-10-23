@@ -4,6 +4,12 @@
 
 Display formatting applies the effective Excel number format from the cell XF to the saved cell value. The parser uses the explicit workbook locale (default `zh-CN`) and does not evaluate formulas. The displayed text and formula-bar text are separate concepts: `<v>` is not itself the formula-bar string.
 
+Format syntax is compiled per effective format code and locale within the
+workbook's FormatIndex. Section directives, classifications, syntax masks and
+date contexts are reused; each value still selects its section and is formatted
+independently using the active date system. No global cache or per-cell/value
+result cache is introduced.
+
 ## Fields
 
 ### `numFmtId`

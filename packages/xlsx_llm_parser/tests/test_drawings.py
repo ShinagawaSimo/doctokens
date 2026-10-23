@@ -4,7 +4,7 @@ import io
 import unittest
 import zipfile
 
-from xlsx_llm_parser import parse_xlsx
+from xlsx_llm_parser import XlsxResourceCatalog, parse_xlsx
 from xlsx_llm_parser import parse_xlsx as parse_xlsx_result
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -94,13 +94,16 @@ class BrokenPartWarningTests(unittest.TestCase):
             ),
             "xl/charts/chart1.xml": "<broken",
         }
-        result = parse_xlsx_result(
-            _workbook_with_broken_part("drawing", "drawings/drawing1.xml", drawing, extra), density="structural"
-        )
+        source = _workbook_with_broken_part("drawing", "drawings/drawing1.xml", drawing, extra)
+        result = parse_xlsx_result(source, density="structural")
         self.assertIn("Kept", result.text)
         self.assertTrue(
             any(w.code == "CHART_XML_INVALID" and w.locator == "xl/charts/chart1.xml" for w in result.report.warnings)
         )
+        # A malformed chart must keep identical resource identities in the
+        # independent lightweight directory and the full cell parser.
+        with XlsxResourceCatalog(source) as catalog:
+            self.assertEqual(catalog.resources, result.resources)
 
 
 class ImageTests(unittest.TestCase):
@@ -165,8 +168,11 @@ class ImageTests(unittest.TestCase):
                 ),
             },
         )
-        output = parse_xlsx(data, density="structural").text
+        parsed = parse_xlsx(data, density="structural")
+        output = parsed.text
         self.assertIn('<img id="image1" ref="A1" />', output)
+        with XlsxResourceCatalog(data) as catalog:
+            self.assertEqual(catalog.resources, parsed.resources)
 
 
 class ChartTests(unittest.TestCase):

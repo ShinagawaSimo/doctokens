@@ -60,10 +60,20 @@ class Presenter:
             )
             for result in parsed
         ]
+        return self.text_parts(document, items, extra=extra, cache_key=cache_key)
+
+    def text_parts(
+        self,
+        document: Document,
+        items: list[tuple[str, dict[str, Any]]],
+        *,
+        extra: dict[str, Any] | None = None,
+        cache_key: str | None = None,
+    ) -> ToolResponse:
         if cache_key is None and sum(len(text) for text, _ in items) <= min(self.config.reply_chars, self.config.max_chunk_size):
             parts = [{"selection": meta["selection"], "media_type": meta["media_type"], "text": text} for text, meta in items]
             data = {"parts": parts, **(extra or {})}
-            warnings = sorted({code for _, meta in items for code in meta["warnings"]})
+            warnings = sorted({code for _, meta in items for code in meta.get("warnings", [])})
             if warnings:
                 data["warnings"] = warnings
             # Bound metadata independently, without quoting the document text

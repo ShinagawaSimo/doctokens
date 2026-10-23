@@ -10,6 +10,7 @@ from ooxml_llm_core.models import ParseReport, ParseResult, ResourceDescriptor
 from ooxml_llm_core.package import PackageReader
 from ooxml_llm_core.resource_xml import resource_document
 from ooxml_llm_core.session import SessionLifecycle
+from ooxml_llm_core.text_search import TextSearchOptions, TextSearchResult, search_text
 
 from ._api_support import Source, _density, _result
 from ._reading import render_selection
@@ -21,6 +22,7 @@ from .query import AggregateSpec, OrderSpec, WhereCondition
 from .query import query_data as _query_data
 from .rendering.selection import parse_range
 from .search import _find_cells
+from .text_search import text_units
 
 
 class XlsxReadSession:
@@ -111,6 +113,11 @@ class XlsxReadSession:
                 yield chunk
 
         return guarded()
+
+    def find_text(
+        self, query: str, *, options: TextSearchOptions | None = None, sheets: list[str] | None = None
+    ) -> TextSearchResult:
+        return search_text(text_units(self._require_open(), sheets), query, options or TextSearchOptions())
 
     def find_cells(
         self,

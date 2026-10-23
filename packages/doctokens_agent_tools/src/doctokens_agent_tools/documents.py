@@ -15,6 +15,7 @@ from typing import Any
 
 from docx_llm_parser import DocxReadSession, open_docx
 from docx_llm_parser import ParseOptions as DocxOptions
+from ooxml_llm_core.models import ResourceDescriptor
 from pptx_llm_parser import ParseOptions as PptxOptions
 from pptx_llm_parser import PptxReadSession, open_pptx
 from xlsx_llm_parser import ParseOptions as XlsxOptions
@@ -44,6 +45,7 @@ class Document:
     session_touched: float = 0
     active: int = 0
     index: dict[str, Any] | None = None
+    resource_catalog: tuple[ResourceDescriptor, ...] | None = None
 
     @property
     def format(self) -> str:

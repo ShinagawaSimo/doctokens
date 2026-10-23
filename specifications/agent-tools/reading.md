@@ -112,9 +112,15 @@
 ### Resource and query selection
 
 - **Processing**
-  - Resource IDs belong to a full parse of a particular snapshot. Use its `document_id` when following resource descriptors; IDs from partial plans or newer file versions must not be mixed.
+  - Resource IDs belong to a particular snapshot. Use its `document_id` when
+    following resource descriptors; XLSX's lightweight resource catalog preserves
+    the IDs and source order of that snapshot's full parse. IDs from partial
+    body plans or newer file versions must not be mixed.
   - Descriptors include `binary_readable`, `renderable`, and `queryable`; presence alone does not promise every operation.
-  - Search defaults to 50 matches. Query defaults to 100 rows; explicit `null` removes that row limit. Query operators and processing retain the existing experimental API rules. Results are saved values; formulas are not evaluated.
+  - `find_xlsx_cells` defaults to 50 matches; [find_document_text](search.md)
+    defaults to 20 bounded excerpts. Query defaults to 100 rows; explicit `null`
+    removes that row limit. Query operators retain the experimental API rules.
+    Results are saved values; formulas are not evaluated.
   - Aggregation runs only when both `group_by` and `aggregates` are nonempty, retaining the parser API's rule.
   - Queries require either a nonempty `table_id` or all of `sheet`, `range_spec`
     and `header_row`. The JSON Schema and tool description expose these alternatives;

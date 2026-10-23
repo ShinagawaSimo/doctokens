@@ -8,8 +8,18 @@ from typing import Any, cast
 
 from docx_llm_parser import DocxReadSession
 from ooxml_llm_core.models import ParseResult
+from ooxml_llm_core.text_search import TextSearchOptions
 from pptx_llm_parser import PptxReadSession
-from xlsx_llm_parser import AggregateSpec, OrderSpec, WhereCondition, XlsxReadSession, inspect_xlsx, parse_xlsx
+from xlsx_llm_parser import (
+    AggregateSpec,
+    OrderSpec,
+    WhereCondition,
+    XlsxReadSession,
+    XlsxResourceCatalog,
+    find_xlsx_text,
+    inspect_xlsx,
+    parse_xlsx,
+)
 from xlsx_llm_parser import ParseOptions as XlsxOptions
 
 from .documents import Document, DocumentStore
@@ -25,6 +35,7 @@ from .schemas import (
     PptxReadArgs,
     PptxResourceArgs,
     QueryArgs,
+    TextFindArgs,
     XlsxReadArgs,
     XlsxResourceArgs,
 )
@@ -75,6 +86,8 @@ class Operations:
         if isinstance(args, XlsxReadArgs):
             self.require_format(document, "xlsx")
             return self.read_xlsx(document, args)
+        if isinstance(args, TextFindArgs):
+            return self.find_text(document, args)
         if isinstance(args, FindArgs):
             workbook = self.xlsx_session(document)
             result = workbook.find_cells(args.query, sheets=args.sheets, kind=args.kind, limit=args.limit)
@@ -102,9 +115,15 @@ class Operations:
             )
             return self.presenter.parsed(document, [result])
         if name == "list_document_resources":
-            session = self.documents.session(document)
+            if isinstance(document.options, XlsxOptions) and document.session is None:
+                if document.resource_catalog is None:
+                    with XlsxResourceCatalog(document.snapshot, options=document.options) as catalog:
+                        document.resource_catalog = catalog.resources
+                descriptors = document.resource_catalog
+            else:
+                descriptors = self.documents.session(document).resources
             resources = []
-            for resource in session.resources:
+            for resource in descriptors:
                 data = resource.to_dict()
                 data["binary_readable"] = resource.source == "embedded" and resource.kind in (
                     {"image", "media"} if document.format == "pptx" else {"image"}
@@ -116,13 +135,22 @@ class Operations:
                 resources.append(data)
             return self.presenter.metadata(document, {"resources": resources})
         if isinstance(args, BinaryArgs):
-            session = self.documents.session(document)
-            descriptor = next((r for r in session.resources if r.kind == args.kind and r.id == args.resource_id), None)
+            if isinstance(document.options, XlsxOptions) and document.session is None:
+                with XlsxResourceCatalog(document.snapshot, options=document.options) as catalog:
+                    descriptors = catalog.resources
+                    descriptor = next((r for r in descriptors if r.kind == args.kind and r.id == args.resource_id), None)
+                    if descriptor is None:
+                        raise ToolError("RESOURCE_NOT_FOUND", "resource kind/id not found in this document snapshot")
+                    value = catalog.read_resource(args.kind, args.resource_id)
+            else:
+                session = self.documents.session(document)
+                descriptor = next((r for r in session.resources if r.kind == args.kind and r.id == args.resource_id), None)
+                if descriptor is not None and descriptor.source != "external":
+                    value = session.read_resource(args.kind, args.resource_id)
             if descriptor is None:
                 raise ToolError("RESOURCE_NOT_FOUND", "resource kind/id not found in this document snapshot")
             if descriptor.source == "external":
                 raise ToolError("EXTERNAL_RESOURCE", "external resources are not downloaded")
-            value = session.read_resource(args.kind, args.resource_id)
             media_type = descriptor.content_type or mimetypes.guess_type(descriptor.part or "")[0] or "application/octet-stream"
             return self.presenter.binary(document, value, media_type)
         if isinstance(args, DocxResourceArgs):
@@ -165,6 +193,25 @@ class Operations:
         session = self.documents.session(document)
         assert isinstance(session, XlsxReadSession)
         return session
+
+    def find_text(self, document: Document, args: TextFindArgs) -> ToolResponse:
+        if args.include_headers_footers and document.format != "docx":
+            raise ToolError("INVALID_ARGUMENT", "include_headers_footers is supported only for DOCX")
+        if args.sheets is not None and document.format != "xlsx":
+            raise ToolError("INVALID_ARGUMENT", "sheets is supported only for XLSX")
+        options = TextSearchOptions(args.case_sensitive, args.offset, args.limit, args.context_before, args.context_after)
+        if isinstance(document.options, XlsxOptions) and document.session is None and args.sheets is not None:
+            result = find_xlsx_text(
+                document.snapshot, args.query, options=document.options, search_options=options, sheets=args.sheets
+            )
+        elif isinstance((session := self.documents.session(document)), DocxReadSession):
+            result = session.find_text(args.query, options=options, include_headers_footers=args.include_headers_footers)
+        elif isinstance(session, PptxReadSession):
+            result = session.find_text(args.query, options=options)
+        else:
+            result = session.find_text(args.query, options=options, sheets=args.sheets)
+        items = [(match.text, {"selection": dict(match.locator), "media_type": "text/plain"}) for match in result.matches]
+        return self.presenter.text_parts(document, items, extra={"next_offset": result.next_offset})
 
     def read_docx(self, document: Document, args: DocxReadArgs) -> ToolResponse:
         session = self.documents.session(document)

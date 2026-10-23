@@ -8,16 +8,19 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from fractions import Fraction
 
 from .codes import _date_scan_text
+from .program import FormatProgram
 from .sections import _clean_display_pattern, _section_directives, _select_format_section, _split_format_sections
 
 
-def _format_number_value(num: float, raw: str, fmt_code: str, is_pct: bool, locale: str) -> str:
-    section, _selected_value = _select_format_section(num, fmt_code)
+def _format_number_value(
+    num: float, raw: str, fmt_code: str, is_pct: bool, locale: str, *, program: FormatProgram | None = None
+) -> str:
+    section, _selected_value = program.select(num) if program is not None else _select_format_section(num, fmt_code)
     if section is None:
         return raw
     magnitude = abs(Decimal(raw))
-    dbnum = _section_directives(section).dbnum
-    syntax = _date_scan_text(section)
+    dbnum = program.section_directives(section).dbnum if program is not None else _section_directives(section).dbnum
+    syntax = program.syntax(section) if program is not None else _date_scan_text(section)
     if "@" in syntax and not re.search(r"[0#?]", syntax):
         return raw
     if dbnum:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from functools import partial
+from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.models import ParseWarning, RelationshipRecord
 from ooxml_llm_core.package import PackageError, PackageReader
@@ -174,60 +175,21 @@ class WorksheetScanner:
         working = SheetWorkingSet(self.flags)
         saw_root = False
         post = SheetPostIndex(self.flags)
-        current_attrs: RowAttrs | None = None
-        current_cells: list[Cell] | None = None
-        previous_ref = ""
         previous_row = 0
         with self.package.open_entry(self.sheet_part) as stream:
-            for event, element in iterparse(stream, events=("start", "end")):
-                if event == "start":
-                    saw_root = True
-                    if element.tag == _ROW:
-                        raw_attrs = _row_attrs(element)
-                        effective_row = raw_attrs.number or previous_row + 1
-                        previous_row = effective_row
-                        current_attrs = raw_attrs._replace(number=effective_row)
-                        current_cells = [] if self._includes_row(effective_row) else None
-                        previous_ref = ""
-                    continue
-                if element.tag == _CELL and current_attrs is not None:
-                    ref = element.get("r", "")
-                    if not ref:
-                        previous_col = parse_ref(previous_ref)[0] if previous_ref else 0
-                        ref = f"{col_letter(previous_col + 1)}{current_attrs.number}"
-                    previous_ref = ref
-                    formula = element.find(_FORMULA)
-                    if formula is not None and formula.get("ref"):
-                        post.blank_content_refs.append(formula.get("ref", ""))
-                    if self.flags.formulas:
-                        if formula is not None and formula.get("t") == "shared":
-                            si = formula.get("si")
-                            shared_ref = formula.get("ref")
-                            if si is not None and shared_ref is not None:
-                                working.add_shared_master(SharedFormulaMaster(si, ref, shared_ref, formula.text or ""))
-                        elif formula is not None and formula.get("t") == "dataTable":
-                            working.data_tables.append(read_data_table(formula, ref))
-                    if current_cells is not None and self._includes_cell(*parse_ref(ref)):
-                        cell = self._parse_cell(
-                            element,
-                            current_attrs,
-                            self.shared_strings,
-                            self.rich_text_map,
-                            self.format_index,
-                            ref,
-                            self.rich_values,
-                        )
-                        current_cells.append(cell)
-                        working.add_cell(cell)
-                    continue
-                elif element.tag == _ROW and current_attrs is not None:
-                    if current_cells is not None:
-                        working.add_row(current_attrs.number, current_cells)
+            # All cell children remain alive until their row ends. Start
+            # events carry no additional information and double large-sheet
+            # event traffic; processing one completed row preserves the same
+            # formula dependencies and tail declarations.
+            for _event, element in iterparse(stream, events=("end",)):
+                saw_root = True
+                if element.tag == _ROW:
+                    attrs = _row_attrs(element)
+                    previous_row = attrs.number or previous_row + 1
+                    self._read_row(element, attrs._replace(number=previous_row), working, post)
                     element.clear()
-                    current_attrs = None
-                    current_cells = None
                     continue
-                if element.tag in _CELL_VALUES:
+                if element.tag == _CELL or element.tag in _CELL_VALUES:
                     continue
                 post.collect(element, format_index=self.format_index)
         if not saw_root:
@@ -242,6 +204,36 @@ class WorksheetScanner:
             allow_annotation_cells=self.cell_window is None,
             warnings=self.warnings,
         )
+
+    def _read_row(self, row: ET.Element, attrs: RowAttrs, working: SheetWorkingSet, post: SheetPostIndex) -> None:
+        cells: list[Cell] | None = [] if self._includes_row(attrs.number) else None
+        previous_ref = ""
+        for element in row:
+            if element.tag != _CELL:
+                continue
+            ref = element.get("r", "")
+            if not ref:
+                previous_col = parse_ref(previous_ref)[0] if previous_ref else 0
+                ref = f"{col_letter(previous_col + 1)}{attrs.number}"
+            previous_ref = ref
+            formula = element.find(_FORMULA)
+            if formula is not None and formula.get("ref"):
+                post.blank_content_refs.append(formula.get("ref", ""))
+            if self.flags.formulas and formula is not None:
+                if formula.get("t") == "shared":
+                    si, shared_ref = formula.get("si"), formula.get("ref")
+                    if si is not None and shared_ref is not None:
+                        working.add_shared_master(SharedFormulaMaster(si, ref, shared_ref, formula.text or ""))
+                elif formula.get("t") == "dataTable":
+                    working.data_tables.append(read_data_table(formula, ref))
+            if cells is not None and (self.cell_window is None or self._includes_cell(*parse_ref(ref))):
+                cell = self._parse_cell(
+                    element, attrs, self.shared_strings, self.rich_text_map, self.format_index, ref, self.rich_values
+                )
+                cells.append(cell)
+                working.add_cell(cell)
+        if cells is not None:
+            working.add_row(attrs.number, cells)
 
     def _includes_row(self, row: int) -> bool:
         if self.cell_window is None:

@@ -119,10 +119,18 @@ class TableBlock(TableBlockRequired, total=False):
 Block = TextBlock | TableBlock
 
 
+class AncillarySearchParagraph(TypedDict, total=False):
+    text: str
+    table: int
+    row: int
+    column: int
+
+
 class AncillaryContent(TypedDict):
     text: str
     runs: list[Run]
     rawHints: list[RawHint]
+    searchUnits: NotRequired[list[AncillarySearchParagraph]]
 
 
 class AncillaryItemRequired(TypedDict):
@@ -133,6 +141,7 @@ class AncillaryItemRequired(TypedDict):
 
 
 class AncillaryItem(AncillaryItemRequired, total=False):
+    searchUnits: list[AncillarySearchParagraph]
     rawHints: list[RawHint]
     author: str | None
     date: str | None

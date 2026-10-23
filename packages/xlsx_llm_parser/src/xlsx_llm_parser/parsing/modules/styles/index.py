@@ -10,8 +10,9 @@ large while preserving the historical ``styles.index`` import path.
 from __future__ import annotations
 
 from ....models import CellControl
+from .number_format import builtin_format_code, formula_bar_value, number_format_color, resolve_format, text_format_parts
 from .number_format import format_value as format_number_value
-from .number_format import formula_bar_value, number_format_color, resolve_format, text_format_parts
+from .number_formats.program import FormatProgram
 from .records import FillInfo, FontInfo
 
 
@@ -23,6 +24,8 @@ class FormatIndex:
         self._cell_formats: list[tuple[int, str, int, int, bool, bool]] = []
         # (locale, numFmtId, formatCode) → (is_date, is_pct)
         self._fmt_cache: dict[tuple[str, int, str], tuple[bool, bool]] = {}
+        self._programs: dict[tuple[str, str], FormatProgram] = {}
+        self._text_parts: dict[str, list[str | None] | None] = {}
         # style_index → resolved attribute string ("" = no styles)
         self._style_attrs_cache: dict[int, str] = {}
         self._fonts: list[FontInfo] = []
@@ -94,12 +97,15 @@ class FormatIndex:
         if style_index is None or not 0 <= style_index < len(self._cell_formats):
             return raw
         num_fmt_id, fmt_code, _font_id, _fill_id, _locked, _hidden = self._cell_formats[style_index]
+        effective_locale = locale or self.locale
+        effective_code = fmt_code or builtin_format_code(num_fmt_id, effective_locale)
         return format_number_value(
             num_fmt_id,
             fmt_code,
             raw,
             date_1904=self.date_1904,
-            locale=locale or self.locale,
+            locale=effective_locale,
+            _program=self._program(effective_code, effective_locale),
         )
 
     def format_code(self, style_index: int | None) -> str:
@@ -110,13 +116,25 @@ class FormatIndex:
         return ""
 
     def text_format_parts(self, style_index: int | None) -> list[str | None] | None:
-        return text_format_parts(self.format_code(style_index))
+        code = self.format_code(style_index)
+        if code not in self._text_parts:
+            self._text_parts[code] = text_format_parts(code)
+        parts = self._text_parts[code]
+        return list(parts) if parts is not None else None
 
     def formula_bar_value(self, style_index: int | None, value: str) -> str | None:
-        return formula_bar_value(value, self.format_code(style_index), self.locale)
+        code = self.format_code(style_index)
+        return formula_bar_value(value, code, self.locale, _program=self._program(code, self.locale))
 
     def number_format_color(self, style_index: int | None, value: str, *, is_text: bool = False) -> str | None:
-        return number_format_color(value, self.format_code(style_index), is_text=is_text)
+        code = self.format_code(style_index)
+        return number_format_color(value, code, is_text=is_text, _program=self._program(code, self.locale))
+
+    def _program(self, code: str, locale: str) -> FormatProgram:
+        key = (locale, code)
+        if key not in self._programs:
+            self._programs[key] = FormatProgram(code, locale)
+        return self._programs[key]
 
     def style_attrs(self, style_index: int | None) -> str:
         """Return semantic font/fill attributes for a cell."""

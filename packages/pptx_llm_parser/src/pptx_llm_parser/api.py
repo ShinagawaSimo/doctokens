@@ -6,6 +6,7 @@ from collections.abc import Iterator
 
 from ooxml_llm_core.models import Density, ParseReport, ParseResult, ResourceDescriptor
 from ooxml_llm_core.session import SessionLifecycle
+from ooxml_llm_core.text_search import TextSearchOptions, TextSearchResult, search_text
 
 from ._api_support import Source, _density, _resource_descriptors, _result, _select_slides
 from .core.enums import ResourceType
@@ -15,6 +16,7 @@ from .parsing import get_render_pipeline
 from .parsing.runner import PptxParser
 from .plan import PptxParsePlan
 from .rendering.resources import render_resource
+from .search import text_units
 
 
 class PptxReadSession:
@@ -73,6 +75,9 @@ class PptxReadSession:
                 "slides": [{"number": s["n"], "hidden": s["hidden"], "section": s.get("section")} for s in presentation.slides],
             },
         }
+
+    def find_text(self, query: str, *, options: TextSearchOptions | None = None) -> TextSearchResult:
+        return search_text(text_units(self._require_open()), query, options or TextSearchOptions())
 
     def render(
         self,

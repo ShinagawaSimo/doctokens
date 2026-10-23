@@ -6,6 +6,7 @@ from collections.abc import Iterator
 
 from ooxml_llm_core.models import Density, ParseReport, ParseResult, ResourceDescriptor
 from ooxml_llm_core.session import SessionLifecycle
+from ooxml_llm_core.text_search import TextSearchOptions, TextSearchResult, search_text
 
 from ._api_support import Source, _density, _resource_descriptors, _result, _validate_window
 from .core.enums import ResourceType
@@ -15,6 +16,7 @@ from .parsing import get_render_pipeline
 from .parsing.runner import DocxParser
 from .plan import DocxParsePlan
 from .rendering.dispatch import describe_pages, render_page_window, render_resource
+from .search import text_units
 
 
 class DocxReadSession:
@@ -64,6 +66,15 @@ class DocxReadSession:
 
     def describe(self) -> dict[str, object]:
         return {"format": "docx", "navigation": describe_pages(self._require_open()), "report": self.report.to_dict()}
+
+    def find_text(
+        self, query: str, *, options: TextSearchOptions | None = None, include_headers_footers: bool = False
+    ) -> TextSearchResult:
+        return search_text(
+            text_units(self._require_open(), include_headers_footers=include_headers_footers),
+            query,
+            options or TextSearchOptions(),
+        )
 
     def render(
         self,

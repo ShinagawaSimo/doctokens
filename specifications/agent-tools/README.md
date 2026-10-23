@@ -3,6 +3,7 @@
 The `doctokens-agent-tools` package provides one tool catalog and runtime for direct Python tool calls and optional MCP stdio.
 
 - [Reading](reading.md): source selection, density, format windows, and parser options.
+- [Text location](search.md): literal search with bounded excerpts and reusable coordinates.
 - [Ownership](ownership.md): snapshots, revision identity, sessions, caches, and limits.
 - [Results](results.md): complete results, fragments, errors, and binary attachments.
 - [MCP](mcp.md): transport projection and the executable entry point.
@@ -36,16 +37,21 @@ with ToolRuntime(RuntimeConfig(allowed_roots=(Path("documents"),))) as runtime:
 | `read_docx` | Saved-page hint interval or explicit full document |
 | `read_pptx` | Slide interval or explicit full presentation |
 | `read_xlsx` | One worksheet; bounded default preview or exact cell/row range with sheet index |
-| `list_document_resources` | Full-session descriptors and supported operations |
+| `list_document_resources` | Resource descriptors and supported operations; XLSX skips worksheet cells |
 | `read_resource` | Original embedded image/media bytes |
 | `render_docx_resource` | Table, chart, or SmartArt DTX; table columns use header text |
 | `render_pptx_resource` | Table, chart, or SmartArt DTX; table columns use zero-based indices |
 | `render_xlsx_resource` | Chart or pivot-table summary DTX |
 | `find_xlsx_cells` | Literal case-sensitive search over saved session data |
+| `find_document_text` | Bounded paragraph/cell excerpts with page/slide/cell locations |
 | `query_xlsx_data` | Experimental saved-data projection/filter/group/aggregate/order |
 | `read_result` | Characters or bytes from an immutable stored result |
 | `release_document` | Release snapshot, reader, and associated results |
 
-## Compatibility
+## Parser interfaces
 
-Parser 0.2.0 preserves the names and parameters of `render_resource`, `find_cells`, and `query_data`, but changes their result syntax from legacy markup to complete DTX 1.0. Main DTP/DTX output and the Python `parse_*` default selections are unchanged. `ParseResult` and `ResourceDescriptor` expose `to_dict()`; read sessions expose `describe()`. `inspect_xlsx()` reads only the workbook index. XLSX query argument types are exported from `xlsx_llm_parser`.
+`render_resource`, `find_cells`, and `query_data` return complete DTX 1.0.
+`ParseResult` and `ResourceDescriptor` expose `to_dict()`; read sessions expose
+`describe()` and bounded `find_text()`. `inspect_xlsx()` reads only the workbook
+index; `XlsxResourceCatalog` reads resource metadata without cell data. XLSX query
+argument types and `find_xlsx_text()` are exported from `xlsx_llm_parser`.

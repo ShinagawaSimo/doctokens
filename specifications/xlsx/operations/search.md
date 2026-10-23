@@ -4,6 +4,27 @@
 
 find_cells is a literal search over retained session data.
 
+## Display-text location
+
+### `find_text(query, options=..., sheets=...)`
+
+- **Output**
+  - [TextSearchResult](../../common/text-search.md), with exact `sheet` and
+    single-cell `range_spec` locators. Search displayed cell text, not formulas,
+    annotations or names. Merged shadow cells do not duplicate an anchor hit.
+- **Source**
+  - Saved cells in requested sheet order, then row/column order. `sheets=None`
+    searches all parsed sheets; an empty list searches none. Unknown names fail.
+- **Processing**
+  - The session method reuses its parsed workbook. Standalone
+    `find_xlsx_text(source, query, options=..., search_options=..., sheets=...)`
+    owns a structural parse restricted to explicit sheets; it closes the reader
+    and returns bounded search values without creating a reusable full session.
+    Output bounds do not promise early XML termination or constant memory.
+  - `options` on the standalone call means `ParseOptions`; `search_options`
+    means `TextSearchOptions`. On a session, `options` means TextSearchOptions.
+    Neither entry evaluates formulas or normalizes displayed strings.
+
 ## Fields
 
 ### `query`

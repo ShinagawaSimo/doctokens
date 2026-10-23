@@ -11,13 +11,14 @@ from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.metrics import MetricsRecorder
 from ooxml_llm_core.models import ParseReport, ParseWarning
 from ooxml_llm_core.package import PackageReader
+from ooxml_llm_core.planning import ParsePurpose
 
 from ..models import (
     ParsedWorkbook,
     ParseOptions,
 )
 from ..plan import XlsxFeature, XlsxParsePlan
-from .modules.styles.index import parse_styles
+from .modules.styles.index import FormatIndex, parse_styles
 from .modules.workbook.features import CellControlCatalog
 from .modules.workbook.metadata import _parse_shared_strings, _parse_workbook_xml
 from .modules.workbook.pivots import PivotCatalog
@@ -28,6 +29,7 @@ from .modules.worksheets.post import (
     parse_tables,
 )
 from .modules.worksheets.scanner import parse_sheet
+from .modules.worksheets.sheet_types import SheetParseResult
 
 
 # OOXML cell type codes -> LLM-readable semantic names.
@@ -59,9 +61,11 @@ def _parse_workbook(
         )
         if parse_plan.sheet_names is not None:
             worksheet_infos = [sheet_info for sheet_info in worksheet_infos if sheet_info["name"] in parse_plan.sheet_names]
-        shared_strings, rich_text_map = _parse_shared_strings(
-            package_reader,
-            include_rich_text=parse_plan.needs(XlsxFeature.RICH_TEXT),
+        resource_only = parse_plan.purpose is ParsePurpose.RESOURCE
+        shared_strings, rich_text_map = (
+            ([], {})
+            if resource_only
+            else _parse_shared_strings(package_reader, include_rich_text=parse_plan.needs(XlsxFeature.RICH_TEXT))
         )
         rich_values = (
             RichValueCatalog.from_package(package_reader, warnings=warnings)
@@ -78,10 +82,14 @@ def _parse_workbook(
             if parse_plan.needs(XlsxFeature.PIVOTS)
             else PivotCatalog()
         )
-        format_index = parse_styles(
-            package_reader,
-            detail=parse_plan.style_detail,  # type: ignore[arg-type]
-            locale=parse_options.locale,
+        format_index = (
+            FormatIndex(locale=parse_options.locale)
+            if resource_only
+            else parse_styles(
+                package_reader,
+                detail=parse_plan.style_detail,  # type: ignore[arg-type]
+                locale=parse_options.locale,
+            )
         )
         format_index.set_cell_controls(cell_controls.by_style)
         format_index.set_date_system(date_1904)
@@ -103,17 +111,21 @@ def _parse_workbook(
                     warnings.append(ParseWarning("SHEET_RELS_INVALID", f"Invalid worksheet relationships: {exc}", part))
                     sheet_relationships = []
 
-                sheet_result = parse_sheet(
-                    package_reader,
-                    sheet_info["part"],
-                    shared_strings,
-                    rich_text_map,
-                    format_index,
-                    sheet_relationships,
-                    threaded_comment_people,
-                    rich_values,
-                    plan=parse_plan,
-                    cell_window=parse_plan.cell_window,
+                sheet_result = (
+                    SheetParseResult([], [], False, "", [], [], [], [], [])
+                    if resource_only
+                    else parse_sheet(
+                        package_reader,
+                        sheet_info["part"],
+                        shared_strings,
+                        rich_text_map,
+                        format_index,
+                        sheet_relationships,
+                        threaded_comment_people,
+                        rich_values,
+                        plan=parse_plan,
+                        cell_window=parse_plan.cell_window,
+                    )
                 )
                 sheet_info["rows"] = sheet_result.rows
                 sheet_info["merge_refs"] = sheet_result.merge_refs

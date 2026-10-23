@@ -10,6 +10,7 @@ WordprocessingML is read from `word/document.xml` and supporting parts. Body blo
 - [Output profile](output.md)
 - [Parse manifest](manifest.md)
 - [Resource operations](operations/resources.md)
+- [Text search](operations/search.md)
 
 ## Document
 

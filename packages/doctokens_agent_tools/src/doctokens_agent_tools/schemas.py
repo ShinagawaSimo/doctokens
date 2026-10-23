@@ -155,6 +155,21 @@ class FindArgs(BaseSourceArgs):
     limit: int = Field(default=50, gt=0)
 
 
+class TextFindArgs(SourceArgs):
+    query: str = Field(
+        min_length=1, max_length=4000, description="Literal text, not a regular expression; never joins unrelated paragraphs."
+    )
+    case_sensitive: bool = True
+    offset: int = Field(default=0, ge=0, description="Number of matching paragraphs/cells to skip; use the returned next_offset.")
+    limit: int = Field(default=20, ge=1, le=200)
+    context_before: int = Field(default=80, ge=0, le=4000, description="Characters before the first match in its paragraph/cell.")
+    context_after: int = Field(default=80, ge=0, le=4000, description="Characters after the first match in its paragraph/cell.")
+    include_headers_footers: bool = Field(
+        default=False, description="DOCX only; search headers and footers once by source, without repeating them per page."
+    )
+    sheets: list[str] | None = Field(default=None, description="XLSX only: exact sheet names; omitted searches all sheets.")
+
+
 class Where(Arguments):
     column: str = Field(min_length=1)
     op: Literal["eq", "contains", "gt", "lt"] = "eq"

@@ -26,7 +26,7 @@ OPERATIONS: dict[str, tuple[type[s.Arguments], str]] = {
     ),
     "list_document_resources": (
         s.SourceArgs,
-        "List images and objects with supported binary/render operations. Loads a full read session.",
+        "List images and objects with supported binary/render operations. XLSX skips worksheet cells and shared strings.",
     ),
     "read_resource": (
         s.BinaryArgs,
@@ -42,6 +42,14 @@ OPERATIONS: dict[str, tuple[type[s.Arguments], str]] = {
     "find_xlsx_cells": (
         s.FindArgs,
         "Search saved cell values, formulas, comments, hyperlinks, or defined names; literal case-sensitive matching.",
+    ),
+    "find_document_text": (
+        s.TextFindArgs,
+        "Locate literal text in DOCX/PPTX paragraphs or XLSX displayed cells. "
+        "Returns bounded excerpts and page/slide/cell locators. "
+        "Includes textboxes/tables, DOCX notes/comments and PPT notes/comments. No image/OCR/chart-data search. "
+        "Each matching paragraph/cell appears once. next_offset continues matches; read_result continues response characters. "
+        "XLSX formula/comment/link/name searches use find_xlsx_cells.",
     ),
     "query_xlsx_data": (
         s.QueryArgs,

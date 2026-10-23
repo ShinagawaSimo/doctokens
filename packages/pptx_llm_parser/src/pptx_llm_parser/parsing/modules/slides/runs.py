@@ -21,7 +21,9 @@ from .lists import list_metadata, list_prefix
 from .text import HyperlinkLookup
 
 
-def tx_body_text(tx_body: ET.Element | None, part: str, warnings: list[ParseWarning]) -> str | None:
+def tx_body_text(
+    tx_body: ET.Element | None, part: str, warnings: list[ParseWarning], *, source_paragraphs: list[str] | None = None
+) -> str | None:
     """Join a txBody's paragraphs into one text block (paragraphs by \\n)."""
     if tx_body is None:
         return None
@@ -30,7 +32,7 @@ def tx_body_text(tx_body: ET.Element | None, part: str, warnings: list[ParseWarn
     for child in tx_body:
         # bodyPr/lstStyle are formatting infrastructure: skipped silently.
         if local_name(child.tag) == "p":
-            text = paragraph_text(child, part, warnings, counters)
+            text = paragraph_text(child, part, warnings, counters, source_paragraphs=source_paragraphs)
             if text:
                 paragraphs.append(text)
     if not paragraphs:
@@ -43,12 +45,16 @@ def paragraph_text(
     part: str,
     warnings: list[ParseWarning],
     counters: dict[tuple[str, int], int] | None = None,
+    *,
+    source_paragraphs: list[str] | None = None,
 ) -> str:
     """Flatten a paragraph's runs/breaks/tabs/fields into plain text."""
     runs = paragraph_runs(p, part, warnings, {}, {}, {})
     metadata = list_metadata(p, {})
     if not any(run.get("text", "").strip() for run in runs):
         return ""
+    if source_paragraphs is not None:
+        source_paragraphs.append("".join(run.get("text", "") for run in runs))
     pr = first_child(p, "a", "pPr")
     prefix = list_prefix(
         metadata, _parse_int(pr.get("lvl") if pr is not None else None, 0), counters if counters is not None else {}

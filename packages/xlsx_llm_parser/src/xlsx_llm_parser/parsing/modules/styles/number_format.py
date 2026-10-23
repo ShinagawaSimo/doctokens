@@ -12,7 +12,8 @@ from .number_formats.codes import builtin_format_code as builtin_format_code
 from .number_formats.codes import resolve_format as resolve_format
 from .number_formats.dates import _format_date_value, time_formula_bar_value
 from .number_formats.numbers import _format_number_value
-from .number_formats.sections import _clean_display_pattern, _section_directives, _select_format_section, _split_format_sections
+from .number_formats.program import FormatProgram
+from .number_formats.sections import _clean_display_pattern, _split_format_sections
 
 
 def format_value(
@@ -22,6 +23,7 @@ def format_value(
     *,
     date_1904: bool,
     locale: str,
+    _program: FormatProgram | None = None,
 ) -> str:
     try:
         num = float(raw)
@@ -32,17 +34,18 @@ def format_value(
     fmt_code = fmt_code or _localized_builtin_code(num_fmt_id, locale)
     if not fmt_code or fmt_code.lower() == "general":
         return raw
-    section, _value = _select_format_section(num, fmt_code)
+    program = _program or FormatProgram(fmt_code, locale)
+    section, _value = program.select(num)
     if section is None:
         return raw
-    is_date, _is_pct = resolve_format(0, section, locale)
+    is_date, _is_pct = program.classify(section)
     try:
         if is_date:
-            return _format_date_value(num, section, date_1904, locale)
-        if _section_directives(section)[2]:
+            return _format_date_value(num, section, date_1904, locale, context=program.date(section))
+        if program.section_directives(section).dbnum:
             rendered = format_chinese_integer(Decimal(raw), section, fmt_code, locale)
             return rendered if rendered is not None else raw
-        return _format_number_value(num, raw, fmt_code, _is_pct, locale)
+        return _format_number_value(num, raw, fmt_code, _is_pct, locale, program=program)
     except (ArithmeticError, ValueError):
         return raw
 
@@ -66,7 +69,7 @@ def text_format_parts(fmt_code: str) -> list[str | None] | None:
     return result
 
 
-def formula_bar_value(raw: str, fmt_code: str, locale: str) -> str | None:
+def formula_bar_value(raw: str, fmt_code: str, locale: str, *, _program: FormatProgram | None = None) -> str | None:
     """Reconstruct supported numeric and Simplified Chinese time edit forms.
 
     The formula bar is an application rendering, not the lexical XML value.
@@ -80,17 +83,18 @@ def formula_bar_value(raw: str, fmt_code: str, locale: str) -> str | None:
         value = Decimal(raw)
         if not value.is_finite():
             return None
-        section, _selected = _select_format_section(float(value), fmt_code)
+        program = _program or FormatProgram(fmt_code, locale)
+        section, _selected = program.select(float(value))
         if section is None:
             return None
-        is_date, is_pct = resolve_format(0, section, locale)
+        is_date, is_pct = program.classify(section)
         if is_date:
             return time_formula_bar_value(value, section, locale)
         if is_pct:
             return None
-        if _section_directives(section)[2] and format_chinese_integer(value, section, fmt_code, locale) is None:
+        if program.section_directives(section).dbnum and format_chinese_integer(value, section, fmt_code, locale) is None:
             return None
-        syntax = _date_scan_text(section)
+        syntax = program.syntax(section)
         # Scientific display formats use the uppercase ``E+``/``E-`` token.
         # It is formatting syntax, not literal text, so it must not prevent
         # recovery of the ordinary saved number shown in Excel's formula bar.
@@ -109,40 +113,25 @@ def formula_bar_value(raw: str, fmt_code: str, locale: str) -> str | None:
         return None
 
 
-def number_format_color(raw: str, fmt_code: str, *, is_text: bool = False) -> str | None:
+def number_format_color(raw: str, fmt_code: str, *, is_text: bool = False, _program: FormatProgram | None = None) -> str | None:
     """Resolve named section colors independently of font-table styles."""
+    program = _program or FormatProgram(fmt_code, "zh-CN")
+    if not any(program.colors.values()):
+        return None
     if is_text:
-        sections = _split_format_sections(fmt_code)
+        sections = program.sections
         section = sections[3] if len(sections) == 4 else sections[0] if "@" in _date_scan_text(fmt_code) else None
     else:
         try:
             value = float(raw)
             if not math.isfinite(value):
                 return None
-            section, _selected = _select_format_section(value, fmt_code)
+            section, _selected = program.select(value)
         except ValueError:
             return None
     if section is None:
         return None
-    match = next(
-        (
-            directive
-            for directive in re.finditer(r"\[([^\]]*)\]", section)
-            if directive.group(1).lower() in {"black", "blue", "cyan", "green", "magenta", "red", "white", "yellow"}
-        ),
-        None,
-    )
-    colors = {
-        "black": "#000000",
-        "blue": "#0000FF",
-        "cyan": "#00FFFF",
-        "green": "#008000",
-        "magenta": "#FF00FF",
-        "red": "#FF0000",
-        "white": "#FFFFFF",
-        "yellow": "#FFFF00",
-    }
-    return colors.get(match.group(1).lower()) if match else None
+    return program.colors[section]
 
 
 __all__ = [

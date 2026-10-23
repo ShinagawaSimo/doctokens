@@ -9,7 +9,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import NamedTuple
 
 from .codes import _DATE_FIELD_RE, _date_scan_text
-from .date_context import date_context
+from .date_context import DateContext, date_context
 from .date_words import date_number, month_name, weekday_name
 
 
@@ -53,8 +53,8 @@ def time_formula_bar_value(value: Decimal, section: str, locale: str) -> str | N
     return f"{hour}:{minute:02d}:{second:02d}"
 
 
-def _format_date_value(serial: float, fmt_code: str, date_1904: bool, locale: str) -> str:
-    context = date_context(fmt_code, locale)
+def _format_date_value(serial: float, fmt_code: str, date_1904: bool, locale: str, *, context: DateContext | None = None) -> str:
+    context = context or date_context(fmt_code, locale)
     fmt_code, locale, dbnum = context
     fraction = re.search(r"(?i)(?:s+|\[s+\])\.([0#?]+)", _date_scan_text(fmt_code))
     if fraction:

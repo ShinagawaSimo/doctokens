@@ -258,9 +258,10 @@ class SlideObjectParser:
                 if local_name(cell.tag) != "tc":
                     continue
                 tx_body = first_child(cell, "a", "txBody")
-                text = tx_body_text(tx_body, part, self._warnings) or ""
+                source_paragraphs: list[str] = []
+                text = tx_body_text(tx_body, part, self._warnings, source_paragraphs=source_paragraphs) or ""
                 row.append(text)
-                cell_info: TableCell = {"text": text}
+                cell_info: TableCell = {"text": text, "searchParagraphs": source_paragraphs}
                 col_span = _parse_int(cell.get("gridSpan"), 1)
                 row_span = _parse_int(cell.get("rowSpan"), 1)
                 if col_span > 1:

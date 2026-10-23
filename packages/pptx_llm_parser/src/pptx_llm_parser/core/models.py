@@ -82,6 +82,7 @@ class TableCell(TypedDict, total=False):
     """A table cell with the OOXML merge declarations preserved."""
 
     text: str
+    searchParagraphs: list[str]
     colSpan: int
     rowSpan: int
     hMerge: bool

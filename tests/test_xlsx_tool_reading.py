@@ -40,6 +40,7 @@ def test_ranges_reuse_results_and_full_sessions(density: str) -> None:
         assert parse.call_count == 1
         assert cached.data["parts"] == first.data["parts"]
         assert runtime.execute("list_document_resources", {"document_id": identifier}).error is None
+        assert runtime.execute("inspect_document", {"document_id": identifier, "full_parse": True}).error is None
         # A different spelling avoids the result cache and exercises session rendering.
         via_session = runtime.execute("read_xlsx", {**selected, "range_spec": "A2:XFD5"})
         assert via_session.error is None

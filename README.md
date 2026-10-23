@@ -160,9 +160,13 @@ with ToolRuntime(RuntimeConfig(allowed_roots=(Path("documents"),))) as runtime:
 
 正文工具默认使用 `structural`。已知目标范围时可直接给出 `path`，需要发现页、幻灯片或工作表目录时再调用 `inspect_document`。例如 `read_xlsx(document_id=..., sheet="Sales", range_spec="101:200")` 读取指定行；默认预览的 `parts[].selection.windows[]` 提供实际范围和可用的 `next_row`。选区规则见[读取规范](specifications/agent-tools/reading.md)。
 
+不知道内容位置时，可调用 `find_document_text(path=..., query="关键词")`，按段落或单元格取得片段和可用于补读的定位。默认最多 20 条，前后各 80 字符；用 `context_before`、`context_after` 扩展上下文，用返回的 `next_offset` 续取命中。XLSX 可用 `sheets=["Sales"]` 限定工作表，避免建立完整工作簿会话；公式、批注、链接与名称仍用 `find_xlsx_cells`。参数与来源见[文字定位](specifications/agent-tools/search.md)。
+
 大文本首次调用直接返回首块；后续使用 `result_id` 和返回的 `next_offset` 继续读取。直接调用 `ToolRuntime` 时正文在 `text` 字段；MCP 将正文只放在原生文本内容中，结构化结果用 `content_index` 关联，并提供必要的快照、范围和续读信息。调用示例见[MCP 连接与续读](specifications/agent-tools/mcp.md)。
 
 工具还覆盖资源目录、图片和媒体、格式专属资源解释、XLSX 搜索/查询及文档释放。MCP 在大小上限内将 PNG/JPEG/WebP/GIF 作为原生图片返回，其他二进制或超限图片返回按需读取的资源 URI；仍可用 read_result 分块取回。直接调用按大小上限返回二进制附件。默认最多保留 4 个解析会话，空闲 10 分钟过期；缓存、快照和回复限制均可配置。完整参数、生命周期和错误码见[工具行为参考](specifications/agent-tools/README.md)。
+
+XLSX 资源目录和原始图片读取跳过工作表单元格；直接 Python 调用可使用 `with XlsxResourceCatalog(source) as catalog` 获取 `catalog.resources` 和读取原图。它与完整会话保持相同资源编号，不提供网格或查询方法。
 
 ### 架构边界
 

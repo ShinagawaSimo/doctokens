@@ -10,6 +10,7 @@ PresentationML slide order follows `ppt/presentation.xml/p:sldIdLst`. Shapes fol
 - [Output profile](output.md)
 - [Parse manifest](manifest.md)
 - [Resource operations](operations/resources.md)
+- [Text search](operations/search.md)
 
 ## Presentation
 

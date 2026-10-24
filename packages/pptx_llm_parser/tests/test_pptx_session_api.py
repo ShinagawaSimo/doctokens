@@ -14,6 +14,9 @@ class PptxSessionApiTests(unittest.TestCase):
     def test_selection_and_iteration_use_the_same_rendering(self) -> None:
         source = rich_deck_pptx()
         with open_pptx(source) as session:
+            # Cache lifetime is infrastructure; this existing test deck only
+            # supplies an open reader for rendering and binary-resource checks.
+            self.assertEqual(session._package_reader._part_cache_bytes, 0)
             selected = session.render(slide=2, density="structural")
             root = ET.fromstring(selected.text)
             self.assertEqual(

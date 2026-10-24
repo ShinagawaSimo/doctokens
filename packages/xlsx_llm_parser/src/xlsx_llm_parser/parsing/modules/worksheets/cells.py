@@ -7,6 +7,7 @@ from typing import cast
 from xml.etree import ElementTree as ET
 
 from ...._utils import parse_ref
+from ....compact_cell import CompactCell
 from ....models import (
     Cell,
     CellControl,
@@ -14,6 +15,7 @@ from ....models import (
 )
 from ..styles.index import FormatIndex
 from ..workbook.rich_values import RichValueCatalog
+from ..workbook.shared_strings import SharedStrings
 from .sheet_types import NS_S, RowAttrs
 
 _CELL_TYPE_MAP: dict[str, str] = {
@@ -41,7 +43,7 @@ def _row_attrs(row_elem: ET.Element) -> RowAttrs:
 def _parse_cell(
     cell_elem: ET.Element,
     row_attrs: RowAttrs,
-    shared_strings: list[str],
+    shared_strings: SharedStrings,
     rich_text_map: dict[int, list[RichTextRun]] | None,
     format_index: FormatIndex | None,
     ref: str,
@@ -68,16 +70,7 @@ def _parse_cell(
         text = _formatted_text(style_index, cell_type, text, format_index)
 
     cell: Cell = {"ref": ref, "row": row_attrs.number or row, "col": col, "text": text}
-    if (
-        not text
-        and cell_type == "n"
-        and (value_elem is None or not value_elem.text)
-        and not any(child.tag in {f"{{{NS_S}}}is", f"{{{NS_S}}}f"} for child in cell_elem)
-        and cell_elem.get("vm") is None
-        and cell_elem.get("cm") is None
-        and (format_index is not None and not format_index.preserves_blank(style_index))
-        and not format_index.preserves_blank(row_attrs.style)
-    ):
+    if _blank_candidate(cell_elem, cell_type, value_elem, row_attrs, style_index, format_index):
         cell["blankCandidate"] = True
     _apply_row_attrs(cell, row_attrs)
     if include_rich_text:
@@ -109,7 +102,28 @@ def _parse_cell(
         cell["type"] = semantic_type
     if cell.get("richValue", {}).get("imagePart") or cell.get("richValue", {}).get("imageUrl"):
         cell["type"] = "image"
-    return cell
+    # Decode into a short-lived dict; compact only the retained result so the
+    # field-attachment helpers keep native dictionary access on this hot path.
+    return cast(Cell, CompactCell(cell))
+
+
+def _blank_candidate(
+    cell_elem: ET.Element,
+    cell_type: str,
+    value_elem: ET.Element | None,
+    row_attrs: RowAttrs,
+    style_index: int | None,
+    format_index: FormatIndex | None,
+) -> bool:
+    return (
+        cell_type == "n"
+        and (value_elem is None or not value_elem.text)
+        and not any(child.tag in {f"{{{NS_S}}}is", f"{{{NS_S}}}f"} for child in cell_elem)
+        and cell_elem.get("vm") is None
+        and cell_elem.get("cm") is None
+        and (format_index is not None and not format_index.preserves_blank(style_index))
+        and not format_index.preserves_blank(row_attrs.style)
+    )
 
 
 def _format_text_cell(cell: Cell, source: str, parts: list[str | None] | None) -> None:
@@ -157,7 +171,7 @@ def _style_index(cell_elem: ET.Element) -> int | None:
 def _cell_text(
     cell_elem: ET.Element,
     cell_type: str,
-    shared_strings: list[str],
+    shared_strings: SharedStrings,
 ) -> tuple[str, ET.Element | None]:
     if cell_type == "inlineStr":
         inline_text = cell_elem.find(f"{{{NS_S}}}is/{{{NS_S}}}t")
@@ -170,6 +184,8 @@ def _cell_text(
     if cell_type == "s":
         with suppress(ValueError):
             idx = int(value_elem.text)
+            if isinstance(shared_strings, dict):
+                return shared_strings.get(idx, ""), value_elem
             if 0 <= idx < len(shared_strings):
                 return shared_strings[idx], value_elem
         return "", value_elem

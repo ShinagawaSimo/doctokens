@@ -38,6 +38,7 @@ class DocxReadSession:
             self.parsed_document = self._lifecycle.enter(
                 package, lambda: DocxParser().parse(package, self.options, plan=DocxParsePlan.session())
             )
+            package.clear_part_cache()
             if package.memory_budget is not None:
                 package.memory_budget.finish(self.parsed_document)
         except BaseException:

@@ -4,6 +4,8 @@
 
 `ParseResult.report.manifest` describes parsed content before rendering. One-shot sheet/range selection narrows this scope; a session retains its full-workbook report.
 
+For a default preview using bounded cell materialization, `cellCount` counts only retained cells in that parse, including the complete threshold row. It is not a worksheet-total statistic. Complete selected-sheet compatibility paths and explicit full sessions report the cells they actually retain.
+
 ## Fields
 
 ### `sheetCount`

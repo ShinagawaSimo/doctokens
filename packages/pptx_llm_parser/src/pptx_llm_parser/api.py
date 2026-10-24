@@ -40,6 +40,7 @@ class PptxReadSession:
             )
             if package.memory_budget is not None:
                 package.memory_budget.finish(self.parsed_presentation)
+            package.clear_part_cache()
         except BaseException:
             self.close()
             raise

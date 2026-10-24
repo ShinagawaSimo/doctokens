@@ -13,6 +13,7 @@ from ....models import Cell
 from ....plan import XlsxParsePlan
 from ..styles.index import FormatIndex
 from ..workbook.rich_values import RichValueCatalog
+from ..workbook.shared_strings import SharedStrings
 from .cells import _row_attrs
 from .scanner import WorksheetScanner
 from .sheet_post_index import SheetPostIndex
@@ -20,7 +21,7 @@ from .sheet_types import NS_S
 from .working_set import SheetWorkingSet
 
 
-def iter_value_rows(package: PackageReader, part: str, strings: list[str], formats: FormatIndex) -> Iterator[list[Cell]]:
+def iter_value_rows(package: PackageReader, part: str, strings: SharedStrings, formats: FormatIndex) -> Iterator[list[Cell]]:
     cells: list[Cell] = []
 
     def consume(_number: int, row: list[Cell]) -> bool:

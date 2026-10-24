@@ -64,8 +64,7 @@ class PackageReader:
         if self._zip is not None:
             self._zip.close()
             self._zip = None
-        self._part_cache.clear()
-        self._part_cache_bytes = 0
+        self.clear_part_cache()
         self._relationships_by_source.clear()
         self._all_relationships = None
 
@@ -222,6 +221,11 @@ class PackageReader:
             self._part_cache[normalized] = data
             self._part_cache_bytes += len(data)
         return data
+
+    def clear_part_cache(self) -> None:
+        """Drop disposable source bytes after parsing; keep the ZIP and indexes open."""
+        self._part_cache.clear()
+        self._part_cache_bytes = 0
 
     def read_xml(self, name: str) -> ET.Element:
         checkpoint("parsing package XML")

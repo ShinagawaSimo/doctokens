@@ -19,6 +19,7 @@ A session owns one open package and its parsed representation.
 
 - **Parsing**
   - Enter before reading; parse once; close the owned package on exit.
+  - After a complete parse succeeds, discard the package's disposable source-byte cache. Keep the parsed representation, ZIP reader and relationship indexes available for repeated rendering and on-demand resource access. This does not force garbage collection or promise an immediate operating-system RSS decrease.
 
 - **Diagnostics**
   - Use before enter or after close: `RuntimeError`.

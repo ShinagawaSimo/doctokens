@@ -11,18 +11,20 @@ from ....models import RichTextRun
 
 _NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 _SI = f"{{{_NS}}}si"
+SharedStrings = list[str] | dict[int, str]
 
 
 def _parse_shared_strings(
-    package_reader: PackageReader, *, include_rich_text: bool
-) -> tuple[list[str], dict[int, list[RichTextRun]]]:
+    package_reader: PackageReader, *, include_rich_text: bool, needed_indices: set[int] | None = None
+) -> tuple[SharedStrings, dict[int, list[RichTextRun]]]:
     part = "xl/sharedStrings.xml"
     if not package_reader.exists(part):
         return [], {}
-    strings: list[str] = []
+    strings: SharedStrings = [] if needed_indices is None else {}
     rich_map: dict[int, list[RichTextRun]] = {}
     root: ET.Element | None = None
     depth = 0
+    index = 0
     with package_reader.open_entry(part) as stream:
         for event, element in iterparse(stream, events=("start", "end")):
             if event == "start":
@@ -32,10 +34,15 @@ def _parse_shared_strings(
                 continue
             if depth == 2:
                 if element.tag == _SI:
-                    value, rich = _string(element, include_rich_text)
-                    if rich is not None:
-                        rich_map[len(strings)] = rich
-                    strings.append(value)
+                    if needed_indices is None or index in needed_indices:
+                        value, rich = _string(element, include_rich_text)
+                        if rich is not None:
+                            rich_map[index] = rich
+                        if isinstance(strings, dict):
+                            strings[index] = value
+                        else:
+                            strings.append(value)
+                    index += 1
                 element.clear()
                 if root is not None:
                     root.remove(element)

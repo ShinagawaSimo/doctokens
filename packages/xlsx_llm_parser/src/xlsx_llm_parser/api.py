@@ -49,6 +49,7 @@ class XlsxReadSession:
             self.parsed_workbook = self._lifecycle.enter(
                 package, lambda: _parse_workbook(package, self.options, plan=XlsxParsePlan.session())
             )
+            package.clear_part_cache()
         except BaseException:
             self.close()
             raise

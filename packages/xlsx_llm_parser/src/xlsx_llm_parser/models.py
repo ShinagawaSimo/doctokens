@@ -269,6 +269,7 @@ class SheetInfo(TypedDict, total=False):
     part: str
     kind: str  # "worksheet" | "chartsheet"
     rows: list[list[Cell]]
+    preview_next_row: int  # next saved reading row after a bounded one-shot preview
     state: str  # "visible" | "hidden" | "veryHidden"
     hidden_cols: list[tuple[int, int]]  # (min_col, max_col) ranges from <cols>
     merge_refs: list[str]  # Saved merge regions, including anchors outside selected ranges.

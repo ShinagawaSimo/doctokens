@@ -5,6 +5,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from weakref import ref
 
 import pytest
 from doctokens_agent_tools import RuntimeConfig, ToolRuntime
@@ -175,3 +176,44 @@ def test_count_eviction_uses_session_access_order() -> None:
         assert runtime._documents.documents[first].session is not None
         assert runtime._documents.documents[second].session is None
         assert runtime._documents.documents[second].session_memory_bytes == 0
+
+
+@pytest.mark.parametrize("kind", ["docx", "xlsx"])
+def test_ready_sessions_release_disposable_source_bytes_but_keep_the_reader_open(kind: str) -> None:
+    from docx_llm_parser import open_docx
+
+    if kind == "docx":
+        session = open_docx(FIXTURES / "docx/docx-paragraph.docx")
+        part = "word/document.xml"
+    else:
+        session = open_xlsx(FIXTURES / "xlsx/xlsx-sparse.xlsx")
+        part = "xl/workbook.xml"
+    with session:
+        package = session._package
+        assert package._part_cache_bytes == 0 and not package._part_cache
+        source = package.read_part(part)
+        assert package._part_cache_bytes > 0
+        package.clear_part_cache()
+        package.clear_part_cache()
+        assert package._part_cache_bytes == 0
+        assert package.read_part(part) == source
+        session.render()
+
+
+def test_consumed_worksheet_rows_are_released_before_the_scan_ends() -> None:
+    # This checks live XML ownership, not parsed cell content. A short native
+    # worksheet lets the parser read ahead while its parent tree remains alive.
+    from xlsx_llm_parser.parsing.modules.worksheets.sheet_types import NS_S
+    from xlsx_llm_parser.parsing.modules.worksheets.xml_stream import iter_sheet_elements
+
+    with (
+        PackageReader(FIXTURES / "xlsx/xlsx-shared-strings.xlsx", PackageLimits()) as package,
+        package.open_entry("xl/worksheets/sheet1.xml") as stream,
+    ):
+        elements = iter_sheet_elements(stream)
+        first = next(element for element in elements if element.tag == f"{{{NS_S}}}row")
+        consumed = ref(first)
+        del first
+        next(element for element in elements if element.tag == f"{{{NS_S}}}row")
+        assert consumed() is None
+        elements.close()

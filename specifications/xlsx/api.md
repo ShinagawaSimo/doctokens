@@ -6,7 +6,9 @@ parse_xlsx/open_xlsx use [common sessions](../common/session.md) and return [Par
 
 ## Processing
 
-One-shot explicit ranges narrow cell materialization while retaining minimal shared-formula master declarations from the same worksheet when formulas are requested. Default sheet/workbook previews still parse the selected sheets before rendering a bounded cell window; an output threshold does not promise streaming parsing or bounded memory. Session rendering selects from an already parsed workbook. Window parsing does not create missing annotation cells. The resource directory reflects the parsed scope, not only emitted grid rows.
+One-shot explicit ranges narrow cell materialization while retaining minimal shared-formula master declarations from the same worksheet when formulas are requested. Default sheet/workbook previews first scan saved cells and sheet declarations to establish the meaningful reading extent. For ordered worksheets with independent cells, only the rows through the 500-cell threshold row are decoded and retained; continuation identifies the first withheld reading row. Internal saved blanks and source coordinates remain intact.
+
+Worksheets with comments, merges, range-associated blank semantics, shared/array/data-table formula declarations, or inconsistent saved row order/coordinates currently retain the complete selected-sheet compatibility path. XML is fully scanned, including its tail. Consumed worksheet rows are detached after their end events. Independent-cell previews can retain a selected shared-string catalog using original source ordinals; other paths retain complete catalogs as described under [shared strings](cells/shared-string.md). The output threshold therefore does not promise constant memory or a bounded amount of source scanning. Session rendering selects from an already parsed workbook. Explicit window parsing does not create missing annotation cells. The resource directory reflects the parsed scope, not only emitted grid rows.
 
 ## Fields
 

@@ -10,7 +10,7 @@ from zipfile import ZipFile
 
 import pytest
 from doctokens_agent_tools import RuntimeConfig, ToolRuntime
-from xlsx_llm_parser import find_xlsx_cells, open_xlsx, query_xlsx
+from xlsx_llm_parser import find_xlsx_cells, open_xlsx, parse_xlsx, query_xlsx
 from xlsx_llm_parser.parsing.modules.worksheets.cells import _parse_cell
 from xlsx_llm_parser.parsing.modules.worksheets.scanner import parse_sheet
 
@@ -106,3 +106,21 @@ def test_limited_query_validates_trailing_xml_and_releases_the_reader() -> None:
         with pytest.raises(ET.ParseError):
             query_xlsx(source.getvalue(), sheet="Sheet1", range_spec="A1:A3", header_row=1, limit=1)
         assert closed.call_count == 1
+
+
+def test_selective_shared_strings_still_validate_the_xml_tail() -> None:
+    # Office cannot save a corrupt XML tail. Damage only this exceptional
+    # condition in a private copy of an existing native shared-string file.
+    source = io.BytesIO()
+    with ZipFile(FIXTURES / "xlsx-shared-strings.xlsx") as original, ZipFile(source, "w") as damaged:
+        for entry in original.infolist():
+            value = original.read(entry.filename)
+            if entry.filename == "xl/sharedStrings.xml":
+                value += b"<broken"
+            damaged.writestr(entry, value)
+    with (
+        patch("xlsx_llm_parser.parsing.modules.worksheets.preview._CELL_BUDGET", 1),
+        patch("xlsx_llm_parser.rendering.window._CELL_BUDGET", 1),
+        pytest.raises(ET.ParseError),
+    ):
+        parse_xlsx(source.getvalue(), sheet="Sheet1")

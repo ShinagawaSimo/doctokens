@@ -56,7 +56,7 @@ def reading_window(
         rows = filter_rows(source, *requested) if requested is not None else reading_rows(source)
     emitted: list[list[Cell]] = []
     count = 0
-    next_row = None
+    next_row = None if exact else sheet.get("preview_next_row")
     hidden = sheet.get("hidden_cols", [])
     for row in rows:
         if not row:

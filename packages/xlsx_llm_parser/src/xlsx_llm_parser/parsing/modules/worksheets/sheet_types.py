@@ -32,6 +32,7 @@ class SheetParseResult(NamedTuple):
     warnings: list[ParseWarning]
     merge_refs: list[str]
     ordered_rows: bool = True
+    preview_next_row: int | None = None
 
 
 class RowAttrs(NamedTuple):

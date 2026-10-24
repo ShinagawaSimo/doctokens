@@ -67,6 +67,7 @@ class XlsxParsePlan:
     scan_cells: bool = True
     retain_cells: bool = True
     formula_only: bool = False
+    preview: bool = False
 
     @property
     def module_keys(self) -> tuple[str, ...]:
@@ -109,7 +110,7 @@ class XlsxParsePlan:
             features = _SEMANTIC
         else:
             raise ValueError("density must be one of: 'plain', 'structural', 'semantic'")
-        return cls(ParsePurpose.RENDER, density, features)
+        return cls(ParsePurpose.RENDER, density, features, preview=True)
 
     @classmethod
     def session(cls) -> XlsxParsePlan:
@@ -128,7 +129,7 @@ class XlsxParsePlan:
     @classmethod
     def sheet(cls, density: str, sheet_name: str) -> XlsxParsePlan:
         base = cls.render(density)
-        return cls(base.purpose, base.density, base.features, frozenset((sheet_name,)))
+        return cls(base.purpose, base.density, base.features, frozenset((sheet_name,)), preview=True)
 
     @classmethod
     def resource(cls, resource_type: str) -> XlsxParsePlan:

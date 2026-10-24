@@ -10,7 +10,6 @@ from xml.etree import ElementTree as ET
 from ooxml_llm_core.execution import checkpoint
 from ooxml_llm_core.models import ParseWarning, RelationshipRecord
 from ooxml_llm_core.package import PackageError, PackageReader
-from ooxml_llm_core.xml import iterparse
 
 from ...._utils import col_letter, parse_ref
 from ....models import (
@@ -20,17 +19,21 @@ from ....models import (
 from ....plan import XlsxParsePlan
 from ..styles.index import FormatIndex
 from ..workbook.rich_values import RichValueCatalog
+from ..workbook.shared_strings import SharedStrings
 from .cells import _parse_cell, _row_attrs
 from .data_tables import read_data_table
 from .formulas import SharedFormulaMaster
+from .preview import PreparedPreview, preview_state
 from .sheet_post_index import SheetPostIndex
 from .sheet_types import NS_S, RowAttrs, SheetParseFlags, SheetParseResult
 from .working_set import SheetWorkingSet
+from .xml_stream import iter_sheet_elements
 
 _ROW = f"{{{NS_S}}}row"
 _CELL = f"{{{NS_S}}}c"
 _FORMULA = f"{{{NS_S}}}f"
 _CELL_VALUES = frozenset(f"{{{NS_S}}}{name}" for name in ("v", "t", "f"))
+_SHEET_DATA = f"{{{NS_S}}}sheetData"
 
 
 class WorksheetScanner:
@@ -40,7 +43,7 @@ class WorksheetScanner:
         self,
         package: PackageReader,
         sheet_part: str,
-        shared_strings: list[str],
+        shared_strings: SharedStrings,
         rich_text_map: dict[int, list[RichTextRun]] | None,
         format_index: FormatIndex | None,
         sheet_relationships: list[RelationshipRecord],
@@ -49,6 +52,7 @@ class WorksheetScanner:
         plan: XlsxParsePlan,
         cell_window: tuple[int, int, int, int] | None,
         row_sink: Callable[[int, list[Cell]], bool] | None = None,
+        prepared_preview: PreparedPreview | None = None,
     ) -> None:
         self.package = package
         self.sheet_part = sheet_part
@@ -75,6 +79,13 @@ class WorksheetScanner:
         self.annotation_cells = plan.annotation_cells
         self.row_sink = row_sink
         self.accept_rows = True
+        self.preview = (
+            prepared_preview.state
+            if prepared_preview is not None
+            else preview_state(package, sheet_part, format_index, self.flags, sheet_relationships, plan.density)
+            if plan.preview
+            else None
+        )
 
     def parse(self) -> SheetParseResult:
         if not self.package.exists(self.sheet_part):
@@ -86,11 +97,9 @@ class WorksheetScanner:
         previous_row = 0
         ordered_rows = True
         with self.package.open_entry(self.sheet_part) as stream:
-            # All cell children remain alive until their row ends. Start
-            # events carry no additional information and double large-sheet
-            # event traffic; processing one completed row preserves the same
-            # formula dependencies and tail declarations.
-            for _event, element in iterparse(stream, events=("end",)):
+            # Preserve complete rows and tail declarations while releasing
+            # each consumed row's parent link instead of retaining empty nodes.
+            for element in iter_sheet_elements(stream):
                 saw_root = True
                 if element.tag == _ROW:
                     checkpoint("reading worksheet rows")
@@ -102,6 +111,9 @@ class WorksheetScanner:
                     element.clear()
                     continue
                 if element.tag == _CELL or element.tag in _CELL_VALUES:
+                    continue
+                if element.tag == _SHEET_DATA:
+                    element.clear()
                     continue
                 post.collect(element, format_index=self.format_index)
         if not saw_root:
@@ -142,10 +154,12 @@ class WorksheetScanner:
             allow_annotation_cells=self.cell_window is None if self.annotation_cells is None else self.annotation_cells,
             warnings=self.warnings,
         )
-        return result._replace(ordered_rows=ordered_rows)
+        return result._replace(ordered_rows=ordered_rows, preview_next_row=self.preview.next_row if self.preview else None)
 
     def _read_row(self, row: ET.Element, attrs: RowAttrs, working: SheetWorkingSet, post: SheetPostIndex) -> None:
         cells: list[Cell] | None = [] if self.accept_rows and self._includes_row(attrs.number) else None
+        if self.preview is not None and not self.preview.accepting:
+            cells = None
         previous_ref = ""
         has_position = False
         if self.plan.formula_only:
@@ -174,6 +188,9 @@ class WorksheetScanner:
                 previous_col = parse_ref(previous_ref)[0] if previous_ref else 0
                 ref = f"{col_letter(previous_col + 1)}{attrs.number}"
             previous_ref = ref
+            if self.preview is not None and cells is None:
+                self.preview.observe_next(ref, attrs.number)
+                continue
             formula = element.find(_FORMULA)
             if formula is not None and formula.get("ref"):
                 post.blank_content_refs.append(formula.get("ref", ""))
@@ -187,6 +204,8 @@ class WorksheetScanner:
             if cells is None or not self.plan.retain_cells:
                 continue
             col, number = parse_ref(ref)
+            if self.preview is not None and (number > self.preview.bottom or col > self.preview.right):
+                continue
             if (
                 self.plan.formula_only
                 and formula is None
@@ -224,6 +243,8 @@ class WorksheetScanner:
             if self.row_sink is None:
                 working.add_cell(cell)
         if cells is not None:
+            if self.preview is not None:
+                self.preview.include(cells)
             if self.row_sink is None:
                 working.add_row(cells)
                 if self.package.memory_budget is not None:
@@ -241,7 +262,7 @@ class WorksheetScanner:
 def parse_sheet(
     package: PackageReader,
     sheet_part: str,
-    shared_strings: list[str],
+    shared_strings: SharedStrings,
     rich_text_map: dict[int, list[RichTextRun]] | None = None,
     format_index: FormatIndex | None = None,
     sheet_relationships: list[RelationshipRecord] | None = None,
@@ -250,6 +271,7 @@ def parse_sheet(
     plan: XlsxParsePlan | None = None,
     cell_window: tuple[int, int, int, int] | None = None,
     row_sink: Callable[[int, list[Cell]], bool] | None = None,
+    prepared_preview: PreparedPreview | None = None,
 ) -> SheetParseResult:
     """Parse a worksheet XML part into typed cell rows and sheet-level metadata."""
     return WorksheetScanner(
@@ -264,4 +286,5 @@ def parse_sheet(
         plan or XlsxParsePlan.session(),
         cell_window,
         row_sink,
+        prepared_preview,
     ).parse()

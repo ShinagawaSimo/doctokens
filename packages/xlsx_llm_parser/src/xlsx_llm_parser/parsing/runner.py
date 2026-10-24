@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.metrics import MetricsRecorder
@@ -30,6 +29,7 @@ from .modules.worksheets.post import (
 )
 from .modules.worksheets.scanner import parse_sheet
 from .modules.worksheets.sheet_types import SheetParseResult
+from .read_preparation import prepare_previews, read_sheet_relationships
 
 
 # OOXML cell type codes -> LLM-readable semantic names.
@@ -62,11 +62,6 @@ def _parse_workbook(
         if parse_plan.sheet_names is not None:
             worksheet_infos = [sheet_info for sheet_info in worksheet_infos if sheet_info["name"] in parse_plan.sheet_names]
         resource_only = parse_plan.purpose is ParsePurpose.RESOURCE
-        shared_strings, rich_text_map = (
-            ([], {})
-            if resource_only or not parse_plan.display_text
-            else _parse_shared_strings(package_reader, include_rich_text=parse_plan.needs(XlsxFeature.RICH_TEXT))
-        )
         rich_values = (
             RichValueCatalog.from_package(package_reader, warnings=warnings)
             if parse_plan.needs(XlsxFeature.RICH_VALUES)
@@ -93,6 +88,15 @@ def _parse_workbook(
         )
         format_index.set_cell_controls(cell_controls.by_style)
         format_index.set_date_system(date_1904)
+        relationships = read_sheet_relationships(package_reader, worksheet_infos, warnings)
+        prepared, needed_strings = prepare_previews(package_reader, worksheet_infos, parse_plan, format_index, relationships)
+        shared_strings, rich_text_map = (
+            ([], {})
+            if resource_only or not parse_plan.display_text
+            else _parse_shared_strings(
+                package_reader, include_rich_text=parse_plan.needs(XlsxFeature.RICH_TEXT), needed_indices=needed_strings
+            )
+        )
         threaded_comment_people = (
             parse_threaded_comment_people(package_reader, warnings) if parse_plan.needs(XlsxFeature.COMMENTS) else {}
         )
@@ -103,13 +107,7 @@ def _parse_workbook(
 
         for sheet_info in worksheet_infos:
             if sheet_info.get("kind") != "chartsheet":
-                # Read sheet relationships once — shared across all helpers.
-                try:
-                    sheet_relationships = list(package_reader.read_relationships_for_part(sheet_info["part"]))
-                except (ET.ParseError, KeyError, ValueError) as exc:
-                    part = sheet_info["part"]
-                    warnings.append(ParseWarning("SHEET_RELS_INVALID", f"Invalid worksheet relationships: {exc}", part))
-                    sheet_relationships = []
+                sheet_relationships = relationships[sheet_info["part"]]
 
                 sheet_result = (
                     SheetParseResult([], [], False, "", [], [], [], [], [])
@@ -125,9 +123,12 @@ def _parse_workbook(
                         rich_values,
                         plan=parse_plan,
                         cell_window=parse_plan.cell_window,
+                        prepared_preview=prepared.get(sheet_info["part"]),
                     )
                 )
                 sheet_info["rows"] = sheet_result.rows
+                if sheet_result.preview_next_row is not None:
+                    sheet_info["preview_next_row"] = sheet_result.preview_next_row
                 sheet_info["merge_refs"] = sheet_result.merge_refs
                 if sheet_result.hidden_cols:
                     sheet_info["hidden_cols"] = sheet_result.hidden_cols

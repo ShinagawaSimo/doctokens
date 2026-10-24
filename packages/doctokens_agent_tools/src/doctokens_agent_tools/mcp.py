@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import base64
 import logging
 import re
 from pathlib import Path
@@ -24,12 +23,16 @@ def build_server(runtime: ToolRuntime) -> Server[Any, Any]:
     from mcp.server import Server
     from mcp.server.lowlevel.helper_types import ReadResourceContents
 
+    from .mcp_output import project_response
+
     server: Server[Any, Any] = Server(
         "doctokens",
         version="0.1.0",
         instructions=(
             "Read paths directly; inspect only to discover navigation. DOCX pages are saved-render hints. "
             "Text appears once in content; structuredContent gives selection and content_index. "
+            "Compatible mode also provides a separate native JSON metadata block; it is not document text. "
+            "Root next_offset in search continues matches; per-part next_offset and read_result continue characters/bytes. "
             "Incomplete parts return result_id and next_offset: continue with read_result at that offset. "
             "Continuation next_offset=null ends the result; XML fragments are not standalone documents. "
             "DOCX/PPTX whole_document must be explicit. Use document_id for snapshot resource IDs."
@@ -52,42 +55,7 @@ def build_server(runtime: ToolRuntime) -> Server[Any, Any]:
 
     async def call_tool(name: str, arguments: dict[str, Any]) -> types.CallToolResult:
         response = await runtime.aexecute(name, arguments)
-        structured = response.to_dict(include_attachments=False)
-        data = dict(response.data)
-        parts = [dict(part) for part in data.get("parts", [])]
-        if "parts" in data:
-            data["parts"] = parts
-        structured["data"] = data
-        content: list[
-            types.TextContent | types.ImageContent | types.AudioContent | types.ResourceLink | types.EmbeddedResource
-        ] = []
-        for payload in [data, *parts]:
-            value = payload.pop("text", None)
-            if value is None and payload.get("encoding") == "base64":
-                value = payload.pop("data", None)
-            if isinstance(value, str):
-                payload["content_index"] = len(content)
-                content.append(types.TextContent(type="text", text=value))
-        images = [
-            attachment
-            for attachment in response.attachments
-            if attachment.media_type in {"image/png", "image/jpeg", "image/webp", "image/gif"}
-        ]
-        if not images and (uri := response.data.get("resource_uri")):
-            content.append(
-                types.ResourceLink(
-                    type="resource_link",
-                    uri=AnyUrl(uri),
-                    name=response.data["result_id"],
-                    mimeType=response.data["media_type"],
-                    size=response.data["length"],
-                    description="Original binary bytes; expires with the result or document snapshot.",
-                )
-            )
-        for attachment in images:
-            encoded = base64.b64encode(attachment.data).decode("ascii")
-            content.append(types.ImageContent(type="image", data=encoded, mimeType=attachment.media_type))
-        return types.CallToolResult(content=content, structuredContent=structured, isError=response.is_error)
+        return project_response(response, runtime.config.mcp_output_mode)
 
     async def list_resources() -> list[types.Resource]:
         # Resource links are issued by binary tool responses, rather than exposing
@@ -123,6 +91,9 @@ def main() -> None:
     parser.add_argument("--root", action="append", required=True, type=Path, help="Allowed directory; repeat for multiple roots.")
     parser.add_argument("--reply-chars", type=int, default=12_000)
     parser.add_argument("--max-sessions", type=int, default=4)
+    parser.add_argument("--max-session-memory-bytes", type=int, default=256 * 1024 * 1024)
+    parser.add_argument("--max-session-total-memory-bytes", type=int, default=512 * 1024 * 1024)
+    parser.add_argument("--mcp-output-mode", choices=("compatible", "compact"), default="compatible")
     parser.add_argument("--max-documents", type=int, default=32)
     parser.add_argument("--idle-seconds", type=float, default=600)
     parser.add_argument("--result-idle-seconds", type=float, default=600)
@@ -137,6 +108,9 @@ def main() -> None:
             allowed_roots=tuple(args.root),
             reply_chars=args.reply_chars,
             max_sessions=args.max_sessions,
+            max_session_memory_bytes=args.max_session_memory_bytes,
+            max_session_total_memory_bytes=args.max_session_total_memory_bytes,
+            mcp_output_mode=args.mcp_output_mode,
             max_documents=args.max_documents,
             idle_seconds=args.idle_seconds,
             result_idle_seconds=args.result_idle_seconds,

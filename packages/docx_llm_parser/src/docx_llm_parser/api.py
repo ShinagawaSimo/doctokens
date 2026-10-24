@@ -22,21 +22,24 @@ from .search import text_units
 class DocxReadSession:
     """Context-managed DOCX session with one package reader owner."""
 
-    def __init__(self, source: Source, options: ParseOptions) -> None:
+    def __init__(self, source: Source, options: ParseOptions, *, memory_limit_bytes: int | None = None) -> None:
         self.source = source
         self.options = options
+        self._memory_limit_bytes = memory_limit_bytes
         self.parsed_document: ParsedDocument | None = None
         self._package: PackageReader | None = None
         self._lifecycle: SessionLifecycle[ParsedDocument] = SessionLifecycle("DOCX")
 
     def __enter__(self) -> DocxReadSession:
         self._lifecycle.check_new()
-        self._package = PackageReader(self.source, self.options)
+        self._package = PackageReader(self.source, self.options, memory_limit_bytes=self._memory_limit_bytes)
         package = self._package
         try:
             self.parsed_document = self._lifecycle.enter(
                 package, lambda: DocxParser().parse(package, self.options, plan=DocxParsePlan.session())
             )
+            if package.memory_budget is not None:
+                package.memory_budget.finish(self.parsed_document)
         except BaseException:
             self.close()
             raise
@@ -52,6 +55,12 @@ class DocxReadSession:
 
     def _require_open(self) -> ParsedDocument:
         return self._lifecycle.require()
+
+    @property
+    def estimated_memory_bytes(self) -> int:
+        self._require_open()
+        budget = self._package.memory_budget if self._package is not None else None
+        return budget.estimated_bytes if budget is not None else 0
 
     @property
     def report(self) -> ParseReport:
@@ -169,8 +178,8 @@ class DocxReadSession:
         )
 
 
-def open_docx(source: Source, *, options: ParseOptions | None = None) -> DocxReadSession:
-    return DocxReadSession(source, options or ParseOptions())
+def open_docx(source: Source, *, options: ParseOptions | None = None, memory_limit_bytes: int | None = None) -> DocxReadSession:
+    return DocxReadSession(source, options or ParseOptions(), memory_limit_bytes=memory_limit_bytes)
 
 
 def parse_docx(

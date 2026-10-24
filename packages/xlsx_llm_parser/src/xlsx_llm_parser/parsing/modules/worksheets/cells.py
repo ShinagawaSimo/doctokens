@@ -144,7 +144,7 @@ def _attach_formula_bar_value(
         index = format_index if format_index is not None else FormatIndex()
         raw = index.formula_bar_value(_style_index(element), source)
     if raw is not None:
-        cell["raw"] = raw
+        cell["raw"] = cell["text"] if raw == cell["text"] else raw
 
 
 def _style_index(cell_elem: ET.Element) -> int | None:

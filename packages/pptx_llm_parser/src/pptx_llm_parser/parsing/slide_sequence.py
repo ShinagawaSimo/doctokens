@@ -217,6 +217,8 @@ class _SlideSequence:
                 section=self._parse_context.section_by_slide_id.get(ref.slide_id),
             )
             self._normalize_navigation(slide, self._refs, slide_number)
+            if self._package_reader.memory_budget is not None:
+                self._package_reader.memory_budget.add_fragment(slide)
             if slide_number >= start_slide:
                 yield _ParsedSlide(slide)
 

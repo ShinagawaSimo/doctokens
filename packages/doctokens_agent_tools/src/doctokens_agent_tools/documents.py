@@ -13,18 +13,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from docx_llm_parser import DocxReadSession, open_docx
+from docx_llm_parser import DocxReadSession
 from docx_llm_parser import ParseOptions as DocxOptions
 from ooxml_llm_core.models import ResourceDescriptor
 from pptx_llm_parser import ParseOptions as PptxOptions
-from pptx_llm_parser import PptxReadSession, open_pptx
+from pptx_llm_parser import PptxReadSession
 from xlsx_llm_parser import ParseOptions as XlsxOptions
-from xlsx_llm_parser import XlsxReadSession, open_xlsx
+from xlsx_llm_parser import XlsxReadSession
 
 from .config import RuntimeConfig
 from .models import ToolError
 from .options import parser_options
 from .schemas import BaseOptions, BaseSourceArgs, DocumentOptions
+from .sessions import admit_session
 
 Session = DocxReadSession | PptxReadSession | XlsxReadSession
 Options = DocxOptions | PptxOptions | XlsxOptions
@@ -43,6 +44,8 @@ class Document:
     touched: float
     session: Session | None = None
     session_touched: float = 0
+    session_memory_bytes: int = 0
+    session_reservation: int | None = None
     active: int = 0
     index: dict[str, Any] | None = None
     resource_catalog: tuple[ResourceDescriptor, ...] | None = None
@@ -55,6 +58,7 @@ class Document:
         if self.session is not None:
             self.session.close()
             self.session = None
+        self.session_memory_bytes = 0
 
 
 class DocumentStore:
@@ -182,22 +186,9 @@ class DocumentStore:
 
     def session(self, document: Document) -> Session:
         if document.session is None:
-            sessions = [d for d in self.documents.values() if d.session is not None]
-            if len(sessions) >= self.config.max_sessions:
-                candidates = [d for d in sessions if not d.active]
-                if not candidates:
-                    raise ToolError("CAPACITY_EXCEEDED", "all cached sessions are in use")
-                min(candidates, key=lambda d: d.session_touched).close_session()
-            options = document.options
-            if isinstance(options, DocxOptions):
-                opened: Session = open_docx(document.snapshot, options=options)
-            elif isinstance(options, PptxOptions):
-                opened = open_pptx(document.snapshot, options=options)
-            else:
-                opened = open_xlsx(document.snapshot, options=options)
-            opened.__enter__()
-            document.session = opened
+            admit_session(document, self.documents.values(), self.config)
         document.session_touched = time.monotonic()
+        assert document.session is not None
         return document.session
 
     def close(self) -> None:

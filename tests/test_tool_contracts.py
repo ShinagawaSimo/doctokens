@@ -163,10 +163,10 @@ def test_mcp_small_non_image_binary_is_linked_without_automatic_base64() -> None
                     result = await client.call_tool(
                         "read_resource", {"document_id": document.id, "kind": "image", "resource_id": "binary"}
                     )
-                assert [content.type for content in result.content] == ["resource_link"]
-                assert result.content[0].mimeType == "application/octet-stream"
-                assert str(result.content[0].uri) == response.data["resource_uri"]
-                assert result.content[0].size == len(original)
+                assert [content.type for content in result.content] == ["text", "resource_link"]
+                assert result.content[1].mimeType == "application/octet-stream"
+                assert str(result.content[1].uri) == response.data["resource_uri"]
+                assert result.content[1].size == len(original)
                 resource = await client.read_resource(AnyUrl(response.data["resource_uri"]))
                 assert base64.b64decode(resource.contents[0].blob) == original
                 await client.call_tool("release_document", {"document_id": document.id})
@@ -174,7 +174,8 @@ def test_mcp_small_non_image_binary_is_linked_without_automatic_base64() -> None
     asyncio.run(verify())
 
 
-def test_mcp_delivers_native_first_text_once_and_continues_without_repeating_metadata() -> None:
+@pytest.mark.parametrize("mode", ["compatible", "compact"])
+def test_mcp_delivers_native_first_text_once_and_continues_without_repeating_metadata(mode: str) -> None:
     pytest.importorskip("mcp")
     from dataclasses import replace
     from unittest.mock import patch
@@ -190,7 +191,7 @@ def test_mcp_delivers_native_first_text_once_and_continues_without_repeating_met
 
     async def verify() -> None:
         with (
-            ToolRuntime(RuntimeConfig(allowed_roots=(FIXTURES,), reply_chars=700)) as runtime,
+            ToolRuntime(RuntimeConfig(allowed_roots=(FIXTURES,), reply_chars=700, mcp_output_mode=mode)) as runtime,
             patch("doctokens_agent_tools.operations.parse_xlsx", return_value=replace(native, text=expected)),
         ):
             async with create_connected_server_and_client_session(build_server(runtime)) as client:
@@ -199,7 +200,7 @@ def test_mcp_delivers_native_first_text_once_and_continues_without_repeating_met
                 assert not {"path", "revision", "cache_hit", "sheets", "selected_sheet"} & data.keys()
                 part = data["parts"][0]
                 assert "text" not in part
-                assert len(response.content) == 1
+                assert len(response.content) == (2 if mode == "compatible" else 1)
                 text = response.content[part["content_index"]].text
                 assert text == expected[:700]
                 offset = part["next_offset"]

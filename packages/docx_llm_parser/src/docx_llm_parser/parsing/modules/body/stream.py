@@ -20,6 +20,7 @@ def read_blocks(owner: DocumentBodyParser) -> list[Block]:
         parser = owner.compatibility.iter_events(stream, "word/document.xml")
         stack: list[str] = []
         body_depth: int | None = None
+        measured = 0
         for event, elem in parser:
             # Optimization: use local_name to avoid split memory allocation.
             lname = local_name(elem.tag)
@@ -72,6 +73,9 @@ def read_blocks(owner: DocumentBodyParser) -> list[Block]:
 
             if lname == "body":
                 body_depth = None
+            if owner.package.memory_budget is not None and len(blocks) > measured:
+                owner.package.memory_budget.add_fragment(blocks[measured:])
+                measured = len(blocks)
             stack.pop()
     return blocks
 

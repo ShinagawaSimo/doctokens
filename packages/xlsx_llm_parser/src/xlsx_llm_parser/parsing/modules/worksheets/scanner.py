@@ -212,7 +212,9 @@ class WorksheetScanner:
                 working.add_cell(cell)
         if cells is not None:
             if self.row_sink is None:
-                working.add_row(attrs.number, cells)
+                working.add_row(cells)
+                if self.package.memory_budget is not None:
+                    self.package.memory_budget.add_cells(cells)
             elif has_position:
                 self.accept_rows = self.row_sink(attrs.number, cells)
 

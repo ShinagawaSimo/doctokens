@@ -21,6 +21,7 @@ from .operations import Operations
 from .presentation import Presenter
 from .results import ResultStore
 from .schemas import BaseSourceArgs, ResultArgs, RuntimeInfoArgs
+from .sessions import session_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,13 @@ class ToolRuntime:
                             "documents": len(self._documents.documents),
                             "sessions": sum(d.session is not None for d in self._documents.documents.values()),
                             "snapshot_bytes": self._documents.bytes,
+                            "session_estimated_bytes": session_bytes(self._documents.documents.values()),
+                            "session_memory_limits": {
+                                "per_session": self.config.max_session_memory_bytes,
+                                "total": self.config.max_session_total_memory_bytes,
+                                "unit": "estimated bytes; not process RSS",
+                            },
+                            "mcp_output_mode": self.config.mcp_output_mode,
                             "result_bytes": self._results.bytes,
                             "configuration": "fixed for this runtime; restart to apply host configuration changes",
                         }

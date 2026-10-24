@@ -22,21 +22,24 @@ from .search import text_units
 class PptxReadSession:
     """Context-managed PPTX session with one package reader owner."""
 
-    def __init__(self, source: Source, options: ParseOptions) -> None:
+    def __init__(self, source: Source, options: ParseOptions, *, memory_limit_bytes: int | None = None) -> None:
         self.source = source
         self.options = options
+        self._memory_limit_bytes = memory_limit_bytes
         self.parsed_presentation: ParsedPresentation | None = None
         self._package_reader: PackageReader | None = None
         self._lifecycle: SessionLifecycle[ParsedPresentation] = SessionLifecycle("PPTX")
 
     def __enter__(self) -> PptxReadSession:
         self._lifecycle.check_new()
-        self._package_reader = PackageReader(self.source, self.options)
+        self._package_reader = PackageReader(self.source, self.options, memory_limit_bytes=self._memory_limit_bytes)
         package = self._package_reader
         try:
             self.parsed_presentation = self._lifecycle.enter(
                 package, lambda: PptxParser().parse(package, self.options, plan=PptxParsePlan.session())
             )
+            if package.memory_budget is not None:
+                package.memory_budget.finish(self.parsed_presentation)
         except BaseException:
             self.close()
             raise
@@ -52,6 +55,12 @@ class PptxReadSession:
 
     def _require_open(self) -> ParsedPresentation:
         return self._lifecycle.require()
+
+    @property
+    def estimated_memory_bytes(self) -> int:
+        self._require_open()
+        budget = self._package_reader.memory_budget if self._package_reader is not None else None
+        return budget.estimated_bytes if budget is not None else 0
 
     @property
     def report(self) -> ParseReport:
@@ -165,8 +174,8 @@ class PptxReadSession:
         )
 
 
-def open_pptx(source: Source, *, options: ParseOptions | None = None) -> PptxReadSession:
-    return PptxReadSession(source, options or ParseOptions())
+def open_pptx(source: Source, *, options: ParseOptions | None = None, memory_limit_bytes: int | None = None) -> PptxReadSession:
+    return PptxReadSession(source, options or ParseOptions(), memory_limit_bytes=memory_limit_bytes)
 
 
 def parse_pptx(

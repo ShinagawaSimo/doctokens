@@ -28,9 +28,10 @@ from .text_search import text_units
 class XlsxReadSession:
     """Context-managed XLSX session with one package reader owner."""
 
-    def __init__(self, source: Source, options: ParseOptions) -> None:
+    def __init__(self, source: Source, options: ParseOptions, *, memory_limit_bytes: int | None = None) -> None:
         self.source = source
         self.options = options
+        self._memory_limit_bytes = memory_limit_bytes
         self.parsed_workbook: ParsedWorkbook | None = None
         self._package: PackageReader | None = None
         self._lifecycle: SessionLifecycle[ParsedWorkbook] = SessionLifecycle("XLSX")
@@ -42,7 +43,7 @@ class XlsxReadSession:
             max_entry_uncompressed_bytes=self.options.max_entry_uncompressed_bytes,
             max_total_uncompressed_bytes=self.options.max_total_uncompressed_bytes,
         )
-        self._package = PackageReader(self.source, limits)
+        self._package = PackageReader(self.source, limits, memory_limit_bytes=self._memory_limit_bytes)
         package = self._package
         try:
             self.parsed_workbook = self._lifecycle.enter(
@@ -63,6 +64,12 @@ class XlsxReadSession:
 
     def _require_open(self) -> ParsedWorkbook:
         return self._lifecycle.require()
+
+    @property
+    def estimated_memory_bytes(self) -> int:
+        self._require_open()
+        budget = self._package.memory_budget if self._package is not None else None
+        return budget.estimated_bytes if budget is not None else 0
 
     @property
     def report(self) -> ParseReport:
@@ -223,8 +230,8 @@ def _resource_selection(kind: str, resource_id: str) -> dict[str, object]:
     return {"kind": "resource", "resource_kind": kind, "id": resource_id}
 
 
-def open_xlsx(source: Source, *, options: ParseOptions | None = None) -> XlsxReadSession:
-    return XlsxReadSession(source, options or ParseOptions())
+def open_xlsx(source: Source, *, options: ParseOptions | None = None, memory_limit_bytes: int | None = None) -> XlsxReadSession:
+    return XlsxReadSession(source, options or ParseOptions(), memory_limit_bytes=memory_limit_bytes)
 
 
 def parse_xlsx(

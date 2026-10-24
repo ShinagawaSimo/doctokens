@@ -33,14 +33,12 @@ class SheetWorkingSet:
     data_tables: list[DataTableFormula] = field(default_factory=list)
     spill_sources: list[Cell] = field(default_factory=list)
 
-    def add_row(self, row_number: int, cells: list[Cell]) -> None:
+    def add_row(self, cells: list[Cell]) -> None:
         if not cells:
             return
         self.rows.append(cells)
-        self.rows_by_number[row_number] = cells
 
     def add_cell(self, cell: Cell) -> None:
-        self.cells_by_coord[coord_key(cell["col"], cell["row"])] = cell
         si = cell.get("si")
         if self.flags.formulas and si is not None:
             self.shared_formula_groups.setdefault(si, []).append(cell)
@@ -64,6 +62,14 @@ class SheetWorkingSet:
         allow_annotation_cells: bool,
         warnings: list[ParseWarning],
     ) -> SheetParseResult:
+        has_comments = self.flags.comments and any(
+            rel.type.endswith(("/comments", "/threadedComment")) for rel in sheet_relationships
+        )
+        has_links = self.flags.hyperlinks and bool(post.hyperlinks)
+        if post.merge_refs or self.spill_sources or has_comments or has_links:
+            self.cells_by_coord = {coord_key(c["col"], c["row"]): c for row in self.rows for c in row}
+        if self.data_tables or (allow_annotation_cells and (has_comments or has_links)):
+            self.rows_by_number = {row[0]["row"]: row for row in self.rows if row}
         if self.flags.formulas:
             expand_selected_shared_formulas(self.shared_formula_groups, self.shared_formula_masters, warnings, sheet_part)
             apply_data_tables(self.data_tables, self.rows_by_number, warnings, sheet_part)

@@ -71,7 +71,7 @@
 - **Processing**
   - Prefer descriptor content type, then the package-part extension, then `application/octet-stream`.
   - MCP emits PNG/JPEG/WebP/GIF within the inline size cap as native image
-    content. Other MIME types, including EMF and audio/video, return only a
+    content. Other MIME types, including EMF and audio/video, return a
     resource link regardless of size; binary data is not automatically embedded
     or Base64-expanded into the tool reply. Direct callers continue to receive
     `BinaryAttachment` objects within the cap.
@@ -90,5 +90,9 @@
 - **Codes**
   - `INVALID_ARGUMENT`, `UNKNOWN_TOOL`, `PATH_NOT_ALLOWED`, `DOCUMENT_NOT_FOUND`, `UNSUPPORTED_FORMAT`, `FORMAT_MISMATCH`.
   - `SOURCE_CHANGED`, `DOCUMENT_EXPIRED`, `RESULT_EXPIRED`, `DOCUMENT_TOO_LARGE`, `RESULT_TOO_LARGE`, `CAPACITY_EXCEEDED`.
+  - `SESSION_MEMORY_LIMIT`: estimated full-session admission or growth exceeds
+    host capacity after eligible inactive-session reclamation. The snapshot
+    remains reusable and no partial session is committed. Bounded XLSX source
+    reads/search/query remain available without full-session admission.
   - `RESOURCE_NOT_FOUND`, `EXTERNAL_RESOURCE`, `OCR_UNAVAILABLE`, `INVALID_DOCUMENT`, `IO_ERROR`, `RUNTIME_CLOSED`, `INTERNAL_ERROR`.
   - Unexpected failures log to stderr; the response does not include a traceback.

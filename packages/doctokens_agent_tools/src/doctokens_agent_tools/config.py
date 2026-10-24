@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 from ooxml_llm_core.options import PackageOptions
 
@@ -28,6 +29,9 @@ class RuntimeConfig:
     ocr_provider: object | None = None
     ocr_workers: int = 4
     ocr_timeout: float = 120
+    max_session_memory_bytes: int = 256 * 1024 * 1024
+    max_session_total_memory_bytes: int = 512 * 1024 * 1024
+    mcp_output_mode: Literal["compatible", "compact"] = "compatible"
 
     def __post_init__(self) -> None:
         if not self.allowed_roots:
@@ -38,6 +42,8 @@ class RuntimeConfig:
         object.__setattr__(self, "allowed_roots", roots)
         for name in (
             "max_sessions",
+            "max_session_memory_bytes",
+            "max_session_total_memory_bytes",
             "max_documents",
             "max_result_bytes",
             "reply_chars",
@@ -57,5 +63,7 @@ class RuntimeConfig:
                 raise ValueError(f"{name} must be finite and positive")
         if self.reply_chars < 4:
             raise ValueError("reply_chars must be at least 4 to encode binary fragments")
+        if self.mcp_output_mode not in {"compatible", "compact"}:
+            raise ValueError("mcp_output_mode must be compatible or compact")
         self.package_options.validate_package_options()
         self.package_options.validate_ocr_options(self.ocr_provider, self.ocr_workers, self.ocr_timeout)

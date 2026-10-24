@@ -23,6 +23,33 @@ A session owns one open package and its parsed representation.
 - **Diagnostics**
   - Use before enter or after close: `RuntimeError`.
 
+### `memory_limit_bytes`
+
+- **Source**
+  - Optional keyword on `open_docx`, `open_pptx`, `open_xlsx` and their session constructors.
+- **Default**
+  - `None`: direct parser sessions do not enable estimated-memory admission.
+- **Parsing**
+  - A positive integer enables a session-local package reservation and growth
+    checks. The estimate uses package part sizes and completed format fragments;
+    it is not process RSS or an allocation guarantee. The algorithm and host
+    aggregate ownership are defined in [tool ownership](../agent-tools/ownership.md).
+  - Failure closes the package and discards the partial parsed value. The same
+    session cannot be re-entered; create a new session to retry.
+- **Diagnostics**
+  - Invalid limits: `ValueError`. Estimated excess:
+    `ooxml_llm_core.ParseMemoryLimitError`, separate from invalid-package errors.
+
+### `estimated_memory_bytes`
+
+- **Output**
+  - Integer estimate for an open session; zero when memory admission was disabled.
+- **Parsing**
+  - Reports the larger of source reservation and observed retained-data growth.
+    It does not measure operating-system memory or add a process-wide cache.
+- **Diagnostics**
+  - Use before enter or after close: `RuntimeError`.
+
 ### `render`
 
 - **Output**

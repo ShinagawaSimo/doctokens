@@ -12,6 +12,7 @@ from typing import IO
 from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.limits import PackageLimits
+from ooxml_llm_core.memory import SessionMemoryBudget
 from ooxml_llm_core.models import ContentTypes, RelationshipRecord, ZipEntryInfo
 from ooxml_llm_core.xml import NS, parse_xml, parse_xml_stream
 
@@ -31,9 +32,10 @@ class PackageError(RuntimeError):
 class PackageReader:
     """On-demand OPC ZIP reader. Never extracts entries to disk."""
 
-    def __init__(self, source: str | Path | bytes, limits: PackageLimits) -> None:
+    def __init__(self, source: str | Path | bytes, limits: PackageLimits, *, memory_limit_bytes: int | None = None) -> None:
         self._source = source
         self.limits = limits
+        self.memory_budget = SessionMemoryBudget(memory_limit_bytes) if memory_limit_bytes is not None else None
         self._zip: zipfile.ZipFile | None = None
         self._entry_index: list[ZipEntryInfo] | None = None
         self._names: set[str] = set()
@@ -138,6 +140,8 @@ class PackageReader:
                 }
             )
 
+        if self.memory_budget is not None:
+            self.memory_budget.admit(entry_index)
         self._entry_index = entry_index
         self._names = names
         return entry_index

@@ -43,7 +43,7 @@ class PackageReader(_BasePackageReader):
     ``validate()`` to require ``ppt/presentation.xml``.
     """
 
-    def __init__(self, source: str | Path | bytes, options: ParseOptions) -> None:
+    def __init__(self, source: str | Path | bytes, options: ParseOptions, *, memory_limit_bytes: int | None = None) -> None:
         self.options = options
         super().__init__(
             source,
@@ -52,6 +52,7 @@ class PackageReader(_BasePackageReader):
                 max_entry_uncompressed_bytes=options.max_entry_uncompressed_bytes,
                 max_total_uncompressed_bytes=options.max_total_uncompressed_bytes,
             ),
+            memory_limit_bytes=memory_limit_bytes,
         )
 
     def __enter__(self) -> Self:

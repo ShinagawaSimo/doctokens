@@ -24,7 +24,7 @@ with ToolRuntime(RuntimeConfig(allowed_roots=(Path("documents"),))) as runtime:
 
 `list_tools()` returns `ToolDefinition` objects with `name`, `description`, `input_schema`, and `output_schema`. The schemas are standard JSON Schema; provider-specific tool wrappers belong to the calling application.
 
-`execute(name, arguments)` returns `ToolResponse`. `aexecute(name, arguments)` runs the same operation in a bounded thread executor. Runtime operations serialize access to owned snapshots and sessions; concurrent calls cannot close a session being read.
+`execute(name, arguments)` returns `ToolResponse`. `aexecute(name, arguments)` runs ordinary reads in a bounded thread executor. Operations on the same snapshot are serialized; different documents can progress independently. Short status/result/release operations bypass parser workers. Both entry points accept optional keyword `control: ParseControl` for cooperative cancellation and phase progress; see [execution control](../common/execution.md). Active readers are protected from release and eviction.
 
 `ToolResponse.attachments` contains original `bytes` and MIME types for hosts to project into native model messages. `to_dict()` base64-encodes these attachments. MCP uses native content blocks instead.
 

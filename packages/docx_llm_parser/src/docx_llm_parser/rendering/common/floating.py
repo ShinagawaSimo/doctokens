@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import cast
 
+from ooxml_llm_core.execution import checkpoint
+
 from ...core.models import Block, InlineContainer, InlineObject, ParsedDocument, Run
 from .pages import iter_block_page_segments
 
@@ -21,6 +23,7 @@ def iter_flow_page_blocks(document: ParsedDocument) -> Iterator[tuple[int, Block
     """Rejoin selected fragments of an anchored story before rendering its prose."""
     index = 0
     while index < len(document.blocks):
+        checkpoint("rendering DOCX blocks")
         block = document.blocks[index]
         index += 1
         if block["type"] == "table":

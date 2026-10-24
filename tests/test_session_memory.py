@@ -113,7 +113,14 @@ def test_concurrent_full_session_admissions_share_one_total_budget() -> None:
         ThreadPoolExecutor(max_workers=2) as pool,
     ):
         futures = [pool.submit(runtime.execute, "inspect_document", {"path": path, "full_parse": True}) for path in PATHS]
-        assert all(f.result().error is None for f in futures)
+        results = [f.result() for f in futures]
+        assert any(result.error is None for result in results)
+        assert all(result.error is None or result.error["code"] == "SESSION_MEMORY_LIMIT" for result in results)
+        # A concurrent active owner cannot be evicted. Once it finishes, a
+        # rejected request can retry against the same immutable source.
+        for path, result in zip(PATHS, results, strict=True):
+            if result.error is not None:
+                assert runtime.execute("inspect_document", {"path": path, "full_parse": True}).error is None
         info = runtime.execute("get_runtime_info", {}).data
         assert info["sessions"] == 1 and info["session_estimated_bytes"] <= total
 

@@ -8,9 +8,10 @@ import zipfile
 from io import BytesIO
 from pathlib import Path
 from types import TracebackType
-from typing import IO
+from typing import IO, cast
 from xml.etree import ElementTree as ET
 
+from ooxml_llm_core.execution import CheckedReader, checkpoint, current_control
 from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.memory import SessionMemoryBudget
 from ooxml_llm_core.models import ContentTypes, RelationshipRecord, ZipEntryInfo
@@ -92,6 +93,7 @@ class PackageReader:
         return name in self._names
 
     def read_entry_index(self) -> list[ZipEntryInfo]:
+        checkpoint("indexing package")
         if self._entry_index is not None:
             return self._entry_index
 
@@ -208,6 +210,7 @@ class PackageReader:
         return records
 
     def read_part(self, name: str) -> bytes:
+        checkpoint("reading package part")
         """Read a small package part, caching bounded immutable bytes per session."""
         normalized = self._normalized_name(name)
         cached = self._part_cache.get(normalized)
@@ -221,6 +224,7 @@ class PackageReader:
         return data
 
     def read_xml(self, name: str) -> ET.Element:
+        checkpoint("parsing package XML")
         """Parse one package XML part from the bounded bytes cache when eligible."""
         normalized = self._normalized_name(name)
         self._ensure_index()
@@ -232,11 +236,13 @@ class PackageReader:
         return parse_xml(self.read_part(normalized))
 
     def open_entry(self, name: str) -> IO[bytes]:
+        checkpoint("opening package part")
         self._ensure_index()
         normalized = self._normalized_name(name)
         if normalized not in self._names:
             raise PackageError(f"Missing zip entry: {normalized}")
-        return self.zip_file.open(normalized, "r")
+        stream = self.zip_file.open(normalized, "r")
+        return CheckedReader(cast(zipfile.ZipExtFile, stream)) if current_control() is not None else stream
 
     @staticmethod
     def _normalized_name(name: str) -> str:

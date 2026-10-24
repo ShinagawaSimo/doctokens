@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from _thread import RLock
 from collections.abc import Collection
 from typing import TYPE_CHECKING
 
 from docx_llm_parser import ParseOptions as DocxOptions
 from docx_llm_parser import open_docx
+from ooxml_llm_core.execution import checkpoint
 from ooxml_llm_core.limits import PackageLimits
 from ooxml_llm_core.memory import ParseMemoryLimitError, estimate_session_bytes
 from ooxml_llm_core.package import PackageReader
@@ -55,40 +57,67 @@ def _memory_error() -> ToolError:
     )
 
 
-def admit_session(document: Document, documents: Collection[Document], config: RuntimeConfig) -> Session:
+def admit_session(
+    document: Document, documents: Collection[Document], config: RuntimeConfig, lock: RLock | None = None
+) -> Session:
+    gate = lock or RLock()
     required = _reservation(document)
     maximum = min(config.max_session_memory_bytes, config.max_session_total_memory_bytes)
     if required > maximum:
         raise _memory_error()
-    sessions = [d for d in documents if d.session is not None]
-    candidates = sorted((d for d in sessions if not d.active), key=lambda d: d.session_touched)
-    while len(sessions) >= config.max_sessions or session_bytes(documents) + required > config.max_session_total_memory_bytes:
-        if not candidates:
-            if len(sessions) >= config.max_sessions:
-                raise ToolError("CAPACITY_EXCEEDED", "all cached sessions are in use")
-            raise _memory_error()
-        victim = candidates.pop(0)
-        victim.close_session()
-        sessions.remove(victim)
-    while True:
-        allowance = min(maximum, config.max_session_total_memory_bytes - session_bytes(documents))
-        opened = _open(document, allowance)
+    for attempt in range(2):
+        with gate:
+            checkpoint("admitting parser session")
+            sessions = [d for d in documents if d.session is not None or d.session_loading]
+            candidates = sorted((d for d in sessions if not d.active and not d.session_loading), key=lambda d: d.session_touched)
+            while (
+                len(sessions) >= config.max_sessions
+                or session_bytes(documents) + required > config.max_session_total_memory_bytes
+            ):
+                if not candidates:
+                    if len(sessions) >= config.max_sessions:
+                        raise ToolError("CAPACITY_EXCEEDED", "all cached sessions are in use")
+                    raise _memory_error()
+                victim = candidates.pop(0)
+                victim.close_session()
+                sessions.remove(victim)
+            allowance = min(maximum, config.max_session_total_memory_bytes - session_bytes(documents))
+            # Reserve growth capacity before leaving the lock, so two concurrent
+            # parses cannot both spend the same aggregate allowance.
+            document.session_memory_bytes = allowance
+            document.session_loading = True
+        opened: Session | None = None
         try:
+            opened = _open(document, allowance)
             opened.__enter__()
             estimated = max(required, opened.estimated_memory_bytes)
-        except ParseMemoryLimitError as exc:
-            opened.close()
-            # Growth can exceed the source-size reservation. Reclaim remaining
-            # idle owners before one retry with the largest available allowance.
-            if candidates and allowance < maximum:
-                for victim in candidates:
-                    victim.close_session()
-                candidates.clear()
+            if estimated > allowance:
+                raise ParseMemoryLimitError("session growth exceeds reserved capacity")
+            checkpoint("parser session ready")
+        except BaseException as exc:
+            if opened is not None:
+                opened.close()
+            with gate:
+                document.session_memory_bytes = 0
+                document.session_loading = False
+                retry = isinstance(exc, ParseMemoryLimitError) and attempt == 0 and allowance < maximum
+                victims = sorted(
+                    (d for d in documents if (d.session is not None or d.session_loading) and not d.active and d is not document),
+                    key=lambda d: d.session_touched,
+                )
+                if retry and victims:
+                    for victim in victims:
+                        victim.close_session()
+                else:
+                    retry = False
+            if retry:
                 continue
-            raise _memory_error() from exc
-        except BaseException:
-            opened.close()
+            if isinstance(exc, ParseMemoryLimitError):
+                raise _memory_error() from exc
             raise
-        document.session_memory_bytes = estimated
-        document.session = opened
+        with gate:
+            document.session = opened
+            document.session_memory_bytes = estimated
+            document.session_loading = False
         return opened
+    raise AssertionError("unreachable admission retry")

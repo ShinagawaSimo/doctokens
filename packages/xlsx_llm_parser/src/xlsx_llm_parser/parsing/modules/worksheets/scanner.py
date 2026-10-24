@@ -7,6 +7,7 @@ from dataclasses import replace
 from functools import partial
 from xml.etree import ElementTree as ET
 
+from ooxml_llm_core.execution import checkpoint
 from ooxml_llm_core.models import ParseWarning, RelationshipRecord
 from ooxml_llm_core.package import PackageError, PackageReader
 from ooxml_llm_core.xml import iterparse
@@ -92,6 +93,7 @@ class WorksheetScanner:
             for _event, element in iterparse(stream, events=("end",)):
                 saw_root = True
                 if element.tag == _ROW:
+                    checkpoint("reading worksheet rows")
                     attrs = _row_attrs(element)
                     number = attrs.number or previous_row + 1
                     ordered_rows = ordered_rows and number > previous_row
@@ -184,17 +186,19 @@ class WorksheetScanner:
                     working.data_tables.append(read_data_table(formula, ref))
             if cells is None or not self.plan.retain_cells:
                 continue
-            if self.plan.formula_only and formula is None:
-                col, number = parse_ref(ref)
-                if not any(
+            col, number = parse_ref(ref)
+            if (
+                self.plan.formula_only
+                and formula is None
+                and not any(
                     table.bounds is not None
                     and table.bounds[0] <= col <= table.bounds[2]
                     and table.bounds[1] <= attrs.number <= table.bounds[3]
                     for table in working.data_tables
-                ):
-                    continue
+                )
+            ):
+                continue
             if self.cell_window is not None or self.columns is not None:
-                col, number = parse_ref(ref)
                 if self.cell_window is not None:
                     left, top, right, bottom = self.cell_window
                     if not (left <= col <= right and top <= number <= bottom):
@@ -205,7 +209,16 @@ class WorksheetScanner:
             else:
                 has_position = True
             cell = self._parse_cell(
-                element, attrs, self.shared_strings, self.rich_text_map, self.format_index, ref, self.rich_values
+                element,
+                attrs,
+                self.shared_strings,
+                self.rich_text_map,
+                self.format_index,
+                ref,
+                self.rich_values,
+                coordinates=(col, number),
+                formula_element=formula,
+                decoded=True,
             )
             cells.append(cell)
             if self.row_sink is None:

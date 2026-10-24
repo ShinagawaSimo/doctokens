@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
+from ooxml_llm_core.execution import checkpoint
+
 from ....core.constants import _TAG_W_PARAGRAPH, _TAG_W_TABLE, first_child, local_name
 from ....core.models import Block, ContentControl
 from ....ooxml.content_controls import parse_content_control
@@ -34,6 +36,8 @@ def read_blocks(owner: DocumentBodyParser) -> list[Block]:
             direct_body_child = (
                 body_depth is not None and len(stack) == body_depth + 1 and len(stack) >= 2 and stack[-2] == "body"
             )
+            if direct_body_child:
+                checkpoint("reading DOCX body")
             if direct_body_child and lname == "p":
                 # Only handle paragraphs that are direct children of body, so table cell content is not hoisted twice.
                 block = owner.parse_paragraph(elem, "word/document.xml")

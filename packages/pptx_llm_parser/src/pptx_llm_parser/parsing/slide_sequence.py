@@ -192,8 +192,11 @@ class _SlideSequence:
         return refs
 
     def iter_results(self, *, start_slide: int = 1) -> Generator[_ParsedSlide, None, None]:
+        from ooxml_llm_core.execution import checkpoint
+
         slide_number = 0
         for ref in self._refs:
+            checkpoint("reading PPTX slides")
             try:
                 slide_root = self._read_slide_xml(ref.part)
             except ET.ParseError as exc:

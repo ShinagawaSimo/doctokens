@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ooxml_llm_core.execution import checkpoint
+
 from ._query_columns import (
     _aggregation_columns,
     _resolve_aggregates,
@@ -57,6 +59,7 @@ class QueryPipeline:
         self.required_columns = frozenset(column["col"] for column in columns if column["key"] in needed)
 
     def consume(self, row_number: int, cells: list[Cell]) -> bool:
+        checkpoint("querying saved rows")
         if self.complete:
             return False
         row = {
@@ -83,6 +86,7 @@ class QueryPipeline:
         return not self.complete
 
     def finish(self) -> tuple[list[dict[str, object]], list[QueryColumn]]:
+        checkpoint("finalizing query")
         rows = list(self.groups.values()) if self.grouping else self.rows
         if self.grouping:
             for row in rows:
@@ -94,4 +98,5 @@ class QueryPipeline:
             rows = _apply_order_by(rows, _resolve_order_specs(self.order_by, self.columns))
         if self.limit is not None:
             rows = rows[: self.limit]
+        checkpoint("query ready")
         return rows, self.columns

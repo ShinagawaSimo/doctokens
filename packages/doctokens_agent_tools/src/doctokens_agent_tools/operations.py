@@ -18,7 +18,6 @@ from xlsx_llm_parser import (
     XlsxReadSession,
     XlsxResourceCatalog,
     find_xlsx_cells,
-    find_xlsx_text,
     inspect_xlsx,
     parse_xlsx,
     query_xlsx,
@@ -42,12 +41,14 @@ from .schemas import (
     XlsxReadArgs,
     XlsxResourceArgs,
 )
+from .search_cache import SearchCache
 
 
 class Operations:
-    def __init__(self, documents: DocumentStore, presenter: Presenter) -> None:
+    def __init__(self, documents: DocumentStore, presenter: Presenter, searches: SearchCache) -> None:
         self.documents = documents
         self.presenter = presenter
+        self.searches = searches
 
     def inspect(self, document: Document, *, full_parse: bool = False) -> dict[str, Any]:
         if isinstance(document.options, XlsxOptions) and not full_parse:
@@ -214,10 +215,11 @@ class Operations:
         if args.sheets is not None and document.format != "xlsx":
             raise ToolError("INVALID_ARGUMENT", "sheets is supported only for XLSX")
         options = TextSearchOptions(args.case_sensitive, args.offset, args.limit, args.context_before, args.context_after)
-        if isinstance(document.options, XlsxOptions) and document.session is None:
-            result = find_xlsx_text(
-                document.snapshot, args.query, options=document.options, search_options=options, sheets=args.sheets
-            )
+        if isinstance(document.options, XlsxOptions):
+            if isinstance(document.session, XlsxReadSession):
+                result = document.session.find_text(args.query, options=options, sheets=args.sheets)
+            else:
+                result = self.searches.search(document, args.query, options, args.sheets)
         elif isinstance((session := self.documents.session(document)), DocxReadSession):
             result = session.find_text(args.query, options=options, include_headers_footers=args.include_headers_footers)
         elif isinstance(session, PptxReadSession):

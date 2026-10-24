@@ -22,6 +22,7 @@ Package access, serialization, public result types, and parsers shared by more t
 - [Reports and diagnostics](diagnostics.md)
 - [ResourceDescriptor](resource.md)
 - [Sessions](session.md)
+- [Execution control](execution.md)
 - [Bounded text search](text-search.md)
 - [OCR](ocr.md)
 

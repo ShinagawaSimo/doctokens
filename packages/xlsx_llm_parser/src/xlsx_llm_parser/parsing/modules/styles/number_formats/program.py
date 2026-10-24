@@ -5,7 +5,8 @@ from __future__ import annotations
 import re
 
 from .codes import _date_scan_text, resolve_format
-from .date_context import DateContext, date_context
+from .date_context import date_context
+from .date_program import DateProgram, compile_date
 from .sections import SectionDirectives, _condition_matches, _section_directives, _split_format_sections
 
 _COLORS = {
@@ -29,7 +30,7 @@ class FormatProgram:
         self.conditional = any(self.directives[section].conditions for section in self.sections[:3])
         self._classifications: dict[str, tuple[bool, bool]] = {}
         self._syntax: dict[str, str] = {}
-        self._dates: dict[str, DateContext] = {}
+        self._dates: dict[str, DateProgram] = {}
         self.colors = {
             section: next(
                 (
@@ -68,9 +69,9 @@ class FormatProgram:
             self._syntax[section] = _date_scan_text(section)
         return self._syntax[section]
 
-    def date(self, section: str) -> DateContext:
+    def date(self, section: str) -> DateProgram:
         if section not in self._dates:
-            self._dates[section] = date_context(section, self.locale)
+            self._dates[section] = compile_date(date_context(section, self.locale))
         return self._dates[section]
 
     def section_directives(self, section: str) -> SectionDirectives:

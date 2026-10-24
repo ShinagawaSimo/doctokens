@@ -6,9 +6,11 @@ import argparse
 import asyncio
 import logging
 import re
+from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ooxml_llm_core.execution import ParseControl
 from pydantic import AnyUrl
 
 from .config import RuntimeConfig
@@ -54,7 +56,39 @@ def build_server(runtime: ToolRuntime) -> Server[Any, Any]:
         ]
 
     async def call_tool(name: str, arguments: dict[str, Any]) -> types.CallToolResult:
-        response = await runtime.aexecute(name, arguments)
+        context = server.request_context
+        token = context.meta.progressToken if context.meta is not None else None
+        loop = asyncio.get_running_loop()
+        pending: set[asyncio.Task[None]] = set()
+
+        async def send_progress(progress: float, stage: str) -> None:
+            try:
+                assert token is not None
+                await context.session.send_progress_notification(token, progress, message=stage)
+            except Exception:
+                logging.getLogger(__name__).debug("progress delivery ended", exc_info=True)
+
+        def progress(value: float, stage: str) -> None:
+            def schedule() -> None:
+                if control.cancelled.is_set():
+                    return
+                task = asyncio.create_task(send_progress(value, stage))
+                pending.add(task)
+                task.add_done_callback(pending.discard)
+
+            if not loop.is_closed():
+                with suppress(RuntimeError):
+                    loop.call_soon_threadsafe(schedule)
+
+        control = ParseControl(progress if token is not None else None)
+        try:
+            response = await runtime.aexecute(name, arguments, control=control)
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+        finally:
+            if control.cancelled.is_set():
+                for task in pending:
+                    task.cancel()
         return project_response(response, runtime.config.mcp_output_mode)
 
     async def list_resources() -> list[types.Resource]:
@@ -94,6 +128,9 @@ def main() -> None:
     parser.add_argument("--max-session-memory-bytes", type=int, default=256 * 1024 * 1024)
     parser.add_argument("--max-session-total-memory-bytes", type=int, default=512 * 1024 * 1024)
     parser.add_argument("--mcp-output-mode", choices=("compatible", "compact"), default="compatible")
+    parser.add_argument("--max-search-bytes", type=int, default=32 * 1024 * 1024)
+    parser.add_argument("--max-search-states", type=int, default=8)
+    parser.add_argument("--search-idle-seconds", type=float, default=600)
     parser.add_argument("--max-documents", type=int, default=32)
     parser.add_argument("--idle-seconds", type=float, default=600)
     parser.add_argument("--result-idle-seconds", type=float, default=600)
@@ -111,6 +148,9 @@ def main() -> None:
             max_session_memory_bytes=args.max_session_memory_bytes,
             max_session_total_memory_bytes=args.max_session_total_memory_bytes,
             mcp_output_mode=args.mcp_output_mode,
+            max_search_bytes=args.max_search_bytes,
+            max_search_states=args.max_search_states,
+            search_idle_seconds=args.search_idle_seconds,
             max_documents=args.max_documents,
             idle_seconds=args.idle_seconds,
             result_idle_seconds=args.result_idle_seconds,

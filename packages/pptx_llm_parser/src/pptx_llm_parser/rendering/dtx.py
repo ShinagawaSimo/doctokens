@@ -6,6 +6,7 @@ from collections.abc import Iterator, Mapping
 from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.doctokens_xml import append, element, serialize, text
+from ooxml_llm_core.execution import checkpoint
 
 from ..core.models import (
     ChartRecord,
@@ -31,6 +32,7 @@ def iter_dtx(presentation: ParsedPresentation, density: str) -> Iterator[str]:
     smartarts = {item["id"]: item for item in presentation.smartarts}
     charts = {item["id"]: item for item in presentation.charts}
     for slide in presentation.slides:
+        checkpoint("rendering PPTX slides")
         _append_slide(root, slide, density, smartarts, charts, presentation.ocr_results)
     _append_comments(root, presentation.comments)
     yield serialize(root)
@@ -65,6 +67,7 @@ def _append_slide(
         assert background is not None
         _append_ocr(node, background.get("assetId"), ocr_results)
     for shape in slide["shapes"]:
+        checkpoint("rendering PPTX shapes")
         _append_shape(node, shape, density, smartarts, charts, ocr_results)
     if slide["notes"]:
         append(node, "speaker-notes", slide["notes"])

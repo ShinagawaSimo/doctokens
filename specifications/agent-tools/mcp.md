@@ -16,6 +16,8 @@ The equivalent module command is `python -m doctokens_agent_tools.mcp --root ...
 `compatible` is the default. `--max-session-memory-bytes` and
 `--max-session-total-memory-bytes` configure the estimated session budgets, with
 defaults 268435456 and 536870912. Host configuration is fixed until restart.
+`--max-search-bytes`, `--max-search-states` and `--search-idle-seconds` configure
+resumable XLSX text search with defaults 33554432, 8 and 600.
 
 ## Protocol mapping
 
@@ -58,6 +60,18 @@ defaults 268435456 and 536870912. Host configuration is fixed until restart.
     use explicit resources/read or the existing read_result fallback.
 - **Ownership**
   - One server connection owns one runtime. EOF, shutdown, or interruption releases its sessions and temporary snapshots. Logs go to stderr; stdout contains protocol messages only.
+- **Cancellation and progress**
+  - MCP cancellation signals a request-local ParseControl, including when its
+    handler is cancelled while awaiting an executor future. The worker checks
+    package I/O, worksheet rows, DOCX blocks, slides, matching/query/render loops
+    and result admission, then unwinds owned resources. Completed caches are
+    preserved; no partial session is committed. An already completed session may
+    survive a later cancelled rendering request.
+  - Send progress only when the request supplies a progressToken. Notifications
+    report throttled phases and a monotonically increasing sequence, at most once
+    per 250 ms; they have no invented percentage/total and never enter body text.
+    No progress token means no progress notifications. External OCR calls and
+    native operations without checkpoints remain non-preemptible until return.
 - **Transport**
   - The initial implementation supports stdio. HTTP, remote uploads, authentication, and multi-tenant isolation are outside this version.
 

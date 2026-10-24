@@ -32,6 +32,9 @@ class RuntimeConfig:
     max_session_memory_bytes: int = 256 * 1024 * 1024
     max_session_total_memory_bytes: int = 512 * 1024 * 1024
     mcp_output_mode: Literal["compatible", "compact"] = "compatible"
+    max_search_bytes: int = 32 * 1024 * 1024
+    max_search_states: int = 8
+    search_idle_seconds: float = 600
 
     def __post_init__(self) -> None:
         if not self.allowed_roots:
@@ -53,11 +56,13 @@ class RuntimeConfig:
             "max_snapshot_bytes",
             "max_snapshot_total_bytes",
             "workers",
+            "max_search_bytes",
+            "max_search_states",
         ):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
-        for name in ("idle_seconds", "result_idle_seconds"):
+        for name in ("idle_seconds", "result_idle_seconds", "search_idle_seconds"):
             value = getattr(self, name)
             if isinstance(value, bool) or not math.isfinite(value) or value <= 0:
                 raise ValueError(f"{name} must be finite and positive")

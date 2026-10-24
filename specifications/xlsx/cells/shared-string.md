@@ -19,6 +19,9 @@ The shared-string index is the source si ordinal.
 
 - **Parsing**
   - If direct t exists, use its text only. Otherwise concatenate direct r/t texts in order. Missing part → empty catalog.
+  - Decode direct si children incrementally; clear and detach completed XML
+    children. Retain the decoded catalog and requested rich runs, rather than
+    the complete sharedStrings XML tree. Source ordinal and whitespace are unchanged.
 
 ### `index`
 

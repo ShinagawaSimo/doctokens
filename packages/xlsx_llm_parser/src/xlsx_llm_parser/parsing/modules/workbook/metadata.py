@@ -8,9 +8,9 @@ from ooxml_llm_core.package import PackageReader
 
 from ....models import (
     DefinedName,
-    RichTextRun,
     SheetInfo,
 )
+from .shared_strings import _parse_shared_strings as _parse_shared_strings
 
 # SpreadsheetML main namespace
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -137,55 +137,3 @@ def _external_link_targets(ref_text: str) -> list[str]:
 
 def _looks_like_external_reference(target: str) -> bool:
     return target.lower().endswith(_EXTERNAL_WORKBOOK_EXTENSIONS)
-
-
-def _parse_shared_strings(
-    package_reader: PackageReader,
-    *,
-    include_rich_text: bool,
-) -> tuple[list[str], dict[int, list[RichTextRun]]]:
-    """Parse xl/sharedStrings.xml into plain strings and rich-text run info.
-
-    Returns (strings, rich_map) where rich_map maps SST index to formatted runs.
-    """
-    if not package_reader.exists("xl/sharedStrings.xml"):
-        return [], {}
-
-    shared_strings_root = package_reader.read_xml("xl/sharedStrings.xml")
-
-    strings: list[str] = []
-    rich_map: dict[int, list[RichTextRun]] = {}
-
-    for shared_string_index, shared_string_element in enumerate(shared_strings_root.findall(f"{{{NS_S}}}si")):
-        text_element = shared_string_element.find(f"{{{NS_S}}}t")
-        if text_element is not None:
-            strings.append(text_element.text or "")
-        else:
-            text_parts: list[str] = []
-            rich_text_runs: list[RichTextRun] = []
-            for run_element in shared_string_element.findall(f"{{{NS_S}}}r"):
-                run_text_element = run_element.find(f"{{{NS_S}}}t")
-                run_text = run_text_element.text if run_text_element is not None and run_text_element.text else ""
-                text_parts.append(run_text)
-                run_properties = run_element.find(f"{{{NS_S}}}rPr") if include_rich_text else None
-                if run_properties is not None:
-                    rich_text_run: RichTextRun = {"text": run_text}
-                    if run_properties.find(f"{{{NS_S}}}b") is not None:
-                        rich_text_run["bold"] = True
-                    if run_properties.find(f"{{{NS_S}}}i") is not None:
-                        rich_text_run["italic"] = True
-                    if run_properties.find(f"{{{NS_S}}}u") is not None:
-                        rich_text_run["underline"] = True
-                    color = run_properties.find(f"{{{NS_S}}}color")
-                    if color is not None:
-                        rgb = color.get("rgb", "")
-                        if rgb and rgb != "00000000":
-                            rich_text_run["color"] = f"#{rgb[2:]}" if len(rgb) == 8 else f"#{rgb}"
-                    rich_text_runs.append(rich_text_run)
-                else:
-                    rich_text_runs.append({"text": run_text})
-            strings.append("".join(text_parts))
-            if include_rich_text and any(len(run) > 1 for run in rich_text_runs):
-                rich_map[shared_string_index] = rich_text_runs
-
-    return strings, rich_map

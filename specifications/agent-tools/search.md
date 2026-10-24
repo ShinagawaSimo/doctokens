@@ -58,10 +58,11 @@ argument and no requirement to inspect first.
   - `null`; XLSX searches all sheets.
 - **Processing**
   - XLSX-only exact names. An empty list searches no sheets; unknown names are
-    rejected. Before a full session exists, explicit sheets use a structural
-    parse restricted to those sheets, without opening a full workbook session.
-    Other searches use the pinned format session. Parsing is not promised to
-    stop at the first returned hit.
+    rejected. Before a full session exists, XLSX uses a resumable display-text
+    source with a runtime-owned [bounded search cache](ownership.md#search-state),
+    including when all sheets are selected. A prior full XLSX session and DOCX/PPTX
+    searches use the pinned format session. Metadata preflight still reads the
+    selected sheet declarations; first-hit lookup is not random XML access.
   - This entry searches displayed cell text. Formula, comment, hyperlink and
     defined-name searches keep the existing `find_xlsx_cells` contract.
 

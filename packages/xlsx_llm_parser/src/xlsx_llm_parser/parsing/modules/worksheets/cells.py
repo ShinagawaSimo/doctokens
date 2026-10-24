@@ -53,14 +53,19 @@ def _parse_cell(
     include_formulas: bool,
     include_cell_controls: bool,
     include_display_text: bool = True,
+    coordinates: tuple[int, int] | None = None,
+    formula_element: ET.Element | None = None,
+    decoded: bool = False,
 ) -> Cell:
-    col, row = parse_ref(ref)
+    col, row = coordinates if coordinates is not None else parse_ref(ref)
+    style_index = _style_index(cell_elem)
+    formula_element = formula_element if decoded else cell_elem.find(f"{{{NS_S}}}f")
     cell_type = cell_elem.get("t", "n")
     text, value_elem = _cell_text(cell_elem, cell_type, shared_strings) if include_display_text else ("", None)
-    formula, formula_meta = _formula_metadata(cell_elem) if include_formulas else (None, {})
+    formula, formula_meta = _formula_metadata(formula_element) if include_formulas else (None, {})
     source_text = text
     if include_display_text:
-        text = _formatted_text(cell_elem, cell_type, text, format_index)
+        text = _formatted_text(style_index, cell_type, text, format_index)
 
     cell: Cell = {"ref": ref, "row": row_attrs.number or row, "col": col, "text": text}
     if (
@@ -70,7 +75,7 @@ def _parse_cell(
         and not any(child.tag in {f"{{{NS_S}}}is", f"{{{NS_S}}}f"} for child in cell_elem)
         and cell_elem.get("vm") is None
         and cell_elem.get("cm") is None
-        and (format_index is not None and not format_index.preserves_blank(_style_index(cell_elem)))
+        and (format_index is not None and not format_index.preserves_blank(style_index))
         and not format_index.preserves_blank(row_attrs.style)
     ):
         cell["blankCandidate"] = True
@@ -78,27 +83,23 @@ def _parse_cell(
     if include_rich_text:
         _attach_rich_text(cell, cell_type, value_elem, rich_text_map)
     if include_display_text and cell_type in {"s", "str", "inlineStr"} and format_index is not None:
-        _format_text_cell(cell, source_text, format_index.text_format_parts(_style_index(cell_elem)))
-    if include_style_index and cell_elem.find(f"{{{NS_S}}}f") is None:
-        _attach_formula_bar_value(cell, cell_elem, cell_type, source_text, format_index)
+        _format_text_cell(cell, source_text, format_index.text_format_parts(style_index))
+    if include_style_index and formula_element is None:
+        _attach_formula_bar_value(cell, style_index, cell_type, source_text, format_index)
     if include_semantic_style and format_index is not None and cell_type in {"n", "s", "str", "inlineStr"}:
-        color = format_index.number_format_color(_style_index(cell_elem), source_text, is_text=cell_type != "n")
+        color = format_index.number_format_color(style_index, source_text, is_text=cell_type != "n")
         if color:
             cell["numberFormatColor"] = color
-    if include_style_index:
-        _attach_style_index(cell, cell_elem)
-    if include_semantic_style:
-        _attach_style(cell, cell_elem)
+    if (include_style_index or include_semantic_style) and style_index is not None:
+        cell["style"] = style_index
     if rich_values is not None and (rich_value := rich_values.resolve(cell_elem.get("vm"))):
         cell["richValue"] = rich_value
-    if include_cell_controls and format_index is not None:
-        style_index = cell.get("style") if include_semantic_style else _style_index(cell_elem)
-        if control := format_index.cell_control(style_index):
-            control_data = cast(CellControl, dict(control))
-            cell["cellControl"] = control_data
-            if control.get("kind") == "checkbox":
-                control_data["value"] = text
-                control_data["state"] = {"TRUE": "true", "FALSE": "false", "": "empty"}.get(text, "empty")
+    if include_cell_controls and format_index is not None and (control := format_index.cell_control(style_index)):
+        control_data = cast(CellControl, dict(control))
+        cell["cellControl"] = control_data
+        if control.get("kind") == "checkbox":
+            control_data["value"] = text
+            control_data["state"] = {"TRUE": "true", "FALSE": "false", "": "empty"}.get(text, "empty")
     if formula is not None:
         cell["formula"] = formula
     cell.update(formula_meta)
@@ -129,7 +130,7 @@ def _format_text_cell(cell: Cell, source: str, parts: list[str | None] | None) -
 
 def _attach_formula_bar_value(
     cell: Cell,
-    element: ET.Element,
+    style_index: int | None,
     cell_type: str,
     source: str,
     format_index: FormatIndex | None,
@@ -142,7 +143,7 @@ def _attach_formula_bar_value(
     raw = None
     if cell_type == "n":
         index = format_index if format_index is not None else FormatIndex()
-        raw = index.formula_bar_value(_style_index(element), source)
+        raw = index.formula_bar_value(style_index, source)
     if raw is not None:
         cell["raw"] = cell["text"] if raw == cell["text"] else raw
 
@@ -179,23 +180,21 @@ def _cell_text(
 
 
 def _formatted_text(
-    cell_elem: ET.Element,
+    style_index: int | None,
     cell_type: str,
     text: str,
     format_index: FormatIndex | None,
 ) -> str:
     if format_index is None or cell_type != "n" or not text:
         return text
-    style_str = cell_elem.get("s")
-    if style_str is None:
+    if style_index is None:
         return text
     with suppress(ValueError, IndexError):
-        return format_index.format_value(int(style_str), text)
+        return format_index.format_value(style_index, text)
     return text
 
 
-def _formula_metadata(cell_elem: ET.Element) -> tuple[str | None, Cell]:
-    formula_elem = cell_elem.find(f"{{{NS_S}}}f")
+def _formula_metadata(formula_elem: ET.Element | None) -> tuple[str | None, Cell]:
     if formula_elem is None:
         return None, {}
 
@@ -249,20 +248,3 @@ def _attach_rich_text(
         idx = int(value_elem.text)
         if idx in rich_text_map:
             cell["rich"] = rich_text_map[idx]
-
-
-def _attach_style(cell: Cell, cell_elem: ET.Element) -> None:
-    style_str = cell_elem.get("s")
-    if style_str is None:
-        return
-    with suppress(ValueError):
-        cell["style"] = int(style_str)
-
-
-def _attach_style_index(cell: Cell, cell_elem: ET.Element) -> None:
-    """Keep the cell-XF index without materializing semantic style details."""
-    style_str = cell_elem.get("s")
-    if style_str is None:
-        return
-    with suppress(ValueError):
-        cell["style"] = int(style_str)

@@ -6,15 +6,18 @@ import hashlib
 import tempfile
 import time
 import uuid
+from _thread import RLock
 from collections import OrderedDict
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from threading import Event
 from typing import Any
 
 from docx_llm_parser import DocxReadSession
 from docx_llm_parser import ParseOptions as DocxOptions
+from ooxml_llm_core.execution import checkpoint
 from ooxml_llm_core.models import ResourceDescriptor
 from pptx_llm_parser import ParseOptions as PptxOptions
 from pptx_llm_parser import PptxReadSession
@@ -49,6 +52,8 @@ class Document:
     active: int = 0
     index: dict[str, Any] | None = None
     resource_catalog: tuple[ResourceDescriptor, ...] | None = None
+    operation_lock: RLock = field(default_factory=RLock)
+    session_loading: bool = False
 
     @property
     def format(self) -> str:
@@ -64,11 +69,16 @@ class Document:
 class DocumentStore:
     """Called under the runtime lock; leases protect active snapshots."""
 
-    def __init__(self, config: RuntimeConfig) -> None:
+    def __init__(self, config: RuntimeConfig, lock: RLock | None = None) -> None:
         self.config = config
+        self.lock = lock or RLock()
+        self.before_remove: Callable[[str], None] | None = None
+        self.before_session: Callable[[str], None] | None = None
         self.directory = tempfile.TemporaryDirectory(prefix="doctokens-tools-")
         self.documents: OrderedDict[str, Document] = OrderedDict()
         self.bytes = 0
+        self.pending_bytes = 0
+        self._pending: dict[tuple[Path, tuple[int, int, int], str], Event] = {}
 
     def path(self, value: str) -> Path:
         candidate = Path(value)
@@ -102,7 +112,12 @@ class DocumentStore:
         return removed
 
     def remove(self, identifier: str) -> None:
-        document = self.documents.pop(identifier)
+        document = self.documents[identifier]
+        if document.active:
+            raise ToolError("DOCUMENT_BUSY", "document is being read; cancel or finish the read before releasing it")
+        if self.before_remove is not None:
+            self.before_remove(identifier)
+        self.documents.pop(identifier)
         document.close_session()
         document.snapshot.unlink(missing_ok=True)
         self.bytes -= document.size
@@ -126,25 +141,56 @@ class DocumentStore:
             None,
         )
 
-    def create(self, value: str, options: BaseOptions) -> Document:
+    def create(self, value: str, options: BaseOptions, *, lease: bool = False) -> Document:
         original = self.path(value)
-        fingerprint = self.fingerprint(original)
-        size = fingerprint[0]
-        if size > min(self.config.max_snapshot_bytes, self.config.max_snapshot_total_bytes):
-            raise ToolError("DOCUMENT_TOO_LARGE", "file exceeds the configured snapshot size limit")
+        options_key = _options_key(options)
         selected = parser_options(original.suffix.lower()[1:], options, self.config)
-        while len(self.documents) >= self.config.max_documents or self.bytes + size > self.config.max_snapshot_total_bytes:
-            victim = next((d for d in self.documents.values() if not d.active), None)
-            if victim is None:
-                raise ToolError("CAPACITY_EXCEEDED", "all cached documents are in use")
-            self.remove(victim.id)
+        while True:
+            checkpoint("admitting snapshot")
+            fingerprint = self.fingerprint(original)
+            size = fingerprint[0]
+            key = (original, fingerprint, options_key)
+            with self.lock:
+                existing = next(
+                    (
+                        d
+                        for d in self.documents.values()
+                        if d.original == original and d.fingerprint == fingerprint and d.options_key == options_key
+                    ),
+                    None,
+                )
+                if existing is not None:
+                    existing.touched = time.monotonic()
+                    self.documents.move_to_end(existing.id)
+                    existing.active += int(lease)
+                    return existing
+                pending = self._pending.get(key)
+                if pending is None:
+                    if size > min(self.config.max_snapshot_bytes, self.config.max_snapshot_total_bytes):
+                        raise ToolError("DOCUMENT_TOO_LARGE", "file exceeds the configured snapshot size limit")
+                    while (
+                        len(self.documents) + len(self._pending) >= self.config.max_documents
+                        or self.bytes + self.pending_bytes + size > self.config.max_snapshot_total_bytes
+                    ):
+                        victim = next((d for d in self.documents.values() if not d.active), None)
+                        if victim is None:
+                            raise ToolError("CAPACITY_EXCEEDED", "all cached documents are in use")
+                        self.remove(victim.id)
+                    pending = Event()
+                    self._pending[key] = pending
+                    self.pending_bytes += size
+                    break
+            while not pending.wait(0.05):
+                checkpoint("waiting for snapshot")
         identifier = uuid.uuid4().hex
         snapshot = Path(self.directory.name) / (identifier + original.suffix.lower())
         digest = hashlib.sha256()
         copied = 0
+        committed = False
         try:
             with original.open("rb") as source, snapshot.open("xb") as destination:
                 while chunk := source.read(1024 * 1024):
+                    checkpoint("creating snapshot")
                     copied += len(chunk)
                     if copied > self.config.max_snapshot_bytes or copied > size:
                         raise ToolError("SOURCE_CHANGED", "file changed during snapshot creation; retry")
@@ -152,41 +198,56 @@ class DocumentStore:
                     destination.write(chunk)
             if copied != size or self.fingerprint(original) != fingerprint:
                 raise ToolError("SOURCE_CHANGED", "file changed during snapshot creation; retry")
-        except BaseException:
-            snapshot.unlink(missing_ok=True)
-            raise
-        document = Document(
-            identifier,
-            original,
-            snapshot,
-            digest.hexdigest(),
-            fingerprint,
-            _options_key(options),
-            selected,
-            copied,
-            time.monotonic(),
-        )
-        self.documents[identifier] = document
-        self.bytes += copied
-        return document
+            checkpoint("snapshot ready")
+            document = Document(
+                identifier,
+                original,
+                snapshot,
+                digest.hexdigest(),
+                fingerprint,
+                options_key,
+                selected,
+                copied,
+                time.monotonic(),
+                active=int(lease),
+            )
+            with self.lock:
+                self.documents[identifier] = document
+                self.bytes += copied
+                committed = True
+            return document
+        finally:
+            try:
+                if not committed:
+                    snapshot.unlink(missing_ok=True)
+            finally:
+                with self.lock:
+                    self.pending_bytes -= size
+                    self._pending.pop(key, None)
+                    pending.set()
 
     @contextmanager
     def acquire(self, args: BaseSourceArgs) -> Iterator[Document]:
-        document = self.lookup(args)
+        with self.lock:
+            document = self.lookup(args)
+            if document is not None:
+                document.touched = time.monotonic()
+                self.documents.move_to_end(document.id)
+                document.active += 1
         if document is None:
             assert args.path is not None
-            document = self.create(args.path, args.options)
-        document.touched = time.monotonic()
-        self.documents.move_to_end(document.id)
-        document.active += 1
+            document = self.create(args.path, args.options, lease=True)
         try:
             yield document
         finally:
-            document.active -= 1
+            with self.lock:
+                document.active -= 1
 
     def session(self, document: Document) -> Session:
         if document.session is None:
-            admit_session(document, self.documents.values(), self.config)
+            if self.before_session is not None:
+                self.before_session(document.id)
+            admit_session(document, self.documents.values(), self.config, self.lock)
         document.session_touched = time.monotonic()
         assert document.session is not None
         return document.session

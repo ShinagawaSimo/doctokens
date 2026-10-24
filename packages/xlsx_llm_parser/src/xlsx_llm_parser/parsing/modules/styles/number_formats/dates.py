@@ -8,9 +8,8 @@ from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import NamedTuple
 
-from .codes import _DATE_FIELD_RE, _date_scan_text
 from .date_context import DateContext, date_context
-from .date_words import date_number, month_name, weekday_name
+from .date_program import DateProgram, compile_date
 
 
 class _SerialDateTime(NamedTuple):
@@ -53,26 +52,15 @@ def time_formula_bar_value(value: Decimal, section: str, locale: str) -> str | N
     return f"{hour}:{minute:02d}:{second:02d}"
 
 
-def _format_date_value(serial: float, fmt_code: str, date_1904: bool, locale: str, *, context: DateContext | None = None) -> str:
-    context = context or date_context(fmt_code, locale)
-    fmt_code, locale, dbnum = context
-    fraction = re.search(r"(?i)(?:s+|\[s+\])\.([0#?]+)", _date_scan_text(fmt_code))
-    if fraction:
-        places = len(fraction.group(1))
-        if places > 3:
-            raise ValueError("Sub-millisecond date display is not supported")
-        quantum = Decimal(1).scaleb(-places)
+def _format_date_value(
+    serial: float, fmt_code: str, date_1904: bool, locale: str, *, context: DateContext | DateProgram | None = None
+) -> str:
+    program = context if isinstance(context, DateProgram) else compile_date(context or date_context(fmt_code, locale))
+    if program.fraction_places is not None:
+        quantum = Decimal(1).scaleb(-program.fraction_places)
         serial = float((Decimal(str(serial)) * 86400).quantize(quantum, rounding=ROUND_HALF_UP) / 86400)
-    serial_time = _serial_datetime(serial, date_1904)
-    return _format_datetime_code(
-        fmt_code,
-        serial_time.date,
-        serial_time.seconds,
-        serial_time.milliseconds,
-        serial_time.day,
-        locale,
-        dbnum,
-    )
+    value = _serial_datetime(serial, date_1904)
+    return program.render(value.date, value.seconds, value.milliseconds, value.day)
 
 
 def _serial_datetime(serial: float, date_1904: bool) -> _SerialDateTime:
@@ -117,151 +105,3 @@ def _serial_day_date(serial_day: int, date_1904: bool) -> tuple[int, int, int]:
     ordinal = serial_day if serial_day < _EXCEL_1900_LEAP_SERIAL else serial_day - 1
     value = datetime(1899, 12, 31) + timedelta(days=ordinal)
     return value.year, value.month, value.day
-
-
-def _format_datetime_code(
-    section: str,
-    date: tuple[int, int, int],
-    seconds: int,
-    milliseconds: int,
-    elapsed_days: int,
-    locale: str,
-    dbnum: str | None = None,
-) -> str:
-    year, month, day = date
-    hour, remainder = divmod(seconds, 3600)
-    minute, second = divmod(remainder, 60)
-    syntax = _date_scan_text(section)
-    has_ampm = bool(re.search(r"(?i)AM/PM|A/P", syntax)) or "上午/下午" in syntax
-    hour_value = hour % 12 or 12 if has_ampm else hour
-    total_seconds = elapsed_days * 86400 + seconds
-    output: list[str] = []
-    i = 0
-    previous_field = ""
-    while i < len(section):
-        if section[i] == '"':
-            end = section.find('"', i + 1)
-            if end < 0:
-                end = len(section)
-            output.append(section[i + 1 : end])
-            i = min(len(section), end + 1)
-            continue
-        if section[i] == "\\":
-            if i + 1 < len(section):
-                output.append(section[i + 1])
-                i += 2
-            else:
-                i += 1
-            continue
-        if section.startswith("上午/下午", i):
-            output.append("上午" if hour < 12 else "下午")
-            i += len("上午/下午")
-            previous_field = "ampm"
-            continue
-        marker = re.match(r"(?i)(AM/PM|A/P)", section[i:])
-        if marker:
-            value = marker.group(1)
-            if value.upper() == "A/P":
-                output.append(("上" if hour < 12 else "下") if locale.lower().startswith("zh") else ("A" if hour < 12 else "P"))
-            else:
-                output.append(
-                    "上午"
-                    if hour < 12 and locale.lower().startswith("zh")
-                    else "AM"
-                    if hour < 12
-                    else "下午"
-                    if locale.lower().startswith("zh")
-                    else "PM"
-                )
-            i += len(value)
-            previous_field = "ampm"
-            continue
-        if section[i] == "[":
-            end = section.find("]", i + 1)
-            if end >= 0:
-                token = section[i + 1 : end].lower()
-                if token in {"h", "hh", "m", "mm", "s", "ss"}:
-                    value = {
-                        "h": total_seconds // 3600,
-                        "hh": total_seconds // 3600,
-                        "m": total_seconds // 60,
-                        "mm": total_seconds // 60,
-                        "s": total_seconds,
-                        "ss": total_seconds,
-                    }[token]
-                    output.append(str(value).zfill(2 if token in {"hh", "mm", "ss"} else 1))
-                    i = end + 1
-                    previous_field = token[0]
-                    continue
-        token_match = _DATE_FIELD_RE.match(section, i)
-        if token_match:
-            token = token_match.group(0)
-            lower = token[0].lower()
-            if lower == "y":
-                output.append(date_number(year % 100 if len(token) == 2 else year, token, dbnum))
-                previous_field = "y"
-            elif lower == "a":
-                if locale != "zh-cn":
-                    raise ValueError("Localized weekday token requires zh-CN")
-                output.append(weekday_name(year, month, day, short=len(token) == 3, locale=locale))
-                previous_field = "d"
-            elif lower == "d":
-                if len(token) <= 2:
-                    output.append(date_number(day, token, dbnum))
-                else:
-                    output.append(weekday_name(year, month, day, short=len(token) == 3, locale=locale))
-                previous_field = "d"
-            elif lower == "h":
-                output.append(str(hour_value) if len(token) == 1 else str(hour_value).zfill(2))
-                previous_field = "h"
-            elif lower == "s":
-                output.append(str(second) if len(token) == 1 else str(second).zfill(2))
-                i += len(token)
-                # A fractional-second suffix belongs to the seconds token;
-                # treating its zeroes as literals would always print ``.0``.
-                fraction_match = re.match(r"\.(?:[0#?]+)", section[i:])
-                if fraction_match:
-                    fraction_code = fraction_match.group(0)[1:]
-                    fraction_text = f"{milliseconds:03d}"[: len(fraction_code)]
-                    if fraction_code.endswith("#"):
-                        fraction_text = fraction_text.rstrip("0")
-                    elif fraction_code.endswith("?"):
-                        fraction_text = fraction_text.rstrip("0") + " " * (len(fraction_code) - len(fraction_text.rstrip("0")))
-                    output.append("." + fraction_text)
-                    i += len(fraction_match.group(0))
-                previous_field = "s"
-                continue
-            else:  # m: month unless adjacent to hour/second, where it is minute.
-                after = syntax[i + len(token) :]
-                minute_token = previous_field == "h" or bool(re.match(r"\s*[:.]?\s*[sS]", after))
-                if minute_token:
-                    output.append(str(minute) if len(token) == 1 else str(minute).zfill(2))
-                    previous_field = "n"
-                elif len(token) <= 2:
-                    output.append(date_number(month, token, dbnum))
-                    previous_field = "M"
-                elif len(token) == 3:
-                    output.append(month_name(month, short=True, locale=locale))
-                    previous_field = "M"
-                elif len(token) == 4:
-                    output.append(month_name(month, short=False, locale=locale))
-                    previous_field = "M"
-                else:
-                    output.append(month_name(month, short=True, locale=locale)[0])
-                    previous_field = "M"
-            i += len(token)
-            continue
-        if section[i] == "_":
-            output.append(" ")
-            i += 2 if i + 1 < len(section) else 1
-            continue
-        if section[i] == "*":
-            i += 2 if i + 1 < len(section) else 1
-            continue
-        if section[i] == "[":
-            end = section.find("]", i + 1)
-            i = end + 1 if end >= 0 else i + 1
-            continue
-        output.append(section[i])
-        i += 1
-    return "".join(output)

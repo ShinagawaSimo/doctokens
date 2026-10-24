@@ -12,6 +12,7 @@ from xlsx_llm_parser.query import AggregateSpec, OrderSpec, WhereCondition
 from xlsx_llm_parser.resource_catalog import XlsxResourceCatalog
 from xlsx_llm_parser.search import find_xlsx_cells
 from xlsx_llm_parser.text_search import find_xlsx_text
+from xlsx_llm_parser.text_source import XlsxTextSource
 
 __all__ = [
     "AggregateSpec",
@@ -23,6 +24,7 @@ __all__ = [
     "WhereCondition",
     "XlsxReadSession",
     "XlsxResourceCatalog",
+    "XlsxTextSource",
     "find_xlsx_cells",
     "find_xlsx_text",
     "inspect_xlsx",

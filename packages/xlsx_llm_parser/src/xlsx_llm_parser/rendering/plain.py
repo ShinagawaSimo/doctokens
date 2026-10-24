@@ -6,6 +6,8 @@ from collections.abc import Iterator
 from html import escape as escape_text
 from typing import cast
 
+from ooxml_llm_core.execution import checkpoint
+
 from ..models import Cell, ParsedWorkbook, SheetInfo
 from .window import ReadingWindow, reading_window
 
@@ -20,6 +22,7 @@ def iter_plain(workbook: ParsedWorkbook) -> Iterator[str]:
 def iter_plain_rows(rows: list[list[Cell]], *, hidden_cols: list[tuple[int, int]] | None = None) -> Iterator[str]:
     """Render selected rows as tab-separated visible values."""
     for row in rows:
+        checkpoint("rendering worksheet rows")
         if not row:
             continue
         values = [_cell_text(cell) for cell in row if not _hidden_column(cell["col"], hidden_cols)]

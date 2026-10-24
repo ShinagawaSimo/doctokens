@@ -6,6 +6,8 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
+from .execution import checkpoint
+
 Locator = dict[str, str | int]
 
 
@@ -68,8 +70,12 @@ class TextSearchCollector:
         self.skipped = 0
         self.complete = False
         self.next_offset: int | None = None
+        self._checked = 0
 
     def consume(self, unit: TextUnit) -> bool:
+        self._checked += 1
+        if self._checked % 128 == 1:
+            checkpoint("matching document text")
         if self.complete:
             return False
         if unit.group and unit.group in self.seen:

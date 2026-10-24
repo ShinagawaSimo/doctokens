@@ -160,7 +160,7 @@ with ToolRuntime(RuntimeConfig(allowed_roots=(Path("documents"),))) as runtime:
 
 正文工具默认使用 `structural`。已知目标范围时可直接给出 `path`，需要发现页、幻灯片或工作表目录时再调用 `inspect_document`。例如 `read_xlsx(document_id=..., sheet="Sales", range_spec="101:200")` 读取指定行；默认预览的 `parts[].selection.windows[]` 提供实际范围和可用的 `next_row`。选区规则见[读取规范](specifications/agent-tools/reading.md)。
 
-不知道内容位置时，可调用 `find_document_text(path=..., query="关键词")`，按段落或单元格取得片段和可用于补读的定位。默认最多 20 条，前后各 80 字符；用 `context_before`、`context_after` 扩展上下文，用返回的 `next_offset` 续取命中。XLSX 可用 `sheets=["Sales"]` 限定工作表，避免建立完整工作簿会话；公式、批注、链接与名称仍用 `find_xlsx_cells`。参数与来源见[文字定位](specifications/agent-tools/search.md)。
+不知道内容位置时，可调用 `find_document_text(path=..., query="关键词")`，按段落或单元格取得片段和可用于补读的定位。默认最多 20 条，前后各 80 字符；用 `context_before`、`context_after` 扩展上下文，用返回的 `next_offset` 续取命中。XLSX 搜索使用有界游标缓存，不打开完整工作簿会话；默认 32 MiB、8 个状态，十分钟闲置过期。公式、批注、链接与名称仍用 `find_xlsx_cells`。参数与来源见[文字定位](specifications/agent-tools/search.md)。
 
 大文本首次调用直接返回首块；后续使用 `result_id` 和返回的 `next_offset` 继续读取。直接调用 `ToolRuntime` 时正文在 `text` 字段；MCP 将正文只放在原生文本内容中，结构化结果用 `content_index` 关联。默认兼容模式在独立原生文本块中提供简短 JSON 定位和续读信息；宿主可用 `--mcp-output-mode compact` 省去正文回复的这块元信息。调用示例见[MCP 连接与续读](specifications/agent-tools/mcp.md)。
 

@@ -94,5 +94,11 @@
     host capacity after eligible inactive-session reclamation. The snapshot
     remains reusable and no partial session is committed. Bounded XLSX source
     reads/search/query remain available without full-session admission.
+  - `CANCELLED`: the request reached a cooperative cancellation checkpoint.
+    Unfinished parsed/session/result state is discarded; completed snapshot data
+    and previously returned results remain available. Cancelling an async caller
+    raises its asyncio cancellation while the worker unwinds cooperatively.
+  - `DOCUMENT_BUSY`: explicit release attempted during an active read or queued
+    same-document read. Finish/cancel the read and retry release.
   - `RESOURCE_NOT_FOUND`, `EXTERNAL_RESOURCE`, `OCR_UNAVAILABLE`, `INVALID_DOCUMENT`, `IO_ERROR`, `RUNTIME_CLOSED`, `INTERNAL_ERROR`.
   - Unexpected failures log to stderr; the response does not include a traceback.

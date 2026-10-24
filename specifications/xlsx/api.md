@@ -10,6 +10,25 @@ One-shot explicit ranges narrow cell materialization while retaining minimal sha
 
 ## Fields
 
+### `XlsxTextSource`
+
+- **Output**
+  - Explicit context-managed iterator of common TextUnit values for displayed
+    saved cells with sheet/range_spec locators; not a complete workbook session.
+- **Source**
+  - `XlsxTextSource(source, options=None, sheets=None)` from xlsx_llm_parser.
+- **Parsing**
+  - Enter loads workbook metadata, shared strings and display formats. Iterate
+    selected sheets in requested order, preflight merges/row order, then yield
+    display-only rows with source coordinates and merge-shadow suppression.
+    Irregular source ordering falls back to the existing complete selected-sheet
+    value scan. Partial iteration owns an open package until close or context exit.
+  - `estimated_memory_bytes` estimates retained source/catalog/row data, not RSS.
+    Cache ownership, bounds, expiry and reuse belong to the caller; the parser
+    introduces no global cache or public streaming flag.
+- **Diagnostics**
+  - Iteration outside an open context or repeated entry raises RuntimeError.
+
 ### `source`
 
 - **Output**

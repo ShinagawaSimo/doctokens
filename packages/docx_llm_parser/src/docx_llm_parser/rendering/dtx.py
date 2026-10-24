@@ -7,6 +7,7 @@ from typing import cast
 from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.doctokens_xml import append, element, serialize
+from ooxml_llm_core.execution import checkpoint
 
 from ..core.models import (
     AncillaryItem,
@@ -51,6 +52,7 @@ def _append_body(parent: ET.Element, parsed_document: ParsedDocument, density: s
     emit_sections = any(block.get("section", 1) != 1 for block in parsed_document.blocks)
     used_anchors = _used_anchors(parsed_document)
     for block_page, block in iter_flow_page_blocks(parsed_document):
+        checkpoint("rendering DOCX blocks")
         section = int(block.get("section", 1))
         if emit_sections and section != current_section:
             current_section = section

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
+from ooxml_llm_core.execution import checkpoint
+
 from ..core.models import ParsedPresentation, ShapeBlock, SlideBlock, SmartArtRecord
 from .diagrams import diagram_text
 
@@ -16,6 +18,7 @@ def iter_plain(parsed_presentation: ParsedPresentation) -> Iterator[str]:
     yield "density=plain\n"
     smartarts = {item["id"]: item for item in parsed_presentation.smartarts}
     for slide in parsed_presentation.slides:
+        checkpoint("rendering PPTX slides")
         if slide["n"] > 1:
             yield "\n"
         section = slide.get("section")

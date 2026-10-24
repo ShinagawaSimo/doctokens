@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from xml.etree import ElementTree as ET
 
 from ooxml_llm_core.doctokens_xml import append, element, serialize, text
+from ooxml_llm_core.execution import checkpoint
 
 from .._utils import col_letter
 from ..models import Cell, ParsedWorkbook, SheetInfo
@@ -84,6 +85,7 @@ def _append_grid(
     comment_ids = _comment_ids_by_cell(comments)
     data_table_groups: set[tuple[str, str]] = set()
     for row in emitted:
+        checkpoint("rendering worksheet rows")
         row_node = append(
             grid,
             "tr",

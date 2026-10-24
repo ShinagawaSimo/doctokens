@@ -6,9 +6,16 @@ Display formatting applies the effective Excel number format from the cell XF to
 
 Format syntax is compiled per effective format code and locale within the
 workbook's FormatIndex. Section directives, classifications, syntax masks and
-date contexts are reused; each value still selects its section and is formatted
+date operations are reused; each value still selects its section and is formatted
 independently using the active date system. No global cache or per-cell/value
 result cache is introduced.
+
+Date compilation resolves literals, month/minute roles, weekday/month names,
+AM/PM, elapsed fields and fractional-second suffixes from the effective locale
+context once. Execution converts each saved serial using its workbook epoch and
+performs value rounding before applying those operations. Cell decoding reads
+coordinates, type, XF index and formula presence once and shares them across
+display, raw, style and control processing; output and fallback rules are unchanged.
 
 ## Fields
 

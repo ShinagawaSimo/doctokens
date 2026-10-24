@@ -257,3 +257,19 @@ def test_large_metadata_includes_a_first_json_fragment_and_reassembles_without_e
             chunks.append(fragment.data["text"])
             offset = fragment.data["next_offset"]
         assert json.loads("".join(chunks)) == {"document_id": document.id, "items": list(range(500))}
+
+
+def test_cached_result_evicted_before_presentation_is_readmitted_for_continuation() -> None:
+    from doctokens_agent_tools.schemas import SourceArgs
+
+    with (
+        ToolRuntime(RuntimeConfig(allowed_roots=(FIXTURES,), reply_chars=650)) as runtime,
+        runtime._documents.acquire(SourceArgs(path="xlsx/xlsx-empty.xlsx")) as document,
+    ):
+        entry = runtime._results.put(document.id, "x" * 700, {"selection": {}, "media_type": "text/plain"})
+        runtime._results.remove(entry.id)  # Simulate another document's LRU admission.
+        response = runtime._presenter.entries(document, [entry])
+        part = response.data["parts"][0]
+        assert part["result_id"] != entry.id
+        tail = runtime.execute("read_result", {"result_id": part["result_id"], "offset": part["next_offset"]})
+        assert tail.error is None and part["text"] + tail.data["text"] == entry.value

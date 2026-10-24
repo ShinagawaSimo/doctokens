@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from ooxml_llm_core.options import PackageOptions
+from doctokens_core.options import PackageOptions
 
 
 @dataclass(frozen=True)

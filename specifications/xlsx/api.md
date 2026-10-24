@@ -18,7 +18,7 @@ Worksheets with comments, merges, range-associated blank semantics, shared/array
   - Explicit context-managed iterator of common TextUnit values for displayed
     saved cells with sheet/range_spec locators; not a complete workbook session.
 - **Source**
-  - `XlsxTextSource(source, options=None, sheets=None)` from xlsx_llm_parser.
+  - `XlsxTextSource(source, options=None, sheets=None)` from doctokens_excel.
 - **Parsing**
   - Enter loads workbook metadata, shared strings and display formats. Iterate
     selected sheets in requested order, preflight merges/row order, then yield

@@ -8,23 +8,23 @@ from unittest.mock import patch
 
 import pytest
 from doctokens_agent_tools import RuntimeConfig, ToolRuntime
-from xlsx_llm_parser import XlsxTextSource, find_xlsx_text
-from xlsx_llm_parser.parsing.modules.workbook.metadata import _parse_shared_strings
-from xlsx_llm_parser.parsing.modules.worksheets.value_rows import iter_value_rows
+from doctokens_excel import XlsxTextSource, find_xlsx_text
+from doctokens_excel.parsing.modules.workbook.metadata import _parse_shared_strings
+from doctokens_excel.parsing.modules.worksheets.value_rows import iter_value_rows
 
 FIXTURES = Path(__file__).resolve().parents[1] / "test_support/fixtures/xlsx"
 SOURCE = "xlsx-shared-strings.xlsx"
 
 
 def test_three_pages_and_context_changes_share_one_source_and_one_value_scan() -> None:
-    from ooxml_llm_core.text_search import TextSearchOptions
+    from doctokens_core.text_search import TextSearchOptions
 
     expected = find_xlsx_text(FIXTURES / SOURCE, "text", search_options=TextSearchOptions(limit=200))
     assert len(expected.matches) >= 3
     with (
         ToolRuntime(RuntimeConfig(allowed_roots=(FIXTURES,))) as runtime,
-        patch("xlsx_llm_parser._operation_source._parse_shared_strings", wraps=_parse_shared_strings) as strings,
-        patch("xlsx_llm_parser.text_source.iter_value_rows", wraps=iter_value_rows) as scans,
+        patch("doctokens_excel._operation_source._parse_shared_strings", wraps=_parse_shared_strings) as strings,
+        patch("doctokens_excel.text_source.iter_value_rows", wraps=iter_value_rows) as scans,
     ):
         gathered = []
         identifier = None
@@ -89,7 +89,7 @@ def test_resumable_source_requires_explicit_lifetime() -> None:
 
 def test_cancelled_resume_closes_mutable_state_and_next_request_rebuilds() -> None:
     from doctokens_agent_tools.search_cursor import SearchCursor
-    from ooxml_llm_core.execution import ParseControl
+    from doctokens_core.execution import ParseControl
 
     with ToolRuntime(RuntimeConfig(allowed_roots=(FIXTURES,))) as runtime:
         first = runtime.execute("find_document_text", {"path": SOURCE, "query": "text", "limit": 1})

@@ -6,7 +6,7 @@ import base64
 import json
 from typing import Any
 
-from ooxml_llm_core.models import ParseResult
+from doctokens_core.models import ParseResult
 
 from .config import RuntimeConfig
 from .documents import Document

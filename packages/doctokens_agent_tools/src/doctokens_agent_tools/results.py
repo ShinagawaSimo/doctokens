@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
-from ooxml_llm_core.execution import checkpoint, current_control
+from doctokens_core.execution import checkpoint, current_control
 
 from .config import RuntimeConfig
 from .models import ToolError

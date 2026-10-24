@@ -10,8 +10,8 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Any
 
-from ooxml_llm_core.execution import ParseCancelled, ParseControl, checkpoint, parse_scope
-from ooxml_llm_core.package import PackageError
+from doctokens_core.execution import ParseCancelled, ParseControl, checkpoint, parse_scope
+from doctokens_core.package import PackageError
 from pydantic import ValidationError
 
 from .catalog import OPERATIONS, definitions

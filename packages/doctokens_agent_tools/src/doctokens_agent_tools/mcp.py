@@ -10,7 +10,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from ooxml_llm_core.execution import ParseControl
+from doctokens_core.execution import ParseControl
 from pydantic import AnyUrl
 
 from .config import RuntimeConfig

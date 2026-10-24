@@ -16,12 +16,12 @@ from xml.etree import ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 if __name__ == "__main__":
-    for package in ("ooxml_llm_core", "docx_llm_parser", "pptx_llm_parser", "xlsx_llm_parser"):
+    for package in ("doctokens_core", "doctokens_word", "doctokens_powerpoint", "doctokens_excel"):
         sys.path.insert(0, str(ROOT / "packages" / package / "src"))
 
-from docx_llm_parser import parse_docx  # noqa: E402
-from pptx_llm_parser import parse_pptx  # noqa: E402
-from xlsx_llm_parser import parse_xlsx  # noqa: E402
+from doctokens_word import parse_docx  # noqa: E402
+from doctokens_powerpoint import parse_pptx  # noqa: E402
+from doctokens_excel import parse_xlsx  # noqa: E402
 
 SUPPORT = ROOT / "test_support"
 DENSITIES = ("semantic", "structural", "plain")

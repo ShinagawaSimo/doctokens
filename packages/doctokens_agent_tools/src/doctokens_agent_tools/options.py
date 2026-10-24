@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any
 
-from docx_llm_parser import ParseOptions as DocxOptions
-from pptx_llm_parser import ParseOptions as PptxOptions
-from xlsx_llm_parser import ParseOptions as XlsxOptions
+from doctokens_word import ParseOptions as DocxOptions
+from doctokens_powerpoint import ParseOptions as PptxOptions
+from doctokens_excel import ParseOptions as XlsxOptions
 
 from .config import RuntimeConfig
 from .models import ToolError

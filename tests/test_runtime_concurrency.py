@@ -11,7 +11,7 @@ from unittest.mock import patch
 import pytest
 from doctokens_agent_tools import RuntimeConfig, ToolRuntime
 from doctokens_agent_tools.models import ToolResponse
-from ooxml_llm_core.execution import ParseCancelled, ParseControl, checkpoint, parse_scope
+from doctokens_core.execution import ParseCancelled, ParseControl, checkpoint, parse_scope
 
 FIXTURES = Path(__file__).resolve().parents[1] / "test_support/fixtures"
 
@@ -97,7 +97,7 @@ def test_status_bypasses_saturated_parser_workers() -> None:
 
 
 def test_native_parse_cancellation_discards_partial_session_and_reservation() -> None:
-    from xlsx_llm_parser.parsing.modules.worksheets.scanner import WorksheetScanner
+    from doctokens_excel.parsing.modules.worksheets.scanner import WorksheetScanner
 
     context = ParseControl()
     original = WorksheetScanner._read_row

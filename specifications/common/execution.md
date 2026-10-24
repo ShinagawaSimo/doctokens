@@ -7,7 +7,7 @@
 ### `ParseControl`
 
 - **Source**
-  - `ooxml_llm_core.execution.ParseControl(progress=None)`; caller-owned state.
+  - `doctokens_core.execution.ParseControl(progress=None)`; caller-owned state.
 - **Processing**
   - `cancel()` sets a thread-safe event. `check(stage="reading")` raises
     `ParseCancelled` if cancelled. Otherwise an optional `(sequence, stage)`
@@ -19,7 +19,7 @@
 ### `parse_scope`
 
 - **Source**
-  - `with parse_scope(control): ...`, imported from ooxml_llm_core.execution.
+  - `with parse_scope(control): ...`, imported from doctokens_core.execution.
 - **Processing**
   - Binds control to the current execution context, resets it on exit and never
     caches document data. Parsers without a scope retain their ordinary behavior.

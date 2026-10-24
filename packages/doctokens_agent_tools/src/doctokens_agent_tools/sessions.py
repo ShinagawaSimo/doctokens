@@ -6,15 +6,15 @@ from _thread import RLock
 from collections.abc import Collection
 from typing import TYPE_CHECKING
 
-from docx_llm_parser import ParseOptions as DocxOptions
-from docx_llm_parser import open_docx
-from ooxml_llm_core.execution import checkpoint
-from ooxml_llm_core.limits import PackageLimits
-from ooxml_llm_core.memory import ParseMemoryLimitError, estimate_session_bytes
-from ooxml_llm_core.package import PackageReader
-from pptx_llm_parser import ParseOptions as PptxOptions
-from pptx_llm_parser import open_pptx
-from xlsx_llm_parser import open_xlsx
+from doctokens_word import ParseOptions as DocxOptions
+from doctokens_word import open_docx
+from doctokens_core.execution import checkpoint
+from doctokens_core.limits import PackageLimits
+from doctokens_core.memory import ParseMemoryLimitError, estimate_session_bytes
+from doctokens_core.package import PackageReader
+from doctokens_powerpoint import ParseOptions as PptxOptions
+from doctokens_powerpoint import open_pptx
+from doctokens_excel import open_xlsx
 
 from .config import RuntimeConfig
 from .models import ToolError

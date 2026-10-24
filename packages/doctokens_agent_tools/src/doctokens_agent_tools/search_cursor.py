@@ -7,17 +7,17 @@ import time
 from collections import deque
 from collections.abc import Iterator
 
-from ooxml_llm_core.execution import checkpoint
-from ooxml_llm_core.memory import object_bytes
-from ooxml_llm_core.text_search import TextSearchOptions, TextSearchResult, TextUnit, search_text
-from xlsx_llm_parser import XlsxTextSource
+from doctokens_core.execution import checkpoint
+from doctokens_core.memory import object_bytes
+from doctokens_core.text_search import TextSearchOptions, TextSearchResult, TextUnit, search_text
+from doctokens_excel import XlsxTextSource
 
 from .documents import Document
 
 
 class SearchCursor:
     def __init__(self, document: Document, query: str, *, case_sensitive: bool, sheets: list[str] | None) -> None:
-        from xlsx_llm_parser import ParseOptions
+        from doctokens_excel import ParseOptions
 
         assert isinstance(document.options, ParseOptions)
         self.document_id = document.id

@@ -7,11 +7,11 @@ import mimetypes
 from functools import partial
 from typing import Any, cast
 
-from docx_llm_parser import DocxReadSession
-from ooxml_llm_core.models import ParseResult
-from ooxml_llm_core.text_search import TextSearchOptions
-from pptx_llm_parser import PptxReadSession
-from xlsx_llm_parser import (
+from doctokens_word import DocxReadSession
+from doctokens_core.models import ParseResult
+from doctokens_core.text_search import TextSearchOptions
+from doctokens_powerpoint import PptxReadSession
+from doctokens_excel import (
     AggregateSpec,
     OrderSpec,
     WhereCondition,
@@ -22,7 +22,7 @@ from xlsx_llm_parser import (
     parse_xlsx,
     query_xlsx,
 )
-from xlsx_llm_parser import ParseOptions as XlsxOptions
+from doctokens_excel import ParseOptions as XlsxOptions
 
 from .documents import Document, DocumentStore
 from .models import ToolError, ToolResponse

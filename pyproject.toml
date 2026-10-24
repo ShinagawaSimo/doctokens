@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ooxml-llm-workspace"
+name = "doctokens-workspace"
 version = "0.0.0"
 description = "Development workspace for OOXML LLM parser packages"
 requires-python = ">=3.10"
@@ -23,19 +23,19 @@ packages = []
 [tool.pytest.ini_options]
 testpaths = [
     "tests",
-    "packages/ooxml_llm_core/tests",
-    "packages/docx_llm_parser/tests",
-    "packages/xlsx_llm_parser/tests",
+    "packages/doctokens_core/tests",
+    "packages/doctokens_word/tests",
+    "packages/doctokens_excel/tests",
     "packages/ocr_llm_core/tests",
-    "packages/pptx_llm_parser/tests",
+    "packages/doctokens_powerpoint/tests",
 ]
 pythonpath = [
     "packages/doctokens_agent_tools/src",
-    "packages/ooxml_llm_core/src",
-    "packages/docx_llm_parser/src",
-    "packages/xlsx_llm_parser/src",
+    "packages/doctokens_core/src",
+    "packages/doctokens_word/src",
+    "packages/doctokens_excel/src",
     "packages/ocr_llm_core/src",
-    "packages/pptx_llm_parser/src",
+    "packages/doctokens_powerpoint/src",
 ]
 # Coverage reporting is enabled by CI (see .github/workflows/ci.yml) so that
 # local package-level test runs remain lightweight and neither CI nor local
@@ -49,11 +49,11 @@ addopts = [
 [tool.coverage.run]
 branch = true
 source = [
-    "packages/ooxml_llm_core/src",
-    "packages/docx_llm_parser/src",
-    "packages/xlsx_llm_parser/src",
+    "packages/doctokens_core/src",
+    "packages/doctokens_word/src",
+    "packages/doctokens_excel/src",
     "packages/ocr_llm_core/src",
-    "packages/pptx_llm_parser/src",
+    "packages/doctokens_powerpoint/src",
 ]
 
 [tool.ruff]
@@ -69,11 +69,11 @@ strict = true
 warn_unreachable = true
 files = [
     "packages/doctokens_agent_tools/src",
-    "packages/ooxml_llm_core/src",
-    "packages/docx_llm_parser/src",
-    "packages/xlsx_llm_parser/src",
+    "packages/doctokens_core/src",
+    "packages/doctokens_word/src",
+    "packages/doctokens_excel/src",
     "packages/ocr_llm_core/src",
-    "packages/pptx_llm_parser/src",
+    "packages/doctokens_powerpoint/src",
 ]
 
 [[tool.mypy.overrides]]

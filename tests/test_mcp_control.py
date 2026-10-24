@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 from doctokens_agent_tools import RuntimeConfig, ToolRuntime
-from ooxml_llm_core.execution import checkpoint
+from doctokens_core.execution import checkpoint
 
 pytest.importorskip("mcp")
 from doctokens_agent_tools.mcp import build_server

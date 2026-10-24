@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from doctokens_agent_tools import RuntimeConfig, ToolRuntime
-from ooxml_llm_core.execution import checkpoint
+from doctokens_core.execution import checkpoint
 
 FIXTURES = Path(__file__).resolve().parents[1] / "test_support/fixtures"
 

@@ -30,10 +30,10 @@
 ```text
 doctokens/
   packages/
-    ooxml_llm_core/   # OPC 包、关系、XML、共享图表与输出基础设施
-    docx_llm_parser/  # Word：段落、编号、表格、分页、附注、修订、对象
-    pptx_llm_parser/  # PowerPoint：幻灯片、形状、文字、备注、批注、对象
-    xlsx_llm_parser/  # Excel：网格、公式、样式、规则、透视表、检索与查询
+    doctokens_core/   # OPC 包、关系、XML、共享图表与输出基础设施
+    doctokens_word/  # Word：段落、编号、表格、分页、附注、修订、对象
+    doctokens_powerpoint/  # PowerPoint：幻灯片、形状、文字、备注、批注、对象
+    doctokens_excel/  # Excel：网格、公式、样式、规则、透视表、检索与查询
     ocr_llm_core/     # 可选 OCR 适配层
     doctokens_agent_tools/ # 共享工具运行层、直接 TOOL_CALL、可选 MCP stdio
   specifications/    # 当前解析行为、输出字段与限制
@@ -98,16 +98,16 @@ doctokens/
 Python ≥ 3.10。在仓库根目录安装需要的子包：
 
 ```sh
-python -m pip install -e ./packages/ooxml_llm_core -e ./packages/docx_llm_parser -e ./packages/pptx_llm_parser -e ./packages/xlsx_llm_parser
+python -m pip install -e ./packages/doctokens_core -e ./packages/doctokens_word -e ./packages/doctokens_powerpoint -e ./packages/doctokens_excel
 ```
 
 只需要 Word 时，安装共享核心和 DOCX 包即可：
 
 ```sh
-python -m pip install -e ./packages/ooxml_llm_core -e ./packages/docx_llm_parser
+python -m pip install -e ./packages/doctokens_core -e ./packages/doctokens_word
 ```
 
-三个格式包互不依赖，共用 `ooxml_llm_core`。共享核心没有必需的第三方运行依赖；DOCX 另依赖 `typing_extensions`。OCR 的安装方式见下文。
+三个格式包互不依赖，共用 `doctokens_core`。共享核心没有必需的第三方运行依赖；DOCX 另依赖 `typing_extensions`。OCR 的安装方式见下文。
 
 ### 本地复现 GitHub Actions
 
@@ -181,9 +181,9 @@ XLSX 资源目录和原始图片读取跳过工作表单元格；直接 Python �
 三个格式的一次性入口都接收路径或完整文件 bytes，返回 `ParseResult`：
 
 ```python
-from docx_llm_parser import parse_docx
-from pptx_llm_parser import parse_pptx
-from xlsx_llm_parser import parse_xlsx
+from doctokens_word import parse_docx
+from doctokens_powerpoint import parse_pptx
+from doctokens_excel import parse_xlsx
 
 report = parse_docx("report.docx", density="semantic")
 slides = parse_pptx("slides.pptx", density="structural")
@@ -198,7 +198,7 @@ print(report.selection, report.syntax_version, report.media_type)
 **DOCX：分页、修订与资源**
 
 ```python
-from docx_llm_parser import ParseOptions, open_docx
+from doctokens_word import ParseOptions, open_docx
 
 with open_docx("report.docx", options=ParseOptions(revision_mode="review")) as document:
     page = document.render(density="semantic", page_hint=3, span=1)
@@ -219,7 +219,7 @@ with open_docx("report.docx", options=ParseOptions(revision_mode="review")) as d
 以下假设 Sales 表的 A1:C5 为 Name、Group、Amount 三列表格，首行为列名：
 
 ```python
-from xlsx_llm_parser import open_xlsx
+from doctokens_excel import open_xlsx
 
 with open_xlsx("sales.xlsx") as workbook:
     grid = workbook.render(sheet="Sales", range_spec="A1:C5")
@@ -243,7 +243,7 @@ with open_xlsx("sales.xlsx") as workbook:
 **PPTX：幻灯片窗口与输出迭代**
 
 ```python
-from pptx_llm_parser import open_pptx
+from doctokens_powerpoint import open_pptx
 
 with open_pptx("slides.pptx") as presentation:
     selected = presentation.render(slide=2, span=2, density="semantic")
@@ -347,7 +347,7 @@ python -m pip install -e "./packages/ocr_llm_core[tesseract]"
 ```
 
 ```python
-from docx_llm_parser import ParseOptions, parse_docx
+from doctokens_word import ParseOptions, parse_docx
 from ocr_llm_core import TesseractProvider
 
 provider = TesseractProvider(lang="chi_sim+eng")

@@ -182,7 +182,7 @@ def test_mcp_delivers_native_first_text_once_and_continues_without_repeating_met
 
     from doctokens_agent_tools.mcp import build_server
     from mcp.shared.memory import create_connected_server_and_client_session
-    from xlsx_llm_parser import parse_xlsx
+    from doctokens_excel import parse_xlsx
 
     native = parse_xlsx(FIXTURES / "xlsx/xlsx-sparse.xlsx", sheet="Sheet1", density="structural")
     # Artificial length tests only opaque transport; the Office parser and its

@@ -7,9 +7,9 @@ from unittest.mock import patch
 
 import pytest
 from doctokens_agent_tools import RuntimeConfig, ToolRuntime
-from docx_llm_parser import open_docx
-from ooxml_llm_core.text_search import TextSearchOptions
-from xlsx_llm_parser import XlsxResourceCatalog, open_xlsx
+from doctokens_word import open_docx
+from doctokens_core.text_search import TextSearchOptions
+from doctokens_excel import XlsxResourceCatalog, open_xlsx
 
 FIXTURES = Path(__file__).resolve().parents[1] / "test_support/fixtures"
 
@@ -59,9 +59,9 @@ def test_search_never_searches_generated_xml_and_checks_session_lifetime() -> No
 
 def test_light_catalog_does_not_read_cell_values_and_does_not_force_tool_session() -> None:
     with (
-        patch("xlsx_llm_parser.parsing.runner._parse_shared_strings", side_effect=AssertionError("shared strings loaded")),
-        patch("xlsx_llm_parser.parsing.runner.parse_sheet", side_effect=AssertionError("worksheet cells loaded")),
-        patch("xlsx_llm_parser.parsing.runner.parse_styles", side_effect=AssertionError("styles loaded")),
+        patch("doctokens_excel.parsing.runner._parse_shared_strings", side_effect=AssertionError("shared strings loaded")),
+        patch("doctokens_excel.parsing.runner.parse_sheet", side_effect=AssertionError("worksheet cells loaded")),
+        patch("doctokens_excel.parsing.runner.parse_styles", side_effect=AssertionError("styles loaded")),
         ToolRuntime(RuntimeConfig(allowed_roots=(FIXTURES,))) as runtime,
     ):
         result = runtime.execute("list_document_resources", {"path": "xlsx/xlsx-shared-strings.xlsx"})
@@ -122,9 +122,9 @@ def test_selected_xlsx_text_search_does_not_allocate_a_full_session() -> None:
 
 
 def test_format_programs_are_compiled_per_code_and_owned_by_one_parse() -> None:
-    from xlsx_llm_parser.parsing.modules.styles.number_formats.program import FormatProgram
+    from doctokens_excel.parsing.modules.styles.number_formats.program import FormatProgram
 
-    with patch("xlsx_llm_parser.parsing.modules.styles.index.FormatProgram", wraps=FormatProgram) as compiled:
+    with patch("doctokens_excel.parsing.modules.styles.index.FormatProgram", wraps=FormatProgram) as compiled:
         with open_xlsx(FIXTURES / "xlsx/xlsx-date-time.xlsx") as workbook:
             first_calls = compiled.call_count
             assert first_calls > 0

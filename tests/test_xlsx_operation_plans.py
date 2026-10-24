@@ -10,9 +10,9 @@ from zipfile import ZipFile
 
 import pytest
 from doctokens_agent_tools import RuntimeConfig, ToolRuntime
-from xlsx_llm_parser import find_xlsx_cells, open_xlsx, parse_xlsx, query_xlsx
-from xlsx_llm_parser.parsing.modules.worksheets.cells import _parse_cell
-from xlsx_llm_parser.parsing.modules.worksheets.scanner import parse_sheet
+from doctokens_excel import find_xlsx_cells, open_xlsx, parse_xlsx, query_xlsx
+from doctokens_excel.parsing.modules.worksheets.cells import _parse_cell
+from doctokens_excel.parsing.modules.worksheets.scanner import parse_sheet
 
 FIXTURES = Path(__file__).resolve().parents[1] / "test_support/fixtures/xlsx"
 
@@ -26,7 +26,7 @@ def test_query_projects_dependencies_before_converting_cells(extra: dict, expect
     args = {"sheet": "Sheet1", "range_spec": "A1:C2", "header_row": 1, "select": ["A"], "limit": 1, **extra}
     with open_xlsx(source) as session:
         expected = session.query_data(**args).text
-    with patch("xlsx_llm_parser.parsing.modules.worksheets.scanner._parse_cell", wraps=_parse_cell) as converted:
+    with patch("doctokens_excel.parsing.modules.worksheets.scanner._parse_cell", wraps=_parse_cell) as converted:
         assert query_xlsx(source, **args).text == expected
         # Complete native header identities remain available, but only output
         # and filter columns are converted for data rows.
@@ -42,7 +42,7 @@ def test_limit_stops_cell_conversion_and_cold_query_does_not_open_a_full_session
     with (
         ToolRuntime(RuntimeConfig(allowed_roots=(FIXTURES,))) as runtime,
         patch("doctokens_agent_tools.documents.DocumentStore.session", side_effect=AssertionError("full session opened")),
-        patch("xlsx_llm_parser.parsing.modules.worksheets.scanner._parse_cell", wraps=_parse_cell) as converted,
+        patch("doctokens_excel.parsing.modules.worksheets.scanner._parse_cell", wraps=_parse_cell) as converted,
     ):
         response = runtime.execute("query_xlsx_data", {"path": str(source), **args})
         assert response.error is None and response.data["parts"][0]["text"] == expected
@@ -52,7 +52,7 @@ def test_limit_stops_cell_conversion_and_cold_query_does_not_open_a_full_session
 
 def test_query_does_not_scan_other_worksheets() -> None:
     source = FIXTURES / "xlsx-formula-cross-sheet.xlsx"
-    with patch("xlsx_llm_parser._operation_source.parse_sheet", wraps=parse_sheet) as scanned:
+    with patch("doctokens_excel._operation_source.parse_sheet", wraps=parse_sheet) as scanned:
         query_xlsx(source, sheet="Data", range_spec="A1:A2", header_row=1)
         assert scanned.call_count == 2  # Header/tail declarations, followed by value rows.
         assert len({call.args[1] for call in scanned.call_args_list}) == 1
@@ -64,9 +64,9 @@ def test_field_search_skips_shared_strings_styles_and_nonmatching_cell_projectio
     with open_xlsx(source) as session:
         expected = session.find_cells("2", kind=kind).text
     with (
-        patch("xlsx_llm_parser.parsing.runner._parse_shared_strings", side_effect=AssertionError("strings loaded")),
-        patch("xlsx_llm_parser.parsing.runner.parse_styles", side_effect=AssertionError("styles loaded")),
-        patch("xlsx_llm_parser.parsing.modules.worksheets.scanner._parse_cell", wraps=_parse_cell) as converted,
+        patch("doctokens_excel.parsing.runner._parse_shared_strings", side_effect=AssertionError("strings loaded")),
+        patch("doctokens_excel.parsing.runner.parse_styles", side_effect=AssertionError("styles loaded")),
+        patch("doctokens_excel.parsing.modules.worksheets.scanner._parse_cell", wraps=_parse_cell) as converted,
     ):
         assert find_xlsx_cells(source, "2", kind=kind).text == expected
         refs = [call.args[5] for call in converted.call_args_list]
@@ -99,7 +99,7 @@ def test_limited_query_validates_trailing_xml_and_releases_the_reader() -> None:
             if entry.filename == "xl/worksheets/sheet1.xml":
                 value += b"<broken"
             damaged.writestr(entry, value)
-    from ooxml_llm_core.package import PackageReader
+    from doctokens_core.package import PackageReader
 
     close = PackageReader.__exit__
     with patch.object(PackageReader, "__exit__", autospec=True, side_effect=close) as closed:
@@ -119,8 +119,8 @@ def test_selective_shared_strings_still_validate_the_xml_tail() -> None:
                 value += b"<broken"
             damaged.writestr(entry, value)
     with (
-        patch("xlsx_llm_parser.parsing.modules.worksheets.preview._CELL_BUDGET", 1),
-        patch("xlsx_llm_parser.rendering.window._CELL_BUDGET", 1),
+        patch("doctokens_excel.parsing.modules.worksheets.preview._CELL_BUDGET", 1),
+        patch("doctokens_excel.rendering.window._CELL_BUDGET", 1),
         pytest.raises(ET.ParseError),
     ):
         parse_xlsx(source.getvalue(), sheet="Sheet1")

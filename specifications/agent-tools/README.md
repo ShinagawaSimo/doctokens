@@ -54,4 +54,4 @@ with ToolRuntime(RuntimeConfig(allowed_roots=(Path("documents"),))) as runtime:
 `ParseResult` and `ResourceDescriptor` expose `to_dict()`; read sessions expose
 `describe()` and bounded `find_text()`. `inspect_xlsx()` reads only the workbook
 index; `XlsxResourceCatalog` reads resource metadata without cell data. XLSX query
-argument types and `find_xlsx_text()` are exported from `xlsx_llm_parser`.
+argument types and `find_xlsx_text()` are exported from `doctokens_excel`.

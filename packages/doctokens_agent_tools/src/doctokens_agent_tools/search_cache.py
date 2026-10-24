@@ -6,7 +6,7 @@ import time
 from _thread import RLock
 from collections import OrderedDict
 
-from ooxml_llm_core.text_search import TextSearchOptions, TextSearchResult
+from doctokens_core.text_search import TextSearchOptions, TextSearchResult
 
 from .config import RuntimeConfig
 from .documents import Document
@@ -46,7 +46,7 @@ class SearchCache:
 
     def search(self, document: Document, query: str, options: TextSearchOptions, sheets: list[str] | None) -> TextSearchResult:
         # Validate identically to one-shot search, before opening any reader.
-        from ooxml_llm_core.text_search import TextSearchCollector
+        from doctokens_core.text_search import TextSearchCollector
 
         TextSearchCollector(query, options)
         key = (document.id, query, options.case_sensitive, tuple(sheets) if sheets is not None else None)

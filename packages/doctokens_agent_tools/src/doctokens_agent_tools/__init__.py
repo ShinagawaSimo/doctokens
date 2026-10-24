@@ -1,6 +1,6 @@
 """Office tools with a shared runtime for direct calls and optional MCP."""
 
-from ooxml_llm_core.execution import ParseCancelled, ParseControl
+from doctokens_core.execution import ParseCancelled, ParseControl
 
 from .config import RuntimeConfig
 from .models import BinaryAttachment, ToolDefinition, ToolResponse

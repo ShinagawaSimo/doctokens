@@ -13,14 +13,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CONSTRAINTS = ROOT / "constraints-ci.txt"
 PACKAGE_ORDER = (
-    "ooxml_llm_core",
+    "doctokens_core",
     "ocr_llm_core",
-    "docx_llm_parser",
-    "xlsx_llm_parser",
-    "pptx_llm_parser",
+    "doctokens_word",
+    "doctokens_excel",
+    "doctokens_powerpoint",
     "doctokens_agent_tools",
 )
-IMPORTS = "import docx_llm_parser, ooxml_llm_core, ocr_llm_core, pptx_llm_parser, xlsx_llm_parser, doctokens_agent_tools"
+IMPORTS = "import doctokens_word, doctokens_core, ocr_llm_core, doctokens_powerpoint, doctokens_excel, doctokens_agent_tools"
 
 
 def _run(*args: str, cwd: Path = ROOT) -> None:
@@ -43,7 +43,7 @@ def _wheel(directory: Path, package: str) -> Path:
 
 def _verify_workspace_wheel(directory: Path) -> None:
     _run(sys.executable, "-m", "pip", "wheel", "--no-deps", "--no-build-isolation", "--wheel-dir", str(directory), ".")
-    workspace_wheel = _wheel(directory, "ooxml_llm_workspace")
+    workspace_wheel = _wheel(directory, "doctokens_workspace")
     with zipfile.ZipFile(workspace_wheel) as archive:
         package_files = [name for name in archive.namelist() if name.startswith(tuple(f"{name}/" for name in PACKAGE_ORDER))]
     if package_files:

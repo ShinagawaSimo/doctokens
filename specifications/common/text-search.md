@@ -3,7 +3,7 @@
 [Common](README.md) / Text search
 
 `TextSearchOptions`, `TextMatch`, and `TextSearchResult` are exported by
-`ooxml_llm_core`. Format sessions expose `find_text(query, options=...)`.
+`doctokens_core`. Format sessions expose `find_text(query, options=...)`.
 Results are search values, not a density rendering or a `ParseResult`.
 
 ## Fields

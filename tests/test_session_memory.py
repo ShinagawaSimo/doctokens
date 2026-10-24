@@ -10,10 +10,10 @@ from weakref import ref
 import pytest
 from doctokens_agent_tools import RuntimeConfig, ToolRuntime
 from doctokens_agent_tools.schemas import SourceArgs
-from ooxml_llm_core.limits import PackageLimits
-from ooxml_llm_core.memory import ParseMemoryLimitError, SessionMemoryBudget, estimate_session_bytes
-from ooxml_llm_core.package import PackageReader
-from xlsx_llm_parser import open_xlsx
+from doctokens_core.limits import PackageLimits
+from doctokens_core.memory import ParseMemoryLimitError, SessionMemoryBudget, estimate_session_bytes
+from doctokens_core.package import PackageReader
+from doctokens_excel import open_xlsx
 
 FIXTURES = Path(__file__).resolve().parents[1] / "test_support/fixtures"
 PATHS = ["docx/docx-paragraph.docx", "xlsx/xlsx-sparse.xlsx"]
@@ -90,7 +90,7 @@ def test_growth_rejection_closes_parser_and_does_not_commit_partial_session() ->
     # Deliberately underestimate admission to exercise in-parse growth using an
     # ordinary native file. This simulates an imperfect heuristic, not Office content.
     with (
-        patch("ooxml_llm_core.memory.estimate_session_bytes", return_value=1024),
+        patch("doctokens_core.memory.estimate_session_bytes", return_value=1024),
         patch("doctokens_agent_tools.sessions.estimate_session_bytes", return_value=1024),
         ToolRuntime(RuntimeConfig(allowed_roots=(FIXTURES,), max_session_memory_bytes=1024 * 1024 + 128)) as runtime,
     ):
@@ -99,7 +99,7 @@ def test_growth_rejection_closes_parser_and_does_not_commit_partial_session() ->
         document = next(iter(runtime._documents.documents.values()))
         assert document.session is None and document.session_memory_bytes == 0
         assert runtime.execute("read_xlsx", {"document_id": document.id}).error is None
-    with patch("ooxml_llm_core.memory.estimate_session_bytes", return_value=1024):
+    with patch("doctokens_core.memory.estimate_session_bytes", return_value=1024):
         session = open_xlsx(FIXTURES / PATHS[1], memory_limit_bytes=1024 * 1024 + 128)
         with pytest.raises(ParseMemoryLimitError):
             session.__enter__()
@@ -128,7 +128,7 @@ def test_concurrent_full_session_admissions_share_one_total_budget() -> None:
 
 def test_fragment_measurement_counts_local_shared_references_once() -> None:
     # Infrastructure identity accounting: this does not define parsing content.
-    from ooxml_llm_core.memory import object_bytes
+    from doctokens_core.memory import object_bytes
 
     value = "a" * 1000
     assert object_bytes([value, value]) < object_bytes([value, value.encode().decode()])
@@ -180,7 +180,7 @@ def test_count_eviction_uses_session_access_order() -> None:
 
 @pytest.mark.parametrize("kind", ["docx", "xlsx"])
 def test_ready_sessions_release_disposable_source_bytes_but_keep_the_reader_open(kind: str) -> None:
-    from docx_llm_parser import open_docx
+    from doctokens_word import open_docx
 
     if kind == "docx":
         session = open_docx(FIXTURES / "docx/docx-paragraph.docx")
@@ -203,8 +203,8 @@ def test_ready_sessions_release_disposable_source_bytes_but_keep_the_reader_open
 def test_consumed_worksheet_rows_are_released_before_the_scan_ends() -> None:
     # This checks live XML ownership, not parsed cell content. A short native
     # worksheet lets the parser read ahead while its parent tree remains alive.
-    from xlsx_llm_parser.parsing.modules.worksheets.sheet_types import NS_S
-    from xlsx_llm_parser.parsing.modules.worksheets.xml_stream import iter_sheet_elements
+    from doctokens_excel.parsing.modules.worksheets.sheet_types import NS_S
+    from doctokens_excel.parsing.modules.worksheets.xml_stream import iter_sheet_elements
 
     with (
         PackageReader(FIXTURES / "xlsx/xlsx-shared-strings.xlsx", PackageLimits()) as package,

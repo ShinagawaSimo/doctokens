@@ -39,7 +39,7 @@ A session owns one open package and its parsed representation.
     session cannot be re-entered; create a new session to retry.
 - **Diagnostics**
   - Invalid limits: `ValueError`. Estimated excess:
-    `ooxml_llm_core.ParseMemoryLimitError`, separate from invalid-package errors.
+    `doctokens_core.ParseMemoryLimitError`, separate from invalid-package errors.
 
 ### `estimated_memory_bytes`
 

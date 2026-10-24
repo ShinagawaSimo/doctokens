@@ -7,7 +7,7 @@ name = "doctokens-agent-tools"
 version = "0.1.0"
 description = "Bounded Office document tools for direct tool calls and MCP"
 requires-python = ">=3.10"
-dependencies = ["docx-llm-parser>=0.2,<0.3", "pptx-llm-parser>=0.2,<0.3", "xlsx-llm-parser>=0.2,<0.3", "pydantic>=2.11,<3"]
+dependencies = ["doctokens-word>=0.2,<0.3", "doctokens-powerpoint>=0.2,<0.3", "doctokens-excel>=0.2,<0.3", "pydantic>=2.11,<3"]
 
 [project.optional-dependencies]
 mcp = ["mcp>=1.12,<2"]

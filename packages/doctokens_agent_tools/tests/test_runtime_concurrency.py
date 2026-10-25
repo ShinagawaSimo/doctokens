@@ -13,7 +13,7 @@ from doctokens_agent_tools import RuntimeConfig, ToolRuntime
 from doctokens_agent_tools.models import ToolResponse
 from doctokens_core.execution import ParseCancelled, ParseControl, checkpoint, parse_scope
 
-FIXTURES = Path(__file__).resolve().parents[1] / "test_support/fixtures"
+FIXTURES = Path(__file__).resolve().parents[3] / "test_support/fixtures"
 
 
 def _idle(runtime: ToolRuntime) -> bool:

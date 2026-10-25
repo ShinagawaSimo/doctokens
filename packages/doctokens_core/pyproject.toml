@@ -1,7 +1,7 @@
 [project]
 name = "doctokens-core"
 version = "0.2.0"
-description = "Shared OOXML package infrastructure for LLM-oriented parsers"
+description = "Shared Office reading infrastructure: OPC, CFB, output and execution control"
 requires-python = ">=3.10"
 dependencies = []
 license = {text = "MIT"}

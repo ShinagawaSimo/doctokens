@@ -7,11 +7,11 @@ from typing import Any, cast
 from xml.etree import ElementTree as ET
 
 from _pptx_fixtures import PNG_BYTES
-from ocr_llm_core import OcrProvider, OcrResult
 from doctokens_powerpoint import parse_pptx
 from doctokens_powerpoint.core.enums import Density
 from doctokens_powerpoint.core.models import ParseOptions
 from doctokens_powerpoint.parsing.runner import PptxParser
+from ocr_llm_core import OcrProvider, OcrResult
 from test_pptx_images import _image_deck
 
 

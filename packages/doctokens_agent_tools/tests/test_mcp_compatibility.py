@@ -17,7 +17,7 @@ from doctokens_agent_tools.mcp import build_server
 from doctokens_agent_tools.mcp_output import project_response
 from mcp.shared.memory import create_connected_server_and_client_session
 
-FIXTURES = Path(__file__).resolve().parents[1] / "test_support/fixtures"
+FIXTURES = Path(__file__).resolve().parents[3] / "test_support/fixtures"
 
 
 @pytest.mark.parametrize("mode", ["compatible", "compact"])

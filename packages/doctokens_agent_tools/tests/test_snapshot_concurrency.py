@@ -10,7 +10,7 @@ from unittest.mock import patch
 from doctokens_agent_tools import RuntimeConfig, ToolRuntime
 from doctokens_core.execution import checkpoint
 
-FIXTURES = Path(__file__).resolve().parents[1] / "test_support/fixtures"
+FIXTURES = Path(__file__).resolve().parents[3] / "test_support/fixtures"
 
 
 def test_inflight_snapshot_is_reserved_once_and_does_not_block_other_documents() -> None:

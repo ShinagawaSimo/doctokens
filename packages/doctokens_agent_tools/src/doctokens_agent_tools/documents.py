@@ -15,14 +15,14 @@ from pathlib import Path
 from threading import Event
 from typing import Any
 
-from doctokens_word import DocxReadSession
-from doctokens_word import ParseOptions as DocxOptions
 from doctokens_core.execution import checkpoint
 from doctokens_core.models import ResourceDescriptor
-from doctokens_powerpoint import ParseOptions as PptxOptions
-from doctokens_powerpoint import PptxReadSession
 from doctokens_excel import ParseOptions as XlsxOptions
 from doctokens_excel import XlsxReadSession
+from doctokens_powerpoint import ParseOptions as PptxOptions
+from doctokens_powerpoint import PptxReadSession
+from doctokens_word import DocxReadSession
+from doctokens_word import ParseOptions as DocxOptions
 
 from .config import RuntimeConfig
 from .models import ToolError

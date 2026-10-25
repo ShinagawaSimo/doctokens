@@ -1,6 +1,4 @@
-"""Minimal-operation ownership and work budgets, using existing native files."""
-
-from __future__ import annotations
+"""Work budgets and malformed-tail handling on native workbooks."""
 
 import io
 from pathlib import Path
@@ -9,12 +7,11 @@ from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
 import pytest
-from doctokens_agent_tools import RuntimeConfig, ToolRuntime
 from doctokens_excel import find_xlsx_cells, open_xlsx, parse_xlsx, query_xlsx
 from doctokens_excel.parsing.modules.worksheets.cells import _parse_cell
 from doctokens_excel.parsing.modules.worksheets.scanner import parse_sheet
 
-FIXTURES = Path(__file__).resolve().parents[1] / "test_support/fixtures/xlsx"
+FIXTURES = Path(__file__).resolve().parents[3] / "test_support/fixtures/xlsx"
 
 
 @pytest.mark.parametrize(
@@ -32,22 +29,6 @@ def test_query_projects_dependencies_before_converting_cells(extra: dict, expect
         # and filter columns are converted for data rows.
         refs = [call.args[5] for call in converted.call_args_list]
         assert refs == ["A1", "B1", "C1", *expected_data_refs]
-
-
-def test_limit_stops_cell_conversion_and_cold_query_does_not_open_a_full_session() -> None:
-    args = {"sheet": "Sheet1", "range_spec": "A1:A3", "header_row": 1, "limit": 1}
-    source = FIXTURES / "xlsx-shared-strings.xlsx"
-    with open_xlsx(source) as session:
-        expected = session.query_data(**args).text
-    with (
-        ToolRuntime(RuntimeConfig(allowed_roots=(FIXTURES,))) as runtime,
-        patch("doctokens_agent_tools.documents.DocumentStore.session", side_effect=AssertionError("full session opened")),
-        patch("doctokens_excel.parsing.modules.worksheets.scanner._parse_cell", wraps=_parse_cell) as converted,
-    ):
-        response = runtime.execute("query_xlsx_data", {"path": str(source), **args})
-        assert response.error is None and response.data["parts"][0]["text"] == expected
-        assert [call.args[5] for call in converted.call_args_list] == ["A1", "A2"]
-        assert runtime.execute("get_runtime_info", {}).data["sessions"] == 0
 
 
 def test_query_does_not_scan_other_worksheets() -> None:
@@ -71,22 +52,6 @@ def test_field_search_skips_shared_strings_styles_and_nonmatching_cell_projectio
         assert find_xlsx_cells(source, "2", kind=kind).text == expected
         refs = [call.args[5] for call in converted.call_args_list]
         assert refs == (["A1", "B1", "C1"] if kind == "formula" else [])
-
-
-def test_existing_full_session_is_reused_for_queries() -> None:
-    with ToolRuntime(RuntimeConfig(allowed_roots=(FIXTURES,))) as runtime:
-        inspected = runtime.execute("inspect_document", {"path": "xlsx-shared-strings.xlsx", "full_parse": True})
-        with patch("doctokens_agent_tools.operations.query_xlsx", side_effect=AssertionError("cold parse used")):
-            response = runtime.execute(
-                "query_xlsx_data",
-                {
-                    "document_id": inspected.data["document_id"],
-                    "sheet": "Sheet1",
-                    "range_spec": "A1:A3",
-                    "header_row": 1,
-                },
-            )
-            assert response.error is None
 
 
 def test_limited_query_validates_trailing_xml_and_releases_the_reader() -> None:

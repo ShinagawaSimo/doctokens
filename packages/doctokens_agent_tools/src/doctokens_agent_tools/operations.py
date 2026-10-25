@@ -7,10 +7,8 @@ import mimetypes
 from functools import partial
 from typing import Any, cast
 
-from doctokens_word import DocxReadSession
 from doctokens_core.models import ParseResult
 from doctokens_core.text_search import TextSearchOptions
-from doctokens_powerpoint import PptxReadSession
 from doctokens_excel import (
     AggregateSpec,
     OrderSpec,
@@ -23,6 +21,8 @@ from doctokens_excel import (
     query_xlsx,
 )
 from doctokens_excel import ParseOptions as XlsxOptions
+from doctokens_powerpoint import PptxReadSession
+from doctokens_word import DocxReadSession
 
 from .documents import Document, DocumentStore
 from .models import ToolError, ToolResponse

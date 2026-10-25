@@ -8,11 +8,11 @@ from unittest.mock import patch
 
 import pytest
 from doctokens_agent_tools import RuntimeConfig, ToolRuntime
-from doctokens_excel import XlsxTextSource, find_xlsx_text
+from doctokens_excel import find_xlsx_text
 from doctokens_excel.parsing.modules.workbook.metadata import _parse_shared_strings
 from doctokens_excel.parsing.modules.worksheets.value_rows import iter_value_rows
 
-FIXTURES = Path(__file__).resolve().parents[1] / "test_support/fixtures/xlsx"
+FIXTURES = Path(__file__).resolve().parents[3] / "test_support/fixtures/xlsx"
 SOURCE = "xlsx-shared-strings.xlsx"
 
 
@@ -72,19 +72,6 @@ def test_expiry_closes_source_without_expiring_the_snapshot() -> None:
         assert not runtime._searches.entries and runtime._searches.bytes == 0
         assert runtime._documents.documents[identifier].snapshot.is_file()
         assert runtime.execute("release_document", {"document_id": identifier}).data["released"]
-
-
-def test_resumable_source_requires_explicit_lifetime() -> None:
-    source = XlsxTextSource(FIXTURES / SOURCE)
-    with pytest.raises(RuntimeError, match="not open"):
-        iter(source)
-    with source:
-        next(iter(source))
-        assert source.estimated_memory_bytes > 0
-    with pytest.raises(RuntimeError, match="not open"):
-        iter(source)
-    with pytest.raises(RuntimeError, match="twice"):
-        source.__enter__()
 
 
 def test_cancelled_resume_closes_mutable_state_and_next_request_rebuilds() -> None:

@@ -11,7 +11,7 @@ from doctokens_agent_tools import RuntimeConfig, ToolRuntime
 from doctokens_agent_tools.presentation import Presenter
 from doctokens_agent_tools.results import ResultStore
 
-FIXTURES = Path(__file__).resolve().parents[1] / "test_support/fixtures"
+FIXTURES = Path(__file__).resolve().parents[3] / "test_support/fixtures"
 
 
 def _tools(runtime: ToolRuntime):
@@ -181,8 +181,8 @@ def test_mcp_delivers_native_first_text_once_and_continues_without_repeating_met
     from unittest.mock import patch
 
     from doctokens_agent_tools.mcp import build_server
-    from mcp.shared.memory import create_connected_server_and_client_session
     from doctokens_excel import parse_xlsx
+    from mcp.shared.memory import create_connected_server_and_client_session
 
     native = parse_xlsx(FIXTURES / "xlsx/xlsx-sparse.xlsx", sheet="Sheet1", density="structural")
     # Artificial length tests only opaque transport; the Office parser and its

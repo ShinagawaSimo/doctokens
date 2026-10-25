@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "doctokens-excel"
 version = "0.2.0"
-description = "Parse XLSX files into LLM-readable Doctokens Plain Text and XML."
+description = "Read Excel workbooks: XLSX reading projections and initial XLS stored content."
 requires-python = ">=3.10"
 dependencies = ["doctokens-core>=0.2.0"]
 classifiers = [

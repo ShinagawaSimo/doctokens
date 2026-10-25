@@ -8,6 +8,7 @@ Package access, serialization, public result types, and parsers shared by more t
 
 - [Namespaces](namespaces.md)
 - [Package](package.md)
+- [CFB streams](cfb.md)
 - [Relationships](relationship.md)
 
 ## Rendering

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -20,7 +21,10 @@ PACKAGE_ORDER = (
     "doctokens_powerpoint",
     "doctokens_agent_tools",
 )
-IMPORTS = "import doctokens_word, doctokens_core, ocr_llm_core, doctokens_powerpoint, doctokens_excel, doctokens_agent_tools"
+IMPORTS = (
+    "import doctokens_word, doctokens_core, ocr_llm_core, doctokens_powerpoint, doctokens_excel, doctokens_agent_tools; "
+    "from doctokens_excel import read_xls_content; from doctokens_core.cfb import CfbReader"
+)
 
 
 def _run(*args: str, cwd: Path = ROOT) -> None:
@@ -41,8 +45,8 @@ def _wheel(directory: Path, package: str) -> Path:
     return wheels[0]
 
 
-def _verify_workspace_wheel(directory: Path) -> None:
-    _run(sys.executable, "-m", "pip", "wheel", "--no-deps", "--no-build-isolation", "--wheel-dir", str(directory), ".")
+def _verify_workspace_wheel(directory: Path, project: Path) -> None:
+    _run(sys.executable, "-m", "pip", "wheel", "--no-deps", "--no-build-isolation", "--wheel-dir", str(directory), str(project))
     workspace_wheel = _wheel(directory, "doctokens_workspace")
     with zipfile.ZipFile(workspace_wheel) as archive:
         package_files = [name for name in archive.namelist() if name.startswith(tuple(f"{name}/" for name in PACKAGE_ORDER))]
@@ -50,13 +54,35 @@ def _verify_workspace_wheel(directory: Path) -> None:
         raise RuntimeError(f"workspace wheel must not include parser source: {package_files[:3]}")
 
 
+def _verify_package_namespace(wheel: Path, package: str) -> None:
+    with zipfile.ZipFile(wheel) as archive:
+        namespaces = {
+            name.split("/", 1)[0]
+            for name in archive.namelist()
+            if "/" in name and not name.split("/", 1)[0].endswith((".dist-info", ".data"))
+        }
+    if namespaces != {package}:
+        raise RuntimeError(f"unexpected namespaces in {wheel.name}: {sorted(namespaces)}")
+
+
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="doctokens-wheel-") as temporary:
         root = Path(temporary)
         wheelhouse = root / "wheelhouse"
         wheelhouse.mkdir()
-        _verify_workspace_wheel(wheelhouse)
+        workspace = root / "workspace"
+        workspace.mkdir()
+        shutil.copy2(ROOT / "pyproject.toml", workspace / "pyproject.toml")
+        _verify_workspace_wheel(wheelhouse, workspace)
         for package in PACKAGE_ORDER:
+            # A previous package name can survive in build/lib and silently
+            # enter a renamed wheel. Build from clean sources, not that cache.
+            project = root / "sources" / package
+            shutil.copytree(
+                ROOT / "packages" / package,
+                project,
+                ignore=shutil.ignore_patterns("build", "dist", "*.egg-info", "__pycache__", ".pytest_cache"),
+            )
             _run(
                 sys.executable,
                 "-m",
@@ -66,8 +92,9 @@ def main() -> None:
                 "--no-build-isolation",
                 "--wheel-dir",
                 str(wheelhouse),
-                str(ROOT / "packages" / package),
+                str(project),
             )
+            _verify_package_namespace(_wheel(wheelhouse, package), package)
 
         environment = root / "environment"
         venv.EnvBuilder(with_pip=True).create(environment)

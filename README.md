@@ -30,10 +30,10 @@
 ```text
 doctokens/
   packages/
-    doctokens_core/   # OPC 包、关系、XML、共享图表与输出基础设施
-    doctokens_word/  # Word：段落、编号、表格、分页、附注、修订、对象
-    doctokens_powerpoint/  # PowerPoint：幻灯片、形状、文字、备注、批注、对象
-    doctokens_excel/  # Excel：网格、公式、样式、规则、透视表、检索与查询
+    doctokens_core/   # OPC/CFB 容器、关系、XML、输出与执行基础设施
+    doctokens_word/   # Word：当前 DOCX 后端
+    doctokens_powerpoint/ # PowerPoint：当前 PPTX 后端
+    doctokens_excel/  # Excel：XLSX 后端与初步 XLS 保存内容读取
     ocr_llm_core/     # 可选 OCR 适配层
     doctokens_agent_tools/ # 共享工具运行层、直接 TOOL_CALL、可选 MCP stdio
   specifications/    # 当前解析行为、输出字段与限制
@@ -378,4 +378,21 @@ python -m pytest -q
 python test_support/update_goldens.py --only docx-list-decimal.docx
 ```
 
-脚本支持 DOCX、PPTX、XLSX，按目录发现文件并更新完整文件 golden；省略 `--only` 更新全部文件。生成后人工审查输出。真实文件回归统一放在 `tests/test_file_goldens.py`，只做全文比较；XML golden 为便于阅读会缩进，测试对当前 XML 结果应用同一格式化后比较，解析器自身仍返回紧凑 XML。范围、资源、搜索和查询 API 只有在专用文件中另有明确用途时才保存对应 API golden。缺少 golden 就报错；测试不会更新基线，也不受 `UPDATE_GOLDEN` 影响。
+脚本支持 DOCX、PPTX、XLSX，按目录发现文件并更新完整文件 golden；省略 `--only` 更新全部文件。生成后人工审查输出。真实文件全文回归分别放在 Word、Excel、PowerPoint 包自己的 `tests/` 中；共享基础设施及工具测试也由各自包管理。XML golden 为便于阅读会缩进，测试对当前 XML 结果应用同一格式化后比较，解析器自身仍返回紧凑 XML。缺少 golden 就报错；测试不会更新基线，也不受 `UPDATE_GOLDEN` 影响。
+
+### 初步 XLS 内容读取
+
+`doctokens_excel` 同时容纳 XLSX 与 XLS 后端。当前 XLS 入口读取未加密 BIFF8
+普通工作表的保存内容，返回单元格坐标、类型、值、XF 索引及公式来源标记：
+
+```python
+from doctokens_excel import read_xls_content
+
+content = read_xls_content("saved.xls")
+for sheet in content.sheets:
+    for cell in sheet.cells:
+        print(sheet.name, cell.ref, cell.kind, cell.value)
+```
+
+数字保留保存值，公式保留保存结果；货币/日期显示、公式表达式及复杂对象尚未接入。
+当前没有 XLS 的密度、完整读取会话或 MCP 工具入口。详见 [XLS 内容读取规范](specifications/xls/README.md)。

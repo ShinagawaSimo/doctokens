@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "doctokens-workspace"
 version = "0.0.0"
-description = "Development workspace for OOXML LLM parser packages"
+description = "Development workspace for Office document reading packages"
 requires-python = ">=3.10"
 dependencies = []
 
@@ -22,7 +22,7 @@ packages = []
 
 [tool.pytest.ini_options]
 testpaths = [
-    "tests",
+    "packages/doctokens_agent_tools/tests",
     "packages/doctokens_core/tests",
     "packages/doctokens_word/tests",
     "packages/doctokens_excel/tests",

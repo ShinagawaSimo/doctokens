@@ -7,11 +7,9 @@ from unittest.mock import patch
 
 import pytest
 from doctokens_agent_tools import RuntimeConfig, ToolRuntime
-from doctokens_word import open_docx
-from doctokens_core.text_search import TextSearchOptions
 from doctokens_excel import XlsxResourceCatalog, open_xlsx
 
-FIXTURES = Path(__file__).resolve().parents[1] / "test_support/fixtures"
+FIXTURES = Path(__file__).resolve().parents[3] / "test_support/fixtures"
 
 
 @pytest.mark.parametrize("source,query", [("docx/docx-paragraph.docx", "paragraph"), ("xlsx/xlsx-shared-strings.xlsx", "text")])
@@ -35,26 +33,6 @@ def test_text_match_pagination_is_independent_of_character_continuation(source: 
         insensitive = runtime.execute("find_document_text", {"path": source, "query": query.upper(), "case_sensitive": False})
         assert insensitive.error is None and insensitive.data["parts"] == expected
         assert runtime.execute("release_document", {"document_id": all_matches.data["document_id"]}).data["released"]
-
-
-@pytest.mark.parametrize(
-    "options",
-    [{"offset": -1}, {"limit": 0}, {"limit": 201}, {"context_before": -1}, {"context_after": 4001}, {"case_sensitive": "true"}],
-)
-def test_search_options_reject_invalid_budgets(options: dict) -> None:
-    with pytest.raises(ValueError):
-        TextSearchOptions(**options)
-
-
-def test_search_never_searches_generated_xml_and_checks_session_lifetime() -> None:
-    session = open_docx(FIXTURES / "docx/docx-paragraph.docx")
-    with session:
-        assert not session.find_text("<document").matches
-        assert not session.find_text(".*").matches  # A literal query, never a regex wildcard.
-        with pytest.raises(ValueError):
-            session.find_text("")
-    with pytest.raises(RuntimeError, match="not open"):
-        session.find_text("paragraph")
 
 
 def test_light_catalog_does_not_read_cell_values_and_does_not_force_tool_session() -> None:
@@ -119,18 +97,3 @@ def test_selected_xlsx_text_search_does_not_allocate_a_full_session() -> None:
             len(short["text"]) <= len(full["text"])
             for short, full in zip(shorter.data["parts"], response.data["parts"], strict=True)
         )
-
-
-def test_format_programs_are_compiled_per_code_and_owned_by_one_parse() -> None:
-    from doctokens_excel.parsing.modules.styles.number_formats.program import FormatProgram
-
-    with patch("doctokens_excel.parsing.modules.styles.index.FormatProgram", wraps=FormatProgram) as compiled:
-        with open_xlsx(FIXTURES / "xlsx/xlsx-date-time.xlsx") as workbook:
-            first_calls = compiled.call_count
-            assert first_calls > 0
-            keys = [call.args for call in compiled.call_args_list]
-            assert len(keys) == len(set(keys))
-            workbook.render(density="semantic")
-            assert compiled.call_count == first_calls
-        with open_xlsx(FIXTURES / "xlsx/xlsx-date-time.xlsx"):
-            assert compiled.call_count == first_calls * 2

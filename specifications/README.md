@@ -1,6 +1,8 @@
 # doctokens reference
 
-The reference defines how OOXML packages become Doctokens Plain Text (DTP), Doctokens XML (DTX), parse reports, and requested resources.
+The reference defines Office reading APIs, including OOXML projections to
+Doctokens Plain Text (DTP), Doctokens XML (DTX), reports and resources, and the
+initial XLS stored-content interface.
 
 | Reference | Scope |
 | --- | --- |
@@ -8,6 +10,7 @@ The reference defines how OOXML packages become Doctokens Plain Text (DTP), Doct
 | [DOCX](docx/README.md) | Document flow, text, numbering, tables, annotations, and drawing objects |
 | [PPTX](pptx/README.md) | Slides, shapes, inheritance, text, tables, annotations, and media |
 | [XLSX](xlsx/README.md) | Worksheets, cells, formulas, formatting, annotations, objects, and queries |
+| [XLS](xls/README.md) | Initial BIFF8 stored cell values through shared CFB access |
 | [Agent tools](agent-tools/README.md) | Direct tool calls, MCP, snapshots, bounded reads, and result retrieval |
 
 ## Notation

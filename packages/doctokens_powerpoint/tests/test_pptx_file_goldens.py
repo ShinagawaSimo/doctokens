@@ -7,9 +7,9 @@ import pytest
 from test_support.update_goldens import DENSITIES, discover_fixtures, golden_path, golden_text, parse_text
 
 
-@pytest.mark.parametrize("fixture", discover_fixtures(), ids=lambda path: path.name)
+@pytest.mark.parametrize("fixture", [path for path in discover_fixtures() if path.suffix == ".pptx"], ids=lambda path: path.name)
 @pytest.mark.parametrize("density", DENSITIES)
-def test_file_matches_golden(fixture: Path, density: str) -> None:
+def test_pptx_file_matches_golden(fixture: Path, density: str) -> None:
     golden = golden_path(fixture, density)
     assert golden.is_file(), (
         f'Missing golden: {golden}\nGenerate it manually with: python test_support/update_goldens.py --only "{fixture.name}"'

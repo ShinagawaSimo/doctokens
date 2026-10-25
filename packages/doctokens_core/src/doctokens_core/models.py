@@ -1,6 +1,6 @@
-"""Shared OPC-level data models.
+"""Shared Office container and reading data models.
 
-Models that apply to ALL OOXML format parsers live here.
+Common container metadata and parser output contracts live here.
 Format-specific models (paragraphs, runs, cells, slides, etc.) stay in
 their respective parser packages.
 """

@@ -18,8 +18,9 @@ not interpret BIFF records or activate OLE objects.
 - **Parsing**
   - Accept version 3, little-endian, 512-byte ordinary sectors, 64-byte mini
     sectors and the 4096-byte mini-stream cutoff. Version 4 is explicitly unsupported.
-  - Read header and extended DIFAT references, then append decoded FAT pages to
-    a compact integer array. Validate allocation counts, markers and file bounds.
+  - Read header and extended DIFAT references, then decode FAT and MiniFAT pages
+    directly into packed 32-bit unsigned arrays. Reject other native element
+    widths and byte-swap on big-endian hosts. Validate counts, markers and bounds.
   - Traverse the root's sibling tree iteratively. Reject cycles, duplicate root
     names and invalid entries. Do not enter child storages or flatten embedded streams.
   - Read only required directory pages; retain at most eight pages.
@@ -29,7 +30,8 @@ not interpret BIFF records or activate OLE objects.
   - Ignore the directory size high word in version 3, as recommended by MS-CFB.
 - **Diagnostics**
   - Invalid container or configured limit: `CfbError`.
-  - Unsupported container version: `CfbUnsupportedError`, a `CfbError` subclass.
+  - Unsupported container version or native integer-array width:
+    `CfbUnsupportedError`, a `CfbError` subclass.
   - Use before enter, after close or a second entry: `RuntimeError`.
 
 ### `CfbStream.read_at(offset, size)`
@@ -38,6 +40,8 @@ not interpret BIFF records or activate OLE objects.
   - Exactly `size` bytes; never expose bytes beyond the declared logical length.
 - **Parsing**
   - Validate the chain at open time without assembling its complete payload.
+    Reuse a root stream's validated chain within the same reader; each open returns
+    a separate view. Release retained indexes when the reader closes.
   - Map ordinary positions through `(sector_id + 1) * 512 + within_sector`.
   - Coalesce physical runs covered by the request.
   - Load MiniFAT only for a requested nonempty stream shorter than 4096 bytes.

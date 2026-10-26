@@ -5,6 +5,7 @@ from __future__ import annotations
 from array import array
 from dataclasses import dataclass
 from struct import Struct, unpack_from
+from sys import byteorder
 
 from ...runtime.execution import checkpoint
 from .source import ByteSource, CfbError, CfbUnsupportedError
@@ -49,7 +50,10 @@ class Allocation:
             raise CfbError("Invalid CFB FAT sector count")
         if self.header.difat_count > self.count or self.header.mini_fat_count > self.count:
             raise CfbError("Invalid CFB allocation-table size")
-        self.owners = array("I", [0]) * self.count
+        self.owners = array("I", [0])
+        if self.owners.itemsize != 4:
+            raise CfbUnsupportedError("CFB requires 32-bit unsigned array entries")
+        self.owners *= self.count
         fat_ids = list(unpack_from("<109I", raw, 76))
         difat_ids: set[int] = set()
         current = self.header.difat_start
@@ -72,7 +76,10 @@ class Allocation:
             if sector in difat_ids:
                 raise CfbError("CFB FAT overlaps DIFAT")
             self.owners[sector] = 1
-            self.fat.extend(_PAGE.unpack(self.sector(sector)))
+            # Decode directly into packed storage instead of a tuple of Python ints.
+            self.fat.frombytes(self.sector(sector))
+        if byteorder != "little":
+            self.fat.byteswap()
         if len(self.fat) < self.count:
             raise CfbError("CFB FAT does not cover the file")
         del self.fat[self.count :]

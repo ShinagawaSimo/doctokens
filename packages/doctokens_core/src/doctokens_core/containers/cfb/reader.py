@@ -6,6 +6,7 @@ from array import array
 from dataclasses import dataclass
 from pathlib import Path
 from struct import unpack_from
+from sys import byteorder
 from types import TracebackType
 
 from ...runtime.execution import checkpoint
@@ -40,6 +41,7 @@ class CfbReader:
         self._mini_fat: array[int] | None = None
         self._pages: dict[int, bytes] = {}
         self._entries: dict[str, DirectoryEntry] = {}
+        self._chains: dict[int, array[int]] = {}
 
     def __enter__(self) -> CfbReader:
         if self._entered:
@@ -77,6 +79,7 @@ class CfbReader:
         self._mini_fat = None
         self._pages.clear()
         self._entries.clear()
+        self._chains.clear()
 
     def _entry(self, sid: int) -> DirectoryEntry:
         if self._directory is None:
@@ -136,11 +139,22 @@ class CfbReader:
             raise CfbError(f"Missing CFB root stream: {name}")
         if entry.size > self.limits.max_stream_bytes:
             raise CfbError("CFB stream exceeds max_stream_bytes")
+        chain = self._chains.get(entry.sid)
         if entry.size >= 4096 or entry.size == 0:
-            count = (entry.size + 511) // 512
-            chain = allocation.chain(entry.start, owner=entry.sid + 8, limit=count, expected=count)
+            if chain is None:
+                count = (entry.size + 511) // 512
+                chain = allocation.chain(entry.start, owner=entry.sid + 8, limit=count, expected=count)
+                self._chains[entry.sid] = chain
             return CfbStream(self._source, chain, entry.size)
         self._load_mini()
+        if self._mini_fat is None or self._mini_root is None:
+            raise CfbError("Missing CFB mini stream")
+        if chain is None:
+            chain = self._mini_chain(entry)
+            self._chains[entry.sid] = chain
+        return CfbStream(self._mini_root, chain, entry.size, mini=True)
+
+    def _mini_chain(self, entry: DirectoryEntry) -> array[int]:
         if self._mini_fat is None or self._mini_root is None:
             raise CfbError("Missing CFB mini stream")
         chain = array("I")
@@ -157,7 +171,7 @@ class CfbReader:
             current = self._mini_fat[current]
         if len(chain) != expected:
             raise CfbError("CFB mini-sector chain is shorter than the declared size")
-        return CfbStream(self._mini_root, chain, entry.size, mini=True)
+        return chain
 
     def _load_mini(self) -> None:
         if self._mini_fat is not None:
@@ -175,4 +189,6 @@ class CfbReader:
         self._mini_fat = array("I")
         for sector in fat_chain:
             raw = allocation.sector(sector)
-            self._mini_fat.extend(unpack_from("<128I", raw))
+            self._mini_fat.frombytes(raw)
+        if byteorder != "little":
+            self._mini_fat.byteswap()

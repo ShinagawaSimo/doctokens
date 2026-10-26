@@ -30,6 +30,9 @@ testpaths = [
     "packages/doctokens_powerpoint/tests",
 ]
 pythonpath = [
+    ".",
+    "packages/doctokens_word/tests/support",
+    "packages/doctokens_powerpoint/tests/support",
     "packages/doctokens_agent_tools/src",
     "packages/doctokens_core/src",
     "packages/doctokens_word/src",
@@ -77,9 +80,9 @@ files = [
 ]
 
 [[tool.mypy.overrides]]
-module = "ocr_llm_core._tesseract"
+module = "ocr_llm_core.providers.tesseract"
 disable_error_code = ["unused-ignore"]
 
 [[tool.mypy.overrides]]
-module = "ocr_llm_core._easyocr"
+module = "ocr_llm_core.providers.easyocr"
 disable_error_code = ["unused-ignore"]

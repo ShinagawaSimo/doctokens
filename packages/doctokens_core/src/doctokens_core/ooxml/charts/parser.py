@@ -1,0 +1,328 @@
+"""Shared parser for legacy DrawingML charts and Office ChartEx charts.
+
+The three Office parsers deliberately share one chart IR. Chart parts are small
+enough to parse eagerly, but their XML is sufficiently different that the
+format-specific parsers must not each grow a second implementation. The
+``ChartParser`` owns one chart-part traversal and returns compact dictionaries
+that can be attached to DOCX, XLSX, or PPTX resources without retaining XML.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from xml.etree import ElementTree as ET
+
+from .axes import parse_chart_axes
+from .models import ChartInfo as ChartInfo
+from .models import ChartPlotInfo as ChartPlotInfo
+from .models import ChartPoint as ChartPoint
+from .models import ChartSeriesInfo as ChartSeriesInfo
+from .values import (
+    NS_C,
+    NS_CX,
+    _cached_values_from,
+    _chartex_dimension_values,
+    _chartex_levels,
+    _chartex_series_name,
+    _chartex_title,
+    _chartml_categories,
+    _chartml_series_name,
+    _chartml_title,
+    _direct_attr,
+    _direct_children,
+    _first_dimension,
+    _first_direct_child,
+    _first_formula,
+    _flatten_category_levels,
+    _local_name,
+    _namespace,
+    _summary_chart_type,
+    _to_float,
+    _true_value,
+    _unique_in_order,
+)
+
+CHART_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
+CHART_EX_REL_TYPE = "http://schemas.microsoft.com/office/2014/relationships/chartEx"
+CHART_RELATIONSHIP_TYPES = frozenset((CHART_REL_TYPE, CHART_EX_REL_TYPE))
+CHART_EX_GRAPHIC_DATA_URI = "http://schemas.microsoft.com/office/drawing/2014/chartex"
+
+_CHART_TYPE_MAP: dict[str, str] = {
+    "areaChart": "area",
+    "area3DChart": "area3d",
+    "barChart": "bar",
+    "bar3DChart": "bar3d",
+    "bubbleChart": "bubble",
+    "doughnutChart": "doughnut",
+    "lineChart": "line",
+    "line3DChart": "line3d",
+    "ofPieChart": "ofPie",
+    "pieChart": "pie",
+    "pie3DChart": "pie3d",
+    "radarChart": "radar",
+    "scatterChart": "scatter",
+    "stockChart": "stock",
+    "surfaceChart": "surface",
+    "surface3DChart": "surface3d",
+}
+
+MAX_PREVIEW_POINTS = 8
+
+
+# ── Output types ──
+
+
+@dataclass(slots=True)
+class _ChartExData:
+    """The dimensions addressed by one ChartEx ``dataId``.
+
+    ChartEx lets a series refer to a shared data block by integer ID. Keeping
+    this short-lived catalog makes reference resolution O(series + data), and
+    avoids repeatedly scanning ``chartData`` for every series.
+    """
+
+    categories: list[str]
+    numeric_dimensions: dict[str, list[str]]
+    formulas: dict[str, str]
+
+
+class ChartParser:
+    """Parse a legacy ChartML or ChartEx part into the shared chart IR."""
+
+    def parse(self, root: ET.Element) -> ChartInfo:
+        if _namespace(root.tag) == NS_CX and _local_name(root.tag) == "chartSpace":
+            return self._parse_chartex(root)
+        result = self._parse_chartml(root)
+        if axes := parse_chart_axes(root):
+            result["axes"] = axes
+        return result
+
+    def _parse_chartml(self, root: ET.Element) -> ChartInfo:
+        plot_area = root.find(f".//{{{NS_C}}}plotArea")
+        plots: list[ChartPlotInfo] = []
+        series: list[ChartSeriesInfo] = []
+        if plot_area is not None:
+            for chart_element in plot_area:
+                chart_type = _CHART_TYPE_MAP.get(_local_name(chart_element.tag))
+                if chart_type is None:
+                    continue
+                plot_index = len(plots) + 1
+                plot_series = self._parse_chartml_series(chart_element, chart_type, plot_index, len(series))
+                series.extend(plot_series)
+                plot: ChartPlotInfo = {
+                    "index": plot_index,
+                    "chart_type": chart_type,
+                    "series_indices": [item["index"] for item in plot_series],
+                }
+                plots.append(plot)
+
+        chart_types = _unique_in_order(plot["chart_type"] for plot in plots)
+        return _chart_info(
+            chart_type=_summary_chart_type(chart_types),
+            title=_chartml_title(root),
+            series=series,
+            plots=plots,
+        )
+
+    def _parse_chartml_series(
+        self,
+        chart_element: ET.Element,
+        chart_type: str,
+        plot_index: int,
+        start_index: int,
+    ) -> list[ChartSeriesInfo]:
+        rows: list[ChartSeriesInfo] = []
+        for offset, series_element in enumerate(_direct_children(chart_element, NS_C, "ser"), start=1):
+            category_source = _first_direct_child(series_element, NS_C, "cat")
+            if category_source is None:
+                category_source = _first_direct_child(series_element, NS_C, "xVal")
+            value_source = _first_direct_child(series_element, NS_C, "val")
+            if value_source is None:
+                value_source = _first_direct_child(series_element, NS_C, "yVal")
+            categories = _chartml_categories(category_source)
+            values = _cached_values_from(value_source)
+            x_values = _cached_values_from(_first_direct_child(series_element, NS_C, "xVal"))
+            y_values = _cached_values_from(_first_direct_child(series_element, NS_C, "yVal"))
+            bubble_sizes = _cached_values_from(_first_direct_child(series_element, NS_C, "bubbleSize"))
+            rows.append(
+                _series_row(
+                    index=start_index + offset,
+                    plot_index=plot_index,
+                    chart_type=chart_type,
+                    categories=categories,
+                    values=values,
+                    x_values=x_values,
+                    y_values=y_values,
+                    bubble_sizes=bubble_sizes,
+                    name=_chartml_series_name(series_element),
+                    formula=_first_formula(value_source),
+                    category_formula=_first_formula(category_source),
+                    hidden=False,
+                )
+            )
+        return rows
+
+    def _parse_chartex(self, root: ET.Element) -> ChartInfo:
+        catalog = self._build_chartex_data_catalog(root)
+        chart = _first_direct_child(root, NS_CX, "chart")
+        plot_area = _first_direct_child(chart, NS_CX, "plotArea") if chart is not None else None
+        region = _first_direct_child(plot_area, NS_CX, "plotAreaRegion") if plot_area is not None else None
+        series: list[ChartSeriesInfo] = []
+        plots_by_type: dict[str, ChartPlotInfo] = {}
+        if region is not None:
+            for series_element in _direct_children(region, NS_CX, "series"):
+                chart_type = series_element.get("layoutId") or "unknown"
+                plot = plots_by_type.get(chart_type)
+                if plot is None:
+                    plot = {"index": len(plots_by_type) + 1, "chart_type": chart_type, "series_indices": []}
+                    plots_by_type[chart_type] = plot
+                data_id = _direct_attr(series_element, NS_CX, "dataId", "val")
+                data = catalog.get(data_id) if data_id is not None else None
+                dimensions = data.numeric_dimensions if data is not None else {}
+                values = dimensions.get("val") or dimensions.get("y") or _first_dimension(dimensions)
+                row = _series_row(
+                    index=len(series) + 1,
+                    plot_index=plot["index"],
+                    chart_type=chart_type,
+                    categories=data.categories if data is not None else [],
+                    values=values,
+                    x_values=dimensions.get("x", []),
+                    y_values=dimensions.get("y", []),
+                    bubble_sizes=dimensions.get("size", []),
+                    name=_chartex_series_name(series_element),
+                    formula=(data.formulas.get("val") or data.formulas.get("y")) if data is not None else None,
+                    category_formula=data.formulas.get("cat") if data is not None else None,
+                    hidden=_true_value(series_element.get("hidden")),
+                )
+                series.append(row)
+                plot["series_indices"].append(row["index"])
+
+        plots = list(plots_by_type.values())
+        return _chart_info(
+            chart_type=_summary_chart_type([plot["chart_type"] for plot in plots]),
+            title=_chartex_title(chart),
+            series=series,
+            plots=plots,
+        )
+
+    def _build_chartex_data_catalog(self, root: ET.Element) -> dict[str, _ChartExData]:
+        chart_data = _first_direct_child(root, NS_CX, "chartData")
+        if chart_data is None:
+            return {}
+        catalog: dict[str, _ChartExData] = {}
+        for data in _direct_children(chart_data, NS_CX, "data"):
+            data_id = data.get("id")
+            if data_id is None:
+                continue
+            categories: list[str] = []
+            dimensions: dict[str, list[str]] = {}
+            formulas: dict[str, str] = {}
+            for dimension in data:
+                if _namespace(dimension.tag) != NS_CX:
+                    continue
+                local = _local_name(dimension.tag)
+                dimension_type = dimension.get("type")
+                if local == "strDim" and dimension_type == "cat":
+                    categories = _flatten_category_levels(_chartex_levels(dimension))
+                    formula = _first_formula(dimension, namespace=NS_CX)
+                    if formula:
+                        formulas["cat"] = formula
+                elif local == "numDim" and dimension_type:
+                    dimensions[dimension_type] = _chartex_dimension_values(dimension)
+                    formula = _first_formula(dimension, namespace=NS_CX)
+                    if formula:
+                        formulas[dimension_type] = formula
+            catalog[data_id] = _ChartExData(categories, dimensions, formulas)
+        return catalog
+
+
+def parse_chart_xml(root: ET.Element) -> ChartInfo:
+    """Compatibility entry point for callers that do not need parser state."""
+    return ChartParser().parse(root)
+
+
+# ── IR construction ──
+
+
+def _chart_info(
+    *,
+    chart_type: str,
+    title: str | None,
+    series: list[ChartSeriesInfo],
+    plots: list[ChartPlotInfo],
+) -> ChartInfo:
+    result: ChartInfo = {
+        "chart_type": chart_type,
+        "series": series,
+        "series_count": len(series),
+        "point_count": sum(_series_point_count(item) for item in series),
+    }
+    if chart_type == "combination":
+        result["plots"] = plots
+    else:
+        for series_item in series:
+            series_item.pop("plot_index", None)
+            series_item.pop("chart_type", None)
+    if title:
+        result["title"] = title
+    return result
+
+
+def _series_row(
+    *,
+    index: int,
+    plot_index: int,
+    chart_type: str,
+    categories: list[str],
+    values: list[str],
+    x_values: list[str],
+    y_values: list[str],
+    bubble_sizes: list[str],
+    name: str | None,
+    formula: str | None,
+    category_formula: str | None,
+    hidden: bool,
+) -> ChartSeriesInfo:
+    point_count = max(len(categories), len(values), len(x_values), len(y_values), len(bubble_sizes))
+    preview_items: list[str] = []
+    for item_index in range(min(point_count, MAX_PREVIEW_POINTS)):
+        category = categories[item_index] if item_index < len(categories) else str(item_index + 1)
+        value = values[item_index] if item_index < len(values) else ""
+        preview_items.append(f"{category}={value}" if value else category)
+    row: ChartSeriesInfo = {
+        "index": index,
+        "plot_index": plot_index,
+        "chart_type": chart_type,
+        "categories": categories,
+        "values": values,
+        "preview": "; ".join(preview_items),
+    }
+    if x_values:
+        row["x_values"] = x_values
+    if y_values:
+        row["y_values"] = y_values
+    if bubble_sizes:
+        row["bubble_sizes"] = bubble_sizes
+    if name:
+        row["name"] = name
+    if formula:
+        row["formula"] = formula
+    if category_formula:
+        row["category_formula"] = category_formula
+    if hidden:
+        row["hidden"] = True
+    numbers = [number for value in values if (number := _to_float(value)) is not None]
+    if numbers:
+        row["min"] = min(numbers)
+        row["max"] = max(numbers)
+    return row
+
+
+def _series_point_count(series: ChartSeriesInfo) -> int:
+    return max(
+        len(series.get("categories", [])),
+        len(series.get("values", [])),
+        len(series.get("x_values", [])),
+        len(series.get("y_values", [])),
+        len(series.get("bubble_sizes", [])),
+    )

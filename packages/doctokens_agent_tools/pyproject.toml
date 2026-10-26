@@ -13,7 +13,7 @@ dependencies = ["doctokens-word>=0.2,<0.3", "doctokens-powerpoint>=0.2,<0.3", "d
 mcp = ["mcp>=1.12,<2"]
 
 [project.scripts]
-doctokens-mcp = "doctokens_agent_tools.mcp:main"
+doctokens-mcp = "doctokens_agent_tools.mcp.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

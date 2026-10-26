@@ -10,7 +10,7 @@ Install `doctokens-agent-tools[mcp]`. The `mcp` extra supplies the official Pyth
 doctokens-mcp --root /absolute/path/to/documents
 ```
 
-The equivalent module command is `python -m doctokens_agent_tools.mcp --root ...`. Repeat `--root` for multiple allowed directories. The service requires initialization by an MCP client; it does not print document content as an ordinary command-line converter.
+The equivalent module command is `python -m doctokens_agent_tools.mcp.server --root ...`. Repeat `--root` for multiple allowed directories. The service requires initialization by an MCP client; it does not print document content as an ordinary command-line converter.
 
 `--mcp-output-mode compatible|compact` selects native metadata projection;
 `compatible` is the default. `--max-session-memory-bytes` and
@@ -103,7 +103,7 @@ async def collect_text(client, response, metadata):
 async def main():
     parameters = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "doctokens_agent_tools.mcp", "--root", "/absolute/path/to/documents"],
+        args=["-m", "doctokens_agent_tools.mcp.server", "--root", "/absolute/path/to/documents"],
     )
     async with stdio_client(parameters) as (reader, writer):
         async with ClientSession(reader, writer) as client:

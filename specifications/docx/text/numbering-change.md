@@ -52,7 +52,7 @@ In the `original` revision view, `w:numberingChange` can provide level definitio
   - Lookup in `NumberFormatRenderer._NFC_FORMATS`.
 
 - **Parsing**
-  - Use the exact mapping in [NumberFormatRenderer](../../../packages/doctokens_word/src/doctokens_word/ooxml/numbering/formats.py#L32). An unknown selector skips its definition.
+  - Use the exact mapping in [NumberFormatRenderer](../../../packages/doctokens_word/src/doctokens_word/docx/ooxml/numbering/formats.py#L32). An unknown selector skips its definition.
 
 - **Diagnostics**
   - `40` or `>=60`: `APPLICATION_DEFINED_NUMBER_FORMAT`; other unknown values: `INVALID_NUMBERING_CHANGE`.

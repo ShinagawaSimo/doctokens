@@ -2,7 +2,7 @@
 
 [COMMON](README.md) / CFB
 
-`doctokens_core.cfb` provides bounded, read-only CFB version 3 access. It does
+`doctokens_core.containers.cfb` provides bounded, read-only CFB version 3 access. It does
 not interpret BIFF records or activate OLE objects.
 
 ## Reader and streams

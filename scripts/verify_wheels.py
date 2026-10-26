@@ -23,7 +23,7 @@ PACKAGE_ORDER = (
 )
 IMPORTS = (
     "import doctokens_word, doctokens_core, ocr_llm_core, doctokens_powerpoint, doctokens_excel, doctokens_agent_tools; "
-    "from doctokens_excel import read_xls_content; from doctokens_core.cfb import CfbReader"
+    "from doctokens_excel import read_xls_content; from doctokens_core.containers.cfb import CfbReader"
 )
 
 
@@ -114,7 +114,7 @@ def main() -> None:
             str(_wheel(wheelhouse, "doctokens_agent_tools")) + "[mcp]",
             cwd=environment,
         )
-        _run(str(python), "-c", "import mcp; from doctokens_agent_tools.mcp import build_server", cwd=environment)
+        _run(str(python), "-c", "import mcp; from doctokens_agent_tools.mcp.server import build_server", cwd=environment)
         command = environment / ("Scripts/doctokens-mcp.exe" if sys.platform == "win32" else "bin/doctokens-mcp")
         _run(str(command), "--help", cwd=environment)
 

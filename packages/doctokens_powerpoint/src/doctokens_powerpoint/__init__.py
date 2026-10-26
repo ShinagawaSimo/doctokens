@@ -1,10 +1,10 @@
 """PPTX parser that produces LLM-readable self-defined output."""
 
-from doctokens_core.models import ParseReport, ParseResult, ResourceDescriptor
+from doctokens_core.contracts.models import ParseReport, ParseResult, ResourceDescriptor
 
 from ._version import __version__
-from .api import PptxReadSession, open_pptx, parse_pptx
-from .core.models import ParseOptions
+from .pptx.model.presentation import ParseOptions
+from .pptx.reading.api import PptxReadSession, open_pptx, parse_pptx
 
 __all__ = [
     "ParseOptions",

@@ -30,17 +30,30 @@
 ```text
 doctokens/
   packages/
-    doctokens_core/   # OPC/CFB 容器、关系、XML、输出与执行基础设施
-    doctokens_word/   # Word：当前 DOCX 后端
-    doctokens_powerpoint/ # PowerPoint：当前 PPTX 后端
-    doctokens_excel/  # Excel：XLSX 后端与初步 XLS 保存内容读取
-    ocr_llm_core/     # 可选 OCR 适配层
-    doctokens_agent_tools/ # 共享工具运行层、直接 TOOL_CALL、可选 MCP stdio
+    doctokens_core/src/doctokens_core/
+      containers/    # OPC、CFB、容器限额与源准入
+      contracts/     # 读取结果、资源、诊断和输入类型
+      runtime/       # 取消、计量、生命周期与对象内存统计
+      output/        # DTP/DTX 序列化
+      ooxml/         # 共享图表、公式、编号
+      text/          # 文本检索
+    doctokens_word/src/doctokens_word/docx/
+    doctokens_excel/src/doctokens_excel/{xlsx,xls}/
+    doctokens_powerpoint/src/doctokens_powerpoint/pptx/
+    ocr_llm_core/src/ocr_llm_core/{providers,processing}/
+    doctokens_agent_tools/src/doctokens_agent_tools/
+      contracts/     # 配置、参数、工具发现和响应契约
+      state/         # 快照、会话、结果和检索状态
+      runtime/       # 调度、操作和响应投影
+      mcp/           # 可选 MCP 服务端适配
   specifications/    # 当前解析行为、输出字段与限制
-  test_support/      # 真实 Office 文件、素材、golden 与手动更新脚本
-  tests/             # 真实文件全文回归与更新脚本测试
-  scripts/           # wheel 构建和安装验证
+  test_support/      # 真实文件、人工审核 golden、素材和共享路径
+  scripts/           # 构建和质量检查
 ```
+
+各发行包的顶层保留公开导出和版本信息；格式后端内部按模型、源解码、读取/查询和输出职责组织。
+测试保留在所属包的 `tests/` 中，按格式和职责分组，公共辅助代码位于各包的 `tests/support/`。
+具体目录说明见[代码目录组织](docs/代码目录组织.md)。
 
 核心解析能力如下。表中标签指正文 DTX 输出；各密度保留的具体字段见[密度参考](specifications/common/density.md)。
 

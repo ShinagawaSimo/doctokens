@@ -7,8 +7,8 @@ from pathlib import Path
 from struct import unpack_from
 from typing import Literal
 
-from doctokens_core.cfb import CfbError, CfbReader
-from doctokens_core.models import ParseWarning
+from doctokens_core.containers.cfb import CfbError, CfbReader
+from doctokens_core.contracts.models import ParseWarning
 
 from .cells import read_cells
 from .models import XlsContent, XlsError, XlsLimits, XlsSheet

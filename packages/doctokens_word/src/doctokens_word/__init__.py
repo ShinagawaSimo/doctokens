@@ -1,10 +1,10 @@
 """DOCX parser that produces LLM-readable self-defined output."""
 
-from doctokens_core.models import ParseReport, ParseResult, ResourceDescriptor
+from doctokens_core.contracts.models import ParseReport, ParseResult, ResourceDescriptor
 
 from ._version import __version__
-from .api import DocxReadSession, open_docx, parse_docx
-from .core.models import ParseOptions
+from .docx.model import ParseOptions
+from .docx.reading.api import DocxReadSession, open_docx, parse_docx
 
 __all__ = [
     "DocxReadSession",

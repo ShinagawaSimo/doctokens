@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-from doctokens_core.cfb import CfbLimits
-from doctokens_core.models import ParseWarning
+from doctokens_core.containers.cfb import CfbLimits
+from doctokens_core.contracts.models import ParseWarning
 
 
 class XlsError(ValueError):

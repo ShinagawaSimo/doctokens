@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from struct import unpack_from
 
-from doctokens_core.execution import checkpoint
+from doctokens_core.runtime.execution import checkpoint
 
 from .models import XlsError
 from .records import Cursor, Record

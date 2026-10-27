@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .chinese_digits import translate_digits
 from .codes import _DATE_FIELD_RE, _date_scan_text
 from .date_context import DateContext
 from .date_words import date_number, month_name, weekday_name
@@ -31,28 +32,28 @@ class DateProgram:
             elif kind == "year":
                 value = date_number(year % 100 if len(token) == 2 else year, token, dbnum)
             elif kind == "day":
-                value = date_number(day, token, dbnum)
+                value = date_number(day, token, dbnum, padding="日" not in self.context.code)
             elif kind == "weekday":
                 value = weekday_name(year, month, day, short=len(token) == 3, locale=locale)
             elif kind == "month":
-                value = date_number(month, token, dbnum)
+                value = date_number(month, token, dbnum, padding="月" not in self.context.code)
             elif kind == "month-name":
                 value = month_name(month, short=len(token) != 4, locale=locale)
                 if len(token) > 4:
                     value = value[0]
             elif kind in {"hour", "minute", "second"}:
                 number = hour_value if kind == "hour" else minute if kind == "minute" else second
-                value = str(number) if len(token) == 1 else str(number).zfill(2)
+                value = date_number(number, token, dbnum)
             elif kind == "elapsed":
                 number = total // (3600 if token[0] == "h" else 60 if token[0] == "m" else 1)
-                value = str(number).zfill(2 if len(token) == 2 else 1)
+                value = date_number(number, token, dbnum, elapsed=True)
             elif kind == "fraction":
                 value = f"{milliseconds:03d}"[: len(token)]
                 if token.endswith("#"):
                     value = value.rstrip("0")
                 elif token.endswith("?"):
                     value = value.rstrip("0") + " " * (len(token) - len(value.rstrip("0")))
-                value = "." + value
+                value = "." + (translate_digits(value, dbnum) if dbnum else value)
             elif token == "上午/下午" or locale.lower().startswith("zh"):
                 value = ("上" if hour < 12 else "下") if token.upper() == "A/P" else ("上午" if hour < 12 else "下午")
             else:

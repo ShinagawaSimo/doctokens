@@ -7,6 +7,8 @@ import re
 from .date_context import date_locale
 from .sections import _section_directives
 
+GENERAL_TOKEN = re.compile(r"General|G/通用格式", re.IGNORECASE)
+
 # Built-in format codes from ECMA-376 §18.8.30.  Excel may omit the
 # corresponding ``numFmt`` element for these IDs, so the parser needs the
 # table even when styles.xml contains no custom formats.

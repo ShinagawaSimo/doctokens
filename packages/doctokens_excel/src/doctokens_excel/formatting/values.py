@@ -6,14 +6,14 @@ import math
 import re
 from decimal import Decimal
 
-from .chinese import format_chinese_integer
+from .chinese import format_chinese_number
 from .codes import _date_scan_text, _localized_builtin_code
 from .codes import builtin_format_code as builtin_format_code
 from .codes import resolve_format as resolve_format
-from .dates import _format_date_value, time_formula_bar_value
-from .numbers import _format_number_value
+from .dates import time_formula_bar_value
+from .display import format_display_value
 from .program import FormatProgram
-from .sections import _clean_display_pattern, _split_format_sections
+from .sections import _clean_display_pattern, _split_format_sections, balanced_format, supported_directives
 
 
 def format_value(
@@ -25,34 +25,19 @@ def format_value(
     locale: str,
     _program: FormatProgram | None = None,
 ) -> str:
-    try:
-        num = float(raw)
-    except (TypeError, ValueError):
-        return raw
-    if not math.isfinite(num):
-        return raw
     fmt_code = fmt_code or _localized_builtin_code(num_fmt_id, locale)
-    if not fmt_code or fmt_code.lower() == "general":
+    if not fmt_code:
         return raw
     program = _program or FormatProgram(fmt_code, locale)
-    section, _value = program.select(num)
-    if section is None:
-        return raw
-    is_date, _is_pct = program.classify(section)
-    try:
-        if is_date:
-            return _format_date_value(num, section, date_1904, locale, context=program.date(section))
-        if program.section_directives(section).dbnum:
-            rendered = format_chinese_integer(Decimal(raw), section, fmt_code, locale)
-            return rendered if rendered is not None else raw
-        return _format_number_value(num, raw, fmt_code, _is_pct, locale, program=program)
-    except (ArithmeticError, ValueError):
-        return raw
+    rendered = format_display_value(raw, program, date_1904=date_1904)
+    return rendered if rendered is not None else raw
 
 
 def text_format_parts(fmt_code: str) -> list[str | None] | None:
     """Return literals and text insertion points; None means no text section."""
     sections = _split_format_sections(fmt_code)
+    if not balanced_format(fmt_code) or len(sections) > 4 or not all(supported_directives(s) for s in sections):
+        return None
     if len(sections) == 4:
         section = sections[3]
     elif len(sections) == 1 and "@" in _date_scan_text(fmt_code):
@@ -92,7 +77,7 @@ def formula_bar_value(raw: str, fmt_code: str, locale: str, *, _program: FormatP
             return time_formula_bar_value(value, section, locale)
         if is_pct:
             return None
-        if program.section_directives(section).dbnum and format_chinese_integer(value, section, fmt_code, locale) is None:
+        if program.section_directives(section).dbnum and format_chinese_number(value, section, program) is None:
             return None
         syntax = program.syntax(section)
         # Scientific display formats use the uppercase ``E+``/``E-`` token.

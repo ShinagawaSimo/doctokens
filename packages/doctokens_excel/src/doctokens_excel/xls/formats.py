@@ -7,16 +7,16 @@ from struct import unpack_from
 
 from doctokens_core.contracts.models import ParseWarning
 
-from doctokens_excel.formatting.numeric import format_numeric_value
+from doctokens_excel.formatting.display import format_display_value
 from doctokens_excel.formatting.program import FormatProgram
-from doctokens_excel.formatting.values import builtin_format_code
+from doctokens_excel.formatting.values import builtin_format_code, text_format_parts
 
 from .models import XlsCell, XlsError
 
 # MS-XLS 2.4.126 permits these localized built-ins and custom identifiers.
 _FORMAT_IDS = frozenset((*range(5, 9), *range(23, 27), *range(41, 45), *range(63, 67), *range(164, 393)))
 # Currency/accounting built-ins require the saved locale-dependent Format code.
-_FIXED_BUILTINS = frozenset((*range(5), *range(9, 23), *range(37, 41), *range(45, 50)))
+_BUILTIN_FALLBACK_IDS = frozenset((*range(5), *range(9, 23), *range(27, 41), *range(45, 59)))
 
 
 def read_number_format(data: bytes) -> tuple[int, str]:
@@ -53,10 +53,12 @@ def read_xf(data: bytes) -> Xf:
 class XlsFormatIndex:
     def __init__(self, locale: str, max_xfs: int) -> None:
         self.locale = locale
+        self.date_1904 = False
         self.max_xfs = max_xfs
         self._xfs: list[Xf] = []
         self._codes: dict[int, str] = {}
         self._programs: dict[int, FormatProgram | None] = {}
+        self._text_parts: dict[int, list[str | None] | None] = {}
         self._warned: set[int] = set()
         self.warnings: list[ParseWarning] = []
 
@@ -84,7 +86,7 @@ class XlsFormatIndex:
         identifier = xf.format_id
         if identifier not in self._programs:
             code = self._codes.get(identifier)
-            if code is None and identifier in _FIXED_BUILTINS:
+            if code is None and identifier in _BUILTIN_FALLBACK_IDS:
                 code = builtin_format_code(identifier, self.locale)
             if code is None and identifier >= 164:
                 raise XlsError(f"Missing XLS Format record for identifier {identifier}")
@@ -94,18 +96,33 @@ class XlsFormatIndex:
     def format_cell(self, cell: XlsCell) -> XlsCell:
         identifier, program = self._program(cell.xf_index)
         text = str(cell.value)
+        if cell.kind == "number" and text.endswith(".0"):
+            text = text[:-2]
         if cell.kind == "boolean":
             text = "TRUE" if cell.value else "FALSE"
-        if cell.kind != "number" or identifier == 0:
+        if cell.kind == "string" and program is not None:
+            if not program.supported:
+                self._warn(identifier)
+                return replace(cell, display_text=text)
+            if identifier not in self._text_parts:
+                self._text_parts[identifier] = text_format_parts(program.code)
+            parts = self._text_parts[identifier]
+            if parts is not None:
+                text = "".join(text if part is None else part for part in parts)
+        if cell.kind != "number":
             return replace(cell, display_text=text)
-        rendered = format_numeric_value(text, program) if program is not None else None
-        if rendered is None and identifier not in self._warned:
+        rendered = format_display_value(text, program, date_1904=self.date_1904) if program is not None else None
+        if rendered is None:
+            self._warn(identifier)
+        return replace(cell, display_text=rendered if rendered is not None else text)
+
+    def _warn(self, identifier: int) -> None:
+        if identifier not in self._warned:
             self._warned.add(identifier)
             self.warnings.append(
                 ParseWarning(
                     "XLS_NUMBER_FORMAT_UNSUPPORTED",
-                    "Number format is not rendered; the saved numeric value is retained",
+                    "Number format is not rendered; the saved value is retained",
                     f"Workbook/Format[{identifier}]",
                 )
             )
-        return replace(cell, display_text=rendered if rendered is not None else text)

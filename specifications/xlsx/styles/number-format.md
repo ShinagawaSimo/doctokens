@@ -10,6 +10,12 @@ date operations are reused; each value still selects its section and is formatte
 independently using the active date system. No global cache or per-cell/value
 result cache is introduced.
 
+XLS and XLSX share the format-family dispatcher. Decimal placeholder/literal
+operations are compiled per core pattern; fraction and scientific algorithms
+retain their own numeric semantics. General preserves the saved precision and
+does not emulate Excel's width-dependent shortening. Fraction display omits only
+alignment padding while retaining explicit literal spaces.
+
 Date compilation resolves literals, month/minute roles, weekday/month names,
 AM/PM, elapsed fields and fractional-second suffixes from the effective locale
 context once. Execution converts each saved serial using its workbook epoch and
@@ -54,14 +60,35 @@ display, raw, style and control processing; output and fallback rules are unchan
 - **Output**
   - Chinese counting text for supported numeric sections and Chinese date fields for supported date sections. Numeric `raw` is independent of date display.
 - **OOXML**
-  - `[DBNum1]` or `[DBNum2]` in `numFmt/@formatCode`, optionally accompanied by the Simplified Chinese locale directive `[$-804]`.
+  - `[DBNum1]`, `[DBNum2]` or `[DBNum3]` in `numFmt/@formatCode`, optionally accompanied by the Simplified Chinese locale directive `[$-804]`.
 - **IR**
   - Resolved `Cell.text`; `Cell.raw` retains an independently supported ordinary numeric edit form. Date serials do not become `raw`.
 - **Parsing**
-  - Support `General` integers with absolute value below `1e15`. `DBNum1` uses `〇一二三四五六七八九` and `十百千`; `DBNum2` uses `零壹贰叁肆伍陆柒捌玖` and `拾佰仟`. Split integers into four-digit groups, attach `万`, `亿`, or `万亿`, and insert a single zero across missing positions. Retain the leading one before ten: `10` becomes `一十` or `壹拾`. Saved `1234` becomes `一千二百三十四` or `壹仟贰佰叁拾肆`.
+  - Support General integers/decimals with absolute value below `1e16`. DBNum1 uses `○一二三四五六七八九` (U+25CB for zero) and `十百千`; DBNum2 uses `零壹贰叁肆伍陆柒捌玖` and `拾佰仟`; DBNum3 uses fullwidth digits with Chinese units. Split integers into four-digit groups, attach `万`, `亿`, or `兆`, and insert a zero across missing positions. General retains the leading one before ten. Fractional digits follow the decimal point without counting units.
+  - Fixed-point patterns translate numeric positions after rounding and padding. Preserve grouping separators and all literal text: `1234.56` with `[DBNum1]0" ID2"` displays `一二三五 ID2`, leaving the literal `2` intact.
   - An explicit locale ID is authoritative; `804` and `0804` select Simplified Chinese even when the parser locale differs. Without an explicit locale directive, require `zh-CN`. Preserve literal prefixes/suffixes and the selected positive/negative/zero section. Literal bracket text is not a locale directive.
-  - Date classification precedes DBNum dispatch. In `zh-CN`, `DBNum1` formats the converted year digit by digit using `○一二三四五六七八九` (U+25CB for zero); month/day use Chinese tens and units, omitting the leading one in ten. Saved `46235` in the 1900 system with `[DBNum1][$-804]yyyy"年"m"月"d"日"` displays `二○二六年八月一日`. Preserve literals; never convert the entire serial into a Chinese integer. Date DBNum2/3 remain unsupported.
-  - Decimal/scientific General values, other numeric patterns, other DBNum variants, and other locales retain the saved value until their display rules are supported. Do not substitute the Word numbering implementation: its glyphs and leading-one rules differ.
+  - Date classification precedes numeric DBNum dispatch. Convert year digits, month/day fields, clocks, elapsed fields and fractional seconds with their field-specific padding and counting rules. DBNum2 keeps financial leading ones in tens; DBNum3 ordinary dates/clocks use fullwidth positions while elapsed fields use counting units. Month-name tokens retain locale words. Saved `46235` with `[DBNum1][$-804]yyyy"年"m"月"d"日"` displays `二○二六年八月一日`. Never convert the entire date serial as an ordinary integer.
+  - Percent/fraction combinations, other variants/locales and out-of-range General values retain the saved value. Do not substitute Word numbering: its glyphs and counting rules differ.
+
+### Fraction approximation
+
+- **Parsing**
+  - Choose the nearest rational whose denominator fits the placeholder count,
+    or round the numerator against an explicit fixed denominator. Retain required
+    zeroes and literal spaces; omit only alignment padding.
+  - Excel can choose a different approximate fraction for the same saved value.
+    With `# ????/????`, saved `0.123456` yields `1229/9955` under this policy;
+    observed Excel yields `10/81`. This is separate from alignment-space removal.
+
+### Unsupported format syntax
+
+- **Parsing**
+  - Require balanced literals/directives and at most four sections. Unknown bracket
+    directives, unsupported DBNum/locales/calendar bits, lowercase exponent forms,
+    explicit `b1/b2` calendar selectors and sub-millisecond time patterns retain saved data.
+  - Quoted/escaped bracket text is literal. Named colors and indexed color
+    directives do not become display characters; only supported named colors
+    are projected through the existing semantic color mapping.
 
 ### Date locale and system long date
 

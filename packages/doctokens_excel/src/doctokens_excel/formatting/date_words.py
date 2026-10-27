@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from .chinese_digits import DBNUM_DIGITS, DBNUM_UNITS, integer_text
+
 _MONTHS = (
     "January",
     "February",
@@ -21,14 +23,22 @@ _MONTHS = (
 _DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
 
-def date_number(value: int, token: str, dbnum: str | None) -> str:
+def date_number(value: int, token: str, dbnum: str | None, *, padding: bool = True, elapsed: bool = False) -> str:
     if dbnum is None:
         return str(value).zfill(len(token))
-    digits = "○一二三四五六七八九"
-    if token[0].lower() == "y":
+    digits = DBNUM_DIGITS[dbnum]
+    if token[0].lower() == "y" or (dbnum == "dbnum3" and not elapsed):
         return "".join(digits[int(digit)] for digit in str(value).zfill(len(token)))
+    if elapsed:
+        return integer_text(value, digits, DBNUM_UNITS[dbnum])
     tens, ones = divmod(value, 10)
-    return (digits[tens] if tens > 1 else "") + ("十" if tens else "") + (digits[ones] if ones or not tens else "")
+    unit = "拾" if dbnum == "dbnum2" else "十"
+    return (
+        (digits[0] * max(0, len(token) - len(str(value))) if padding else "")
+        + (digits[tens] if tens > 1 or (tens and dbnum == "dbnum2") else "")
+        + (unit if tens else "")
+        + (digits[ones] if ones or not tens else "")
+    )
 
 
 def month_name(month: int, *, short: bool, locale: str) -> str:

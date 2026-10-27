@@ -8,29 +8,40 @@ from __future__ import annotations
 
 import re
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
-from .codes import _date_scan_text
-from .sections import _clean_display_pattern, _section_directives, _split_format_sections
+from .chinese_digits import DBNUM_DIGITS, DBNUM_UNITS, integer_text
+from .codes import GENERAL_TOKEN, _date_scan_text
+from .numbers import format_number_value
+from .sections import _clean_display_pattern, _section_directives
+
+if TYPE_CHECKING:
+    from .program import FormatProgram
 
 
-def format_chinese_integer(value: Decimal, section: str, fmt_code: str, locale: str) -> str | None:
-    """Render DBNum1/2 General integers; leave unverified variants untouched."""
+def format_chinese_number(value: Decimal, section: str, program: FormatProgram) -> str | None:
+    """Render Simplified Chinese DBNum General and fixed-point numbers."""
     mode = _section_directives(section)[2]
-    if mode not in {"dbnum1", "dbnum2"} or not _simplified_chinese(section, locale):
+    if mode not in {"dbnum1", "dbnum2", "dbnum3"} or not _simplified_chinese(section, program.locale):
         return None
     syntax = _date_scan_text(section)
-    token = re.search(r"(?i)General", syntax)
-    if token is None or syntax[: token.start()].strip() or syntax[token.end() :].strip():
-        return None
+    token = GENERAL_TOKEN.search(syntax)
     magnitude = abs(value)
-    # General's decimal/scientific and width-dependent forms need separate
-    # Office evidence. Do not manufacture a Chinese display for those cases.
-    if magnitude != magnitude.to_integral_value() or magnitude >= Decimal("1e15"):
+    if magnitude >= Decimal("1e16"):
         return None
-    digits, units = ("〇一二三四五六七八九", "十百千") if mode == "dbnum1" else ("零壹贰叁肆伍陆柒捌玖", "拾佰仟")
-    rendered = _integer_text(int(magnitude), digits, units)
+    digits, units = DBNUM_DIGITS[mode], DBNUM_UNITS[mode]
+    if token is None:
+        if _section_directives(section).currency or re.search(r"[%/@Ee]", syntax):
+            return None
+        return format_number_value(str(value), section, program, digits=digits)
+    if syntax[: token.start()].strip() or syntax[token.end() :].strip():
+        return None
+    rendered = integer_text(int(magnitude), digits, units)
+    if magnitude != magnitude.to_integral_value():
+        fraction = format(magnitude, "f").partition(".")[2].rstrip("0")
+        rendered += "." + fraction.translate(str.maketrans("0123456789", digits))
     prefix = _clean_display_pattern(section[: token.start()])
-    if value < 0 and len(_split_format_sections(fmt_code)) == 1 and "-" not in prefix and "(" not in prefix:
+    if value < 0 and len(program.sections) == 1 and not program.conditional and "-" not in prefix and "(" not in prefix:
         rendered = "-" + rendered
     return prefix + rendered + _clean_display_pattern(section[token.end() :])
 
@@ -43,42 +54,3 @@ def _simplified_chinese(section: str, locale: str) -> bool:
     if lcid:
         return int(lcid.group(1), 16) == 0x804
     return locale.replace("_", "-").lower() == "zh-cn"
-
-
-def _integer_text(value: int, digits: str, units: str) -> str:
-    if value == 0:
-        return digits[0]
-    groups: list[int] = []
-    while value:
-        value, group = divmod(value, 10_000)
-        groups.append(group)
-    output: list[str] = []
-    skipped = False
-    for position in range(len(groups) - 1, -1, -1):
-        group = groups[position]
-        if not group:
-            skipped = True
-            continue
-        if output and (skipped or group < 1000):
-            output.append(digits[0])
-        output.append(_group_text(group, digits, units))
-        output.append(("", "万", "亿", "万亿")[position])
-        skipped = False
-    return "".join(output)
-
-
-def _group_text(value: int, digits: str, units: str) -> str:
-    output: list[str] = []
-    skipped = False
-    for position in range(3, -1, -1):
-        digit, value = divmod(value, 10**position)
-        if not digit:
-            skipped = bool(output)
-            continue
-        if skipped:
-            output.append(digits[0])
-        output.append(digits[digit])
-        if position:
-            output.append(units[position - 1])
-        skipped = False
-    return "".join(output)

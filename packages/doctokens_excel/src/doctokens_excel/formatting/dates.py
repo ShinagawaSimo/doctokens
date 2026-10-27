@@ -13,7 +13,7 @@ from .date_program import DateProgram, compile_date
 
 
 class _SerialDateTime(NamedTuple):
-    """Calendar components derived from one SpreadsheetML serial value.
+    """Calendar components derived from one Excel serial value.
 
     ``day`` is the serial day before the calendar conversion.  Keeping it in
     the result lets elapsed-time formats use the same split as date formats.

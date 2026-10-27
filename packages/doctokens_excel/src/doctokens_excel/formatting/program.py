@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
-import re
-
 from .codes import _date_scan_text, resolve_format
 from .date_context import date_context
 from .date_program import DateProgram, compile_date
-from .sections import SectionDirectives, _condition_matches, _section_directives, _split_format_sections
+from .decimal import DecimalPattern, compile_decimal_pattern
+from .sections import (
+    SectionDirectives,
+    _condition_matches,
+    _section_directives,
+    _split_format_sections,
+    balanced_format,
+    directive_values,
+    supported_directives,
+)
 
 _COLORS = {
     "black": "#000000",
@@ -26,18 +33,16 @@ class FormatProgram:
         self.code = code
         self.locale = locale
         self.sections = _split_format_sections(code)
+        self.supported = balanced_format(code) and len(self.sections) <= 4 and all(supported_directives(s) for s in self.sections)
         self.directives = {section: _section_directives(section) for section in self.sections}
         self.conditional = any(self.directives[section].conditions for section in self.sections[:3])
         self._classifications: dict[str, tuple[bool, bool]] = {}
         self._syntax: dict[str, str] = {}
         self._dates: dict[str, DateProgram] = {}
+        self._decimals: dict[str, DecimalPattern] = {}
         self.colors = {
             section: next(
-                (
-                    _COLORS[match.group(1).lower()]
-                    for match in re.finditer(r"\[([^\]]*)\]", section)
-                    if match.group(1).lower() in _COLORS
-                ),
+                (_COLORS[value.lower()] for value in directive_values(section) if value.lower() in _COLORS),
                 None,
             )
             for section in self.sections
@@ -73,6 +78,11 @@ class FormatProgram:
         if section not in self._dates:
             self._dates[section] = compile_date(date_context(section, self.locale))
         return self._dates[section]
+
+    def decimal(self, core: str) -> DecimalPattern:
+        if core not in self._decimals:
+            self._decimals[core] = compile_decimal_pattern(core)
+        return self._decimals[core]
 
     def section_directives(self, section: str) -> SectionDirectives:
         return self.directives[section]

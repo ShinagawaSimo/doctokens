@@ -42,6 +42,6 @@ def date_context(section: str, locale: str) -> DateContext:
     elif directives.language_info == 0xF400:
         # System time is a separate policy, awaiting a real Office fixture.
         raise ValueError("System time format is not yet supported")
-    if directives.dbnum and (directives.dbnum != "dbnum1" or effective_locale != "zh-cn"):
+    if directives.dbnum and (directives.dbnum not in {"dbnum1", "dbnum2", "dbnum3"} or effective_locale != "zh-cn"):
         raise ValueError("Unsupported date DBNum mode")
     return DateContext(section, effective_locale, directives.dbnum)

@@ -29,15 +29,15 @@ def test_fraction_text_omits_only_alignment_padding(raw: str, code: str, expecte
 @pytest.mark.parametrize(
     ("raw", "lower", "upper"),
     [
-        ("0", "〇", "零"),
+        ("0", "○", "零"),
         ("10", "一十", "壹拾"),
-        ("101", "一百〇一", "壹佰零壹"),
-        ("1010", "一千〇一十", "壹仟零壹拾"),
+        ("101", "一百○一", "壹佰零壹"),
+        ("1010", "一千○一十", "壹仟零壹拾"),
         ("10000", "一万", "壹万"),
-        ("10001", "一万〇一", "壹万零壹"),
-        ("10010", "一万〇一十", "壹万零壹拾"),
-        ("100000001", "一亿〇一", "壹亿零壹"),
-        ("100010000", "一亿〇一万", "壹亿零壹万"),
+        ("10001", "一万○一", "壹万零壹"),
+        ("10010", "一万○一十", "壹万零壹拾"),
+        ("100000001", "一亿○一", "壹亿零壹"),
+        ("100010000", "一亿○一万", "壹亿零壹万"),
         ("123456789", "一亿二千三百四十五万六千七百八十九", "壹亿贰仟叁佰肆拾伍万陆仟柒佰捌拾玖"),
         ("-1234", "-一千二百三十四", "-壹仟贰佰叁拾肆"),
     ],
@@ -65,20 +65,6 @@ def test_chinese_general_uses_units_and_internal_zeroes(raw: str, lower: str, up
 )
 def test_chinese_locale_and_literals(code: str, locale: str, expected: str) -> None:
     assert format_value(176, code, "1234", date_1904=False, locale=locale) == expected
-
-
-@pytest.mark.parametrize(
-    ("raw", "code"),
-    [
-        ("1234.56", "[DBNum1][$-804]General"),
-        ("1000000000000000", "[DBNum2][$-804]General"),
-        ("1234", "[DBNum3][$-804]General"),
-        ("1234", "[DBNum1]0"),
-    ],
-)
-def test_unverified_chinese_forms_keep_the_saved_value(raw: str, code: str) -> None:
-    assert format_value(176, code, raw, date_1904=False, locale="zh-CN") == raw
-    assert formula_bar_value(raw, code, "zh-CN") is None
 
 
 def test_millisecond_time_display_and_formula_bar_are_independent() -> None:

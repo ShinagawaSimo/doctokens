@@ -25,388 +25,94 @@
 
 ---
 
-### 项目组成
+### 支持的内容
 
-```text
-doctokens/
-  packages/
-    doctokens_core/src/doctokens_core/
-      containers/    # OPC、CFB、容器限额与源准入
-      contracts/     # 读取结果、资源、诊断和输入类型
-      runtime/       # 取消、计量、生命周期与对象内存统计
-      output/        # DTP/DTX 序列化
-      ooxml/         # 共享图表、公式、编号
-      text/          # 文本检索
-    doctokens_word/src/doctokens_word/docx/
-    doctokens_excel/src/doctokens_excel/{xlsx,xls}/
-    doctokens_powerpoint/src/doctokens_powerpoint/pptx/
-    ocr_llm_core/src/ocr_llm_core/{providers,processing}/
-    doctokens_agent_tools/src/doctokens_agent_tools/
-      contracts/     # 配置、参数、工具发现和响应契约
-      state/         # 快照、会话、结果和检索状态
-      runtime/       # 调度、操作和响应投影
-      mcp/           # 可选 MCP 服务端适配
-  specifications/    # 当前解析行为、输出字段与限制
-  test_support/      # 真实文件、人工审核 golden、素材和共享路径
-  scripts/           # 构建和质量检查
-```
+| 格式 | 主要能力 |
+| --- | --- |
+| DOCX | 段落与标题、自动编号、表格、链接、数学公式、图片、图表、SmartArt、脚注尾注、批注及修订 |
+| XLSX | 工作表与区域读取、合并单元格、公式与保存结果、数字显示格式、批注、筛选与规则、图表、透视信息、搜索与查询 |
+| PPTX | 幻灯片文字与表格、图片与媒体、图表、SmartArt、演讲者备注、批注及主题样式 |
 
-各发行包的顶层保留公开导出和版本信息；格式后端内部按模型、源解码、读取/查询和输出职责组织。
-测试保留在所属包的 `tests/` 中，按格式和职责分组，公共辅助代码位于各包的 `tests/support/`。
-具体目录说明见[代码目录组织](docs/代码目录组织.md)。
-
-核心解析能力如下。表中标签指正文 DTX 输出；各密度保留的具体字段见[密度参考](specifications/common/density.md)。
-
-**DOCX**
-
-| 内容 | DTX 表达 | 说明 |
-| --- | --- | --- |
-| 标题与段落 | `<h1>`–`<h9>`、`<p>` | 基于大纲级别和样式继承解析，保留正文顺序 |
-| 强调与颜色 | `<b>`、`<i>`、`<u>`、`<s>`、`<sup>`、`<sub>`、`<small-caps>`、`<color>`、`<mark>` | semantic 中保留已解析的阅读语义 |
-| 自动编号 | 段落中的编号文本 | 多级占位组合、起点、续编、重启、项目符号及编号样式 |
-| 表格 | `<table>`、`<tr>`、`<td>` | 合并、嵌套、跨页分段；完整表可按资源读取 |
-| 链接、书签与域 | `<a>`、`<field>`、`<cite>` 及锚点属性 | 外部链接、内部跳转、域指令和保存的显示文字 |
-| 公式 | `<equation notation="latex">` | 将支持的 OMML 结构转为 LaTeX 表达 |
-| 图片、文本框、嵌入对象 | `<img>`、`<textbox>`、`<embedded>` | 文字、描述和对象引用；嵌入对象不等于递归解析其文件 |
-| 图表与 SmartArt | `<chart>`、`<smartart>` | 摘要与资源细节，读取保存的数据和节点关系 |
-| 脚注、尾注、批注 | `<footnote-ref>`、`<endnote-ref>`、`<comment-ref>` | 引用与附属正文；批注可包含回复、作者和解决状态 |
-| 页眉与页脚 | `<supplemental>` 下的 `<headers>`、`<footers>` | semantic 中保留已解析内容 |
-| 修订 | `<ins>`、`<del>` | final、original、review 三种视图 |
-| 内容控件 | `<content-control>` | 类型、内容、选项、复选状态、锁定和绑定等 |
-| 分页 | `<page number="N" />` | 保存分页提示；plain 使用独立的 `<page=N>` 行 |
-
-**XLSX**
-
-| 内容 | DTX 表达 | 说明 |
-| --- | --- | --- |
-| 工作表与网格 | `<sheet>`、`<grid>`、`<tr>`、`<cell>` | 稀疏坐标、行列顺序、隐藏与分组状态 |
-| 合并单元格 | `colspan`、`rowspan` | 保留跨度和后续单元格位置 |
-| 公式 | 单元格的 `formula` 等属性 | 保存的结果、公式文本、共享公式展开、数组与溢出信息；不计算公式 |
-| 样式 | 单元格格式、内联标签、`<style-range>` | 字体强调、颜色、填充及支持的数字显示格式 |
-| 数据表 | `<table-summary>` | 表名、范围、列信息；数据仍在网格中 |
-| 筛选与规则 | `<filter>`、`<data-validation>`、`<conditional-format>` | 保存的条件、阈值和样式，不重新执行 Excel 的规则引擎 |
-| 透视数据 | `<pivot-table>`、`<pivot-cache>`、`<slicer>`、`<timeline>` | 保存的布局、字段、缓存与关联信息，不刷新数据源 |
-| 图片与图表 | `<img>`、`<chart>` | 锚点、资源引用和图表数据摘要 |
-| 名称与外部引用 | `<defined-name>`、`<external-link>` | 命名范围、作用域和外部工作簿目标 |
-| 批注与链接 | `<comment-ref>`、`<comment>`、`<a>` | 传统备注、现代批注线程和单元格链接 |
-| 现代单元格 | `<cell>` 的控件、富值属性 | 支持的复选框、单元格内图片和保存的富值信息 |
-
-**PPTX**
-
-| 内容 | DTX 表达 | 说明 |
-| --- | --- | --- |
-| 幻灯片 | `<slide>` | 文件中的幻灯片顺序、隐藏状态和节名称 |
-| 标题与文字 | `<title>`、`<p>` | 占位符角色、段落、项目符号、编号和内联格式 |
-| 形状与连接 | `<shape>`，连接符使用 `kind="connector"` | 描述、对象身份和连接端点；公共密度保持源形状顺序 |
-| 图片与媒体 | `<img>`、`<media>` | 嵌入图片、音视频；外部资源只记录目标 |
-| 表格 | `<table>` | 单元格文字与合并；支持表资源切片和聚合 |
-| 图表与 SmartArt | `<chart>`、`<smartart>` | 类型、系列、节点与资源细节 |
-| 备注与批注 | `<speaker-notes>`、`<comments>` | 演讲者备注、批注及所属幻灯片 |
-| 主题与模板 | 有效颜色、占位符信息 | 解析适用的主题、布局和母版默认值；不把模板提示文字插入正文 |
-
----
+旧版 XLS 另提供独立的单元格内容读取接口，支持范围见 [XLS 参考](specifications/xls/README.md)。
 
 ### 安装
 
-Python ≥ 3.10。在仓库根目录安装需要的子包：
+需要 Python 3.10 或以上版本。克隆仓库后，在根目录安装需要的格式包：
 
 ```sh
-python -m pip install -e ./packages/doctokens_core -e ./packages/doctokens_word -e ./packages/doctokens_powerpoint -e ./packages/doctokens_excel
+python -m pip install ./packages/doctokens_core ./packages/doctokens_word ./packages/doctokens_excel ./packages/doctokens_powerpoint
 ```
 
-只需要 Word 时，安装共享核心和 DOCX 包即可：
+只需要一种格式时，安装共享核心 `doctokens_core` 和对应的格式包即可。
 
-```sh
-python -m pip install -e ./packages/doctokens_core -e ./packages/doctokens_word
-```
-
-三个格式包互不依赖，共用 `doctokens_core`。共享核心没有必需的第三方运行依赖；DOCX 另依赖 `typing_extensions`。OCR 的安装方式见下文。
-
-### 本地复现 GitHub Actions
-
-在仓库根目录用需要验证的 Python 运行：
-
-```sh
-python scripts/ci.py
-```
-
-Windows 已有开发环境时可直接运行 `.venv\Scripts\python.exe scripts/ci.py`。脚本会创建临时干净 venv，按 `constraints-ci.txt` 安装完整的固定依赖（包括构建工具和间接依赖），依次运行格式检查、lint、mypy、隔离 wheel 安装与完整 pytest；检查结束后删除临时环境。GitHub Actions 调用同一脚本的各步骤，并使用同一依赖约束。
-
-需要快速检查现有开发环境时，先运行 `python scripts/ci.py --install-only` 同步依赖，再运行 `python scripts/ci.py --skip-install`；单独复现某一步可追加 `--step format|lint|types|wheels|test`。检查命令失败时脚本返回非零退出码。依赖刷新时更新 `requirements-ci.in`，用约束文件顶部的命令重新解析并验证完整矩阵。
-
-远程矩阵固定为 Ubuntu 24.04 的 Python 3.10、3.11、3.12，以及 Windows 2025 的 Python 3.12。上述本地命令只验证当前 Python 和操作系统；在 Windows 上通过不能证明 Linux 上也通过。提交前应在对应 Linux 环境（WSL、容器或虚拟机）中分别运行三种 Python 的同一命令，并保留远程矩阵作为最终检查。比较结果时还应确保所有源码、fixture 与 golden 已加入 Git，避免本地未跟踪文件影响测试。
-
-### 智能体工具与 MCP
-
-工具适配包管理文件快照、短期会话、范围缓存和长结果。直接 TOOL_CALL 与 MCP 共用同一套定义和执行逻辑，模型调用循环由宿主负责。安装解析包后，可安装工具包及官方 MCP SDK：
-
-```sh
-python -m pip install -e "./packages/doctokens_agent_tools[mcp]"
-doctokens-mcp --root /absolute/path/to/documents
-```
-
-`--root` 是允许读取的目录，可重复指定。MCP 客户端配置示例（替换为本机绝对路径）：
-
-```json
-{
-  "mcpServers": {
-    "doctokens": {
-      "command": "D:\\Word Project\\.venv\\Scripts\\doctokens-mcp.exe",
-      "args": ["--root", "D:\\Word Project\\test_support\\fixtures"]
-    }
-  }
-}
-```
-
-直接 Python 调用只需基础工具包，不要求 MCP SDK：
-
-```python
-from pathlib import Path
-from doctokens_agent_tools import RuntimeConfig, ToolRuntime
-
-with ToolRuntime(RuntimeConfig(allowed_roots=(Path("documents"),))) as runtime:
-    tools = [tool.to_dict() for tool in runtime.list_tools()]
-    result = runtime.execute("read_docx", {"path": "report.docx", "density": "semantic"})
-    print(result.to_dict())
-    # 异步宿主使用 await runtime.aexecute(name, arguments)。
-```
-
-正文工具默认使用 `structural`。已知目标范围时可直接给出 `path`，需要发现页、幻灯片或工作表目录时再调用 `inspect_document`。例如 `read_xlsx(document_id=..., sheet="Sales", range_spec="101:200")` 读取指定行；默认预览的 `parts[].selection.windows[]` 提供实际范围和可用的 `next_row`。选区规则见[读取规范](specifications/agent-tools/reading.md)。
-
-不知道内容位置时，可调用 `find_document_text(path=..., query="关键词")`，按段落或单元格取得片段和可用于补读的定位。默认最多 20 条，前后各 80 字符；用 `context_before`、`context_after` 扩展上下文，用返回的 `next_offset` 续取命中。XLSX 搜索使用有界游标缓存，不打开完整工作簿会话；默认 32 MiB、8 个状态，十分钟闲置过期。公式、批注、链接与名称仍用 `find_xlsx_cells`。参数与来源见[文字定位](specifications/agent-tools/search.md)。
-
-大文本首次调用直接返回首块；后续使用 `result_id` 和返回的 `next_offset` 继续读取。直接调用 `ToolRuntime` 时正文在 `text` 字段；MCP 将正文只放在原生文本内容中，结构化结果用 `content_index` 关联。默认兼容模式在独立原生文本块中提供简短 JSON 定位和续读信息；宿主可用 `--mcp-output-mode compact` 省去正文回复的这块元信息。调用示例见[MCP 连接与续读](specifications/agent-tools/mcp.md)。
-
-工具还覆盖资源目录、图片和媒体、格式专属资源解释、XLSX 搜索/查询及文档释放。MCP 在大小上限内将 PNG/JPEG/WebP/GIF 作为原生图片返回，其他二进制或超限图片返回按需读取的资源 URI；仍可用 read_result 分块取回。直接调用按大小上限返回二进制附件。默认最多保留 4 个解析会话，空闲 10 分钟过期；完整会话另有单个 256 MiB、合计 512 MiB 的估算预算，超额回收闲置会话或明确失败。这些是可配置的准入估算，不是进程内存硬上限。完整参数、生命周期和错误码见[工具行为参考](specifications/agent-tools/README.md)。
-
-XLSX 资源目录和原始图片读取跳过工作表单元格；直接 Python 调用可使用 `with XlsxResourceCatalog(source) as catalog` 获取 `catalog.resources` 和读取原图。它与完整会话保持相同资源编号，不提供网格或查询方法。
-
-### 架构边界
-
-解析器负责 OOXML 包读取、关系解析、限制与诊断、格式专属中间表示（IR），以及文本和资源输出。分块、检索增强、向量化、模型调用、跨请求缓存由下游实现。
-
-一次性 `parse_*` 根据密度与选区解析；`open_*` 会话保留后续读取需要的语义数据，退出 `with` 时关闭文件资源。两种入口的提取计划可能不同，尤其是对象摘要和诊断；不要假设不同计划得到完全相同的资源编号或细节。
-
-`iter_render()` 迭代已解析内容的输出块，不表示流式解析，也不保证恒定内存占用。当前没有公开的 `stream`、`full` 或 `details` 参数。
-
-### API
-
-三个格式的一次性入口都接收路径或完整文件 bytes，返回 `ParseResult`：
+### 快速使用
 
 ```python
 from doctokens_word import parse_docx
-from doctokens_powerpoint import parse_pptx
 from doctokens_excel import parse_xlsx
+from doctokens_powerpoint import parse_pptx
 
-report = parse_docx("report.docx", density="semantic")
-slides = parse_pptx("slides.pptx", density="structural")
-sales = parse_xlsx("sales.xlsx", density="structural")
+document = parse_docx("report.docx", density="semantic")
+workbook = parse_xlsx("sales.xlsx", sheet="Sales", range_spec="A1:C20")
+presentation = parse_pptx("slides.pptx", slide=2, span=2)
 
-print(report.text)
-print(report.report.to_dict())
-print(report.resources)
-print(report.selection, report.syntax_version, report.media_type)
+print(document.text)
+print(workbook.text)
+print(presentation.text)
 ```
 
-**DOCX：分页、修订与资源**
+返回结果包含文本、解析报告和资源目录。输入可以是文件路径或完整文件的 `bytes`。
 
-```python
-from doctokens_word import ParseOptions, open_docx
-
-with open_docx("report.docx", options=ParseOptions(revision_mode="review")) as document:
-    page = document.render(density="semantic", page_hint=3, span=1)
-    last_page = document.render(density="plain", page_hint=-1)
-    print(page.text)
-
-    # 使用资源目录实际返回的 ID。
-    for resource in document.resources:
-        if resource.kind == "image" and resource.source == "embedded":
-            image_bytes = document.read_resource("image", resource.id)
-        elif resource.kind == "table":
-            table = document.render_resource("table", resource.id)
-            print(table.text)
-```
-
-**XLSX：范围读取、搜索与查询**
-
-以下假设 Sales 表的 A1:C5 为 Name、Group、Amount 三列表格，首行为列名：
+需要对同一文件重复读取或搜索时，可以使用会话：
 
 ```python
 from doctokens_excel import open_xlsx
 
 with open_xlsx("sales.xlsx") as workbook:
-    grid = workbook.render(sheet="Sales", range_spec="A1:C5")
-    matches = workbook.find_cells("Alice", sheets=["Sales"], limit=20)
-    rows = workbook.query_data(
-        sheet="Sales",
-        range_spec="A1:C5",
-        header_row=1,
-        select=["Name", "Amount"],
-        where=[{"column": "Amount", "op": "gt", "value": 10}],
-        order_by=[{"column": "Amount", "direction": "desc"}],
-        limit=2,
-    )
-    print(grid.text)
-    print(matches.text)
-    print(rows.text)
+    print(workbook.render(sheet="Sales", range_spec="A1:C20").text)
+    print(workbook.find_cells("合计", sheets=["Sales"]).text)
 ```
 
-`query_data` 是实验性查询接口，支持有限的投影、筛选、分组、聚合和排序。它读取文件中保存的数据，不求值公式，不刷新外部连接，也不是完整 SQL 引擎。范围参数需带两端地址，单格写作 `A1:A1`。
+页码窗口、修订视图、资源读取和查询等用法见各格式的 [DOCX](specifications/docx/api.md)、[XLSX](specifications/xlsx/api.md)、[PPTX](specifications/pptx/api.md) API 参考。
 
-**PPTX：幻灯片窗口与输出迭代**
+### 选择输出密度
 
-```python
-from doctokens_powerpoint import open_pptx
-
-with open_pptx("slides.pptx") as presentation:
-    selected = presentation.render(slide=2, span=2, density="semantic")
-    print(selected.text)
-    for chunk in presentation.iter_render(density="plain"):
-        print(chunk, end="")
-```
-
-#### 三种密度与输出语法
-
-| 密度 | 语法与类型 | 典型用途 |
+| 密度 | 输出 | 适合的任务 |
 | --- | --- | --- |
-| plain | `doctokens-plain/1.0`，`text/plain` | 概括、分类、提取文字；仍有元信息行和必要的导航标记 |
-| structural | `doctokens-xml/1.0`，`application/xml` | 读取段落、表格、对象引用、工作表结构和公式 |
-| semantic | `doctokens-xml/1.0`，`application/xml` | 在结构上增加已解析的强调、颜色、状态和对象关系 |
+| `plain` | DTP 纯文本 | 概括、分类、提取文字 |
+| `structural` | DTX XML | 理解层级、表格、工作表结构和公式 |
+| `semantic` | DTX XML | 结合强调、颜色、修订、批注状态等阅读语义进行分析 |
 
-DTX 的根节点分别为 `<document>`、`<presentation>`、`<workbook>`，是闭合且可由 XML 解析器读取的文档。语法版本保留在 `ParseResult.syntax_version`，正文不重复 schema/version/syntax。以下示例为便于阅读增加了缩进：
+密度影响保留哪些信息；具体范围见[密度说明](specifications/common/density.md)。
 
-```xml
-<document density="semantic" format="docx" pagination="last-rendered-hints" revision-view="final">
-  <body><page number="1" /><p>Hello <b>world</b>.</p></body>
-</document>
-```
+### 智能体工具与 MCP
 
-对应的 plain 内容：
+工具接口支持文档导航、按范围读取、文字定位、资源读取和表格查询，可供智能体按需获取内容。
 
-```text
-density=plain format=docx pagination=last-rendered-hints revision_view=final
-<page=1>
-
-Hello world.
-```
-
-PPTX 和 XLSX 的结构示例：
-
-```xml
-<presentation density="structural" format="pptx">
-  <slide number="1"><title placeholder="title">Quarterly report</title></slide>
-</presentation>
-```
-
-```xml
-<workbook density="structural" format="xlsx">
-  <sheet name="Sales"><grid ref="A1:B1"><tr number="1"><cell>Total</cell><cell>42</cell></tr></grid></sheet>
-</workbook>
-```
-
-`render_resource()`、`find_cells()`、`query_data()` 的解释性输出为完整 DTX：资源位于格式根节点的 `<resources>` 内，搜索为 `<workbook><matches>…</matches></workbook>`，查询为 `<workbook><query><table>…</table></query></workbook>`。空结果同样是完整 XML；以 `ParseResult.syntax_version` 和 `media_type` 判断语法。二进制资源由 `read_resource()` 直接返回 bytes。
-
-#### API 速查
-
-| 入口 | 说明 |
-| --- | --- |
-| `parse_docx(source, density=..., page_hint=..., span=..., options=...)` | 全文或保存分页提示窗口；默认 semantic |
-| `parse_pptx(source, density=..., slide=..., span=..., options=...)` | 全部或连续幻灯片；默认 semantic |
-| `parse_xlsx(source, density=..., sheet=..., range_spec=..., options=...)` | 工作簿、工作表或区域；默认 structural |
-| `open_docx` / `open_pptx` / `open_xlsx` | 显式 `with` 会话；通过 `render` 重复读取 |
-| `session.iter_render(...)` | 在会话内迭代输出字符串 |
-| `session.report` / `session.resources` | 诊断报告和资源目录 |
-| `session.read_resource(kind, resource_id)` | DOCX/XLSX 支持图片，PPTX 支持图片和媒体；不下载外部目标 |
-| `session.render_resource(kind, resource_id, ...)` | DOCX/PPTX 支持表格、图表、SmartArt；XLSX 支持图表和透视表摘要 |
-| `workbook.find_cells(...)` / `workbook.query_data(...)` | 单元格搜索与实验性表格查询 |
-| `inspect_xlsx(source, options=...)` | 轻量工作簿元数据目录，不扫描单元格 |
-| `session.describe()` | 格式专属导航信息与报告的 JSON 字典 |
-
-所有选择参数均为关键字参数；详细签名、选项和限制见各格式的 [DOCX API](specifications/docx/api.md)、[PPTX API](specifications/pptx/api.md)、[XLSX API](specifications/xlsx/api.md) 与[会话参考](specifications/common/session.md)。
-
-### Word 实显与规范
-
-OOXML 格式定义说明文件如何表示内容，Microsoft 的实现说明记录 Word 与该规范的部分差异；两者仍未必覆盖本机 Word 的实际行为。尤其是编号格式，不能仅凭枚举名称推导最终字符，也不能把 Excel 列号算法直接用于 Word 列表。
-
-本项目面向简体中文 Word 文件建立真实样例。遇到差异，以用户本机 Word 显示和人工确认的 golden 为依据；不宣称能够在所有语言、字体和 Office 版本中完全复现编号。
-
-| 情况 | 需要区别的行为 |
-| --- | --- |
-| Word 字母编号 | 27、28 的扩展为 AA、BB；PowerPoint 的字母自动编号可为 AA、AB |
-| 天干、地支 | 有效范围到 10、12；其后的项显示十进制 11、13，不回到甲、子 |
-| 片假名编号 | 当前实现按 Word 行为循环序列，不能直接套用字符重复规则 |
-| 中文数字与大写计数 | `〇`、`零`、`万`、`萬`，以及省“一”和补零位置，都需要实际文件确认 |
-
-例如当前 `chineseCountingThousand` 的 10050 golden 为 `一万〇五十`，`chineseLegalSimplified` 为 `壹萬零伍拾`。这些是当前保存的基线，仍应由本机显示复核，不作为所有 Word 版本的保证。
-
-相关资料：[OOXML 编号定义](reference/C071691e-17.18.59-ST_NumberFormat.md)、[Word 编号实现差异](reference/MS-OI29500-2.1.548-ST_NumberFormat.md)、[编号修订差异](reference/MS-OI29500-2.1.1772-numberingChange.md)。更完整的规范资料位于 `reference/`。
-
-分页也有明确边界：DOCX 解析器读取显式分页、节信息和保存的渲染分页线索，**不运行 Word 排版引擎**。字体、纸张或环境改变后重新排版得到的页数，可能与文件中的旧线索不同。PPTX 公共输出同样不提供完整坐标或几何还原；相关内部能力不等于已公开的排版密度。
-
-### OCR 适配层
-
-OCR 默认关闭。DOCX、PPTX 可通过各自的 `ParseOptions(ocr=...)` 显式传入适配器；XLSX 当前没有该选项。
-
-| Provider | 运行方式 | 额外要求 |
-| --- | --- | --- |
-| `TesseractProvider` | 本地 Tesseract | 安装 Tesseract 程序、语言包以及 Python 适配依赖 |
-| `EasyOcrProvider` | 本地 EasyOCR | EasyOCR、PyTorch、模型文件；可配置 CPU/GPU |
-| `PaddleVLProvider` | 云端服务适配 | 服务凭据和网络连接；使用时会向服务提交图片 |
-
-以本地 Tesseract 为例：
+安装可选的 MCP 服务端后，将它配置到支持 MCP 的客户端：
 
 ```sh
-python -m pip install -e "./packages/ocr_llm_core[tesseract]"
+python -m pip install "./packages/doctokens_agent_tools[mcp]"
+doctokens-mcp --root /absolute/path/to/documents
 ```
 
-```python
-from doctokens_word import ParseOptions, parse_docx
-from ocr_llm_core import TesseractProvider
+将 `--root` 替换为允许读取的文档目录。连接配置见 [MCP 接入说明](specifications/agent-tools/mcp.md)，直接集成 Python 工具接口见[工具参考](specifications/agent-tools/README.md)。
 
-provider = TesseractProvider(lang="chi_sim+eng")
-result = parse_docx("scan.docx", density="semantic", options=ParseOptions(ocr=provider))
-print(result.text)
-```
+### 可选 OCR
 
-`chi_sim+eng` 需要本机安装简体中文和英文语言数据。OCR 结果附在相应图片附近；它补充图片中的文字，不重新解释文档里的原生文字。
+DOCX、PPTX 可以通过 OCR 补充图片内的文字。支持本地 Tesseract、EasyOCR，以及 PaddleVL 服务适配；OCR 引擎或服务需要单独配置，默认不开启。
 
-### 路线图
-
-- [ ] 用小型真实 Office 文件逐步替代正常内容的手工 XML 测试，人工审查 golden
-- [ ] PDF 解析器
-- [ ] 更细的只读排版信息及可编辑投影；`typography`、`geometry`、`full` 尚非公开 API
-
-### 运行测试
-
-安装开发依赖后，在仓库根目录运行：
+本地 Tesseract 适配依赖可按需安装：
 
 ```sh
-python -m pip install -e ".[dev]" -e ./packages/ocr_llm_core
-python -m pytest -q
+python -m pip install "./packages/ocr_llm_core[tesseract]"
 ```
 
-真实 Office 文件位于 `test_support/fixtures/`，对应三档输出位于 `test_support/golden/`；手工创建清单见[Office 真实测试文件清单](docs/真实测试文件清单.md)。开发时比较当前输出与旧 golden；预期行为变化后，人工对照 Office 显示确认，再更新相应基线。单个文件的更新命令：
+还需安装 Tesseract 程序及所需语言包。配置方式见 [OCR 参考](specifications/common/ocr.md)。
 
-```sh
-python test_support/update_goldens.py --only docx-list-decimal.docx
-```
+### 使用边界
 
-脚本支持 DOCX、PPTX、XLSX，按目录发现文件并更新完整文件 golden；省略 `--only` 更新全部文件。生成后人工审查输出。真实文件全文回归分别放在 Word、Excel、PowerPoint 包自己的 `tests/` 中；共享基础设施及工具测试也由各自包管理。XML golden 为便于阅读会缩进，测试对当前 XML 结果应用同一格式化后比较，解析器自身仍返回紧凑 XML。缺少 golden 就报错；测试不会更新基线，也不受 `UPDATE_GOLDEN` 影响。
+- Excel 读取文件保存的公式与结果，不重新计算公式或刷新外部数据。
+- DOCX 按文件保存的分页线索定位，不执行 Word 的实时排版；重新排版后的页码可能不同。
 
-### 初步 XLS 内容读取
-
-`doctokens_excel` 同时容纳 XLSX 与 XLS 后端。当前 XLS 入口读取未加密 BIFF8
-普通工作表的保存内容，返回单元格坐标、类型、值、XF 索引及公式来源标记：
-
-```python
-from doctokens_excel import read_xls_content
-
-content = read_xls_content("saved.xls")
-for sheet in content.sheets:
-    for cell in sheet.cells:
-        print(sheet.name, cell.ref, cell.display_text)
-```
-
-`cell.value` 保留保存值，`cell.display_text` 提供普通数值、百分比和货币显示；符号按文件中的格式码保留。
-日期、分数、科学记数等其它显示分支、公式表达式及复杂对象尚未接入。
-当前没有 XLS 的密度、完整读取会话或 MCP 工具入口。详见 [XLS 内容读取规范](specifications/xls/README.md)。
+各格式的支持范围、参数和限制以[解析行为参考](specifications/README.md)为准。

@@ -88,6 +88,7 @@ def read_xls_content(source: str | Path | bytes, *, limits: XlsLimits | None = N
                 raise XlsError("Encrypted OOXML is not a supported BIFF8 workbook")
             stream = container.open_root_stream("Workbook")
             references, strings, date_1904 = _globals(Cursor(stream, budget), formats)
+            formats.date_1904 = date_1904
             for sheet in references:
                 if sheet.kind != 0:
                     warnings.append(ParseWarning("XLS_SHEET_TYPE_UNSUPPORTED", "Only ordinary worksheets are read", sheet.name))

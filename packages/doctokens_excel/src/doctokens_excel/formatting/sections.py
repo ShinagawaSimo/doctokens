@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from typing import NamedTuple
 
@@ -46,6 +47,59 @@ class SectionDirectives(NamedTuple):
     language_info: int | None
 
 
+def directive_values(section: str) -> list[str]:
+    masked = re.sub(r'"[^\"]*"|\\.|_.|\*.', lambda match: " " * len(match.group()), section)
+    return re.findall(r"\[([^\]]*)\]", masked)
+
+
+def currency_parts(body: str) -> tuple[str | None, int | None]:
+    symbol, separator, language = body.rpartition("-")
+    if separator and re.fullmatch(r"[0-9a-fA-F]{1,8}", language):
+        return symbol or None, int(language, 16)
+    return body or None, None
+
+
+def supported_directives(section: str) -> bool:
+    for value in directive_values(section):
+        lower = value.lower()
+        if lower.startswith("$") or lower in {"h", "hh", "m", "mm", "s", "ss", "dbnum1", "dbnum2", "dbnum3"}:
+            continue
+        if lower in {"black", "blue", "cyan", "green", "magenta", "red", "white", "yellow"}:
+            continue
+        color = re.fullmatch(r"(?:color|颜色)(\d+)", lower)
+        if color and 1 <= int(color.group(1)) <= 56:
+            continue
+        condition = _CONDITION_RE.fullmatch(value)
+        if condition and math.isfinite(float(condition.group(2))):
+            continue
+        return False
+    return True
+
+
+def balanced_format(code: str) -> bool:
+    quoted = False
+    bracketed = False
+    escaped = False
+    for char in code:
+        if escaped:
+            escaped = False
+        elif char == '"' and not bracketed:
+            quoted = not quoted
+        elif quoted:
+            continue
+        elif char in "\\_*" and not bracketed:
+            escaped = True
+        elif char == "[":
+            if bracketed:
+                return False
+            bracketed = True
+        elif char == "]":
+            if not bracketed:
+                return False
+            bracketed = False
+    return not quoted and not bracketed and not escaped
+
+
 def _section_directives(section: str) -> SectionDirectives:
     """Read directives without losing the language/calendar/number-system bits."""
     conditions: list[tuple[str, float]] = []
@@ -53,20 +107,13 @@ def _section_directives(section: str) -> SectionDirectives:
     dbnum: str | None = None
     language_info: int | None = None
     # Ignore bracket-looking text inside quoted or escaped literals.
-    directives = re.sub(r'"[^\"]*"|\\.|_.|\*.', lambda match: " " * len(match.group()), section)
-    for match in re.finditer(r"\[([^\]]*)\]", directives):
-        value = match.group(1)
+    for value in directive_values(section):
         lower = value.lower()
         condition = _CONDITION_RE.fullmatch(value)
         if condition:
             conditions.append((condition.group(1), float(condition.group(2))))
         elif lower.startswith("$"):
-            body = value[1:]
-            currency = body.split("-", 1)[0] or None
-            if "-" in body:
-                language = body.rsplit("-", 1)[1]
-                if re.fullmatch(r"[0-9a-fA-F]{1,8}", language):
-                    language_info = int(language, 16)
+            currency, language_info = currency_parts(value[1:])
         elif lower.startswith("dbnum"):
             dbnum = lower
     return SectionDirectives(conditions, currency, dbnum, language_info)
@@ -82,29 +129,6 @@ def _condition_matches(value: float, condition: tuple[str, float]) -> bool:
         "<=": value <= target,
         ">=": value >= target,
     }[operator]
-
-
-def _select_format_section(value: float, fmt_code: str) -> tuple[str | None, float]:
-    sections = _split_format_sections(fmt_code)[:3]
-    if any(_section_directives(section)[0] for section in sections):
-        for section in sections:
-            conditions = _section_directives(section).conditions
-            if not conditions or all(_condition_matches(value, condition) for condition in conditions):
-                return section, value
-        # Excel fills the cell with hashes if no condition applies. Width
-        # rendering is outside this parser; never pick a failed condition.
-        return None, value
-    if len(sections) == 1:
-        return sections[0], value
-    if len(sections) == 2:
-        if value < 0:
-            return sections[1], abs(value)
-        return sections[0], value
-    if value > 0:
-        return sections[0], value
-    if value < 0:
-        return sections[1], abs(value)
-    return sections[2], value
 
 
 def _clean_display_pattern(pattern: str, *, keep_elapsed: bool = False) -> str:
@@ -141,7 +165,7 @@ def _clean_display_pattern(pattern: str, *, keep_elapsed: bool = False) -> str:
             if keep_elapsed and directive.lower() in {"h", "hh", "m", "mm", "s", "ss"}:
                 out.append(pattern[i : end + 1])
             elif directive.startswith("$"):
-                body = directive[1:].split("-", 1)[0]
+                body, _language = currency_parts(directive[1:])
                 if body:
                     out.append(body)
             i = end + 1

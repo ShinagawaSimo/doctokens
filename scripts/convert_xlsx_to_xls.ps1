@@ -7,12 +7,14 @@ This script does not generate or approve formal fixtures or golden baselines.
 param(
     [string[]]$Pattern = @('xlsx-format-number-*.xlsx', 'xlsx-format-percent.xlsx', 'xlsx-format-currency-*.xlsx'),
     [string]$OutputDirectory = 'tmp/xls-number-percent',
+    [string]$SourceDirectory = 'test_support/fixtures/xlsx',
+    [switch]$VerifyExisting,
     [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$fixtureRoot = Join-Path $repoRoot 'test_support/fixtures/xlsx'
+$fixtureRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot $SourceDirectory))
 $tmpRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot 'tmp'))
 $destination = [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDirectory))
 if (-not $destination.StartsWith($tmpRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
@@ -25,7 +27,10 @@ $sources = @($sources | Sort-Object FullName -Unique)
 if ($sources.Count -eq 0) { throw 'No XLSX fixtures matched Pattern.' }
 foreach ($source in $sources) {
     $output = Join-Path $destination ($source.BaseName + '.xls')
-    if ((Test-Path -LiteralPath $output) -and -not $Force) {
+    if ($VerifyExisting -and -not (Test-Path -LiteralPath $output)) {
+        throw "Cannot verify missing XLS: $output"
+    }
+    if ((Test-Path -LiteralPath $output) -and -not $Force -and -not $VerifyExisting) {
         throw "Output already exists; use -Force to replace the temporary conversion: $output"
     }
 }
@@ -63,8 +68,8 @@ function Get-WorkbookContent($Application, $Book) {
                                     [string]$Application.WorksheetFunction.Text($value, $cell.NumberFormat)
                                 } elseif ($kind -eq 'boolean') {
                                     if ($value) { 'TRUE' } else { 'FALSE' }
-                                } else { [string]$value }
-                                $cells.Add([ordered]@{
+                                } else { [string]$cell.Text }
+                                $cells.Add([pscustomobject][ordered]@{
                                     row = [int]$cell.Row
                                     column = [int]$cell.Column
                                     kind = $kind
@@ -112,7 +117,7 @@ try {
             $book = $books.Open($source.FullName, 0, $true)
             $book.CheckCompatibility = $false
             $before = Get-WorkbookContent $excel $book
-            $book.SaveAs($output, 56)
+            if (-not $VerifyExisting) { $book.SaveAs($output, 56) }
             $book.Close($false)
             Release-ComObject $book
             $book = $null
@@ -122,25 +127,28 @@ try {
             if ((Get-FileHash -LiteralPath $source.FullName -Algorithm SHA256).Hash -ne $sourceHash) {
                 throw "Source fixture changed during conversion: $($source.FullName)"
             }
-            $results.Add([ordered]@{
+            $record = [ordered]@{
                 source = $source.FullName
                 source_sha256 = $sourceHash
                 path = $output
-                sha256 = (Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash
+                sha256 = $null
                 date_1904 = [bool]$book.Date1904
                 before = $before
                 sheets = $after
-            })
-            Write-Host "Converted $($source.Name)"
+            }
         } finally {
             if ($null -ne $book) { $book.Close($false); Release-ComObject $book }
         }
+        $record.sha256 = (Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash
+        $results.Add($record)
+        Write-Host "Captured $($source.Name)"
     }
     $manifest = [ordered]@{
         producer = 'Microsoft Excel'
         version = [string]$excel.Version
         build = [string]$excel.Build
         file_format = 56
+        verified_existing_files = [bool]$VerifyExisting
         display_oracle = 'Excel TEXT(Value2, NumberFormat); cell_text also retains the width-dependent display'
         files = $results.ToArray()
     }

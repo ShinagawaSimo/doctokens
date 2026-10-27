@@ -11,6 +11,7 @@ from doctokens_core.containers.cfb import CfbError, CfbReader
 from doctokens_core.contracts.models import ParseWarning
 
 from .cells import read_cells
+from .formats import XlsFormatIndex
 from .models import XlsContent, XlsError, XlsLimits, XlsSheet
 from .records import Budget, Cursor, read_bof
 from .strings import read_sst, short_string
@@ -24,7 +25,7 @@ class SheetRef:
     kind: int
 
 
-def _globals(cursor: Cursor) -> tuple[list[SheetRef], list[str], bool]:
+def _globals(cursor: Cursor, formats: XlsFormatIndex) -> tuple[list[SheetRef], list[str], bool]:
     read_bof(cursor, 0x0005)
     sheets: list[SheetRef] = []
     strings: list[str] = []
@@ -62,16 +63,23 @@ def _globals(cursor: Cursor) -> tuple[list[SheetRef], list[str], bool]:
             if value not in (0, 1):
                 raise XlsError("Invalid XLS date system")
             date_1904 = bool(value)
+        elif record.kind == 0x00E0:
+            formats.add_xf(cursor.payload(record))
+        elif record.kind == 0x041E:
+            data = cursor.payload(record, 5)
+            formats.add_format(data)
+            cursor.budget.add_string(unpack_from("<H", data, 2)[0])
 
 
-def read_xls_content(source: str | Path | bytes, *, limits: XlsLimits | None = None) -> XlsContent:
-    """Read stored values, not formula expressions, styles or object content.
+def read_xls_content(source: str | Path | bytes, *, limits: XlsLimits | None = None, locale: str = "zh-CN") -> XlsContent:
+    """Read saved values and supported numeric display text from BIFF8.
 
     Source handles are closed before returning the immutable content result.
-    Numbers remain saved numeric values; XF/date metadata is not display formatting.
+    Numbers remain numeric in value; display_text applies supported formats.
     """
     options = limits or XlsLimits()
     budget = Budget(options)
+    formats = XlsFormatIndex(locale, options.max_xfs)
     warnings: list[ParseWarning] = []
     sheets: list[XlsSheet] = []
     try:
@@ -79,16 +87,16 @@ def read_xls_content(source: str | Path | bytes, *, limits: XlsLimits | None = N
             if container.has_root_stream("EncryptionInfo") and container.has_root_stream("EncryptedPackage"):
                 raise XlsError("Encrypted OOXML is not a supported BIFF8 workbook")
             stream = container.open_root_stream("Workbook")
-            references, strings, date_1904 = _globals(Cursor(stream, budget))
+            references, strings, date_1904 = _globals(Cursor(stream, budget), formats)
             for sheet in references:
                 if sheet.kind != 0:
                     warnings.append(ParseWarning("XLS_SHEET_TYPE_UNSUPPORTED", "Only ordinary worksheets are read", sheet.name))
                     continue
-                cells = read_cells(Cursor(stream, budget, sheet.offset), strings)
+                cells = read_cells(Cursor(stream, budget, sheet.offset), strings, formats)
                 if cells is None:
                     warnings.append(ParseWarning("XLS_SHEET_TYPE_UNSUPPORTED", "Dialog sheet is not read", sheet.name))
                     continue
                 sheets.append(XlsSheet(sheet.name, sheet.state, cells))
-            return XlsContent(tuple(sheets), date_1904, tuple(warnings))
+            return XlsContent(tuple(sheets), date_1904, (*warnings, *formats.warnings))
     except CfbError as exc:
         raise XlsError(str(exc)) from exc

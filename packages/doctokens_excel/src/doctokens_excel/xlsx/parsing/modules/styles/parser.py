@@ -7,8 +7,9 @@ from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.reader import PackageReader
 
+from doctokens_excel.formatting.values import builtin_format_code
+
 from .index import FormatIndex
-from .number_format import builtin_format_code
 from .records import NS_S, differential_style, fill_info, font_info, parse_theme
 
 StyleDetail = Literal["display", "structural", "semantic"]

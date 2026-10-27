@@ -404,8 +404,9 @@ from doctokens_excel import read_xls_content
 content = read_xls_content("saved.xls")
 for sheet in content.sheets:
     for cell in sheet.cells:
-        print(sheet.name, cell.ref, cell.kind, cell.value)
+        print(sheet.name, cell.ref, cell.display_text)
 ```
 
-数字保留保存值，公式保留保存结果；货币/日期显示、公式表达式及复杂对象尚未接入。
+`cell.value` 保留保存值，`cell.display_text` 提供普通数值、百分比和货币显示；符号按文件中的格式码保留。
+日期、分数、科学记数等其它显示分支、公式表达式及复杂对象尚未接入。
 当前没有 XLS 的密度、完整读取会话或 MCP 工具入口。详见 [XLS 内容读取规范](specifications/xls/README.md)。

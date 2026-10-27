@@ -1,7 +1,7 @@
 """Runtime style index used while rendering worksheet cells.
 
 The XML reader lives in :mod:`styles.parser`; number-format rendering lives in
-:mod:`styles.number_format`; and theme/font/fill records live in
+:mod:`doctokens_excel.formatting.values`; and theme/font/fill records live in
 :mod:`styles.records`. Keeping this module focused on the in-memory index
 prevents new format cases from making the public style object unmanageably
 large while preserving the historical ``styles.index`` import path.
@@ -9,10 +9,17 @@ large while preserving the historical ``styles.index`` import path.
 
 from __future__ import annotations
 
+from doctokens_excel.formatting.program import FormatProgram
+from doctokens_excel.formatting.values import (
+    builtin_format_code,
+    formula_bar_value,
+    number_format_color,
+    resolve_format,
+    text_format_parts,
+)
+from doctokens_excel.formatting.values import format_value as format_number_value
+
 from ....model.workbook import CellControl
-from .number_format import builtin_format_code, formula_bar_value, number_format_color, resolve_format, text_format_parts
-from .number_format import format_value as format_number_value
-from .number_formats.program import FormatProgram
 from .records import FillInfo, FontInfo
 
 

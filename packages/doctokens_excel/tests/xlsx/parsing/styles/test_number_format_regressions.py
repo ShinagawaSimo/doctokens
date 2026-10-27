@@ -6,7 +6,7 @@ unsupported valid formats are migration gaps, not malformed-file exceptions.
 """
 
 import pytest
-from doctokens_excel.xlsx.parsing.modules.styles.number_format import format_value, formula_bar_value
+from doctokens_excel.formatting.values import format_value, formula_bar_value
 
 
 @pytest.mark.parametrize(

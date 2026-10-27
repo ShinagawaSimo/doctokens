@@ -22,6 +22,7 @@ class XlsLimits:
     max_string_characters: int = 32_767
     max_total_string_characters: int = 16_000_000
     max_cells: int = 500_000
+    max_xfs: int = 4096
 
     def __post_init__(self) -> None:
         for name in (
@@ -31,6 +32,7 @@ class XlsLimits:
             "max_string_characters",
             "max_total_string_characters",
             "max_cells",
+            "max_xfs",
         ):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
@@ -45,6 +47,7 @@ class XlsCell:
     value: str | float | bool
     xf_index: int
     from_formula: bool = False
+    display_text: str | None = None
 
     @property
     def ref(self) -> str:

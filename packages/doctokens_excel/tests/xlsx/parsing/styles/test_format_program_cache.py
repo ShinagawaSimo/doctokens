@@ -8,7 +8,7 @@ FIXTURES = REPO_ROOT / "test_support/fixtures"
 
 
 def test_format_programs_are_compiled_per_code_and_owned_by_one_parse() -> None:
-    from doctokens_excel.xlsx.parsing.modules.styles.number_formats.program import FormatProgram
+    from doctokens_excel.formatting.program import FormatProgram
 
     with patch("doctokens_excel.xlsx.parsing.modules.styles.index.FormatProgram", wraps=FormatProgram) as compiled:
         with open_xlsx(FIXTURES / "xlsx/xlsx-date-time.xlsx") as workbook:

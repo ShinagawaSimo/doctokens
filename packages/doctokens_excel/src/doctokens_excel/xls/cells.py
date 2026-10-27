@@ -7,6 +7,7 @@ import sys
 from dataclasses import replace
 from struct import pack, unpack_from
 
+from .formats import XlsFormatIndex
 from .models import XlsCell, XlsError
 from .records import Cursor, Record, read_bof
 from .strings import read_formula_string
@@ -92,7 +93,7 @@ def _value_cells(cursor: Cursor, record: Record, strings: list[str]) -> list[Xls
     raise XlsError("Invalid XLS formula cached-result type")
 
 
-def read_cells(cursor: Cursor, strings: list[str]) -> tuple[XlsCell, ...] | None:
+def read_cells(cursor: Cursor, strings: list[str], formats: XlsFormatIndex) -> tuple[XlsCell, ...] | None:
     read_bof(cursor, 0x0010)
     cells: dict[tuple[int, int], XlsCell] = {}
     pending: XlsCell | None = None
@@ -109,7 +110,7 @@ def read_cells(cursor: Cursor, strings: list[str]) -> tuple[XlsCell, ...] | None
             continue
         if pending is not None:
             if record.kind == 0x0207:
-                cell = replace(pending, value=read_formula_string(cursor, record))
+                cell = formats.format_cell(replace(pending, value=read_formula_string(cursor, record)))
                 cells[(cell.row, cell.column)] = cell
                 pending = None
                 continue
@@ -127,6 +128,7 @@ def read_cells(cursor: Cursor, strings: list[str]) -> tuple[XlsCell, ...] | None
             raise XlsError("Inline Label/RString compatibility records are not supported yet")
         elif record.kind in _VALUES:
             for cell in _value_cells(cursor, record, strings):
+                cell = formats.format_cell(cell)
                 key = (cell.row, cell.column)
                 if key in cells:
                     raise XlsError(f"Duplicate XLS cell {cell.ref}")

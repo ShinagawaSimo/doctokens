@@ -1,4 +1,4 @@
-"""OOXML number-format tables, tokenization, and display formatting."""
+"""Shared spreadsheet number-format tables and display formatting."""
 
 from __future__ import annotations
 
@@ -6,14 +6,14 @@ import math
 import re
 from decimal import Decimal
 
-from .number_formats.chinese import format_chinese_integer
-from .number_formats.codes import _date_scan_text, _localized_builtin_code
-from .number_formats.codes import builtin_format_code as builtin_format_code
-from .number_formats.codes import resolve_format as resolve_format
-from .number_formats.dates import _format_date_value, time_formula_bar_value
-from .number_formats.numbers import _format_number_value
-from .number_formats.program import FormatProgram
-from .number_formats.sections import _clean_display_pattern, _split_format_sections
+from .chinese import format_chinese_integer
+from .codes import _date_scan_text, _localized_builtin_code
+from .codes import builtin_format_code as builtin_format_code
+from .codes import resolve_format as resolve_format
+from .dates import _format_date_value, time_formula_bar_value
+from .numbers import _format_number_value
+from .program import FormatProgram
+from .sections import _clean_display_pattern, _split_format_sections
 
 
 def format_value(

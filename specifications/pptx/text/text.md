@@ -80,10 +80,13 @@ inherited numbering instead of letting the master label reappear.
   - `<equation notation="latex">...</equation>`.
 
 - **OOXML**
-  - Direct paragraph oMath/oMathPara.
+  - Direct paragraph m:oMath/m:oMathPara or a14:m/m:oMath, including paragraph mc:AlternateContent wrappers. a14 identifies http://schemas.microsoft.com/office/drawing/2010/main.
 
 - **IR**
   - `Run.equation: str`
 
 - **Parsing**
   - Use [OMML conversion](../../common/equation.md); also store LaTeX as text for plain output. Empty conversion yields no run.
+  - [Native math alternatives](../../../packages/doctokens_powerpoint/src/doctokens_powerpoint/pptx/ooxml/math.py) are selected while reading slide and notes XML. Resolve every Choice/@Requires prefix in its actual namespace scope, including aliases and local rebindings. A math Choice must require only supported DrawingML/main, Office Math or DrawingML 2010 namespaces, and contain readable inline math/runs/fields/breaks/tabs.
+  - Select the first supported Choice, otherwise the explicit Fallback, preserving source order and reading only one branch. An explicitly empty selected branch stays empty. With no readable branch or Fallback, emit MATH_ALTERNATE_CONTENT_UNSUPPORTED and omit that math alternative.
+  - This selection applies only to paragraph alternatives containing mathematical content. Shape-level alternatives and OLE previews keep their separate dispatch behavior. Math uses all densities; formatting/geometry density choices do not disable its extraction.

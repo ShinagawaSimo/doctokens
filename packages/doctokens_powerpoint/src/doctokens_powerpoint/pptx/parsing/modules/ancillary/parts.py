@@ -8,6 +8,7 @@ from doctokens_core.containers.opc.relationships import RelationshipIndex
 from doctokens_core.contracts.models import ParseWarning
 
 from ....model.presentation import CommentItem
+from ....ooxml.math import read_math_part
 from ....ooxml.namespaces import first_child, local_name
 from ....ooxml.package import PackageReader
 from ..slides.runs import tx_body_text
@@ -77,7 +78,7 @@ class NotesParser:
         return None
 
     def _read_xml(self, part: str) -> ET.Element:
-        return self._pkg.read_xml(part)
+        return read_math_part(self._pkg, part, self._warnings)
 
 
 class CommentsParser:

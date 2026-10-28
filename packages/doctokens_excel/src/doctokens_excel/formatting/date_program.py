@@ -31,12 +31,12 @@ class DateProgram:
                 value = token
             elif kind == "year":
                 value = date_number(year % 100 if len(token) == 2 else year, token, dbnum)
-            elif kind == "day":
-                value = date_number(day, token, dbnum, padding="日" not in self.context.code)
+            elif kind in {"day", "day-unit"}:
+                value = date_number(day, token, dbnum, padding=kind != "day-unit")
             elif kind == "weekday":
                 value = weekday_name(year, month, day, short=len(token) == 3, locale=locale)
-            elif kind == "month":
-                value = date_number(month, token, dbnum, padding="月" not in self.context.code)
+            elif kind in {"month", "month-unit"}:
+                value = date_number(month, token, dbnum, padding=kind != "month-unit")
             elif kind == "month-name":
                 value = month_name(month, short=len(token) != 4, locale=locale)
                 if len(token) > 4:
@@ -118,6 +118,11 @@ def compile_date(context: DateContext) -> DateProgram:
                 minute = previous == "h" or bool(re.match(r"\s*[:.]?\s*[sS]", syntax[i + len(token) :]))
                 kind = "minute" if minute else "month" if len(token) <= 2 else "month-name"
                 previous = "n" if minute else "M"
+            if kind in {"month", "day"}:
+                unit = "月" if kind == "month" else "日"
+                following = section[i + len(token) :]
+                if following.startswith((unit, '"' + unit, "\\" + unit)):
+                    kind += "-unit"
             operations.append((kind, token))
             i += len(token)
             if lower == "s" and (suffix := re.match(r"\.[0#?]+", section[i:])):

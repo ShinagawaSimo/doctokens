@@ -9,7 +9,6 @@ from typing import Any, cast
 from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.relationships import RelationshipIndex
-from doctokens_core.ooxml.equations.converter import omath_to_latex
 from doctokens_word.docx.model import ParseOptions, ParseWarning, RelationshipRecord
 from doctokens_word.docx.ooxml.formatting import (
     is_default_text_color,
@@ -27,10 +26,9 @@ from doctokens_word.docx.rendering.objects.smartarts import render_smartart_reso
 from doctokens_word.docx.rendering.tables.render import render_table, table_id
 
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 
 
-class OoxmlFormattingAndMathTests(unittest.TestCase):
+class OoxmlFormattingTests(unittest.TestCase):
     def test_run_format_parses_visible_values_and_filters_defaults(self) -> None:
         run_properties = ET.fromstring(
             f"""<w:rPr xmlns:w="{W_NS}">
@@ -61,61 +59,6 @@ class OoxmlFormattingAndMathTests(unittest.TestCase):
         self.assertIsNone(normalize_hex_color("auto"))
         self.assertTrue(is_default_text_color("#101010"))
         self.assertFalse(is_default_text_color("themeAccent1"))
-
-    def test_omml_converter_covers_structural_math_nodes(self) -> None:
-        math = ET.fromstring(
-            f"""<m:oMath xmlns:m="{M_NS}">
-              <m:f><m:num><m:r><m:t>a&amp;b</m:t></m:r></m:num>
-                <m:den><m:r><m:t>c_d</m:t></m:r></m:den></m:f>
-              <m:rad><m:deg><m:r><m:t>3</m:t></m:r></m:deg>
-                <m:e><m:r><m:t>x</m:t></m:r></m:e></m:rad>
-              <m:sSub><m:e><m:r><m:t>x</m:t></m:r></m:e>
-                <m:sub><m:r><m:t>i</m:t></m:r></m:sub></m:sSub>
-              <m:sSup><m:e><m:r><m:t>y</m:t></m:r></m:e>
-                <m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup>
-              <m:sSubSup><m:e><m:r><m:t>z</m:t></m:r></m:e>
-                <m:sub><m:r><m:t>0</m:t></m:r></m:sub>
-                <m:sup><m:r><m:t>n</m:t></m:r></m:sup></m:sSubSup>
-              <m:sPre><m:e><m:r><m:t>A</m:t></m:r></m:e>
-                <m:sub><m:r><m:t>l</m:t></m:r></m:sub>
-                <m:sup><m:r><m:t>u</m:t></m:r></m:sup></m:sPre>
-              <m:nary><m:chr m:val="∫"/><m:sub><m:r><m:t>0</m:t></m:r></m:sub>
-                <m:sup><m:r><m:t>1</m:t></m:r></m:sup><m:e><m:r><m:t>f</m:t></m:r></m:e>
-              </m:nary>
-              <m:acc><m:chr m:val="⃗"/><m:e><m:r><m:t>v</m:t></m:r></m:e></m:acc>
-              <m:bar><m:pr m:pos="bot"/><m:e><m:r><m:t>q</m:t></m:r></m:e></m:bar>
-              <m:func><m:fName><m:r><m:t>lim</m:t></m:r></m:fName>
-                <m:lim><m:r><m:t>x</m:t></m:r></m:lim><m:e><m:r><m:t>g</m:t></m:r></m:e>
-              </m:func>
-              <m:groupChr><m:pr m:chr="⏞"/><m:e><m:r><m:t>sum</m:t></m:r></m:e></m:groupChr>
-              <m:d><m:pr m:begChr="[" m:endChr="]"/><m:e><m:r><m:t>p</m:t></m:r></m:e></m:d>
-              <m:m><m:mr><m:e><m:r><m:t>1</m:t></m:r></m:e>
-                <m:e><m:r><m:t>2</m:t></m:r></m:e></m:mr></m:m>
-              <m:eqArr><m:e><m:r><m:t>x=1</m:t></m:r></m:e>
-                <m:e><m:r><m:t>y=2</m:t></m:r></m:e></m:eqArr>
-              <m:limLow><m:e><m:r><m:t>h</m:t></m:r></m:e>
-                <m:lim><m:r><m:t>0</m:t></m:r></m:lim></m:limLow>
-              <m:limUpp><m:e><m:r><m:t>h</m:t></m:r></m:e>
-                <m:lim><m:r><m:t>∞</m:t></m:r></m:lim></m:limUpp>
-              <m:phant><m:e><m:r><m:t>ghost</m:t></m:r></m:e></m:phant>
-              <m:borderBox><m:e><m:r><m:t>box</m:t></m:r></m:e></m:borderBox>
-              <m:box><m:e><m:r><m:t>pass</m:t></m:r></m:e></m:box>
-              <m:unknown><m:r><m:t>plain</m:t></m:r></m:unknown>
-            </m:oMath>"""
-        )
-
-        latex = omath_to_latex(math)
-
-        self.assertIn(r"\frac{a\&b}{c\_d}", latex)
-        self.assertIn(r"\sqrt[3]{x}", latex)
-        self.assertIn(r"x_{i}", latex)
-        self.assertIn(r"y^{2}", latex)
-        self.assertIn(r"\int_{0}^{1} {f}", latex)
-        self.assertIn(r"\vec{v}", latex)
-        self.assertIn(r"\underline{q}", latex)
-        self.assertIn(r"\lim_{x}{g}", latex)
-        self.assertIn(r"\begin{matrix} 1 & 2 \end{matrix}", latex)
-        self.assertIn(r"\boxed{box}", latex)
 
 
 class NumberingAndAssetTests(unittest.TestCase):

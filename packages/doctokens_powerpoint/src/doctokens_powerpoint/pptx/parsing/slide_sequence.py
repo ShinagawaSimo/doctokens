@@ -20,6 +20,7 @@ from ..model.presentation import (
     SmartArtLookup,
 )
 from ..ooxml.inheritance import LayoutMasterResolver
+from ..ooxml.math import read_math_part
 from ..ooxml.namespaces import attr, first_child, local_name
 from ..ooxml.package import PackageReader
 from .modules.ancillary.parts import NotesParser
@@ -226,4 +227,4 @@ class _SlideSequence:
                 yield _ParsedSlide(slide)
 
     def _read_slide_xml(self, part: str) -> ET.Element:
-        return self._package_reader.read_xml(part)
+        return read_math_part(self._package_reader, part, self._warnings)

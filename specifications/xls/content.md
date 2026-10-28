@@ -64,6 +64,8 @@
     a parent style changes; it does not replace the saved `ifmt` during reading.
   - General preserves the saved number's precision; XLS omits a redundant `.0`
     for integral values. It does not shorten values to Excel's visual width.
+    XLS uses a round-trip representation of binary64 values; XLSX can retain a
+    longer XML numeric spelling for the same binary value.
     Fixed-point number, percentage and currency
     formats support precision, section selection, signs/parentheses and literals.
     `0` keeps required zeroes, `#` omits optional zeroes, and `?` retains alignment

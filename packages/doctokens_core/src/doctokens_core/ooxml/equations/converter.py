@@ -13,15 +13,12 @@ from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.xml import local_name
 
+from . import operators
 from .support import (
-    _ACCENT_MAP,
-    _DELIM_MAP,
     _FUNC_MAP,
-    _NARY_OPERATOR_MAP,
     _escape_latex,
     _plain_text,
     _wrap_group,
-    attr,
     child_elements,
     first_child,
     qualified_name,
@@ -40,7 +37,7 @@ def _convert_node(node: ET.Element) -> str:
     if handler is not None:
         return handler(node)
     # Unknown element: fall back to extracting its text
-    return _plain_text(node)
+    return _escape_latex(_plain_text(node))
 
 
 # ── Leaf nodes: math text runs ──
@@ -127,53 +124,7 @@ def _handle_spre(elem: ET.Element) -> str:
     if sup:
         parts.append(f"^{{{sup}}}")
     parts.append(_wrap_group(e_val))
-    return "".join(parts)
-
-
-# ── N-ary operators (sum, integral, product, etc.) ──
-
-
-def _handle_nary(elem: ET.Element) -> str:
-    """Handle <m:nary> → \\sum_{sub}^{sup} or \\int_{sub}^{sup}, etc."""
-    # Read the operator character from <m:chr>
-    chr_val = _child_attr(elem, "chr", "val")
-    op = _NARY_OPERATOR_MAP.get(chr_val or "", r"\sum")
-
-    sub = _child_convert(elem, "sub")
-    sup = _child_convert(elem, "sup")
-    e_val = _child_convert(elem, "e")
-
-    # Build the limits
-    limits = ""
-    if sub:
-        limits += f"_{{{sub}}}"
-    if sup:
-        limits += f"^{{{sup}}}"
-
-    return f"{op}{limits} {{{e_val}}}"
-
-
-# ── Accents ──
-
-
-def _handle_acc(elem: ET.Element) -> str:
-    """Handle <m:acc> → \\hat{e}, \\vec{e}, etc."""
-    chr_val = _child_attr(elem, "chr", "val")
-    cmd = _ACCENT_MAP.get(chr_val or "", r"\hat")
-    e_val = _child_convert(elem, "e")
-    return f"{cmd}{{{e_val}}}"
-
-
-# ── Overline/underline ──
-
-
-def _handle_bar(elem: ET.Element) -> str:
-    """Handle <m:bar> → \\overline{e} or \\underline{e}."""
-    pos = _child_attr(elem, "pr", "pos") or "top"
-    e_val = _child_convert(elem, "e")
-    if pos == "bot":
-        return rf"\underline{{{e_val}}}"
-    return rf"\overline{{{e_val}}}"
+    return "{}" + "".join(parts)
 
 
 # ── Math functions ──
@@ -181,8 +132,8 @@ def _handle_bar(elem: ET.Element) -> str:
 
 def _handle_func(elem: ET.Element) -> str:
     """Handle <m:func> → \\sin{e} or \\lim_{sub} e."""
-    fname_text = _func_name(elem)
-    func_cmd = _FUNC_MAP.get(fname_text, rf"\operatorname{{{fname_text}}}")
+    name = first_child(elem, "m", "fName")
+    func_cmd = _function_name(name) if name is not None else ""
 
     # Check for limits (e.g. lim's subscript)
     lim = _child_convert(elem, "lim")
@@ -196,37 +147,22 @@ def _handle_func(elem: ET.Element) -> str:
     return result
 
 
-def _func_name(elem: ET.Element) -> str:
-    """Extract the function name text from <m:fName>."""
-    fname = first_child(elem, "m", "fName")
-    if fname is None:
-        return ""
-    return _plain_text(fname).strip()
-
-
-# ── Bracket groups ──
-
-
-def _handle_groupchr(elem: ET.Element) -> str:
-    """Handle <m:groupChr> → {e} or a bracket group with a symbol above."""
-    chr_val = _child_attr(elem, "pr", "chr") or _child_attr(elem, "groupChrPr", "chr")
-    e_val = _child_convert(elem, "e")
-    if chr_val is not None:
-        return rf"\overbrace{{{e_val}}}" if chr_val == "⏞" else f"{{{e_val}}}"
-    return f"{{{e_val}}}"
-
-
-# ── Delimiters (parentheses) ──
-
-
-def _handle_d(elem: ET.Element) -> str:
-    """Handle <m:d> → \\left( e \\right)."""
-    beg_chr = _child_attr(elem, "pr", "begChr") or "("
-    end_chr = _child_attr(elem, "pr", "endChr") or ")"
-    beg = _DELIM_MAP.get(beg_chr, beg_chr)
-    end = _DELIM_MAP.get(end_chr, end_chr)
-    e_val = _child_convert(elem, "e")
-    return rf"\left{beg} {e_val} \right{end}"
+def _function_name(elem: ET.Element) -> str:
+    """Keep limits and scripts in function names instead of flattening their text."""
+    scripted = {"limLow", "limUpp", "sSub", "sSup", "sSubSup"}
+    kind = local_name(elem.tag)
+    if kind in scripted:
+        base = first_child(elem, "m", "e")
+        value = _function_name(base) if base is not None else ""
+        for name, marker in (("lim", "^" if kind == "limUpp" else "_"), ("sub", "_"), ("sup", "^")):
+            limit = _child_convert(elem, name)
+            if limit:
+                value += f"{marker}{{{limit}}}"
+        return value
+    if any(local_name(child.tag) in scripted for child in elem):
+        return "".join(_function_name(child) for child in elem if not local_name(child.tag).endswith("Pr"))
+    text = _plain_text(elem).strip()
+    return _FUNC_MAP.get(text, rf"\operatorname{{{_escape_latex(text)}}}")
 
 
 # ── Matrices ──
@@ -300,14 +236,6 @@ def _child_convert(elem: ET.Element, child_local: str) -> str:
     return _convert_node(child)
 
 
-def _child_attr(elem: ET.Element, child_local: str, attr_name: str) -> str | None:
-    """Read the attribute value of the specified child element."""
-    child = first_child(elem, "m", child_local)
-    if child is None:
-        return None
-    return attr(child, "m", attr_name)
-
-
 def _convert_children(elem: ET.Element) -> str:
     """Convert all child elements and concatenate (LaTeX math mode ignores whitespace)."""
     parts: list[str] = []
@@ -329,12 +257,12 @@ _DISPATCH: dict[str, Callable[[ET.Element], str]] = {
     "sSup": _handle_ssup,
     "sSubSup": _handle_ssubsup,
     "sPre": _handle_spre,
-    "nary": _handle_nary,
-    "acc": _handle_acc,
-    "bar": _handle_bar,
+    "nary": lambda e: operators.nary(e, _convert_node),
+    "acc": lambda e: operators.accent(e, _convert_node),
+    "bar": lambda e: operators.bar(e, _convert_node),
     "func": _handle_func,
-    "groupChr": _handle_groupchr,
-    "d": _handle_d,
+    "groupChr": lambda e: operators.group_character(e, _convert_node),
+    "d": lambda e: operators.delimiter(e, _convert_node),
     "m": _handle_m,
     "eqArr": _handle_eqarr,
     "limLow": _handle_limlow,
@@ -353,7 +281,7 @@ _DISPATCH: dict[str, Callable[[ET.Element], str]] = {
     "sup": _convert_children,
     "deg": _convert_children,
     "lim": _convert_children,
-    "fName": lambda e: _plain_text(e).strip(),
+    "fName": _function_name,
     "chr": lambda e: e.get(qualified_name("m", "val"), ""),
     # Formatting control elements: produce no output
     "oMathParaPr": lambda e: "",

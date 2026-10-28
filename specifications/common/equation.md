@@ -6,7 +6,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
 
 ## Processing
 
-`omath_to_latex(root)` converts its children. Dispatch uses the element local name. Unrecognized elements use descendant text; they do not emit a diagnostic.
+`omath_to_latex(root)` converts its children. Dispatch uses the element local name. Unrecognized elements use escaped descendant math text; they do not emit a diagnostic.
 
 ## Fields
 
@@ -22,7 +22,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_r](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L48)
+  - [_handle_r](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -48,7 +48,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_t](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L58)
+  - [_handle_t](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -69,7 +69,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_f](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L66)
+  - [_handle_f](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -92,7 +92,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_rad](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L76)
+  - [_handle_rad](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -117,7 +117,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_ssub](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L88)
+  - [_handle_ssub](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -141,7 +141,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_ssup](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L96)
+  - [_handle_ssup](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -165,7 +165,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_ssubsup](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L104)
+  - [_handle_ssubsup](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -195,7 +195,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_spre](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L118)
+  - [_handle_spre](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -210,174 +210,97 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
       if sup:
           parts.append(f"^{{{sup}}}")
       parts.append(_wrap_group(e_val))
-      return "".join(parts)
+      return "{}" + "".join(parts)
   ```
 
 ### `nary`
 
 - **Output**
-  - LaTeX fragment in the containing equation.
-
+  - LaTeX operator, visible lower/upper limits, then the grouped base.
 - **OOXML**
-  - `m:nary`
-
+  - m:nary/m:naryPr; direct m:sub, m:sup, m:e.
 - **IR**
   - Recursive string result.
-
 - **Parsing**
-  - [_handle_nary](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L135)
-
-- **Conversion**
-
-  ```python
-  def _handle_nary(elem: ET.Element) -> str:
-      chr_val = _child_attr(elem, "chr", "val")
-      op = _NARY_OPERATOR_MAP.get(chr_val or "", r"\sum")
-  
-      sub = _child_convert(elem, "sub")
-      sup = _child_convert(elem, "sup")
-      e_val = _child_convert(elem, "e")
-  
-      limits = ""
-      if sub:
-          limits += f"_{{{sub}}}"
-      if sup:
-          limits += f"^{{{sup}}}"
-  
-      return f"{op}{limits} {{{e_val}}}"
-  ```
+  - [nary](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/operators.py).
+  - Read chr from naryPr/chr/@m:val. Missing chr means integral U+222B, not summation. A present chr without val, or with an empty val, means no operator.
+  - Map known integral/product/sum/set operators through _NARY_OPERATOR_MAP. Preserve any other explicit character as escaped text rather than inventing a sum.
+  - Convert visible sub/sup as _{...}/^{...}. Missing subHide/supHide means false; a present flag without val means true; 0/false/off means false.
+  - Omit hidden limits even when their saved arguments contain text. An empty operator with visible limits uses an empty TeX base {}.
+  - Example: chr="∏", sub="k=1", sup="n", e="A" → \prod_{k=1}^{n} {A}.
 
 ### `acc`
 
 - **Output**
-  - LaTeX fragment in the containing equation.
-
+  - A mapped LaTeX accent over the converted base.
 - **OOXML**
-  - `m:acc`
-
+  - m:acc/m:accPr/m:chr/@m:val; m:acc/m:e.
 - **IR**
   - Recursive string result.
-
 - **Parsing**
-  - [_handle_acc](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L158)
-
-- **Conversion**
-
-  ```python
-  def _handle_acc(elem: ET.Element) -> str:
-      chr_val = _child_attr(elem, "chr", "val")
-      cmd = _ACCENT_MAP.get(chr_val or "", r"\hat")
-      e_val = _child_convert(elem, "e")
-      return f"{cmd}{{{e_val}}}"
-  ```
+  - [accent](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/operators.py).
+  - Missing chr defaults to combining circumflex U+0302. A present empty chr, including missing val, leaves the base undecorated.
+  - Known characters map through _ACCENT_MAP, including vector, dot, double dot, tilde and hat. Preserve an unknown explicit character with \overset{character}{base}.
+  - Example: chr="⃗", e="v" → \vec{v}.
 
 ### `bar`
 
 - **Output**
-  - LaTeX fragment in the containing equation.
-
+  - \overline{base} or \underline{base}.
 - **OOXML**
-  - `m:bar`
-
+  - m:bar/m:barPr/m:pos/@m:val; m:bar/m:e.
 - **IR**
   - Recursive string result.
-
 - **Parsing**
-  - [_handle_bar](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L169)
-
-- **Conversion**
-
-  ```python
-  def _handle_bar(elem: ET.Element) -> str:
-      pos = _child_attr(elem, "pr", "pos") or "top"
-      e_val = _child_convert(elem, "e")
-      if pos == "bot":
-          return rf"\underline{{{e_val}}}"
-      return rf"\overline{{{e_val}}}"
-  ```
+  - [bar](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/operators.py).
+  - Explicit top selects overline; bot selects underline. An omitted pos or omitted val defaults to bot, as in ISO/IEC 29500-1:2016 §22.1.2.84 and Office.
+  - Example: pos="bot", e="q" → \underline{q}.
 
 ### `func`
 
 - **Output**
-  - LaTeX fragment in the containing equation.
-
+  - LaTeX function name, its saved limits/scripts and its grouped argument.
 - **OOXML**
-  - `m:func`
-
+  - m:func/m:fName and m:func/m:e.
 - **IR**
   - Recursive string result.
-
 - **Parsing**
-  - [_handle_func](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L181)
-
-- **Conversion**
-
-  ```python
-  def _handle_func(elem: ET.Element) -> str:
-      fname_text = _func_name(elem)
-      func_cmd = _FUNC_MAP.get(fname_text, rf"\operatorname{{{fname_text}}}")
-  
-      lim = _child_convert(elem, "lim")
-      e_val = _child_convert(elem, "e")
-  
-      result = func_cmd
-      if lim:
-          result += f"_{{{lim}}}"
-      if e_val:
-          result += f"{{{e_val}}}"
-      return result
-  ```
+  - [_handle_func](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py).
+  - Map simple names through _FUNC_MAP; escape other names inside \operatorname{...}.
+  - Preserve limLow/limUpp and sSub/sSup/sSubSup within fName, recursively converting the function base and limit arguments. Do not flatten limit text into the name.
+  - The previously accepted direct m:lim also adds a lower limit when present.
+  - Example: fName/limLow with e="lim", lim="x→0", outer e="f" → \lim_{x→0}{f}.
 
 ### `groupChr`
 
 - **Output**
-  - LaTeX fragment in the containing equation.
-
+  - A brace/arrow command or an explicit character above/below the base.
 - **OOXML**
-  - `m:groupChr`
-
+  - m:groupChr/m:groupChrPr/{m:chr,m:pos}/@m:val; direct m:e.
 - **IR**
   - Recursive string result.
-
 - **Parsing**
-  - [_handle_groupchr](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L209)
-
-- **Conversion**
-
-  ```python
-  def _handle_groupchr(elem: ET.Element) -> str:
-      chr_val = _child_attr(elem, "pr", "chr") or _child_attr(elem, "groupChrPr", "chr")
-      e_val = _child_convert(elem, "e")
-      if chr_val is not None:
-          return rf"\overbrace{{{e_val}}}" if chr_val == "⏞" else f"{{{e_val}}}"
-      return f"{{{e_val}}}"
-  ```
+  - [group_character](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/operators.py).
+  - Missing chr defaults to bottom curly bracket U+23DF; present empty chr leaves the base undecorated. Missing pos or val defaults to bot.
+  - Upper U+23DE at top maps to \overbrace; lower U+23DF at bot maps to \underbrace.
+  - Left/right/bidirectional arrows use the corresponding over/under arrow commands. Other explicit character/position pairs use \overset or \underset and preserve escaped character text.
+  - Vertical baseline justification and exact stretching are not reconstructed.
 
 ### `d`
 
 - **Output**
-  - LaTeX fragment in the containing equation.
-
+  - Converted arguments in their saved delimiters, joined by the saved separator.
 - **OOXML**
-  - `m:d`
-
+  - m:d/m:dPr/{m:begChr,m:sepChr,m:endChr}/@m:val; every direct m:e.
 - **IR**
   - Recursive string result.
-
 - **Parsing**
-  - [_handle_d](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L221)
-
-- **Conversion**
-
-  ```python
-  def _handle_d(elem: ET.Element) -> str:
-      beg_chr = _child_attr(elem, "pr", "begChr") or "("
-      end_chr = _child_attr(elem, "pr", "endChr") or ")"
-      beg = _DELIM_MAP.get(beg_chr, beg_chr)
-      end = _DELIM_MAP.get(end_chr, end_chr)
-      e_val = _child_convert(elem, "e")
-      return rf"\left{beg} {e_val} \right{end}"
-  ```
+  - [delimiter](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/operators.py).
+  - Omitted begChr/endChr default to ( and ); omitted sepChr defaults to |. U+2502 is normalized to the same separator.
+  - A present character element with no val or an empty val means no character. It does not restore the default. Empty outer delimiters use TeX \left. or \right.; an empty separator concatenates arguments.
+  - Convert all e children in order. Known delimiters use _DELIM_MAP and \left/\right. Other explicit characters use \mathopen/\mathclose; do not generate an invalid TeX delimiter pair.
+  - Example: square brackets, separator ;, e="x" and e="y" → \left[ x;y \right].
+  - Example: default properties and the same arguments → \left( x|y \right).
 
 ### `m`
 
@@ -391,7 +314,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_m](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L234)
+  - [_handle_m](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -417,7 +340,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_eqarr](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L247)
+  - [_handle_eqarr](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -440,7 +363,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_limlow](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L257)
+  - [_handle_limlow](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -463,7 +386,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_limupp](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L264)
+  - [_handle_limupp](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -486,7 +409,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_phant](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L274)
+  - [_handle_phant](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -508,7 +431,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_borderbox](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L280)
+  - [_handle_borderbox](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -530,7 +453,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_handle_box](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L286)
+  - [_handle_box](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -551,7 +474,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L310)
+  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -577,7 +500,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L310)
+  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -603,7 +526,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L310)
+  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -629,7 +552,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L310)
+  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -655,7 +578,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L310)
+  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -681,7 +604,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L310)
+  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -707,7 +630,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L310)
+  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -733,7 +656,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L310)
+  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -759,7 +682,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L310)
+  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
 
 - **Conversion**
 
@@ -785,7 +708,7 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
   - Recursive string result.
 
 - **Parsing**
-  - `lambda e: _plain_text(e).strip()`
+  - [_function_name](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py), preserving nested limits and scripts.
 
 ### `chr`
 
@@ -1069,7 +992,9 @@ OMML nodes produce LaTeX text through recursive conversion. The result is a read
 
 ## Character conversion
 
-- [_escape_latex](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/support.py#L143)
-- [_plain_text](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/support.py#L137)
-- [_wrap_group](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/support.py#L126)
-- [_child_attr](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py#L302)
+- [_escape_latex](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/support.py)
+- [_plain_text](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/support.py)
+- [_wrap_group](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/support.py)
+- [_property](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/operators.py)
+
+Literal TeX special characters are escaped once per source character, including text from unknown-node fallback. Generated command braces are not re-escaped. For example, a literal backslash becomes `\textbackslash{}`.

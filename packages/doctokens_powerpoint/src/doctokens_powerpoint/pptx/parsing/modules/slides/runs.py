@@ -10,6 +10,7 @@ from doctokens_core.ooxml.equations.converter import omath_to_latex
 
 from ....model.presentation import Paragraph, ParagraphStyle, Run, RunFormat
 from ....ooxml.colors import is_default_text_color, resolve_color_element
+from ....ooxml.math import TEXT_MATH
 from ....ooxml.namespaces import attr, first_child, local_name
 from .lists import integer as _parse_int
 from .lists import list_metadata, list_prefix
@@ -152,13 +153,17 @@ def paragraph_runs(
             pending += "\t"
         elif name in {"pPr", "endParaRPr"}:
             continue
-        elif name in {"oMath", "oMathPara"}:
+        elif name in {"oMath", "oMathPara"} or child.tag == TEXT_MATH:
             if pending:
                 runs.append({"text": pending})
                 pending = ""
-            latex = omath_to_latex(child)
-            if latex:
-                runs.append({"text": latex, "equation": latex})
+            nodes = child if child.tag == TEXT_MATH else (child,)
+            for node in nodes:
+                if local_name(node.tag) not in {"oMath", "oMathPara"}:
+                    continue
+                latex = omath_to_latex(node)
+                if latex:
+                    runs.append({"text": latex, "equation": latex})
         else:
             warnings.append(
                 ParseWarning(

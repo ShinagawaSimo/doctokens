@@ -16,7 +16,7 @@ from ..model import (
     Chart,
     ContentTypes,
     ImageAsset,
-    OcrStoredResult,
+    OcrResultRecord,
     ParsedDocument,
     ParseWarning,
     SmartArt,
@@ -43,7 +43,7 @@ class _DocumentParseResult:
     smartarts: list[SmartArt]
     blocks: list[Block]
     ancillary: AncillaryResult
-    ocr_results: dict[str, OcrStoredResult]
+    ocr_results: dict[str, OcrResultRecord]
     revision_view: str
     alternate_content: list[dict[str, object]]
 

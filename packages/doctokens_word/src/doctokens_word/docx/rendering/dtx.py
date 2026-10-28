@@ -6,10 +6,11 @@ from collections.abc import Iterator, Sequence
 from typing import cast
 from xml.etree import ElementTree as ET
 
+from doctokens_core.ooxml.equations.results import append_math_text
 from doctokens_core.output.xml import append, element, serialize
 from doctokens_core.runtime.execution import checkpoint
 
-from ..model import AncillaryItem, Block, InlineContainer, InlineObject, OcrStoredResult, ParsedDocument, Run, TableBlock
+from ..model import AncillaryItem, Block, InlineContainer, InlineObject, OcrResultRecord, ParsedDocument, Run, TableBlock
 from ..model.traversal import iter_blocks
 from .common.floating import floating_textboxes, is_floating_textbox, iter_flow_page_blocks
 from .common.pages import iter_block_page_segments
@@ -63,7 +64,7 @@ def _append_block(
     parent: ET.Element,
     block: Block,
     density: str,
-    ocr_results: dict[str, OcrStoredResult],
+    ocr_results: dict[str, OcrResultRecord],
     used_anchors: set[str],
 ) -> None:
     controls = block.get("contentControls", [])
@@ -107,7 +108,7 @@ def _append_inline(
     parent: ET.Element,
     container: InlineContainer,
     density: str,
-    ocr_results: dict[str, OcrStoredResult],
+    ocr_results: dict[str, OcrResultRecord],
 ) -> None:
     runs = container.get("runs")
     if not runs:
@@ -115,6 +116,13 @@ def _append_inline(
         return
     for run in merge_text_runs(runs):
         content_parent = _append_controls(parent, run.get("contentControls", []), density)
+        if density == "semantic" and run.get("revision") in {"inserted", "deleted"}:
+            content_parent = append(
+                content_parent,
+                "ins" if run["revision"] == "inserted" else "del",
+                author=run.get("revisionAuthor"),
+                date=run.get("revisionDate"),
+            )
         _append_run_text(content_parent, run, density)
         for inline_object in run.get("objects", []):
             if is_floating_textbox(inline_object):
@@ -124,7 +132,7 @@ def _append_inline(
 
 
 def _append_floating(
-    parent: ET.Element, container: InlineContainer, density: str, ocr_results: dict[str, OcrStoredResult]
+    parent: ET.Element, container: InlineContainer, density: str, ocr_results: dict[str, OcrResultRecord]
 ) -> None:
     for item in floating_textboxes(container):
         _append_inline_object(parent, item, density, ocr_results)
@@ -135,12 +143,6 @@ def _append_run_text(parent: ET.Element, run: Run, density: str) -> None:
     if not value:
         return
     node = parent
-    if density == "semantic":
-        revision = run.get("revision")
-        if revision == "inserted":
-            node = append(node, "ins", author=run.get("revisionAuthor"), date=run.get("revisionDate"))
-        elif revision == "deleted":
-            node = append(node, "del", author=run.get("revisionAuthor"), date=run.get("revisionDate"))
     field = run.get("field")
     if density == "semantic" and field and field.get("kind") == "citation" and field.get("key"):
         node = append(node, "cite", key=field["key"])
@@ -179,7 +181,7 @@ def _append_inline_object(
     parent: ET.Element,
     inline_object: InlineObject,
     density: str,
-    ocr_results: dict[str, OcrStoredResult],
+    ocr_results: dict[str, OcrResultRecord],
 ) -> None:
     object_type = inline_object["type"]
     if object_type == "image":
@@ -205,7 +207,10 @@ def _append_inline_object(
         else:
             _append_text_with_breaks(node, inline_object.get("text", ""))
     elif object_type == "equation":
-        append(parent, "equation", inline_object.get("text") or "", notation="latex")
+        node = append(parent, "equation", notation="latex")
+        append_math_text(
+            node, inline_object.get("text") or "", inline_object.get("mathRevisions", ()) if density == "semantic" else ()
+        )
     elif object_type == "chart":
         _append_chart(parent, inline_object)
     elif object_type == "smartart":
@@ -224,7 +229,7 @@ def _append_inline_object(
         append(parent, "unsupported", type=object_type)
 
 
-def _append_table(parent: ET.Element, block: TableBlock, density: str, ocr_results: dict[str, OcrStoredResult]) -> None:
+def _append_table(parent: ET.Element, block: TableBlock, density: str, ocr_results: dict[str, OcrResultRecord]) -> None:
     rows = block["rows"]
     truncated = len(rows) > _TABLE_ROW_LIMIT
     table = append(parent, "table", id=block["tableId"], truncated=True if truncated else None)
@@ -241,7 +246,7 @@ def _append_table(parent: ET.Element, block: TableBlock, density: str, ocr_resul
             _append_cell_content(cell_node, cell, density, ocr_results)
 
 
-def _append_cell_content(parent: ET.Element, cell: object, density: str, ocr_results: dict[str, OcrStoredResult]) -> None:
+def _append_cell_content(parent: ET.Element, cell: object, density: str, ocr_results: dict[str, OcrResultRecord]) -> None:
     typed_cell = cast(dict[str, object], cell)
     blocks = typed_cell.get("blocks")
     if not isinstance(blocks, list) or not blocks:
@@ -271,7 +276,7 @@ def _append_cell_content(parent: ET.Element, cell: object, density: str, ocr_res
             _append_inline(paragraph, cast(InlineContainer, fragment), density, ocr_results)
 
 
-def _append_table_rows(parent: ET.Element, block: TableBlock, density: str, ocr_results: dict[str, OcrStoredResult]) -> None:
+def _append_table_rows(parent: ET.Element, block: TableBlock, density: str, ocr_results: dict[str, OcrResultRecord]) -> None:
     for row in block["rows"]:
         row_node = append(parent, "tr", header=True if row.get("isHeader") else None)
         for cell in row["cells"]:

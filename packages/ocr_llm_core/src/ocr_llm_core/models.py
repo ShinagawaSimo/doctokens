@@ -71,7 +71,7 @@ class OcrResult:
 
 
 class OcrProvider(ABC):
-    """Minimal OCR interface with a diagnostics-preserving adapter method."""
+    """OCR interface returning a structured recognition result."""
 
     # Providers are conservative by default. Adapters may raise this when
     # their implementation is safe to call concurrently.
@@ -81,24 +81,9 @@ class OcrProvider(ABC):
     supports_timeout = False
 
     @abstractmethod
-    def extract(self, image_bytes: bytes) -> str:
-        """Extract text from image bytes, returning an empty string for no text."""
-        ...
-
     def extract_result(self, image_bytes: bytes, *, timeout: float | None = None) -> OcrResult:
-        """Run the legacy ``extract`` method and normalize its outcome."""
-        del timeout
-        try:
-            return OcrResult.from_text(self.extract(image_bytes))
-        except TimeoutError as exc:
-            return OcrResult.error("timeout", _error_message(exc))
-        except Exception as exc:
-            return OcrResult.error("provider_error", _error_message(exc))
-
-
-def _error_message(error: BaseException) -> str:
-    message = str(error).strip() or error.__class__.__name__
-    return message[:300]
+        """Recognize bytes, preserving success, empty and error outcomes."""
+        ...
 
 
 __all__ = ["OcrProvider", "OcrResult", "OcrStatus"]

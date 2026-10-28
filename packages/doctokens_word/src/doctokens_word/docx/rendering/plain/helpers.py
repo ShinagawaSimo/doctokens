@@ -6,7 +6,7 @@ from typing import cast
 
 from doctokens_core.output.plain import page_marker
 
-from ...model import Block, ContentControl, InlineContainer, InlineObject, OcrStoredResult, TableBlock
+from ...model import Block, ContentControl, InlineContainer, InlineObject, OcrResultRecord, TableBlock
 from ...model.traversal import iter_blocks
 from ..common import constants as _constants
 from ..common.controls import wrap_plain_control
@@ -26,7 +26,7 @@ def block_text_only(
     footnote_map: dict[str, str],
     endnote_order: list[str],
     comment_order: list[str],
-    ocr_results: dict[str, OcrStoredResult] | None = None,
+    ocr_results: dict[str, OcrResultRecord] | None = None,
 ) -> str:
     """Render a parsed block as plain text."""
     if block["type"] == "table":
@@ -67,7 +67,7 @@ def block_text_only(
 
 def inline_text_only(
     block: InlineContainer,
-    ocr_results: dict[str, OcrStoredResult] | None = None,
+    ocr_results: dict[str, OcrResultRecord] | None = None,
     *,
     include_floating: bool = True,
 ) -> str:
@@ -103,7 +103,7 @@ def inline_text_only(
     return _with_floating_stories(content, block, ocr_results) if include_floating else content
 
 
-def _with_floating_stories(content: str, block: InlineContainer, ocr_results: dict[str, OcrStoredResult] | None) -> str:
+def _with_floating_stories(content: str, block: InlineContainer, ocr_results: dict[str, OcrResultRecord] | None) -> str:
     stories = floating_textboxes(block)
     if not stories:
         return content
@@ -120,7 +120,7 @@ def _controls(value: object) -> list[ContentControl]:
 
 def plain_object_placeholder(
     inline_object: InlineObject,
-    ocr_results: dict[str, OcrStoredResult] | None = None,
+    ocr_results: dict[str, OcrResultRecord] | None = None,
 ) -> str:
     """Return the plain-text representation of one inline object."""
     object_type = inline_object["type"]
@@ -154,7 +154,7 @@ def plain_object_placeholder(
 
 def plain_image_placeholder(
     inline_object: InlineObject,
-    ocr_results: dict[str, OcrStoredResult] | None = None,
+    ocr_results: dict[str, OcrResultRecord] | None = None,
 ) -> str:
     """Render a compact plain-text image summary."""
     label = (
@@ -218,7 +218,7 @@ def collect_refs(block: InlineContainer, ref_type: str) -> list[str]:
     ]
 
 
-def table_text_only(block: TableBlock, ocr_results: dict[str, OcrStoredResult] | None = None) -> str:
+def table_text_only(block: TableBlock, ocr_results: dict[str, OcrResultRecord] | None = None) -> str:
     """Render a table as tab-separated plain text, truncating very large tables."""
     rows = block["rows"]
     if len(rows) > _constants._TABLE_TRUNCATE_PLAIN:
@@ -232,7 +232,7 @@ def table_text_only(block: TableBlock, ocr_results: dict[str, OcrStoredResult] |
     return "\n".join(row_texts)
 
 
-def _plain_cell_text(cell: object, ocr_results: dict[str, OcrStoredResult] | None) -> str:
+def _plain_cell_text(cell: object, ocr_results: dict[str, OcrResultRecord] | None) -> str:
     if not isinstance(cell, dict):
         return ""
     fallback = _string_field(cell.get("text"))

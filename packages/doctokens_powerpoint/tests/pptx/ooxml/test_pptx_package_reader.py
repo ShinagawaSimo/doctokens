@@ -5,8 +5,9 @@ from __future__ import annotations
 import unittest
 
 from _pptx_package import content_types_xml, make_pptx, presentation_xml, root_rels_xml
+from doctokens_core.containers.opc.reader import PackageError
 from doctokens_powerpoint.pptx.model.presentation import ParseOptions
-from doctokens_powerpoint.pptx.ooxml.package import PackageError, PackageReader
+from doctokens_powerpoint.pptx.ooxml.package import PackageReader
 
 
 def _valid_entries() -> dict[str, str]:

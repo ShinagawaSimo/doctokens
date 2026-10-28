@@ -21,9 +21,10 @@ from doctokens_word.docx.ooxml.numbering import NumberingInstance, NumberingLeve
 from doctokens_word.docx.ooxml.package import PackageReader
 from doctokens_word.docx.parsing.modules.resources.assets import IMAGE_REL_TYPE, AssetExtractor
 from doctokens_word.docx.parsing.modules.resources.objects import EmbeddedObjectExtractor
-from doctokens_word.docx.rendering.objects.charts import chart_to_output, render_chart_resource
-from doctokens_word.docx.rendering.objects.smartarts import render_smartart_resource, smartart_to_output
-from doctokens_word.docx.rendering.tables.render import render_table, table_id
+from doctokens_word.docx.rendering.dtx import _append_table
+from doctokens_word.docx.rendering.dtx_content import _append_chart, _append_smartart
+from doctokens_word.docx.rendering.objects.charts import render_chart_resource
+from doctokens_word.docx.rendering.objects.smartarts import render_smartart_resource
 
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
@@ -149,12 +150,20 @@ class RendererBranchTests(unittest.TestCase):
             "title": "Sales",
         }
 
-        self.assertIn("categories=Q1,Q2", chart_to_output(cast(Any, chart)))
-        self.assertIn("names=Q1,Q2", chart_to_output(cast(Any, {**chart, "chartType": "pie"})))
-        self.assertIn("points=12", chart_to_output(cast(Any, {**chart, "chartType": "scatter"})))
-        self.assertIn("categories=Q1,Q2", chart_to_output(cast(Any, {**chart, "chartType": "stock"})))
-        self.assertIn("names=S1,S2", chart_to_output(cast(Any, {**chart, "chartType": "surface"})))
-        self.assertIn("<chart id=empty type=? series=0 truncated>", chart_to_output(cast(Any, {"id": "empty"})))
+        inline = ET.Element("root")
+        _append_chart(inline, cast(Any, chart))
+        self.assertEqual(
+            inline.find("chart").attrib,
+            {
+                "id": "chartX",
+                "type": "bar",
+                "title": "Sales",
+                "series": "6",
+                "truncated": "true",
+                "categories": "Q1,Q2",
+                "names": "S1,S2,S3,S4,S5,S6",
+            },
+        )
         chart_output = render_chart_resource(cast(Any, chart))
         chart_resource = ET.fromstring(chart_output)
         chart_node = chart_resource.find(".//chart")
@@ -181,10 +190,9 @@ class RendererBranchTests(unittest.TestCase):
             "links": [{"from": index, "to": index + 1, "kind": "parOf"} for index in range(1, 19)],
         }
 
-        rendered_sa = smartart_to_output(cast(Any, smartart))
-        self.assertIn("truncated", rendered_sa)
-        self.assertIn("Node 1", rendered_sa)
-        self.assertIn("Node 14", rendered_sa)
+        inline_sa = ET.Element("root")
+        _append_smartart(inline_sa, cast(Any, smartart))
+        self.assertEqual([node.text for node in inline_sa.findall("smartart/node")], [f"Node {index}" for index in range(1, 15)])
         smartart_output = render_smartart_resource(cast(Any, smartart))
         self.assertIn("Node 1", smartart_output)
 
@@ -207,13 +215,18 @@ class RendererBranchTests(unittest.TestCase):
         ]
         table = {"type": "table", "tableId": "t-long", "rows": rows, "columnCount": 1}
 
-        self.assertIn("<table id=t-long truncated>", "".join(render_table(cast(Any, table), "semantic")))
-        self.assertIn(
-            "<td>R1",
-            "".join(render_table(cast(Any, {"tableId": "t-short", "rows": rows[:2], "columnCount": 1}), "structural")),
+        output = ET.Element("root")
+        _append_table(output, cast(Any, table), "semantic", {})
+        self.assertEqual(
+            ET.tostring(output, encoding="unicode"),
+            '<root><table id="t-long" truncated="true"><tr header="true"><th>R0</th></tr><tr><td>R1</td></tr></table></root>',
         )
-        with self.assertRaisesRegex(TypeError, "tableId"):
-            table_id(cast(Any, {"tableId": 123}))
+        short = ET.Element("root")
+        _append_table(short, cast(Any, {**table, "tableId": "t-short", "rows": rows[:2]}), "structural", {})
+        self.assertEqual(
+            ET.tostring(short, encoding="unicode"),
+            '<root><table id="t-short"><tr header="true"><th>R0</th></tr><tr><td>R1</td></tr></table></root>',
+        )
 
 
 class ChartExObjectExtractorTests(unittest.TestCase):
@@ -250,7 +263,9 @@ class ChartExObjectExtractorTests(unittest.TestCase):
             relationships = RelationshipIndex.from_records(package.read_all_relationships())
             _lookup, charts, _smartarts = EmbeddedObjectExtractor(package, relationships, []).extract()
 
-        self.assertIn("type=sunburst", chart_to_output(cast(Any, charts[0])))
+        output = ET.Element("root")
+        _append_chart(output, cast(Any, charts[0]))
+        self.assertEqual(output.find("chart").get("type"), "sunburst")
 
 
 class FakePackage:

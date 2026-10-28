@@ -8,7 +8,7 @@ from xml.etree import ElementTree as ET
 from doctokens_core.ooxml.charts.axes import append_chart_axes
 from doctokens_core.output.xml import append, text
 
-from ..model import ContentControl, InlineObject, OcrStoredResult
+from ..model import ContentControl, InlineObject, OcrResultRecord
 from .common.ocr import ocr_text
 
 
@@ -59,7 +59,7 @@ def _append_smartart(parent: ET.Element, smartart: InlineObject) -> None:
         append(node, "link", **{"from": edge["from"], "to": edge["to"], "kind": edge.get("kind")})
 
 
-def _append_ocr(parent: ET.Element, asset_id: str | None, results: dict[str, OcrStoredResult]) -> None:
+def _append_ocr(parent: ET.Element, asset_id: str | None, results: dict[str, OcrResultRecord]) -> None:
     if not asset_id or asset_id not in results:
         return
     result = results[asset_id]

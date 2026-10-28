@@ -27,8 +27,8 @@ class PptxRenderPipeline:
 
     def render(self, parsed: ParsedPresentation) -> Iterator[str]:
         if self.density is Density.PLAIN:
-            legacy_text = "".join(self.renderer(parsed))
-            return iter((render_plain(legacy_text, format_name="pptx"),))
+            content = "".join(self.renderer(parsed))
+            return iter((render_plain(content, format_name="pptx"),))
         return self.renderer(parsed)
 
 

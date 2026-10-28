@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from ..model import ImageAsset, OcrStoredResult, ParseOptions
+from ..model import ImageAsset, OcrResultRecord, ParseOptions
 from ..ooxml.package import PackageReader
 
 _MAX_OCR_BATCH_BYTES = 64 * 1024 * 1024
@@ -14,7 +14,7 @@ def run_ocr(
     package: PackageReader,
     assets: list[ImageAsset],
     parse_options: ParseOptions,
-) -> dict[str, OcrStoredResult]:
+) -> dict[str, OcrResultRecord]:
     """Run fail-soft OCR in bounded batches, reusing shared media parts."""
     provider = getattr(parse_options, "ocr", None)
     if provider is None:
@@ -31,7 +31,7 @@ def run_ocr(
 
     from ocr_llm_core import OcrResult, run_ocr_batch
 
-    results: dict[str, OcrStoredResult] = {}
+    results: dict[str, OcrResultRecord] = {}
     pending: dict[str, bytes] = {}
     aliases: dict[str, list[str]] = {}
     pending_bytes = 0
@@ -48,7 +48,7 @@ def run_ocr(
         for primary_id, ocr_result in batch_results.items():
             record = ocr_result.to_record()
             for asset_id in aliases[primary_id]:
-                results[asset_id] = cast(OcrStoredResult, dict(record))
+                results[asset_id] = cast(OcrResultRecord, dict(record))
         pending.clear()
         aliases.clear()
         pending_bytes = 0
@@ -60,7 +60,7 @@ def run_ocr(
         except Exception as exc:
             record = OcrResult.error("image_read_error", str(exc)).to_record()
             for asset_id in asset_ids:
-                results[asset_id] = cast(OcrStoredResult, dict(record))
+                results[asset_id] = cast(OcrResultRecord, dict(record))
             continue
         if pending and (len(pending) >= item_limit or pending_bytes + len(image_bytes) > _MAX_OCR_BATCH_BYTES):
             flush()

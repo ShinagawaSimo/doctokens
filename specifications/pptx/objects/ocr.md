@@ -29,7 +29,7 @@ Semantic parsing/session can OCR referenced embedded image assets when an adapte
   - Common OCR result.
 
 - **IR**
-  - `OcrStoredResult`
+  - `OcrResultRecord`
 
 - **Parsing**
   - Emit recognized text after picture. No plain/structural OCR projection.

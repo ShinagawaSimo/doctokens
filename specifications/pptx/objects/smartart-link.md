@@ -12,7 +12,7 @@ Edges reference retained node ordinals.
   - Resource source.
 
 - **OOXML**
-  - cxn/@fromModelId.
+  - dgm:cxn/@srcId.
 
 - **IR**
   - `SmartArtLink["from"]: int`
@@ -26,7 +26,7 @@ Edges reference retained node ordinals.
   - Resource destination.
 
 - **OOXML**
-  - cxn/@toModelId.
+  - dgm:cxn/@destId.
 
 - **IR**
   - `SmartArtLink["to"]: int`

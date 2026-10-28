@@ -8,8 +8,16 @@ import unittest
 from xml.etree import ElementTree as ET
 
 from doctokens_core.ooxml.charts.axes import append_chart_axes
-from doctokens_core.ooxml.charts.parser import ChartParser, _first_dimension, _namespace, _summary_chart_type, _true_value
-from doctokens_core.ooxml.charts.values import _flatten_category_levels, _safe_int, _to_float
+from doctokens_core.ooxml.charts.parser import ChartParser
+from doctokens_core.ooxml.charts.values import (
+    _first_dimension,
+    _flatten_category_levels,
+    _namespace,
+    _safe_int,
+    _summary_chart_type,
+    _to_float,
+    _true_value,
+)
 from doctokens_core.output.resources import resource_document
 from doctokens_core.output.xml import element
 

@@ -35,7 +35,7 @@ from ....ooxml.namespaces import (
     first_child,
     local_name,
 )
-from .objects import drawing_objects, equation_object, parse_embedded_object
+from .objects import drawing_objects, parse_embedded_object
 from .vml import pict_objects
 
 
@@ -144,10 +144,11 @@ class RunParser:
             if self.owner.include_raw_hints:
                 raw_hints.extend({"type": "pict", **obj} for obj in pict)
         elif child_tag in (_TAG_M_OMATH, _TAG_M_OMATH_PARA):
-            obj = equation_object(child)
-            objects.append(obj)
-            if self.owner.include_raw_hints:
-                raw_hints.append(obj)
+            obj: InlineObject = self.owner.read_equation(child, part, block_id)
+            if obj.get("text"):
+                objects.append(obj)
+                if self.owner.include_raw_hints:
+                    raw_hints.append(obj)
         elif child_tag == _TAG_W_FLD_CHAR:
             self.handle_field_character(child, raw_hints, runs)
         elif child_tag == _TAG_W_INSTR_TEXT:

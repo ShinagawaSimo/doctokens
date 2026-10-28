@@ -10,7 +10,11 @@ from doctokens_core.containers.opc.xml import child_elements as _core_child_elem
 from doctokens_core.containers.opc.xml import first_child as _core_first_child
 from doctokens_core.containers.opc.xml import qualified_name as _core_qualified_name
 
-NS = {**_NS_OPC, "m": "http://schemas.openxmlformats.org/officeDocument/2006/math"}
+NS = {
+    **_NS_OPC,
+    "m": "http://schemas.openxmlformats.org/officeDocument/2006/math",
+    "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+}
 
 
 def qualified_name(prefix: str, local: str) -> str:

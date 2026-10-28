@@ -51,9 +51,9 @@ class ParseResult:
     density: Density
     selection: dict[str, object]
     report: ParseReport
+    syntax_version: str
+    media_type: str
     resources: tuple[ResourceDescriptor, ...] = ()
-    syntax_version: str = "legacy-markup/0"
-    media_type: str = "text/plain"
 
     def to_dict(self) -> dict[str, object]:
         return {

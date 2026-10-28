@@ -65,13 +65,13 @@ def _result(
         raise RuntimeError("parsed PPTX has no parse report")
     resolved_syntax, resolved_media_type = _output_metadata(density)
     return ParseResult(
-        text,
-        density,
-        selection,
-        presentation.report,
-        _resource_descriptors(presentation),
-        syntax_version or resolved_syntax,
-        media_type or resolved_media_type,
+        text=text,
+        density=density,
+        selection=selection,
+        report=presentation.report,
+        resources=_resource_descriptors(presentation),
+        syntax_version=syntax_version or resolved_syntax,
+        media_type=media_type or resolved_media_type,
     )
 
 

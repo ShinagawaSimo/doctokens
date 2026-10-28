@@ -13,10 +13,7 @@ from dataclasses import dataclass
 from xml.etree import ElementTree as ET
 
 from .axes import parse_chart_axes
-from .models import ChartInfo as ChartInfo
-from .models import ChartPlotInfo as ChartPlotInfo
-from .models import ChartPoint as ChartPoint
-from .models import ChartSeriesInfo as ChartSeriesInfo
+from .models import ChartInfo, ChartPlotInfo, ChartSeriesInfo
 from .values import (
     NS_C,
     NS_CX,
@@ -234,11 +231,6 @@ class ChartParser:
                         formulas[dimension_type] = formula
             catalog[data_id] = _ChartExData(categories, dimensions, formulas)
         return catalog
-
-
-def parse_chart_xml(root: ET.Element) -> ChartInfo:
-    """Compatibility entry point for callers that do not need parser state."""
-    return ChartParser().parse(root)
 
 
 # ── IR construction ──

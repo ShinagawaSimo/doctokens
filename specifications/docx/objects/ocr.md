@@ -29,7 +29,7 @@ OCR is performed only when an adapter is supplied and the parse plan includes OC
   - Adapter result.
 
 - **IR**
-  - `OcrStoredResult`
+  - `OcrResultRecord`
 
 - **Parsing**
   - Use [common OCR](../../common/ocr.md); nonempty recognized text wins.

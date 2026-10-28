@@ -7,7 +7,7 @@ from xml.etree import ElementTree as ET
 from doctokens_core.containers.opc.models import RelationshipRecord
 from doctokens_core.containers.opc.reader import PackageReader
 from doctokens_core.contracts.models import ParseWarning
-from doctokens_core.ooxml.charts.parser import CHART_RELATIONSHIP_TYPES, parse_chart_xml
+from doctokens_core.ooxml.charts.parser import CHART_RELATIONSHIP_TYPES, ChartParser
 
 from ....model.coordinates import col_letter
 from ....model.workbook import ChartPoint, DrawingChart, DrawingChartSeries, DrawingImage
@@ -142,7 +142,7 @@ def _parse_chart_part(pkg: PackageReader, chart_part: str, warnings: list[ParseW
         return {"type": "", "title": "", "series_count": 0}
     try:
         root = pkg.read_xml(chart_part)
-        chart_info = parse_chart_xml(root)
+        chart_info = ChartParser().parse(root)
     except Exception as exc:
         _warn(warnings, "CHART_XML_INVALID", f"Invalid chart XML: {exc}", chart_part)
         return {"type": "", "title": "", "series_count": 0}

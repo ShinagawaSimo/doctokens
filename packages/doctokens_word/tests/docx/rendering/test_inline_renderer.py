@@ -11,8 +11,7 @@ from doctokens_word.docx.model import ParseOptions, ParseWarning
 from doctokens_word.docx.ooxml.styles import StyleMap
 from doctokens_word.docx.parsing.modules.body.inline import InlineParser
 from doctokens_word.docx.parsing.modules.resources.objects import parse_chart_root, parse_smartart_root
-from doctokens_word.docx.rendering.inline.content import inline_content as _inline_content
-from doctokens_word.docx.rendering.tables.render import nested_table as _nested_table
+from doctokens_word.docx.rendering.dtx import _append_inline, _append_table
 
 NS = (
     'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
@@ -45,7 +44,9 @@ class InlineRendererTests(unittest.TestCase):
         """解析一段 OOXML 并渲染为段落内 XML。"""
         p = ET.fromstring(xml)
         runs, _hints = self.parser.paragraph_runs(p, "word/document.xml", "b-test", None)
-        return _inline_content(cast(Any, {"text": "", "runs": runs}), "semantic")
+        output = ET.Element("p")
+        _append_inline(output, cast(Any, {"text": "", "runs": runs}), "semantic", {})
+        return ET.tostring(output, encoding="unicode")
 
     def _render_with_objects(self, xml: str, object_lookup: dict[tuple[str, str], object] | None = None) -> str:
         """使用预解析对象索引渲染一段 OOXML。"""
@@ -59,13 +60,15 @@ class InlineRendererTests(unittest.TestCase):
         )
         p = ET.fromstring(xml)
         runs, _hints = parser.paragraph_runs(p, "word/document.xml", "b-test", None)
-        return _inline_content(cast(Any, {"text": "", "runs": runs}), "semantic")
+        output = ET.Element("p")
+        _append_inline(output, cast(Any, {"text": "", "runs": runs}), "semantic", {})
+        return ET.tostring(output, encoding="unicode")
 
     def test_omml_equation_renders_as_eq(self) -> None:
         """OMML 公式应进入最终 XML。"""
         xml = f"<w:p {NS}><m:oMath><m:r><m:t>x+1=y</m:t></m:r></m:oMath></w:p>"
 
-        self.assertEqual(self._render_paragraph(xml), "<equation>x+1=y</equation>")
+        self.assertEqual(self._render_paragraph(xml), '<p><equation notation="latex">x+1=y</equation></p>')
 
     def test_drawingml_textbox_renders_as_textbox(self) -> None:
         """DrawingML/WPS 文本框应保留文字和有语义的 alt。"""
@@ -79,7 +82,7 @@ class InlineRendererTests(unittest.TestCase):
 
         self.assertEqual(
             self._render_paragraph(xml),
-            "<textbox alt=desc>text box</textbox>",
+            '<p><textbox alt="desc">text box</textbox></p>',
         )
 
     def test_vml_textbox_renders_as_textbox(self) -> None:
@@ -92,20 +95,21 @@ class InlineRendererTests(unittest.TestCase):
 
         self.assertEqual(
             self._render_paragraph(xml),
-            "<textbox alt=old box>vml text</textbox>",
+            '<p><textbox alt="old box">vml text</textbox></p>',
         )
 
     def test_note_self_reference_is_not_warning_noise(self) -> None:
         """尾注正文内的自编号标记不应进入最终 XML 或 warning。"""
         xml = f"<w:p {NS}><w:r><w:endnoteRef /></w:r><w:r><w:t>note text</w:t></w:r></w:p>"
 
-        self.assertEqual(self._render_paragraph(xml), "note text")
+        self.assertEqual(self._render_paragraph(xml), "<p>note text</p>")
         self.assertEqual(self.warnings, [])
 
     def test_nested_table_renders_structured_xml(self) -> None:
         """单元格内嵌套表格不能再压缩成纯文本。"""
         nested = {
             "type": "table",
+            "tableId": "inner",
             "rows": [
                 {
                     "rowIndex": 0,
@@ -132,9 +136,11 @@ class InlineRendererTests(unittest.TestCase):
             "columnCount": 3,
         }
 
+        output = ET.Element("root")
+        _append_table(output, cast(Any, nested), "semantic", {})
         self.assertEqual(
-            _nested_table(cast(Any, nested)),
-            "<nestedtable rows=1 cols=3><row><td>A<td colspan=2>B",
+            ET.tostring(output, encoding="unicode"),
+            '<root><table id="inner"><tr><td><p>A</p></td><td colspan="2"><p>B</p></td></tr></table></root>',
         )
 
     def test_chart_cache_renders_as_chart_summary(self) -> None:
@@ -161,10 +167,10 @@ class InlineRendererTests(unittest.TestCase):
 
         rendered = self._render_with_objects(xml, {("word/document.xml", "rIdChart"): chart})
 
-        self.assertIn("<chart id=chart1 type=bar title=人口趋势 series=1", rendered)
+        self.assertEqual(ET.fromstring(rendered).find("chart").get("type"), "bar")
         self.assertIn("truncated", rendered)
-        self.assertIn("names=人群A", rendered)
-        self.assertIn("categories=一期,二期", rendered)
+        self.assertIn('names="人群A"', rendered)
+        self.assertIn('categories="一期,二期"', rendered)
 
     def test_smartart_data_renders_nodes_and_links(self) -> None:
         """SmartArt data model 应输出节点文本和连接关系。"""
@@ -182,7 +188,8 @@ class InlineRendererTests(unittest.TestCase):
 
         rendered = self._render_with_objects(xml, {("word/document.xml", "rIdDm"): smartart})
 
-        self.assertIn("<smartart id=smartart1 type= nodes=2 links=1 truncated>采集 分析", rendered)
+        self.assertEqual([node.text for node in ET.fromstring(rendered).findall("smartart/node")], ["采集", "分析"])
+        self.assertEqual(ET.fromstring(rendered).find("smartart/link").attrib, {"from": "1", "to": "2", "kind": "parOf"})
 
 
 if __name__ == "__main__":

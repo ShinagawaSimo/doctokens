@@ -32,7 +32,6 @@ class PaddleVLProviderTest(unittest.TestCase):
         p = PaddleVLProvider("key1", "secret1")
         self.assertEqual(p.api_key, "key1")
         self.assertEqual(p.secret_key, "secret1")
-        self.assertEqual(p.language, "cht")
         self.assertEqual(p.poll_interval, 5.0)
         self.assertEqual(p.timeout, 120)
         self.assertFalse(p.error_on_empty)
@@ -48,8 +47,8 @@ class PaddleVLProviderTest(unittest.TestCase):
             patch.object(p, "_poll", return_value=("success", None, {"markdown_url": "https://x.bcebos.com/a.md"})),
             patch.object(p, "_download_markdown", return_value=expected),
         ):
-            result = p.extract(PNG_BYTES)
-        self.assertEqual(result, expected)
+            result = p.extract_result(PNG_BYTES)
+        self.assertEqual(result.text, expected)
 
     def test_extract_returns_empty_on_api_failure(self) -> None:
         p = PaddleVLProvider("k", "s")
@@ -57,8 +56,8 @@ class PaddleVLProviderTest(unittest.TestCase):
             patch.object(p, "_get_access_token", return_value="tok"),
             patch.object(p, "_submit", side_effect=RuntimeError("network down")),
         ):
-            result = p.extract(PNG_BYTES)
-        self.assertEqual(result, "")
+            result = p.extract_result(PNG_BYTES)
+        self.assertEqual(result.text, "")
 
     def test_extract_returns_empty_on_poll_timeout(self) -> None:
         p = PaddleVLProvider("k", "s", timeout=0.1, poll_interval=0.05)
@@ -67,8 +66,8 @@ class PaddleVLProviderTest(unittest.TestCase):
             patch.object(p, "_submit", return_value="task-abc"),
             patch.object(p, "_poll", return_value=("timeout", "timed out", {})),
         ):
-            result = p.extract(PNG_BYTES)
-        self.assertEqual(result, "")
+            result = p.extract_result(PNG_BYTES)
+        self.assertEqual(result.text, "")
 
     def test_error_on_empty_false_returns_empty_for_empty_result(self) -> None:
         p = PaddleVLProvider("k", "s", error_on_empty=False)
@@ -78,8 +77,8 @@ class PaddleVLProviderTest(unittest.TestCase):
             patch.object(p, "_poll", return_value=("success", None, {})),
             patch.object(p, "_download_markdown", return_value=""),
         ):
-            result = p.extract(PNG_BYTES)
-        self.assertEqual(result, "")
+            result = p.extract_result(PNG_BYTES)
+        self.assertEqual(result.text, "")
 
     def test_get_access_token_request(self) -> None:
         """Verify token request is well-formed."""

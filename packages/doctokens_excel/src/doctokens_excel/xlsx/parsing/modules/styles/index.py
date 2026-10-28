@@ -4,7 +4,7 @@ The XML reader lives in :mod:`styles.parser`; number-format rendering lives in
 :mod:`doctokens_excel.formatting.values`; and theme/font/fill records live in
 :mod:`styles.records`. Keeping this module focused on the in-memory index
 prevents new format cases from making the public style object unmanageably
-large while preserving the historical ``styles.index`` import path.
+large.
 """
 
 from __future__ import annotations
@@ -187,8 +187,4 @@ class FormatIndex:
         return self._fmt_cache[key]
 
 
-# Compatibility re-export: existing callers historically imported parse_styles
-# from styles.index. The implementation is intentionally kept in parser.py.
-from .parser import StyleDetail, parse_styles  # noqa: E402  (after FormatIndex)
-
-__all__ = ["FormatIndex", "StyleDetail", "parse_styles"]
+__all__ = ["FormatIndex"]

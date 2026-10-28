@@ -6,12 +6,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from doctokens_core.containers.opc.limits import PackageLimits
-from doctokens_core.containers.opc.reader import (
-    PackageError,
-    rels_path_for_part,
-    resolve_relationship_target,
-    source_part_from_rels_path,
-)
 from doctokens_core.containers.opc.reader import PackageReader as _BasePackageReader
 
 if TYPE_CHECKING:
@@ -21,16 +15,8 @@ if TYPE_CHECKING:
 
 from ..model import ParseOptions
 
-# Backward-compatible alias for tests and existing code
-DocxPackageError = PackageError
-
 __all__ = [
-    "DocxPackageError",
-    "PackageError",
     "PackageReader",
-    "rels_path_for_part",
-    "resolve_relationship_target",
-    "source_part_from_rels_path",
 ]
 
 

@@ -71,7 +71,7 @@ class SmartArtShapeTests(unittest.TestCase):
             '<dgm:dataModel xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" '
             'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
             '<dgm:cxnLst><dgm:cxn srcId="A" destId="B" type="parOf"/>'
-            '<dgm:cxn fromModelId="B" toModelId="R"/><dgm:cxn srcId="missing" destId="B"/></dgm:cxnLst>'
+            '<dgm:cxn srcId="B" destId="R"/><dgm:cxn srcId="missing" destId="B"/></dgm:cxnLst>'
             '<dgm:ptLst><dgm:pt modelId="A"><dgm:t><a:t>A, first</a:t></dgm:t></dgm:pt>'
             '<dgm:pt modelId="B"><dgm:t><a:t>B</a:t></dgm:t></dgm:pt>'
             '<dgm:pt modelId="A"><dgm:t><a:t>Duplicate</a:t></dgm:t></dgm:pt>'

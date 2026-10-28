@@ -15,10 +15,10 @@ class _CountingProvider(OcrProvider):
         self.calls = 0
         self._lock = threading.Lock()
 
-    def extract(self, image_bytes: bytes) -> str:
+    def extract_result(self, image_bytes: bytes, *, timeout: float | None = None) -> OcrResult:
         with self._lock:
             self.calls += 1
-        return image_bytes.decode()
+        return OcrResult.from_text(image_bytes.decode())
 
 
 class OcrResultTests(unittest.TestCase):
@@ -48,34 +48,34 @@ class BatchTests(unittest.TestCase):
         class DuckProvider:
             max_concurrency = 1
 
-            def extract_result(self, image_bytes: bytes, *, timeout: float | None = None) -> dict[str, str]:
-                return {"status": "success", "text": image_bytes.decode()}
+            def extract_result(self, image_bytes: bytes, *, timeout: float | None = None) -> OcrResult:
+                return OcrResult.from_text(image_bytes.decode())
 
         result = run_ocr_batch({"img1": b"duck"}, DuckProvider())
         self.assertEqual(result["img1"].text, "duck")
 
     def test_invalid_structured_result_is_not_treated_as_empty(self) -> None:
         class BadProvider:
-            def extract_result(self, image_bytes: bytes) -> dict[str, str]:
+            def extract_result(self, image_bytes: bytes, *, timeout: float | None = None) -> dict[str, str]:
                 return {"status": "success", "text": ""}
 
         result = run_ocr_batch({"img1": b"x"}, BadProvider())
         self.assertEqual(result["img1"].error_code, "invalid_result")
 
-    def test_rejects_contradictory_structured_results(self) -> None:
+    def test_rejects_values_outside_result_contract(self) -> None:
         class BadProvider:
             max_concurrency = 3
 
             def __init__(self) -> None:
                 self.call = 0
 
-            def extract_result(self, image_bytes: bytes) -> dict[str, str]:
+            def extract_result(self, image_bytes: bytes, *, timeout: float | None = None) -> object:
                 self.call += 1
                 if self.call == 1:
-                    return {"status": "success", "text": "text", "error_code": "also-error"}
+                    return "old string result"
                 if self.call == 2:
-                    return {"status": "empty", "text": "", "error_message": "also-error"}
-                return {"status": "error", "text": "text", "error_code": "engine_error"}
+                    return {"status": "success", "text": "old mapping result"}
+                return None
 
         results = run_ocr_batch({"one": b"1", "two": b"2", "three": b"3"}, BadProvider(), max_workers=1)
         self.assertTrue(all(result.error_code == "invalid_result" for result in results.values()))

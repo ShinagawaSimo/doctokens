@@ -36,10 +36,8 @@ def parse_diagram_data(
     for element in root.iter():
         if element.tag != qualified_name("dgm", "cxn"):
             continue
-        # Standard DrawingML names take precedence; retain the previously
-        # accepted producer aliases for documents that use those spellings.
-        start = node_map.get(element.get("srcId") or element.get("fromModelId") or "")
-        end = node_map.get(element.get("destId") or element.get("toModelId") or "")
+        start = node_map.get(element.get("srcId") or "")
+        end = node_map.get(element.get("destId") or "")
         if start is None or end is None:
             warnings.append(ParseWarning("SMARTART_UNRESOLVED_LINK", "dgm:cxn references unknown modelId", part))
             continue

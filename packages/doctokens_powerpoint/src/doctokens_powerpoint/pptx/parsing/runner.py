@@ -12,7 +12,7 @@ from doctokens_core.containers.opc.relationships import HYPERLINK_RELATIONSHIP_T
 from doctokens_core.contracts.models import ParseReport, ParseWarning
 from doctokens_core.runtime.metrics import MetricsRecorder
 
-from ..model.presentation import ImageAsset, OcrStoredResult, ParsedPresentation, ParseOptions, PresentationSection, SlideBlock
+from ..model.presentation import ImageAsset, OcrResultRecord, ParsedPresentation, ParseOptions, PresentationSection, SlideBlock
 from ..ooxml.inheritance import LayoutMasterResolver
 from ..ooxml.namespaces import first_child, local_name
 from ..ooxml.package import PackageReader
@@ -152,7 +152,7 @@ class PptxParser:
         assets: list[ImageAsset],
         slides: list[SlideBlock],
         options: ParseOptions,
-    ) -> dict[str, OcrStoredResult]:
+    ) -> dict[str, OcrResultRecord]:
         """OCR embedded image assets while preserving normalized outcomes."""
         if options.ocr is None:
             return {}
@@ -184,7 +184,7 @@ class PptxParser:
 
         from ocr_llm_core import OcrResult, run_ocr_batch
 
-        results: dict[str, OcrStoredResult] = {}
+        results: dict[str, OcrResultRecord] = {}
         pending: dict[str, bytes] = {}
         aliases: dict[str, list[str]] = {}
         pending_bytes = 0
@@ -201,7 +201,7 @@ class PptxParser:
             for primary_id, ocr_result in batch_results.items():
                 record = ocr_result.to_record()
                 for asset_id in aliases[primary_id]:
-                    results[asset_id] = cast(OcrStoredResult, dict(record))
+                    results[asset_id] = cast(OcrResultRecord, dict(record))
             pending.clear()
             aliases.clear()
             pending_bytes = 0
@@ -213,7 +213,7 @@ class PptxParser:
             except Exception as exc:
                 record = OcrResult.error("image_read_error", str(exc)).to_record()
                 for asset_id in asset_ids:
-                    results[asset_id] = cast(OcrStoredResult, dict(record))
+                    results[asset_id] = cast(OcrResultRecord, dict(record))
                 continue
             if pending and (len(pending) >= item_limit or pending_bytes + len(image_bytes) > _MAX_OCR_BATCH_BYTES):
                 flush()

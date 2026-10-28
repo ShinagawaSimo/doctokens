@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import cast
 from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.relationships import RelationshipIndex
@@ -265,10 +265,6 @@ class DocumentBodyParser:
     ) -> list[TableBlock]:
         """Delegate table structure and table-local pagination to TableParser."""
         return self._table_parser.parse(table, part, content_controls)
-
-    def _apply_vertical_merges(self, rows: list[Any], active: dict[int, Any] | None = None) -> None:
-        """Compatibility delegate for callers that inspect table merge state."""
-        self._table_parser.apply_vertical_merges(rows, active)
 
     def _mark_page_break(self) -> None:
         """Called by InlineParser when an lrpb/manual page break is found; increments the pending page-break count."""

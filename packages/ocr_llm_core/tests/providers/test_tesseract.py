@@ -41,8 +41,8 @@ class TesseractProviderTest(unittest.TestCase):
     def test_extract_calls_image_to_string(self) -> None:
         p = TesseractProvider(lang="eng+chi_sim")
         with patch("pytesseract.image_to_string", return_value="hello world"):
-            result = p.extract(_png_bytes())
-        self.assertEqual(result, "hello world")
+            result = p.extract_result(_png_bytes())
+        self.assertEqual(result.text, "hello world")
 
     def test_extract_returns_empty_on_error(self) -> None:
         p = TesseractProvider()
@@ -50,8 +50,8 @@ class TesseractProviderTest(unittest.TestCase):
             "pytesseract.image_to_string",
             side_effect=RuntimeError("tesseract not found"),
         ):
-            result = p.extract(_png_bytes())
-        self.assertEqual(result, "")
+            result = p.extract_result(_png_bytes())
+        self.assertEqual(result.text, "")
 
     def test_pytesseract_runtime_timeout_is_classified(self) -> None:
         p = TesseractProvider()
@@ -77,7 +77,7 @@ class TesseractProviderTest(unittest.TestCase):
 
         pytesseract.pytesseract.tesseract_cmd = "original-tesseract"
         with patch("pytesseract.image_to_string", return_value="ok"):
-            p.extract(_png_bytes())
+            p.extract_result(_png_bytes())
         self.assertEqual(pytesseract.pytesseract.tesseract_cmd, "original-tesseract")
 
 

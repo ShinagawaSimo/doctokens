@@ -15,7 +15,6 @@ from ..plain import block_text_only, inline_text_only
 
 def iter_plain(parsed_document: ParsedDocument, *, first_page: int | None = None) -> Iterator[str]:
     """plain — pure text stream. Footnotes are appended to paragraph ends, endnotes to the document end."""
-    yield "density=plain\n"
     ocr_results = getattr(parsed_document, "ocr_results", None) or {}
     footnote_map: dict[str, str] = {}
     for footnote in parsed_document.footnotes:

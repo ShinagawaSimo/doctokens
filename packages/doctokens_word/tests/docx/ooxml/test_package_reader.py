@@ -7,13 +7,13 @@ import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from doctokens_word.docx.model import ParseOptions
-from doctokens_word.docx.ooxml.package import (
-    DocxPackageError,
-    PackageReader,
+from doctokens_core.containers.opc.reader import (
+    PackageError,
     resolve_relationship_target,
     source_part_from_rels_path,
 )
+from doctokens_word.docx.model import ParseOptions
+from doctokens_word.docx.ooxml.package import PackageReader
 
 from test_support.paths import REPO_ROOT
 
@@ -26,14 +26,14 @@ class PackageReaderTests(unittest.TestCase):
             temp = Path(temp_dir)
             not_zip = temp / "not.docx"
             not_zip.write_text("plain", encoding="utf-8")
-            with self.assertRaisesRegex(DocxPackageError, "Not a zip"):
+            with self.assertRaisesRegex(PackageError, "Not a zip"):
                 PackageReader(not_zip, ParseOptions()).__enter__()
 
             missing_content_types = temp / "missing-content-types.docx"
             _write_zip(missing_content_types, {"word/document.xml": "<w:document/>"})
             with (
                 PackageReader(missing_content_types, ParseOptions()) as package,
-                self.assertRaisesRegex(DocxPackageError, "Content_Types"),
+                self.assertRaisesRegex(PackageError, "Content_Types"),
             ):
                 package.validate()
 
@@ -41,7 +41,7 @@ class PackageReaderTests(unittest.TestCase):
             _write_zip(missing_document, {"[Content_Types].xml": _content_types()})
             with (
                 PackageReader(missing_document, ParseOptions()) as package,
-                self.assertRaisesRegex(DocxPackageError, "word/document.xml"),
+                self.assertRaisesRegex(PackageError, "word/document.xml"),
             ):
                 package.validate()
 
@@ -49,7 +49,7 @@ class PackageReaderTests(unittest.TestCase):
             _write_zip(too_many, {"[Content_Types].xml": "", "word/document.xml": ""})
             with (
                 PackageReader(too_many, ParseOptions(max_zip_entries=1)) as package,
-                self.assertRaisesRegex(DocxPackageError, "Too many"),
+                self.assertRaisesRegex(PackageError, "Too many"),
             ):
                 package.read_entry_index()
 
@@ -60,7 +60,7 @@ class PackageReaderTests(unittest.TestCase):
                     too_large,
                     ParseOptions(max_entry_uncompressed_bytes=3),
                 ) as package,
-                self.assertRaisesRegex(DocxPackageError, "Entry too large"),
+                self.assertRaisesRegex(PackageError, "Entry too large"),
             ):
                 package.read_entry_index()
 
@@ -68,7 +68,7 @@ class PackageReaderTests(unittest.TestCase):
             _write_zip(unsafe, {"[Content_Types].xml": "", "../evil.xml": ""})
             with (
                 PackageReader(unsafe, ParseOptions()) as package,
-                self.assertRaisesRegex(DocxPackageError, "parent traversal"),
+                self.assertRaisesRegex(PackageError, "parent traversal"),
             ):
                 package.read_entry_index()
 
@@ -91,7 +91,7 @@ class PackageReaderTests(unittest.TestCase):
             )
             with (
                 PackageReader(path, ParseOptions(max_total_uncompressed_bytes=100_000)) as package,
-                self.assertRaisesRegex(DocxPackageError, "too large"),
+                self.assertRaisesRegex(PackageError, "too large"),
             ):
                 package.read_entry_index()
 
@@ -114,7 +114,7 @@ class PackageReaderTests(unittest.TestCase):
                 zf.writestr("word/large.bin", b"\x00" * 500_000)
             with (
                 PackageReader(path, ParseOptions()) as package,
-                self.assertRaisesRegex(DocxPackageError, "Suspicious compression ratio"),
+                self.assertRaisesRegex(PackageError, "Suspicious compression ratio"),
             ):
                 package.read_entry_index()
 
@@ -146,7 +146,7 @@ class PackageReaderTests(unittest.TestCase):
                 zf.writestr("word/duplicate.xml", "")
             with (
                 PackageReader(path, ParseOptions()) as package,
-                self.assertRaisesRegex(DocxPackageError, "Duplicate zip entry"),
+                self.assertRaisesRegex(PackageError, "Duplicate zip entry"),
             ):
                 package.read_entry_index()
 
@@ -159,7 +159,7 @@ class PackageReaderTests(unittest.TestCase):
                 zf.writestr(zipfile.ZipInfo(""), "")
             with (
                 PackageReader(path, ParseOptions()) as package,
-                self.assertRaisesRegex(DocxPackageError, "empty name"),
+                self.assertRaisesRegex(PackageError, "empty name"),
             ):
                 package.read_entry_index()
 
@@ -169,7 +169,7 @@ class PackageReaderTests(unittest.TestCase):
             _write_zip(path, {"[Content_Types].xml": _content_types(), "/word/document.xml": ""})
             with (
                 PackageReader(path, ParseOptions()) as package,
-                self.assertRaisesRegex(DocxPackageError, "absolute"),
+                self.assertRaisesRegex(PackageError, "absolute"),
             ):
                 package.read_entry_index()
 
@@ -179,7 +179,7 @@ class PackageReaderTests(unittest.TestCase):
             _write_zip(path, {"[Content_Types].xml": _content_types(), "C:/word/document.xml": ""})
             with (
                 PackageReader(path, ParseOptions()) as package,
-                self.assertRaisesRegex(DocxPackageError, "drive"),
+                self.assertRaisesRegex(PackageError, "drive"),
             ):
                 package.read_entry_index()
 
@@ -188,7 +188,7 @@ class PackageReaderTests(unittest.TestCase):
             package.validate()
 
     def test_bytes_source_rejects_invalid(self) -> None:
-        with self.assertRaisesRegex(DocxPackageError, "Not a valid zip"):
+        with self.assertRaisesRegex(PackageError, "Not a valid zip"):
             PackageReader(b"not a zip file", ParseOptions()).__enter__()
 
     def test_exists_returns_false_for_missing(self) -> None:
@@ -198,14 +198,14 @@ class PackageReaderTests(unittest.TestCase):
     def test_open_entry_on_missing_raises(self) -> None:
         with (
             PackageReader(FIXTURE, ParseOptions()) as package,
-            self.assertRaisesRegex(DocxPackageError, "Missing zip entry"),
+            self.assertRaisesRegex(PackageError, "Missing zip entry"),
         ):
             package.open_entry("nonexistent.xml")
 
     def test_zip_file_before_enter_raises(self) -> None:
         reader = PackageReader.__new__(PackageReader)
         reader._zip = None
-        with self.assertRaisesRegex(DocxPackageError, "not open"):
+        with self.assertRaisesRegex(PackageError, "not open"):
             _ = reader.zip_file
 
 

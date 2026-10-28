@@ -2,999 +2,386 @@
 
 [COMMON](README.md) / OMML expressions
 
-OMML nodes produce LaTeX text through recursive conversion. The result is a reading representation; layout and font fidelity are not reconstructed.
+Native Office Math is projected to LaTeX reading text. The projection preserves
+saved mathematical symbols and structure; it does not calculate an expression,
+infer the author's definitions, or reconstruct exact typography and geometry.
 
 ## Processing
 
-`omath_to_latex(root)` converts its children. Dispatch uses the element local name. Unrecognized elements use escaped descendant math text; they do not emit a diagnostic.
+- [Conversion](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
+  creates a fresh context per expression. Namespace-qualified math and Word
+  content use their own dispatch rules; no document-global state or cache exists.
+- `convert_math(element, revision_mode=..., warn=...)` returns a `MathResult`
+  containing reading text and nested review ranges. Read `.text` when only the
+  LaTeX string is needed. The caller's DOCX revision view participates in
+  conversion, independently of reading density.
+- Word hyperlink, simple-field, SmartTag, custom-XML and content-control
+  wrappers are traversed without flattening their mathematical children.
+  Bookmarks, proofing/permission markers and run-property containers add no
+  mathematical characters. Field instructions are not evaluated.
+- Literal TeX characters are escaped once. Normal text and equation-array
+  alignment markers have distinct contexts. Generated commands are not
+  re-escaped.
+- Unknown semantic elements/namespaces retain escaped descendant math text and
+  invoke `MATH_CONTENT_UNSUPPORTED` when a warning sink is supplied. They do not
+  silently claim a complete structural conversion. Layout-property containers
+  remain intentionally omitted.
+- Public DOCX/PPTX adapters attach conversion diagnostics to their ordinary
+  parse reports. Unknown font encodings are not guessed.
 
 ## Fields
 
 ### `r`
 
 - **Output**
-  - LaTeX fragment in the containing equation.
-
+  - Converted math-run content.
 - **OOXML**
-  - `m:r`
-
+  - `m:r`, or a saved `w:r` inside a math container.
 - **IR**
-  - Recursive string result.
-
+  - Recursive string result in the containing equation.
 - **Parsing**
-  - [_handle_r](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _handle_r(elem: ET.Element) -> str:
-      parts: list[str] = []
-      for child in elem:
-          if local_name(child.tag) == "t":
-              text = child.text or ""
-              parts.append(_escape_latex(text))
-      return "".join(parts)
-  ```
+  - Read direct `m:t`, `w:t` and saved `w:delText` in order; apply explicit math-run properties. Decode supported Word character nodes and explicit breaks. Run text and known-character decoding are in [text.py](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/text.py).
 
 ### `t`
 
 - **Output**
-  - LaTeX fragment in the containing equation.
-
+  - Escaped text, subject to the containing run's math/text mode.
 - **OOXML**
-  - `m:t`
-
+  - `m:t` and the corresponding saved Word text children.
 - **IR**
-  - Recursive string result.
-
+  - Recursive string result in the containing equation.
 - **Parsing**
-  - [_handle_t](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
+  - Preserve source characters. Literal ``, braces, `_`, `&`, `%`, `$`, `#`, `~` and `^` are escaped once; normal-text whitespace remains inside `\text{...}`. Outside array alignment contexts a real ampersand remains literal `\&`.
 
-- **Conversion**
-
-  ```python
-  def _handle_t(elem: ET.Element) -> str:
-      return _escape_latex(elem.text or "")
-  ```
-
-### `f`
+### `scr`
 
 - **Output**
-  - LaTeX fragment in the containing equation.
-
+  - Unicode mathematical letters, including Letterlike Symbols where Unicode has historical holes.
 - **OOXML**
-  - `m:f`
-
+  - `m:r/m:rPr/m:scr/@m:val`.
 - **IR**
-  - Recursive string result.
-
+  - Recursive string result in the containing equation.
 - **Parsing**
-  - [_handle_f](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _handle_f(elem: ET.Element) -> str:
-      num = _child_convert(elem, "num")
-      den = _child_convert(elem, "den")
-      return rf"\frac{{{num}}}{{{den}}}"
-  ```
-
-### `rad`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:rad`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_handle_rad](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _handle_rad(elem: ET.Element) -> str:
-      deg = _child_convert(elem, "deg")
-      e_val = _child_convert(elem, "e")
-      if deg:
-          return rf"\sqrt[{deg}]{{{e_val}}}"
-      return rf"\sqrt{{{e_val}}}"
-  ```
-
-### `sSub`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:sSub`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_handle_ssub](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _handle_ssub(elem: ET.Element) -> str:
-      e_val = _child_convert(elem, "e")
-      sub = _child_convert(elem, "sub")
-      e_out = _wrap_group(e_val)
-      return f"{e_out}_{{{sub}}}"
-  ```
-
-### `sSup`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:sSup`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_handle_ssup](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _handle_ssup(elem: ET.Element) -> str:
-      e_val = _child_convert(elem, "e")
-      sup = _child_convert(elem, "sup")
-      e_out = _wrap_group(e_val)
-      return f"{e_out}^{{{sup}}}"
-  ```
-
-### `sSubSup`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:sSubSup`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_handle_ssubsup](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _handle_ssubsup(elem: ET.Element) -> str:
-      e_val = _child_convert(elem, "e")
-      sub = _child_convert(elem, "sub")
-      sup = _child_convert(elem, "sup")
-      e_out = _wrap_group(e_val)
-      result = e_out
-      if sub:
-          result += f"_{{{sub}}}"
-      if sup:
-          result += f"^{{{sup}}}"
-      return result
-  ```
-
-### `sPre`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:sPre`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_handle_spre](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _handle_spre(elem: ET.Element) -> str:
-      e_val = _child_convert(elem, "e")
-      sub = _child_convert(elem, "sub")
-      sup = _child_convert(elem, "sup")
-      parts: list[str] = []
-      if sub:
-          parts.append(f"_{{{sub}}}")
-      if sup:
-          parts.append(f"^{{{sup}}}")
-      parts.append(_wrap_group(e_val))
-      return "{}" + "".join(parts)
-  ```
-
-### `nary`
-
-- **Output**
-  - LaTeX operator, visible lower/upper limits, then the grouped base.
-- **OOXML**
-  - m:nary/m:naryPr; direct m:sub, m:sup, m:e.
-- **IR**
-  - Recursive string result.
-- **Parsing**
-  - [nary](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/operators.py).
-  - Read chr from naryPr/chr/@m:val. Missing chr means integral U+222B, not summation. A present chr without val, or with an empty val, means no operator.
-  - Map known integral/product/sum/set operators through _NARY_OPERATOR_MAP. Preserve any other explicit character as escaped text rather than inventing a sum.
-  - Convert visible sub/sup as _{...}/^{...}. Missing subHide/supHide means false; a present flag without val means true; 0/false/off means false.
-  - Omit hidden limits even when their saved arguments contain text. An empty operator with visible limits uses an empty TeX base {}.
-  - Example: chr="∏", sub="k=1", sup="n", e="A" → \prod_{k=1}^{n} {A}.
-
-### `acc`
-
-- **Output**
-  - A mapped LaTeX accent over the converted base.
-- **OOXML**
-  - m:acc/m:accPr/m:chr/@m:val; m:acc/m:e.
-- **IR**
-  - Recursive string result.
-- **Parsing**
-  - [accent](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/operators.py).
-  - Missing chr defaults to combining circumflex U+0302. A present empty chr, including missing val, leaves the base undecorated.
-  - Known characters map through _ACCENT_MAP, including vector, dot, double dot, tilde and hat. Preserve an unknown explicit character with \overset{character}{base}.
-  - Example: chr="⃗", e="v" → \vec{v}.
-
-### `bar`
-
-- **Output**
-  - \overline{base} or \underline{base}.
-- **OOXML**
-  - m:bar/m:barPr/m:pos/@m:val; m:bar/m:e.
-- **IR**
-  - Recursive string result.
-- **Parsing**
-  - [bar](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/operators.py).
-  - Explicit top selects overline; bot selects underline. An omitted pos or omitted val defaults to bot, as in ISO/IEC 29500-1:2016 §22.1.2.84 and Office.
-  - Example: pos="bot", e="q" → \underline{q}.
-
-### `func`
-
-- **Output**
-  - LaTeX function name, its saved limits/scripts and its grouped argument.
-- **OOXML**
-  - m:func/m:fName and m:func/m:e.
-- **IR**
-  - Recursive string result.
-- **Parsing**
-  - [_handle_func](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py).
-  - Map simple names through _FUNC_MAP; escape other names inside \operatorname{...}.
-  - Preserve limLow/limUpp and sSub/sSup/sSubSup within fName, recursively converting the function base and limit arguments. Do not flatten limit text into the name.
-  - The previously accepted direct m:lim also adds a lower limit when present.
-  - Example: fName/limLow with e="lim", lim="x→0", outer e="f" → \lim_{x→0}{f}.
-
-### `groupChr`
-
-- **Output**
-  - A brace/arrow command or an explicit character above/below the base.
-- **OOXML**
-  - m:groupChr/m:groupChrPr/{m:chr,m:pos}/@m:val; direct m:e.
-- **IR**
-  - Recursive string result.
-- **Parsing**
-  - [group_character](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/operators.py).
-  - Missing chr defaults to bottom curly bracket U+23DF; present empty chr leaves the base undecorated. Missing pos or val defaults to bot.
-  - Upper U+23DE at top maps to \overbrace; lower U+23DF at bot maps to \underbrace.
-  - Left/right/bidirectional arrows use the corresponding over/under arrow commands. Other explicit character/position pairs use \overset or \underset and preserve escaped character text.
-  - Vertical baseline justification and exact stretching are not reconstructed.
-
-### `d`
-
-- **Output**
-  - Converted arguments in their saved delimiters, joined by the saved separator.
-- **OOXML**
-  - m:d/m:dPr/{m:begChr,m:sepChr,m:endChr}/@m:val; every direct m:e.
-- **IR**
-  - Recursive string result.
-- **Parsing**
-  - [delimiter](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/operators.py).
-  - Omitted begChr/endChr default to ( and ); omitted sepChr defaults to |. U+2502 is normalized to the same separator.
-  - A present character element with no val or an empty val means no character. It does not restore the default. Empty outer delimiters use TeX \left. or \right.; an empty separator concatenates arguments.
-  - Convert all e children in order. Known delimiters use _DELIM_MAP and \left/\right. Other explicit characters use \mathopen/\mathclose; do not generate an invalid TeX delimiter pair.
-  - Example: square brackets, separator ;, e="x" and e="y" → \left[ x;y \right].
-  - Example: default properties and the same arguments → \left( x|y \right).
-
-### `m`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:m`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_handle_m](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _handle_m(elem: ET.Element) -> str:
-      rows: list[str] = []
-      for mr in child_elements(elem, "m", "mr"):
-          cells = [_convert_node(cell) for cell in mr if local_name(cell.tag) == "e"]
-          rows.append(" & ".join(cells))
-      body = r" \\ ".join(rows)
-      return rf"\begin{{matrix}} {body} \end{{matrix}}"
-  ```
-
-### `eqArr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:eqArr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_handle_eqarr](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _handle_eqarr(elem: ET.Element) -> str:
-      rows = [_convert_node(child) for child in elem if local_name(child.tag) == "e"]
-      body = r" \\ ".join(rows)
-      return rf"\begin{{aligned}} {body} \end{{aligned}}"
-  ```
-
-### `limLow`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:limLow`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_handle_limlow](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _handle_limlow(elem: ET.Element) -> str:
-      e_val = _child_convert(elem, "e")
-      lim = _child_convert(elem, "lim")
-      return f"{{{e_val}}}_{{{lim}}}"
-  ```
-
-### `limUpp`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:limUpp`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_handle_limupp](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _handle_limupp(elem: ET.Element) -> str:
-      e_val = _child_convert(elem, "e")
-      lim = _child_convert(elem, "lim")
-      return f"{{{e_val}}}^{{{lim}}}"
-  ```
-
-### `phant`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:phant`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_handle_phant](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _handle_phant(elem: ET.Element) -> str:
-      e_val = _child_convert(elem, "e")
-      return rf"\phantom{{{e_val}}}"
-  ```
-
-### `borderBox`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:borderBox`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_handle_borderbox](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _handle_borderbox(elem: ET.Element) -> str:
-      e_val = _child_convert(elem, "e")
-      return rf"\boxed{{{e_val}}}"
-  ```
-
-### `box`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:box`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_handle_box](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _handle_box(elem: ET.Element) -> str:
-      return _convert_children(elem)
-  ```
-
-### `oMath`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:oMath`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _convert_children(elem: ET.Element) -> str:
-      parts: list[str] = []
-      for child in elem:
-          latex = _convert_node(child)
-          if latex:
-              parts.append(latex)
-      return "".join(parts)
-  ```
-
-### `oMathPara`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:oMathPara`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _convert_children(elem: ET.Element) -> str:
-      parts: list[str] = []
-      for child in elem:
-          latex = _convert_node(child)
-          if latex:
-              parts.append(latex)
-      return "".join(parts)
-  ```
-
-### `e`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:e`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _convert_children(elem: ET.Element) -> str:
-      parts: list[str] = []
-      for child in elem:
-          latex = _convert_node(child)
-          if latex:
-              parts.append(latex)
-      return "".join(parts)
-  ```
-
-### `num`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:num`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _convert_children(elem: ET.Element) -> str:
-      parts: list[str] = []
-      for child in elem:
-          latex = _convert_node(child)
-          if latex:
-              parts.append(latex)
-      return "".join(parts)
-  ```
-
-### `den`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:den`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _convert_children(elem: ET.Element) -> str:
-      parts: list[str] = []
-      for child in elem:
-          latex = _convert_node(child)
-          if latex:
-              parts.append(latex)
-      return "".join(parts)
-  ```
-
-### `sub`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:sub`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _convert_children(elem: ET.Element) -> str:
-      parts: list[str] = []
-      for child in elem:
-          latex = _convert_node(child)
-          if latex:
-              parts.append(latex)
-      return "".join(parts)
-  ```
-
-### `sup`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:sup`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _convert_children(elem: ET.Element) -> str:
-      parts: list[str] = []
-      for child in elem:
-          latex = _convert_node(child)
-          if latex:
-              parts.append(latex)
-      return "".join(parts)
-  ```
-
-### `deg`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:deg`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _convert_children(elem: ET.Element) -> str:
-      parts: list[str] = []
-      for child in elem:
-          latex = _convert_node(child)
-          if latex:
-              parts.append(latex)
-      return "".join(parts)
-  ```
-
-### `lim`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:lim`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_convert_children](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py)
-
-- **Conversion**
-
-  ```python
-  def _convert_children(elem: ET.Element) -> str:
-      parts: list[str] = []
-      for child in elem:
-          latex = _convert_node(child)
-          if latex:
-              parts.append(latex)
-      return "".join(parts)
-  ```
-
-### `fName`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:fName`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - [_function_name](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/converter.py), preserving nested limits and scripts.
-
-### `chr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:chr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: e.get(qualified_name('m', 'val'), '')`
-
-### `oMathParaPr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:oMathParaPr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: ''`
-
-### `oMathPr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:oMathPr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: ''`
-
-### `sSubPr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:sSubPr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: ''`
-
-### `sSupPr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:sSupPr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: ''`
-
-### `sSubSupPr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:sSubSupPr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: ''`
-
-### `sPrePr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:sPrePr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: ''`
-
-### `fPr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:fPr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: ''`
-
-### `naryPr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:naryPr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: ''`
-
-### `radPr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:radPr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: ''`
-
-### `accPr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:accPr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: ''`
-
-### `barPr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:barPr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: ''`
-
-### `dPr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:dPr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: ''`
-
-### `mPr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:mPr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: ''`
-
-### `eqArrPr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:eqArrPr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: ''`
-
-### `groupChrPr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:groupChrPr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: ''`
-
-### `ctrlPr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:ctrlPr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: ''`
-
-### `rPr`
-
-- **Output**
-  - LaTeX fragment in the containing equation.
-
-- **OOXML**
-  - `m:rPr`
-
-- **IR**
-  - Recursive string result.
-
-- **Parsing**
-  - `lambda e: ''`
+  - Decode ASCII letters/digits using the declared script: `script`, `fraktur`, `double-struck`, `sans-serif`, or `monospace`. Existing non-ASCII symbols and operators are retained. For example, saved ASCII `R` with double-struck becomes `ℝ`; fraktur `g` becomes `𝔤`. An omitted script element or value uses roman. Unsupported script names invoke `MATH_SCRIPT_UNSUPPORTED` and keep escaped text.
 
 ### `sty`
 
 - **Output**
-  - LaTeX fragment in the containing equation.
-
+  - Explicit reading style on mathematical letters.
 - **OOXML**
-  - `m:sty`
-
+  - `m:r/m:rPr/m:sty/@m:val`.
 - **IR**
-  - Recursive string result.
-
+  - Recursive string result in the containing equation.
 - **Parsing**
-  - `lambda e: ''`
+  - Roman script uses `\mathrm`, `\mathbf`, `\mathit`, or `\boldsymbol` for `p`, `b`, `i`, `bi`. Non-roman alphabets choose their Unicode bold/italic variants where those exist. Unspecified style does not add a roman wrapper; the non-roman mapping uses italic as its default style choice. Unsupported roman style invokes `MATH_STYLE_UNSUPPORTED`.
 
-### `jc`
+### `nor`
 
 - **Output**
-  - LaTeX fragment in the containing equation.
-
+  - `\text{...}` for normal-text runs.
 - **OOXML**
-  - `m:jc`
-
+  - `m:r/m:rPr/m:nor/@m:val`.
 - **IR**
-  - Recursive string result.
-
+  - Recursive string result in the containing equation.
 - **Parsing**
-  - `lambda e: ''`
+  - Missing means false. A present flag without `val` means true; `0`, `false`, `off` mean false. Keep actual words and spaces separate from mathematical variables. Example: `if x > 0` → `\text{if x > 0}`. Its genuine ampersands remain literal even inside an equation array.
 
-## Character conversion
+### `f`
 
-- [_escape_latex](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/support.py)
-- [_plain_text](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/support.py)
-- [_wrap_group](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/support.py)
-- [_property](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/operators.py)
+- **Output**
+  - A fraction or a no-bar stack.
+- **OOXML**
+  - `m:f/m:num`, `m:f/m:den` and `m:f/m:fPr/m:type`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Convert numerator and denominator recursively. A `noBar` object uses `\genfrac{}{}{0pt}{}{numerator}{denominator}`. Other fraction layouts (`bar`, `lin`, `skw`) share `\frac{numerator}{denominator}` as a reading representation. A no-bar stack is not automatically interpreted as a binomial coefficient. See [structures.py](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/structures.py).
 
-Literal TeX special characters are escaped once per source character, including text from unknown-node fallback. Generated command braces are not re-escaped. For example, a literal backslash becomes `\textbackslash{}`.
+### `rad`
+
+- **Output**
+  - `\sqrt{base}` or `\sqrt[degree]{base}`.
+- **OOXML**
+  - `m:rad/m:deg`, `m:rad/m:e`, `m:rad/m:radPr/m:degHide`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Honor `degHide` before reading the saved degree. Missing flag is false; a present flag without `val` is true. A hidden or empty degree produces a square-root reading. A nonempty visible degree is retained. Hidden saved `3` must not change the visible square root into a cube root.
+
+### `sSub`
+
+- **Output**
+  - Grouped base followed by `_{subscript}`.
+- **OOXML**
+  - `m:sSub/{m:e,m:sub}`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Convert the base and subscript recursively; group a compound base before attaching its script.
+
+### `sSup`
+
+- **Output**
+  - Grouped base followed by `^{superscript}`.
+- **OOXML**
+  - `m:sSup/{m:e,m:sup}`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Convert the base and exponent recursively. Nested powers attach to grouped intermediate expressions, rather than emitting consecutive ungrouped superscripts.
+
+### `sSubSup`
+
+- **Output**
+  - Grouped base, optional lower script and optional upper script.
+- **OOXML**
+  - `m:sSubSup/{m:e,m:sub,m:sup}`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Convert each argument recursively. Preserve both scripts without using their exact source alignment as a separate output field.
+
+### `sPre`
+
+- **Output**
+  - `{}_{lower}^{upper}base`.
+- **OOXML**
+  - `m:sPre/{m:sub,m:sup,m:e}`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - The left scripts have their own empty TeX base. They must not attach to a preceding source character; for example `x{}_{l}^{u}A`.
+
+### `nary`
+
+- **Output**
+  - Saved operator, visible limits, then its grouped operand.
+- **OOXML**
+  - `m:nary/m:naryPr/{m:chr,m:subHide,m:supHide}` and direct `m:sub`, `m:sup`, `m:e`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Read `chr/@m:val` at its standard property level. Missing `chr` defaults to integral U+222B; a present empty character means no operator. Map known operators through `_NARY_OPERATOR_MAP`, preserving other explicit characters. Hide each limit only when its corresponding flag is true. An empty operator with limits uses `{}` as its TeX base. Example: `∏`, `k=1`, `n`, `A` → `\prod_{k=1}^{n} {A}`. See [operators.py](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/operators.py).
+
+### `acc`
+
+- **Output**
+  - A known accent command, or a preserved explicit accent character.
+- **OOXML**
+  - `m:acc/m:accPr/m:chr/@m:val` and direct `m:e`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Missing character defaults to combining circumflex U+0302. A present empty character leaves the base undecorated. Known vector/dot/tilde/hat characters use `_ACCENT_MAP`; other explicit characters use `\overset{character}{base}`. Example: vector `v` → `\vec{v}`.
+
+### `bar`
+
+- **Output**
+  - `\overline{base}` or `\underline{base}`.
+- **OOXML**
+  - `m:bar/m:barPr/m:pos/@m:val` and direct `m:e`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Explicit `top` selects overline; `bot` selects underline. Omitted position or value defaults to `bot`, following ISO/IEC 29500-1:2016 §22.1.2.84 and the Office reading behavior.
+
+### `func`
+
+- **Output**
+  - Function name and its recursively converted argument.
+- **OOXML**
+  - `m:func/m:fName` and direct `m:e`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Map simple textual names using `_FUNC_MAP`, with escaped `\operatorname{...}` for other simple names. Preserve structural function names through their ordinary math handlers, including accents, fractions and delimiters. Preserve scripts and limits on a recursively grouped name. Example: a hat on `f` stays `\hat{f}{x}`.
+
+### `fName`
+
+- **Output**
+  - A simple name or an intact compound function-name expression.
+- **OOXML**
+  - `m:func/m:fName`, an `CT_OMathArg` containing math/Word content.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Handle `limLow`, `limUpp`, `sSub`, `sSup`, `sSubSup`, `sPre` as structural name nodes inside the standard `fName` argument. Group every compound script base. For example `(f²)³` becomes `{\operatorname{f}^{2}}^{3}`. Transparent wrappers and revisions retain the function-name traversal context.
+
+### `groupChr`
+
+- **Output**
+  - An over/under brace, arrow or explicit grouping character.
+- **OOXML**
+  - `m:groupChr/m:groupChrPr/{m:chr,m:pos}` and direct `m:e`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Missing character defaults to U+23DF (bottom curly bracket), and missing position defaults to `bot`. A present empty character leaves the base undecorated. Use `\overbrace`/`\underbrace` for matching upper/lower braces, corresponding arrow commands for arrows, and `\overset`/`\underset` for other explicit character/position pairs. Exact stretching and baseline justification are not reconstructed.
+
+### `d`
+
+- **Output**
+  - All arguments in order, with their saved delimiters and separator.
+- **OOXML**
+  - `m:d/m:dPr/{m:begChr,m:sepChr,m:endChr}` and every direct `m:e`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Omitted beginning/ending characters default to `(`/`)`; omitted separator defaults to `|` (including the U+2502 spelling). A present empty character means no character, not the default. Empty outer delimiters use `\left.`/`\right.`. Known delimiters use `_DELIM_MAP`; custom characters use `\mathopen`/`\mathclose`. Example: two arguments `x`,`y`, square brackets and `;` → `\left[ x;y \right]`.
+
+### `m`
+
+- **Output**
+  - `\begin{matrix} ... \end{matrix}`.
+- **OOXML**
+  - `m:m/m:mr/m:e`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Retain source rows and cells, joining cells with `&` and rows with `\`. Source column widths/justification and exact row spacing are not projected.
+
+### `eqArr`
+
+- **Output**
+  - `\begin{aligned} ... \end{aligned}`.
+- **OOXML**
+  - `m:eqArr/m:e` and mathematical text within each argument.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Retain rows. Count source alignment ampersands across runs within each row: odd occurrences become TeX alignment tabs; even occurrences are adjustable source spacers and are omitted. Reset the counter for each row and nested array. Genuine normal-text ampersands remain escaped literals. Styled runs split around alignment tabs, keeping tabs outside style-command braces.
+
+### `limLow`
+
+- **Output**
+  - `{base}_{limit}` outside a function-name context.
+- **OOXML**
+  - `m:limLow/{m:e,m:lim}`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Keep the base and limit structure. Within a function name, use the recognized function name and grouped compound bases instead of flattening limit text into that name.
+
+### `limUpp`
+
+- **Output**
+  - `{base}^{limit}` outside a function-name context.
+- **OOXML**
+  - `m:limUpp/{m:e,m:lim}`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - The same recursive rules as lower limits apply, with the upper-script marker.
+
+### `phant`
+
+- **Output**
+  - Visible base or explicit `\phantom{base}`.
+- **OOXML**
+  - `m:phant/m:phantPr/m:show` and direct `m:e`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - `show` defaults to true, including when present without `val`. Return the visible base when true; use `phantom` only for false. Exact zero-width/ascent/descent and transparency layout are not reconstructed.
+
+### `borderBox`
+
+- **Output**
+  - Saved enclosure/strike states, as a reading projection.
+- **OOXML**
+  - `m:borderBox/m:borderBoxPr` and direct `m:e`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - All four visible edges use `\boxed`. With hidden edges, visible top/bottom edges use overline/underline and visible left/right edges use paired `\left\lvert`/`\right\rvert` or invisible partners. This retains the selected edges without promising exact line joins. Forward/backward/both diagonal strikes use `\cancel`, `\bcancel`, `\xcancel`. Horizontal/vertical strikes use explicit `\overset{\text{horizontal strike}}{...}` / `vertical strike` reading annotations, not guessed diagonal cancellation. A flag is false when absent and true when present without a value.
+
+### `box`
+
+- **Output**
+  - Converted children.
+- **OOXML**
+  - `m:box/m:e` and its property container.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Read content recursively. Operator-emulation spacing, automatic line-wrap constraints and differential spacing are layout properties, not a reason to change the saved operator/letters.
+
+### `oMath`
+
+- **Output**
+  - One mathematical expression.
+- **OOXML**
+  - `m:oMath`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Convert children in source order. Known transparent Word containers are traversed as structure; unknown semantic content reports conversion degradation.
+
+### `oMathPara`
+
+- **Output**
+  - One expression, or `\begin{gathered} ... \\ ... \end{gathered}`.
+- **OOXML**
+  - `m:oMathPara/m:oMath`.
+- **IR**
+  - Recursive string result in the containing equation.
+- **Parsing**
+  - Keep independent expression boundaries. One retained expression needs no extra environment; multiple expressions use gathered. Revision filtering can remove an empty expression. Explicit hard breaks within an argument also use gathered, while automatic line layout remains outside this projection.
+
+## Word content and revisions
+
+### `revision_mode`
+
+- **Output**
+  - DOCX uses the selected view in all densities. Semantic review additionally
+    emits `ins`/`del` children within an equation or around a whole equation.
+- **OOXML**
+  - Word `ins`, `moveTo`, `del`, `moveFrom` wrappers.
+- **IR**
+  - Internal `MathResult.text` plus nested `MathRevision` ranges. These are not
+    source offsets or an editable projection.
+- **Parsing**
+  - `final` retains insertions/move destinations; `original` retains
+    deletions/move sources; `review` retains both and reviewer attribution.
+  - Keep formula structure inside a retained wrapper. Deleted whole formulas
+    are recovered as formula objects instead of concatenated deleted letters.
+  - Semantic review markup is mixed XML content: concatenate an equation's
+    character data with `itertext()` to recover its complete LaTeX text.
+    Structural/plain review contains both saved branches without attribution
+    wrappers, consistent with its lower density.
+  - Example: `<equation notation="latex">\frac{<ins author="A">a</ins>}{b}</equation>`.
+  - A fresh conversion context owns these ranges; internal composition markers
+    never appear in output.
+- **Diagnostics**
+  - Invalid internal view value: `ValueError`.
+
+### `word_characters`
+
+- **Output**
+  - Known text characters, `quad` for a tab, or explicit gathered-line boundaries.
+- **OOXML**
+  - Word `noBreakHyphen`, `softHyphen`, `tab`, `br`, `cr`, `sym` inside math runs.
+- **IR**
+  - Converted string fragments.
+- **Parsing**
+  - A nonbreaking hyphen uses `\text{-}` so it remains a text hyphen even when a
+    math font lacks U+2011. A discretionary soft-hyphen node adds no visible glyph
+    without line layout. Breaks keep explicit boundaries.
+  - `sym` in the known Symbol encoding uses the saved hexadecimal code and
+    font name. Decode its byte-sized or U+F000-prefixed encoding using the
+    Unicode mapping in [symbols.py](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/symbols.py).
+    Extender/private glyphs and other font encodings are not guessed.
+  - Run properties, field-control instructions and saved page-wrap markers add
+    no mathematical characters.
+- **Diagnostics**
+  - `MATH_SYMBOL_UNSUPPORTED`: unknown font/character mapping.
+  - `MATH_RUN_CHILD_UNSUPPORTED`: encountered other unhandled math-run content.
+
+## Deliberate limits
+
+Exact font metrics, source coordinates, mathematical glyph stretching, line joins,
+source spacing and automatic page/line layout are not reconstructed. Conversion
+does not evaluate Office fields or formulas. Transparent mathematical hyperlink
+wrappers preserve mathematical structure; their internal navigation is not a new
+public navigation API. Unsupported semantic content is reported when the host
+provides a warning sink; reading fallback text does not establish full support.

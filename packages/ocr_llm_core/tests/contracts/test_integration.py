@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import unittest
 
+from ocr_llm_core import OcrResult
+
 
 class ProviderIntegrationTest(unittest.TestCase):
     def test_all_providers_importable(self) -> None:
@@ -18,11 +20,11 @@ class ProviderIntegrationTest(unittest.TestCase):
         from ocr_llm_core import OcrProvider
 
         class MyProvider(OcrProvider):
-            def extract(self, image_bytes: bytes) -> str:
-                return "custom text"
+            def extract_result(self, image_bytes: bytes, *, timeout: float | None = None) -> OcrResult:
+                return OcrResult.from_text("custom text")
 
         p = MyProvider()
-        self.assertEqual(p.extract(b"anything"), "custom text")
+        self.assertEqual(p.extract_result(b"anything").text, "custom text")
 
 
 if __name__ == "__main__":

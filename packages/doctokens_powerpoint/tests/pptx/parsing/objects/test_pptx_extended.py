@@ -112,6 +112,32 @@ class ExtendedPptxTests(unittest.TestCase):
             ["MATH_ALTERNATE_CONTENT_UNSUPPORTED"],
         )
 
+    def test_nested_math_alternatives_read_one_native_representation(self) -> None:
+        # Temporary native-math migration case; no Office fixture exists yet.
+        paragraph = (
+            '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" '
+            'xmlns:math="http://schemas.microsoft.com/office/drawing/2010/main">'
+            '<mc:Choice Requires="math"><mc:AlternateContent><mc:Choice Requires="math"><math:m>'
+            '<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
+            "<m:r><m:t>x</m:t></m:r></m:oMath></math:m></mc:Choice>"
+            "<mc:Fallback><a:r><a:t>Inner preview</a:t></a:r></mc:Fallback></mc:AlternateContent></mc:Choice>"
+            "<mc:Fallback><a:r><a:t>Outer preview</a:t></a:r></mc:Fallback></mc:AlternateContent>"
+        )
+        source = _deck(rich_text_shape_xml([paragraph]))
+        for density in ("plain", "structural", "semantic"):
+            with self.subTest(density=density):
+                if density == "plain":
+                    expected = "density=plain format=pptx\n=== Slide 1 ===\nx"
+                else:
+                    name = ' name="Rich 9"' if density == "semantic" else ""
+                    expected = (
+                        f'<presentation density="{density}" format="pptx"><slide number="1">'
+                        f'<p{name} shape-id="s1"><equation notation="latex">x</equation></p></slide></presentation>'
+                    )
+                self.assertEqual(parse_pptx(source, density=density).text, expected)
+                with open_pptx(source) as session:
+                    self.assertEqual(session.render(density=density).text, expected)
+
     def test_drawingml_autonumber_schemes_use_shared_formatters(self) -> None:
         paragraphs = [
             '<a:pPr><a:buAutoNum type="alphaUcParenBoth" startAt="3"/></a:pPr><a:r><a:t>Alpha</a:t></a:r>',

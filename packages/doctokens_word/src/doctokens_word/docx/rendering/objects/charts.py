@@ -2,39 +2,11 @@
 
 from __future__ import annotations
 
-from html import escape as escape_text
-
 from doctokens_core.ooxml.charts.axes import append_chart_axes
 from doctokens_core.output.resources import resource_document
 from doctokens_core.output.xml import append, element
 
-from ...model import Chart, ChartSeries, InlineObject
-from ..common import constants as _constants
-
-
-def chart_to_output(chart: InlineObject) -> str:
-    """Render an inline chart summary; full points are available through get_resource."""
-    attrs = _chart_attrs(chart)
-    type_attrs = chart_type_attrs(chart, chart.get("chartType", "?"))
-    if type_attrs:
-        attrs += type_attrs
-    return f"<chart {attrs} truncated>\n"
-
-
-def chart_type_attrs(chart: InlineObject, chart_type: str) -> str:
-    """Return attributes that make each chart family easier to skim."""
-    series = chart.get("series") or []
-    if chart_type in ("bar", "bar3d", "line", "line3d", "area", "area3d", "radar"):
-        return _bar_like_chart_attrs(series)
-    if chart_type in ("pie", "pie3d", "doughnut"):
-        return _pie_chart_attrs(series)
-    if chart_type in ("scatter", "bubble"):
-        return _scatter_chart_attrs(chart, series)
-    if chart_type == "stock":
-        return _stock_chart_attrs(series)
-    if chart_type in ("surface", "surface3d"):
-        return _surface_chart_attrs(series)
-    return ""
+from ...model import Chart
 
 
 def render_chart_resource(chart: Chart) -> str:
@@ -82,87 +54,3 @@ def render_chart_resource(chart: Chart) -> str:
         for i in range(max((len(values) for _, values in arrays), default=0)):
             append(child, "point", **{name: values[i] for name, values in arrays if i < len(values)})
     return resource_document("docx", node)
-
-
-def _chart_attrs(chart: Chart | InlineObject, *, include_points: bool = False) -> str:
-    attrs = f"id={chart.get('id', '?')} type={chart.get('chartType', '?')}"
-    if chart.get("title"):
-        attrs += f" title={escape_text(chart['title'], quote=True)}"
-    attrs += f" series={chart.get('seriesCount', 0)}"
-    if include_points:
-        attrs += f" points={chart.get('pointCount', 0)}"
-        if chart.get("plots"):
-            plot_types = ",".join(str(plot.get("chartType", "unknown")) for plot in chart["plots"])
-            attrs += f" plots={escape_text(plot_types, quote=True)}"
-    return attrs
-
-
-def _bar_like_chart_attrs(series: list[ChartSeries]) -> str:
-    attrs = _categories_attr(series, ellipsize=True)
-    names = _series_names(series)
-    if names:
-        attrs += f" names={escape_text(','.join(names), quote=True)}"
-    return attrs
-
-
-def _pie_chart_attrs(series: list[ChartSeries]) -> str:
-    categories = _collect_categories(series)
-    if not categories:
-        return ""
-    labels = categories[: _constants._X_LABEL_MAX]
-    return f" names={escape_text(','.join(labels), quote=True)}"
-
-
-def _scatter_chart_attrs(chart: InlineObject, series: list[ChartSeries]) -> str:
-    attrs = ""
-    names = _series_names(series)
-    if names:
-        attrs += f" names={escape_text(','.join(names), quote=True)}"
-    attrs += f" points={chart.get('pointCount', 0)}"
-    return attrs
-
-
-def _stock_chart_attrs(series: list[ChartSeries]) -> str:
-    return _categories_attr(series, ellipsize=True)
-
-
-def _surface_chart_attrs(series: list[ChartSeries]) -> str:
-    attrs = ""
-    names = _series_names(series)
-    if names:
-        attrs += f" names={escape_text(','.join(names), quote=True)}"
-    attrs += _categories_attr(series, ellipsize=False)
-    return attrs
-
-
-def _categories_attr(series: list[ChartSeries], *, ellipsize: bool) -> str:
-    categories = _collect_categories(series)
-    if not categories:
-        return ""
-    labels = categories[: _constants._X_LABEL_MAX]
-    category_text = ",".join(labels)
-    if ellipsize and len(categories) > _constants._X_LABEL_MAX:
-        category_text += ",..."
-    return f" categories={escape_text(category_text, quote=True)}"
-
-
-def _series_names(series: list[ChartSeries]) -> list[str]:
-    names: list[str] = []
-    for series_item in series:
-        name = series_item.get("name", f"S{series_item.get('index', '')}")
-        if name:
-            names.append(str(name))
-    return names
-
-
-def _collect_categories(series: list[ChartSeries]) -> list[str]:
-    categories: list[str] = []
-    for series_item in series:
-        preview = (series_item.get("preview") or "").split("; ")
-        for preview_item in preview:
-            if "=" not in preview_item:
-                continue
-            category = preview_item.split("=", 1)[0]
-            if category and category not in categories:
-                categories.append(category)
-    return categories

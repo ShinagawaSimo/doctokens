@@ -34,8 +34,8 @@ class PackageOptions:
             raise ValueError("ocr_workers must be greater than zero")
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("ocr_timeout must be greater than zero")
-        if ocr is not None and not any(callable(getattr(ocr, method, None)) for method in ("extract", "extract_result")):
-            raise TypeError("ocr must provide an extract(image_bytes) or extract_result(image_bytes) method")
+        if ocr is not None and not callable(getattr(ocr, "extract_result", None)):
+            raise TypeError("ocr must provide extract_result(image_bytes, *, timeout=...) returning OcrResult")
 
 
 __all__ = ["PackageOptions"]

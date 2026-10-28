@@ -11,7 +11,7 @@ from doctokens_core.runtime.execution import checkpoint
 from ..model.presentation import (
     ChartRecord,
     CommentItem,
-    OcrStoredResult,
+    OcrResultRecord,
     Paragraph,
     ParsedPresentation,
     Run,
@@ -44,7 +44,7 @@ def _append_slide(
     density: str,
     smartarts: dict[str, SmartArtRecord],
     charts: dict[str, ChartRecord],
-    ocr_results: Mapping[str, OcrStoredResult],
+    ocr_results: Mapping[str, OcrResultRecord],
 ) -> None:
     slide_attrs: dict[str, object] = {"number": slide["n"], "hidden": True if slide["hidden"] else None}
     if slide.get("section"):
@@ -79,7 +79,7 @@ def _append_shape(
     density: str,
     smartarts: dict[str, SmartArtRecord],
     charts: dict[str, ChartRecord],
-    ocr_results: Mapping[str, OcrStoredResult],
+    ocr_results: Mapping[str, OcrResultRecord],
 ) -> None:
     shape_type = shape["type"]
     if shape_type == "text":
@@ -297,7 +297,7 @@ def _append_comments(parent: ET.Element, comments: list[CommentItem]) -> None:
         )
 
 
-def _append_ocr(parent: ET.Element, asset_id: str | None, values: Mapping[str, OcrStoredResult]) -> None:
+def _append_ocr(parent: ET.Element, asset_id: str | None, values: Mapping[str, OcrResultRecord]) -> None:
     if not asset_id or asset_id not in values:
         return
     value = values[asset_id]
@@ -310,9 +310,7 @@ def _append_ocr(parent: ET.Element, asset_id: str | None, values: Mapping[str, O
         append(parent, "ocr-text", id=asset_id, error=True)
 
 
-def _ocr_text(value: OcrStoredResult) -> str:
-    if isinstance(value, str):
-        return value
+def _ocr_text(value: OcrResultRecord) -> str:
     if value.get("status") == "success":
         text_value = value.get("text")
         return text_value if isinstance(text_value, str) else ""

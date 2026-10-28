@@ -14,7 +14,6 @@ from .window import ReadingWindow, reading_window
 
 def iter_plain(workbook: ParsedWorkbook) -> Iterator[str]:
     """Render workbook text in reading order with the existing sheet boundaries."""
-    yield "density=plain\n"
     for index, sheet in enumerate(workbook["sheets"]):
         yield from _iter_sheet(sheet, workbook, emit_globals=index == 0)
 

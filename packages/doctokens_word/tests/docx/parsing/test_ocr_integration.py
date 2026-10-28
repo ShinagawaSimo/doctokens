@@ -7,6 +7,7 @@ from typing import Any, cast
 from xml.etree import ElementTree as ET
 
 from doctokens_word.docx.model import ParseOptions
+from ocr_llm_core import OcrResult
 
 
 class ParseOptionsOcrTest(unittest.TestCase):
@@ -33,8 +34,8 @@ class ParseOptionsOcrTest(unittest.TestCase):
         from ocr_llm_core import OcrProvider
 
         class FakeProvider(OcrProvider):
-            def extract(self, image_bytes: bytes) -> str:
-                return "test"
+            def extract_result(self, image_bytes: bytes, *, timeout: float | None = None) -> OcrResult:
+                return OcrResult.from_text("test")
 
         p = FakeProvider()
         opts = ParseOptions(ocr=p, ocr_workers=2)
@@ -73,7 +74,7 @@ class RenderOcrTextTest(unittest.TestCase):
             warnings=[],
             assets=assets,
             content_types=ContentTypes(defaults={}, overrides={}),
-            ocr_results={"img1": "## Detected text\n\nSome content", "img2": ""},
+            ocr_results={"img1": {"status": "success", "text": "## Detected text\n\nSome content"}, "img2": {"status": "empty"}},
         )
         root = ET.fromstring(to_output(parsed, Density.SEMANTIC))
         assets = root.find("assets")
@@ -82,7 +83,7 @@ class RenderOcrTextTest(unittest.TestCase):
         self.assertEqual([item.tag for item in assets], ["img", "ocr-text", "img", "ocr-text"])
         self.assertEqual(assets[0].get("id"), "img1")
         self.assertTrue((assets[1].text or "").startswith("## Detected text"))
-        self.assertEqual((assets[3].get("id"), assets[3].get("error")), ("img2", "true"))
+        self.assertEqual((assets[3].get("id"), assets[3].get("empty")), ("img2", "true"))
 
     def test_structured_ocr_results_escape_text_and_preserve_empty(self) -> None:
         from doctokens_word.docx.model import ContentTypes, ImageAsset, ParsedDocument
@@ -163,7 +164,7 @@ class RenderOcrTextTest(unittest.TestCase):
             warnings=[],
             assets=assets,
             content_types=ContentTypes(defaults={}, overrides={}),
-            ocr_results={"img7": "Diagram text"},
+            ocr_results={"img7": {"status": "success", "text": "Diagram text"}},
         )
         root = ET.fromstring(to_output(parsed, Density.SEMANTIC))
         paragraph = root.find(".//body/p")
@@ -276,9 +277,9 @@ class EndToEndOcrTest(unittest.TestCase):
             def __init__(self) -> None:
                 self.calls = 0
 
-            def extract(self, image_bytes: bytes) -> str:
+            def extract_result(self, image_bytes: bytes, *, timeout: float | None = None) -> OcrResult:
                 self.calls += 1
-                return "read once"
+                return OcrResult.from_text("read once")
 
         class Package:
             def __init__(self) -> None:
@@ -314,9 +315,9 @@ class EndToEndOcrTest(unittest.TestCase):
             def __init__(self) -> None:
                 self.calls = 0
 
-            def extract(self, image_bytes: bytes) -> str:
+            def extract_result(self, image_bytes: bytes, *, timeout: float | None = None) -> OcrResult:
                 self.calls += 1
-                return "text"
+                return OcrResult.from_text("text")
 
         provider = CountingProvider()
         with TemporaryDirectory() as temp_dir:

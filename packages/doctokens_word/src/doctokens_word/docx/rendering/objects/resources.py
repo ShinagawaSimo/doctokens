@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import base64
-import zipfile
 from collections.abc import Callable
 
 from doctokens_core.output.resources import resource_document
@@ -12,7 +10,6 @@ from doctokens_core.output.xml import append, element
 from ...model import ParsedDocument, TableBlock, TableRow
 from ...model.enums import ResourceType
 from ...model.traversal import document_blocks
-from ..common.ocr import render_ocr_result
 from .charts import render_chart_resource
 from .smartarts import render_smartart_resource
 
@@ -35,7 +32,7 @@ def render_resource(
         raise ValueError("resource_id is required with a singular resource type")
 
     if resolved_type in {ResourceType.IMAGES, ResourceType.IMAGE}:
-        return _render_images(parsed_document, resource_id)
+        raise ValueError("use read_resource() for DOCX image bytes")
     if resolved_type in {ResourceType.CHARTS, ResourceType.CHART}:
         return _render_charts(parsed_document, resource_id)
     if resolved_type in {ResourceType.SMARTARTS, ResourceType.SMARTART}:
@@ -74,36 +71,6 @@ def table_groups(parsed_document: ParsedDocument) -> dict[str, list[TableBlock]]
             continue
         groups.setdefault(block["tableId"], []).append(block)
     return groups
-
-
-def _render_images(parsed_document: ParsedDocument, resource_id: str | None) -> list[str]:
-    source_path = parsed_document.metadata.get("sourcePath")
-    ocr_results = getattr(parsed_document, "ocr_results", None) or {}
-    archive: zipfile.ZipFile | None = None
-    if isinstance(source_path, str) and source_path:
-        archive = zipfile.ZipFile(source_path, "r")
-    resources: list[str] = []
-    try:
-        for asset in parsed_document.assets:
-            if resource_id and asset["id"] != resource_id:
-                continue
-            attrs = f"id={asset['id']}"
-            if asset.get("href"):
-                attrs += f" href={asset['href']}"
-            if asset.get("contentType"):
-                attrs += f" contentType={asset['contentType']}"
-            output_parts = [f"<image {attrs}>"]
-            zip_path = asset.get("zipPath")
-            if zip_path and archive is not None:
-                output_parts.append(base64.b64encode(archive.read(zip_path)).decode())
-            rendered_ocr = render_ocr_result(asset["id"], ocr_results.get(asset["id"]))
-            if rendered_ocr is not None:
-                output_parts.append(f"\n{rendered_ocr}")
-            resources.append("".join(output_parts))
-    finally:
-        if archive is not None:
-            archive.close()
-    return resources
 
 
 def _render_charts(parsed_document: ParsedDocument, resource_id: str | None) -> list[str]:

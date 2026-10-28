@@ -31,12 +31,12 @@ class DocxRenderPipeline:
 
     def render(self, parsed: ParsedDocument) -> Iterator[str]:
         if self.density is Density.PLAIN:
-            legacy_text = "".join(self.renderer(parsed))
+            content = "".join(self.renderer(parsed))
             revision_view = parsed.metadata.get("revisionView")
             return iter(
                 (
                     render_plain(
-                        legacy_text,
+                        content,
                         format_name="docx",
                         revision_view=revision_view if isinstance(revision_view, str) else None,
                         pagination="last-rendered-hints",

@@ -35,7 +35,8 @@ The selected view determines which saved revision text participates in output.
   - `Run.revision: "inserted" | "deleted"`
 
 - **Parsing**
-  - Assign only in review mode. Deletions concatenate descendant `w:delText` into one run; deleted inline formatting/objects are not reconstructed.
+  - Assign only in review mode. Deletions without mathematical objects concatenate descendant `w:delText` into one run; general deleted inline formatting/objects are not reconstructed by this path.
+  - When a deletion/move-source contains native math, recover its text and mathematical objects in source order and apply the selected view to each formula. Semantic review wraps a whole formula as `ins`/`del`; formula-internal revisions retain nested mixed-content review markers. See [equations](../objects/equation.md).
 
 - **Absence and defaults**
   - No wrappers in final/original.

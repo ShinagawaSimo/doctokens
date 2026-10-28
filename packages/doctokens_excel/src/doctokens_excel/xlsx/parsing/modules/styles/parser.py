@@ -19,18 +19,13 @@ def parse_styles(
     pkg: PackageReader,
     *,
     detail: StyleDetail = "semantic",
-    include_semantic_details: bool | None = None,
     locale: str = "zh-CN",
 ) -> FormatIndex:
     """Parse the style layer needed by the selected output density.
 
     Numeric formats and protection are retained at every density.  Theme,
     font, fill, and differential-style trees are read only for semantic output.
-    ``include_semantic_details`` remains as a compatibility spelling for older
-    callers.
     """
-    if include_semantic_details is not None:
-        detail = "semantic" if include_semantic_details else "structural"
     index = FormatIndex(locale=locale)
 
     if not pkg.exists("xl/styles.xml"):

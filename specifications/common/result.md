@@ -74,6 +74,7 @@ Public result of a parse, render, resource, search, or query operation.
 
 - **Parsing**
   - Plain body: `doctokens-plain/1.0`; XML body and resource/search/query results: `doctokens-xml/1.0`.
+  - Required constructor field; no implicit syntax version.
 
 ### `media_type`
 
@@ -85,6 +86,7 @@ Public result of a parse, render, resource, search, or query operation.
 
 - **Parsing**
   - DTX: `application/xml`; DTP: `text/plain`.
+  - Required constructor field, supplied by each operation.
 
 ### `to_dict()`
 

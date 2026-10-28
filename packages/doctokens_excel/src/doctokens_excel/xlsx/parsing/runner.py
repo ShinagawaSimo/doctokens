@@ -13,7 +13,8 @@ from doctokens_core.runtime.metrics import MetricsRecorder
 from doctokens_core.runtime.planning import ParsePurpose
 
 from ..model.workbook import ParsedWorkbook, ParseOptions
-from .modules.styles.index import FormatIndex, parse_styles
+from .modules.styles.index import FormatIndex
+from .modules.styles.parser import parse_styles
 from .modules.workbook.features import CellControlCatalog
 from .modules.workbook.metadata import _parse_shared_strings, _parse_workbook_xml
 from .modules.workbook.pivots import PivotCatalog

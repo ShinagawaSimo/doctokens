@@ -18,7 +18,8 @@ DOCX and PPTX accept an explicitly supplied OCR provider. XLSX exposes no OCR op
   - `ParseOptions.ocr: object | None = None`
 
 - **Parsing**
-  - Requires callable `extract(image_bytes)` or `extract_result(image_bytes)`; invoked only when the plan enables OCR.
+  - Requires callable `extract_result(image_bytes, *, timeout=...)` returning `ocr_llm_core.OcrResult`; invoked only when the plan enables OCR. The batcher passes the timeout keyword directly.
+  - String/mapping return values produce an `invalid_result` error. Parser IR stores `OcrResultRecord` dictionaries generated from the result; it does not accept a second string-result schema.
 
 - **Diagnostics**
   - Invalid provider: `TypeError`.

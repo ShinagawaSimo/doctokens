@@ -19,9 +19,9 @@ class _TextProvider(OcrProvider):
     def __init__(self) -> None:
         self.calls = 0
 
-    def extract(self, image_bytes: bytes) -> str:
+    def extract_result(self, image_bytes: bytes, *, timeout: float | None = None) -> OcrResult:
         self.calls += 1
-        return "Slide <text>"
+        return OcrResult.from_text("Slide <text>")
 
 
 class PptxOcrTests(unittest.TestCase):
@@ -80,9 +80,6 @@ class PptxOcrTests(unittest.TestCase):
 
     def test_error_details_stay_internal(self) -> None:
         class ErrorProvider(OcrProvider):
-            def extract(self, image_bytes: bytes) -> str:
-                return ""
-
             def extract_result(self, image_bytes: bytes, *, timeout: float | None = None) -> OcrResult:
                 return OcrResult.error("engine_error", "private diagnostic")
 

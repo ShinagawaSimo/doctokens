@@ -6,7 +6,7 @@ from typing import cast
 from xml.etree import ElementTree as ET
 
 from doctokens_core.contracts.models import ParseWarning
-from doctokens_core.ooxml.equations.converter import omath_to_latex
+from doctokens_core.ooxml.equations.converter import convert_math
 
 from ....model.presentation import Paragraph, ParagraphStyle, Run, RunFormat
 from ....ooxml.colors import is_default_text_color, resolve_color_element
@@ -161,7 +161,7 @@ def paragraph_runs(
             for node in nodes:
                 if local_name(node.tag) not in {"oMath", "oMathPara"}:
                     continue
-                latex = omath_to_latex(node)
+                latex = convert_math(node, warn=lambda code, message: warnings.append(ParseWarning(code, message, part))).text
                 if latex:
                     runs.append({"text": latex, "equation": latex})
         else:

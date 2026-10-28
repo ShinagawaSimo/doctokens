@@ -6,7 +6,7 @@ from typing import cast
 from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.relationships import RelationshipIndex
-from doctokens_core.ooxml.charts.parser import CHART_RELATIONSHIP_TYPES, parse_chart_xml
+from doctokens_core.ooxml.charts.parser import CHART_RELATIONSHIP_TYPES, ChartParser
 
 from ....model import (
     Chart,
@@ -191,7 +191,7 @@ def _smartart_summary(smartart: SmartArt) -> SmartArt:
 
 def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> Chart:
     """Extract chart information from the chart XML, delegating to the shared ChartML parser."""
-    info = parse_chart_xml(root)
+    info = ChartParser().parse(root)
     series: list[ChartSeries] = []
     for s in info.get("series", []):
         row: ChartSeries = {
@@ -273,8 +273,8 @@ def parse_smartart_root(root: ET.Element, smartart_id: str, part_name: str) -> S
     raw_link_count = 0
     for connection in root.iter(qualified_name("dgm", "cxn")):
         raw_link_count += 1
-        source = connection.get("srcId") or connection.get("fromModelId")
-        target = connection.get("destId") or connection.get("toModelId")
+        source = connection.get("srcId")
+        target = connection.get("destId")
         if source is not None and target is not None and source in node_index_by_model_id and target in node_index_by_model_id:
             # The final XML references nodes by short ordinal numbers to avoid exposing
             # lengthy modelIds.

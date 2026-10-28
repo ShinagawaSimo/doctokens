@@ -8,7 +8,7 @@ from typing import Literal, TypedDict
 
 from doctokens_core.containers.opc.options import PackageOptions
 from doctokens_core.contracts.models import MetricsSnapshot, ParseReport, ParseWarning
-from doctokens_core.ooxml.charts.parser import ChartPlotInfo, ChartSeriesInfo
+from doctokens_core.ooxml.charts.models import ChartPlotInfo, ChartSeriesInfo
 
 DEFAULT_MAX_ZIP_ENTRIES = 10_000
 DEFAULT_MAX_ENTRY_UNCOMPRESSED_BYTES = 50 * 1024 * 1024
@@ -165,9 +165,6 @@ class OcrResultRecord(TypedDict, total=False):
     error_message: str
 
 
-OcrStoredResult = str | OcrResultRecord
-
-
 class SmartArtNodeRequired(TypedDict):
     id: int
     text: str
@@ -297,6 +294,6 @@ class ParsedPresentation:
     comments: list[CommentItem] = field(default_factory=list)
     sections: list[PresentationSection] = field(default_factory=list)
     warnings: list[ParseWarning] = field(default_factory=list)
-    ocr_results: dict[str, OcrStoredResult] = field(default_factory=dict)
+    ocr_results: dict[str, OcrResultRecord] = field(default_factory=dict)
     metrics: MetricsSnapshot = field(default_factory=_empty_metrics)
     report: ParseReport | None = None

@@ -13,7 +13,7 @@ from doctokens_core.containers.opc.reader import PackageReader
 from doctokens_core.contracts.models import ParseReport, ParseResult, ParseWarning, Source
 
 from ..model.workbook import Cell, ParsedWorkbook, ParseOptions, SheetInfo
-from .modules.styles.index import parse_styles
+from .modules.styles.parser import parse_styles
 from .modules.workbook.metadata import _parse_shared_strings, _parse_workbook_xml
 from .modules.worksheets.comments import parse_threaded_comment_people
 from .modules.worksheets.post import parse_tables
@@ -129,5 +129,10 @@ class OperationSource:
 
     def result(self, text: str, kind: str) -> ParseResult:
         return ParseResult(
-            text, "structural", {"kind": kind}, self.workbook()["report"], (), "doctokens-xml/1.0", "application/xml"
+            text=text,
+            density="structural",
+            selection={"kind": kind},
+            report=self.workbook()["report"],
+            syntax_version="doctokens-xml/1.0",
+            media_type="application/xml",
         )

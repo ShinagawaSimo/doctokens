@@ -21,9 +21,6 @@ class OcrResultRecord(TypedDict, total=False):
     error_message: str
 
 
-OcrStoredResult = str | OcrResultRecord
-
-
 class DocumentManifest(TypedDict):
     """Small document overview returned before rendering or resource extraction."""
 
@@ -93,7 +90,7 @@ class ParsedDocument:
     footnotes: list[AncillaryItem] = field(default_factory=list)
     endnotes: list[AncillaryItem] = field(default_factory=list)
     comments: list[AncillaryItem] = field(default_factory=list)
-    ocr_results: dict[str, OcrStoredResult] = field(default_factory=dict)
+    ocr_results: dict[str, OcrResultRecord] = field(default_factory=dict)
     metrics: MetricsSnapshot = field(default_factory=lambda: MetricsSnapshot(stagesMs={}, counters={}))
     report: ParseReport | None = None
 
@@ -120,4 +117,4 @@ class ParsedDocument:
         }
 
 
-__all__ = ["DocumentManifest", "OcrResultRecord", "OcrStoredResult", "ParseOptions", "ParsedDocument", "StyleRecord"]
+__all__ = ["DocumentManifest", "OcrResultRecord", "ParseOptions", "ParsedDocument", "StyleRecord"]

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 
-_LEGACY_DENSITY_LINE = re.compile(r"^density=plain\r?\n")
 _PAGE_MARKER_LINE = re.compile(r"^<page=(?P<number>[1-9][0-9]*)>$")
 _PAGE_TOKEN = "\x00doctokens-page:"
 _PAGE_TOKEN_END = "\x00"
@@ -18,14 +17,13 @@ def page_marker(page: int) -> str:
 
 
 def render_plain(
-    legacy_text: str,
+    content: str,
     *,
     format_name: str,
     revision_view: str | None = None,
     pagination: str | None = None,
 ) -> str:
-    """Add the DTP envelope without reinterpreting legacy plain content."""
-    content = _LEGACY_DENSITY_LINE.sub("", legacy_text, count=1)
+    """Envelope raw reading content in the current DTP format."""
     content = _escape_user_page_markers(content)
     content = _restore_page_markers(content)
 

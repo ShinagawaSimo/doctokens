@@ -38,9 +38,6 @@ class TesseractProvider(OcrProvider):
         self.max_input_bytes = max_input_bytes
         self.max_pixels = max_pixels
 
-    def extract(self, image_bytes: bytes) -> str:
-        return self.extract_result(image_bytes).text
-
     def extract_result(self, image_bytes: bytes, *, timeout: float | None = None) -> OcrResult:
         if not isinstance(image_bytes, bytes) or not image_bytes:
             return OcrResult.error("invalid_image", "image_bytes must be non-empty bytes")

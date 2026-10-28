@@ -9,7 +9,7 @@ from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.relationships import RelationshipIndex
 from doctokens_core.contracts.models import ParseWarning
-from doctokens_core.ooxml.charts.parser import CHART_RELATIONSHIP_TYPES, parse_chart_xml
+from doctokens_core.ooxml.charts.parser import CHART_RELATIONSHIP_TYPES, ChartParser
 
 from ....model.presentation import ChartLookup, ChartRecord, LayoutLookup, SmartArtLookup, SmartArtRecord
 from ....ooxml.namespaces import local_name
@@ -163,7 +163,7 @@ class EmbeddedObjectExtractor:
             )
             return None
         try:
-            chart_data = parse_chart_xml(self._read_xml(spec.part))
+            chart_data = ChartParser().parse(self._read_xml(spec.part))
             return cast(ChartRecord, {**chart_data, "id": spec.object_id, "part": spec.part})
         except (ET.ParseError, ValueError, TypeError) as exc:
             self._warnings.append(
@@ -240,7 +240,7 @@ class EmbeddedObjectExtractor:
                 )
                 continue
             chart_root = self._read_xml(part)
-            chart_data = parse_chart_xml(chart_root)
+            chart_data = ChartParser().parse(chart_root)
             # ChartInfo keys are structurally compatible with ChartRecord; the
             # unpack merge cannot be verified statically, so cast is contained here.
             chart = cast(ChartRecord, {**chart_data, "id": chart_id, "part": part})

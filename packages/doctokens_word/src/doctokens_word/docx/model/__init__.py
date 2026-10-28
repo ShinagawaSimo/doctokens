@@ -43,7 +43,7 @@ from .content import (
     SmartArtLink,
     SmartArtNode,
 )
-from .document import DocumentManifest, OcrResultRecord, OcrStoredResult, ParsedDocument, ParseOptions, StyleRecord
+from .document import DocumentManifest, OcrResultRecord, ParsedDocument, ParseOptions, StyleRecord
 
 
 def append_warning(
@@ -84,7 +84,6 @@ __all__ = [
     "NumberingLabel",
     "ObjectLookup",
     "OcrResultRecord",
-    "OcrStoredResult",
     "ParagraphBlock",
     "ParagraphBorder",
     "ParagraphBorders",

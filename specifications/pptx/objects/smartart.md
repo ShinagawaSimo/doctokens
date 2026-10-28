@@ -87,8 +87,7 @@ The diagram extractor uses its own node and connection conventions.
   - Explicit body/resource `link` elements; plain lists saved endpoint pairs.
 
 - **OOXML**
-  - Standard `dgm:cxn/@srcId` and `@destId`; retain the previously supported
-    producer aliases `fromModelId`/`toModelId` when standard fields are absent.
+  - Standard `dgm:cxn/@srcId` and `@destId`.
 
 - **IR**
   - `list[SmartArtLink]`

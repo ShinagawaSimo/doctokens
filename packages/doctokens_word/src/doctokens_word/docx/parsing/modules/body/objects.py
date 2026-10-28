@@ -5,8 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from xml.etree import ElementTree as ET
 
-from doctokens_core.ooxml.equations.converter import omath_to_latex
-
 from ....model import AssetLookup, Chart, DrawingCommon, InlineObject, ObjectLookup, SmartArt
 from ....ooxml.namespaces import attr, first_child, local_name, qualified_name
 from .object_common import append_image_or_placeholder, copy_drawing_common
@@ -74,12 +72,6 @@ class DrawingScanResult:
         if chosen is not None:
             scan_result.common = chosen
         return scan_result
-
-
-def equation_object(node: ET.Element) -> InlineObject:
-    """Convert an OMML equation to a LaTeX string."""
-    equation_text = omath_to_latex(node)
-    return {"type": "equation", "text": equation_text}
 
 
 def drawing_objects(

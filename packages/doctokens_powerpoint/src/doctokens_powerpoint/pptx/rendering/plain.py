@@ -15,7 +15,6 @@ _TABLE_ROW_LIMIT = 10
 
 def iter_plain(parsed_presentation: ParsedPresentation) -> Iterator[str]:
     """Render the deliberately unformatted presentation text stream."""
-    yield "density=plain\n"
     smartarts = {item["id"]: item for item in parsed_presentation.smartarts}
     for slide in parsed_presentation.slides:
         checkpoint("rendering PPTX slides")

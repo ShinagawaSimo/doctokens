@@ -2,26 +2,10 @@
 
 from __future__ import annotations
 
-from html import escape as escape_text
-
 from doctokens_core.output.resources import resource_document
 from doctokens_core.output.xml import append, element
 
-from ...model import InlineObject, SmartArt
-
-
-def smartart_to_output(inline_object: InlineObject) -> str:
-    """Output a SmartArt summary: show all node text; the full structure is available via get_resource."""
-    smartart_id = inline_object.get("id", "?")
-    smartart_type = inline_object.get("layoutType", "")
-    node_count = inline_object.get("nodeCount", 0)
-    link_count = inline_object.get("linkCount", 0)
-
-    attrs = f"id={smartart_id} type={smartart_type} nodes={node_count} links={link_count} truncated"
-
-    nodes = inline_object.get("nodes") or []
-    all_text = " ".join(node.get("text", "") for node in nodes)
-    return f"<smartart {attrs}>{escape_text(all_text)}\n"
+from ...model import SmartArt
 
 
 def render_smartart_resource(s: SmartArt) -> str:

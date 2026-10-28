@@ -29,13 +29,13 @@ def _result(
 ) -> ParseResult:
     resolved_syntax, resolved_media_type = _output_metadata(density)
     return ParseResult(
-        text,
-        cast(Density, density),
-        selection,
-        workbook["report"],
-        _resource_descriptors(workbook),
-        syntax_version or resolved_syntax,
-        media_type or resolved_media_type,
+        text=text,
+        density=cast(Density, density),
+        selection=selection,
+        report=workbook["report"],
+        resources=_resource_descriptors(workbook),
+        syntax_version=syntax_version or resolved_syntax,
+        media_type=media_type or resolved_media_type,
     )
 
 

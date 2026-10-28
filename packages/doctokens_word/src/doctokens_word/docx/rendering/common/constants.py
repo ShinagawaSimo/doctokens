@@ -1,6 +1,3 @@
 """Threshold constants shared by the renderers."""
 
 _TABLE_TRUNCATE_PLAIN = 10
-_TABLE_TRUNCATE_STRUCTURAL_SEMANTIC = 30
-_EXTRACT_POINTS_LIMIT = 500
-_X_LABEL_MAX = 8

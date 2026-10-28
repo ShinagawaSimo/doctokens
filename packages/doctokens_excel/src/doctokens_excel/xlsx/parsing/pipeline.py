@@ -22,8 +22,8 @@ class XlsxRenderPipeline:
 
     def render(self, workbook: ParsedWorkbook, start_row: int = 1) -> Iterator[str]:
         if self.density == "plain":
-            legacy_text = "".join(iter_plain(workbook))
-            return iter((render_plain(legacy_text, format_name="xlsx"),))
+            content = "".join(iter_plain(workbook))
+            return iter((render_plain(content, format_name="xlsx"),))
         if start_row != 1:
             raise ValueError("start_row is not supported by the public XLSX API")
         return iter_dtx(workbook, self.density)

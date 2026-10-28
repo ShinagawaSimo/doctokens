@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, TypedDict
 
+from doctokens_core.ooxml.equations.results import MathRevision
+
 if TYPE_CHECKING:
     from .blocks import Block
 
@@ -174,6 +176,7 @@ class InlineObject(InlineObjectRequired, total=False):
     cx: str
     cy: str
     text: str
+    mathRevisions: tuple[MathRevision, ...]
     instruction: str
     chartType: str
     part: str

@@ -4,16 +4,19 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import cast
 from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.relationships import RelationshipIndex
+from doctokens_core.ooxml.equations.results import RevisionView
 
 from ....model import AssetLookup, InlineObject, ObjectLookup, ParseOptions, ParseWarning, RawHint, Run, append_warning
 from ....ooxml.content_controls import parse_content_control
 from ....ooxml.namespaces import _TAG_W_DELETION_TEXT, attr, first_child, local_name
 from ....ooxml.styles import StyleMap
 from ...plan import DocxFeature, DocxParsePlan
-from .objects import equation_object, parse_embedded_object
+from .equations import contains_math, deleted_math_runs, equation_object
+from .objects import parse_embedded_object
 from .runs import RunParser
 from .textboxes import TextboxReader
 
@@ -126,7 +129,7 @@ class InlineParser:
             self._append_control_runs(node, lname, part, block_id, paragraph_style_id, raw_hints, runs)
             return
         if lname in {"oMath", "oMathPara"}:
-            self._append_object_run(equation_object(node), raw_hints, runs)
+            self._append_object_run(self.read_equation(node, part, block_id), raw_hints, runs)
             return
         if lname == "bookmarkStart":
             name = attr(node, "w", "name")
@@ -251,6 +254,13 @@ class InlineParser:
         )
         if self.options.revision_mode not in {"original", "review"}:
             return
+        if contains_math(deletion):
+            for run in deleted_math_runs(deletion, lambda node: self.read_equation(node, part, block_id)):
+                if self.options.revision_mode == "review":
+                    run["revision"] = "deleted"
+                    self._run_parser.add_revision_metadata(run, deletion)
+                runs.append(run)
+            return
         deleted_text = "".join((item.text or "") for item in deletion.iter(_TAG_W_DELETION_TEXT))
         if not deleted_text:
             return
@@ -259,6 +269,13 @@ class InlineParser:
             deleted_run["revision"] = "deleted"
             self._run_parser.add_revision_metadata(deleted_run, deletion)
         runs.append(deleted_run)
+
+    def read_equation(self, node: ET.Element, part: str, block_id: str) -> InlineObject:
+        return equation_object(
+            node,
+            revision_mode=cast(RevisionView, self.options.revision_mode),
+            warn=lambda code, message: self._warn(code, message, part, block_id),
+        )
 
     def _append_simple_field_runs(
         self,
@@ -274,6 +291,8 @@ class InlineParser:
         self._run_parser.apply_field_instruction(attr(field_node, "w", "instr") or "", runs[start:])
 
     def _append_object_run(self, obj: InlineObject, raw_hints: list[RawHint], runs: list[Run]) -> None:
+        if obj["type"] == "equation" and not obj.get("text"):
+            return
         runs.append({"text": "", "objects": [obj]})
         if self.include_raw_hints:
             raw_hints.append(obj)

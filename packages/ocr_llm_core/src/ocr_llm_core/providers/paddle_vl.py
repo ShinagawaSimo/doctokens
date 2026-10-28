@@ -85,7 +85,6 @@ class PaddleVLProvider(OcrProvider):
         api_key: str,
         secret_key: str,
         *,
-        language: str = "cht",
         poll_interval: float = 5.0,
         timeout: float = 120.0,
         error_on_empty: bool = False,
@@ -110,9 +109,6 @@ class PaddleVLProvider(OcrProvider):
             raise ValueError("max_input_bytes cannot exceed the PaddleOCR-VL 10 MiB image limit")
         self.api_key = api_key
         self.secret_key = secret_key
-        # Kept for source compatibility. The current PaddleOCR-VL endpoint
-        # determines language automatically and does not accept this field.
-        self.language = language
         self.poll_interval = poll_interval
         self.timeout = timeout
         self.error_on_empty = error_on_empty
@@ -122,9 +118,6 @@ class PaddleVLProvider(OcrProvider):
         self._token_lock = threading.Lock()
         self._submit_limiter = _RateLimiter(2.0)
         self._query_limiter = _RateLimiter(5.0)
-
-    def extract(self, image_bytes: bytes) -> str:
-        return self.extract_result(image_bytes).text
 
     def extract_result(self, image_bytes: bytes, *, timeout: float | None = None) -> OcrResult:
         if not isinstance(image_bytes, bytes) or not image_bytes:

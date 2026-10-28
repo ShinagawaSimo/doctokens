@@ -39,14 +39,14 @@ class EasyOcrProviderTest(unittest.TestCase):
         mock_reader = MagicMock()
         mock_reader.readtext.return_value = ["line1", "line2", "line3"]
         with patch("easyocr.Reader", return_value=mock_reader):
-            result = p.extract(_png_bytes())
-        self.assertEqual(result, "line1\nline2\nline3")
+            result = p.extract_result(_png_bytes())
+        self.assertEqual(result.text, "line1\nline2\nline3")
 
     def test_extract_returns_empty_on_error(self) -> None:
         p = EasyOcrProvider(["en"])
         with patch("easyocr.Reader", side_effect=RuntimeError("no GPU")):
-            result = p.extract(_png_bytes())
-        self.assertEqual(result, "")
+            result = p.extract_result(_png_bytes())
+        self.assertEqual(result.text, "")
 
     def test_extract_result_rejects_pixel_bomb(self) -> None:
         result = EasyOcrProvider(["en"], max_pixels=1).extract_result(_png_bytes())

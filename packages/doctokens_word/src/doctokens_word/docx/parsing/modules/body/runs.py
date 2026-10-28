@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import shlex
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
-from ....model import InlineObject, LinkInfo, RawHint, Run
+from ....model import InlineObject, LinkInfo, RawHint, Run, RunFormat
+from ....ooxml.characters import word_character
+from ....ooxml.fields import apply_field_instruction
 from ....ooxml.formatting import merge_run_formats, parse_run_format, visible_run_format
 from ....ooxml.namespaces import (
     _TAG_M_OMATH,
@@ -16,6 +16,7 @@ from ....ooxml.namespaces import (
     _TAG_W_BREAK,
     _TAG_W_CARRIAGE_RETURN,
     _TAG_W_COMMENT_REFERENCE,
+    _TAG_W_DELETED_INSTR_TEXT,
     _TAG_W_DELETION_TEXT,
     _TAG_W_DRAWING,
     _TAG_W_ENDNOTE_REF,
@@ -36,13 +37,17 @@ from ....ooxml.namespaces import (
     local_name,
 )
 from .objects import drawing_objects, parse_embedded_object
+from .ruby import ruby_run
 from .vml import pict_objects
+
+if TYPE_CHECKING:
+    from .inline import InlineParser
 
 
 class RunParser:
     """Own the low-level run parser while delegating document policy to ``InlineParser``."""
 
-    def __init__(self, owner: Any) -> None:
+    def __init__(self, owner: InlineParser) -> None:
         self.owner = owner
 
     def parse(
@@ -53,57 +58,46 @@ class RunParser:
         paragraph_style_id: str | None,
         raw_hints: list[RawHint],
         runs: list[Run],
-    ) -> list[Run]:
-        """Parse a run and retain calculated page breaks at their inline positions."""
-        text_segments: list[list[str]] = [[]]
-        object_segments: list[list[InlineObject]] = [[]]
-        run_properties: ET.Element | None = None
-
-        def split_segment() -> None:
-            text_segments.append([])
-            object_segments.append([])
-
-        for child in run_element:
-            child_tag = child.tag
-            if child_tag == _TAG_W_RUN_PROPERTIES:
-                run_properties = child
-            else:
-                self._handle_child(
-                    child,
-                    part,
-                    block_id,
-                    raw_hints,
-                    text_segments[-1],
-                    object_segments[-1],
-                    runs,
-                    split_segment,
-                )
-
+    ) -> None:
+        """Append run fragments in source order, including object and field boundaries."""
+        run_properties = first_child(run_element, "w", "rPr")
         run_style_id = None
         if run_properties is not None:
             rstyle = first_child(run_properties, "w", "rStyle")
             run_style_id = attr(rstyle, "w", "val") if rstyle is not None else None
         visible_format = {}
+        run_format: RunFormat = {}
         if self.owner.include_character_formatting:
             run_format = merge_run_formats(
                 self.owner.styles.resolve_run_format(paragraph_style_id),
+                self.owner.ruby_format,
                 self.owner.styles.resolve_run_format(run_style_id),
                 parse_run_format(run_properties),
             )
             visible_format = visible_run_format(run_format)
-        parsed_runs: list[Run] = []
-        for index, (text_parts, objects) in enumerate(zip(text_segments, object_segments, strict=True)):
-            parsed_run: Run = {"text": "".join(text_parts)}
-            if objects:
-                parsed_run["objects"] = objects
+        for child in run_element:
+            if child.tag == _TAG_W_RUN_PROPERTIES:
+                continue
+            if local_name(child.tag) == "ruby":
+                parsed_run = ruby_run(self.owner, child, part, block_id, paragraph_style_id, raw_hints, run_format)
+            else:
+                text_parts: list[str] = []
+                objects: list[InlineObject] = []
+                self._handle_child(child, part, block_id, raw_hints, text_parts, objects, runs)
+                parsed_run = {"text": "".join(text_parts)}
+                if objects:
+                    parsed_run["objects"] = objects
             if run_style_id is not None and self.owner.include_character_formatting:
                 parsed_run["styleId"] = run_style_id
-            if visible_format:
+            if visible_format and "ruby" not in parsed_run:
                 parsed_run["format"] = visible_format
-            parsed_runs.append(parsed_run)
-            if index < len(text_segments) - 1:
-                parsed_runs.append({"text": "", "pageBreak": True})
-        return parsed_runs
+            if (
+                parsed_run["text"]
+                or parsed_run.get("objects")
+                or (parsed_run.get("ruby") and parsed_run["ruby"]["baseRuns"])
+                or self.owner.options.preserve_empty_paragraphs
+            ):
+                runs.append(parsed_run)
 
     def _handle_child(
         self,
@@ -114,11 +108,14 @@ class RunParser:
         text_parts: list[str],
         objects: list[InlineObject],
         runs: list[Run],
-        split_segment: Callable[[], None],
     ) -> None:
         child_tag = child.tag
         if child_tag == _TAG_W_TEXT:
             text_parts.append(child.text or "")
+        elif (
+            character := word_character(child, lambda code, message: self.owner._warn(code, message, part, block_id))
+        ) is not None:
+            text_parts.append(character)
         elif child_tag == _TAG_W_TAB:
             text_parts.append("\t")
         elif child_tag in (_TAG_W_BREAK, _TAG_W_CARRIAGE_RETURN):
@@ -132,7 +129,7 @@ class RunParser:
             if self.owner.include_raw_hints:
                 raw_hints.append({"type": "lastRenderedPageBreak"})
             self.owner._mark_page_break()
-            split_segment()
+            runs.append({"text": "", "pageBreak": True})
         elif child_tag == _TAG_W_DRAWING:
             drawing = drawing_objects(child, part, self.owner.asset_lookup, self.owner.object_lookup, self.owner.textbox_reader)
             objects.extend(drawing)
@@ -150,8 +147,10 @@ class RunParser:
                 if self.owner.include_raw_hints:
                     raw_hints.append(obj)
         elif child_tag == _TAG_W_FLD_CHAR:
-            self.handle_field_character(child, raw_hints, runs)
-        elif child_tag == _TAG_W_INSTR_TEXT:
+            self.handle_field_character(child, raw_hints, runs, part, block_id)
+        elif child_tag in {_TAG_W_INSTR_TEXT, _TAG_W_DELETED_INSTR_TEXT}:
+            if child_tag == _TAG_W_DELETED_INSTR_TEXT and not self.owner.revisions.deleted_depth:
+                return
             instruction = child.text or ""
             if self.owner._field_stack:
                 self.owner._field_stack[-1].instruction_parts.append(instruction)
@@ -178,12 +177,10 @@ class RunParser:
             if isinstance(comment_id, str):
                 self.owner._mark_comment_anchor(comment_id, block_id)
         elif child_tag == _TAG_W_DELETION_TEXT:
-            self.owner._warn(
-                "DELETED_TEXT_SKIPPED",
-                "Encountered deleted text in run; parser skips deleted text in final mode.",
-                part=part,
-                block_id=block_id,
-            )
+            if self.owner.revisions.deleted_depth:
+                text_parts.append(child.text or "")
+            else:
+                self.owner._warn("DELETED_TEXT_SKIPPED", "Deleted text outside a selected deletion was skipped.", part, block_id)
         elif child_tag == _TAG_W_OBJECT:
             obj = parse_embedded_object(child)
             objects.append(obj)
@@ -199,7 +196,9 @@ class RunParser:
                 block_id=block_id,
             )
 
-    def handle_field_character(self, field_char: ET.Element, raw_hints: list[RawHint], runs: list[Run]) -> None:
+    def handle_field_character(
+        self, field_char: ET.Element, raw_hints: list[RawHint], runs: list[Run], part: str, block_id: str
+    ) -> None:
         """Track complex-field boundaries without emitting field-code text."""
         field_type = attr(field_char, "w", "fldCharType") or ""
         if self.owner.include_raw_hints:
@@ -211,57 +210,11 @@ class RunParser:
         elif field_type == "end" and self.owner._field_stack:
             context = self.owner._field_stack.pop()
             if context.result_start is not None:
-                self.apply_field_instruction("".join(context.instruction_parts), runs[context.result_start :])
-
-    @staticmethod
-    def add_revision_metadata(run: Run, revision: ET.Element) -> None:
-        author = attr(revision, "w", "author")
-        date = attr(revision, "w", "date")
-        if author:
-            run["revisionAuthor"] = author
-        if date:
-            run["revisionDate"] = date
-
-    @staticmethod
-    def apply_field_instruction(instruction: str, result_runs: list[Run]) -> None:
-        """Attach navigation and citation semantics to field result runs."""
-        if not result_runs or not instruction.strip():
-            return
-        try:
-            tokens = shlex.split(instruction)
-        except ValueError:
-            tokens = instruction.split()
-        if not tokens:
-            return
-        kind, payload = tokens[0].upper(), tokens[1:]
-        if kind in {"REF", "PAGEREF", "NOTEREF"}:
-            target = next((token for token in payload if not token.startswith("\\")), "")
-            if target:
-                for run in result_runs:
-                    run["link"] = {"anchor": target}
-                    run["field"] = {"kind": "reference", "anchor": target}
-        elif kind == "HYPERLINK":
-            href = ""
-            anchor = ""
-            for index, token in enumerate(payload):
-                if token.lower() == "\\l" and index + 1 < len(payload):
-                    anchor = payload[index + 1]
-                elif not token.startswith("\\") and not href:
-                    href = token
-            if href or anchor:
-                link: LinkInfo = {}
-                if href:
-                    link["href"] = href
-                if anchor:
-                    link["anchor"] = anchor
-                for run in result_runs:
-                    run["link"] = link
-                    run["field"] = {"kind": "reference", "anchor": anchor}
-        elif kind == "CITATION":
-            key = next((token for token in payload if not token.startswith("\\")), "")
-            if key:
-                for run in result_runs:
-                    run["field"] = {"kind": "citation", "key": key}
+                apply_field_instruction(
+                    "".join(context.instruction_parts),
+                    runs[context.result_start :],
+                    lambda code, message: self.owner._warn(code, message, part, block_id),
+                )
 
     def hyperlink_info(self, node: ET.Element, part: str) -> LinkInfo:
         """Resolve a hyperlink target while preserving dangling-link degradation."""

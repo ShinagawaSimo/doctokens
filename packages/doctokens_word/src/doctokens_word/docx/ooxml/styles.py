@@ -14,6 +14,7 @@ from .formatting import (
     parse_run_format,
 )
 from .namespaces import attr, first_child, qualified_name
+from .outline import parse_outline_level
 from .package import PackageReader
 
 
@@ -63,7 +64,7 @@ class StyleMap:
         )
 
     def resolve_run_format(self, style_id: str | None) -> RunFormat:
-        """Resolve the visible run format of a styleId after inheritance."""
+        """Resolve a style's run properties, retaining explicit cancellations."""
         if not style_id:
             return {}
         if style_id not in self._run_format_cache:
@@ -104,10 +105,10 @@ class StyleMap:
             # No heading fallback when the style table has no explicit record.
             return None
 
-        if record.outline_level is not None and record.outline_level < 9:
+        if record.outline_level is not None:
             # OOXML outlineLvl is 0-based; 9 explicitly means no outline level.
             # The output representation intentionally preserves all real levels.
-            return record.outline_level + 1
+            return record.outline_level + 1 if record.outline_level < 9 else None
 
         if record.based_on:
             # Only follow the inheritance chain for an explicit outlineLvl; never guess from style names.
@@ -239,7 +240,6 @@ class StylesParser:
             next_style = first_child(style, "w", "next")
             paragraph_properties = first_child(style, "w", "pPr")
             run_properties = first_child(style, "w", "rPr")
-            outline = first_child(paragraph_properties, "w", "outlineLvl")
             numbering_properties = first_child(paragraph_properties, "w", "numPr")
 
             record.name = attr(name, "w", "val") if name is not None else None
@@ -251,23 +251,7 @@ class StylesParser:
                 record.alignment = parse_paragraph_alignment(paragraph_properties)
                 record.borders = parse_paragraph_borders(paragraph_properties)
                 record.run_format = parse_run_format(run_properties)
-            outline_val = attr(outline, "w", "val") if outline is not None else None
-            if outline_val is not None:
-                try:
-                    outline_level = int(outline_val)
-                    if 0 <= outline_level <= 9:
-                        record.outline_level = outline_level
-                    else:
-                        raise ValueError
-                except ValueError:
-                    # An invalid outlineLvl does not affect parsing of other styles.
-                    self.warnings.append(
-                        ParseWarning(
-                            code="INVALID_OUTLINE_LEVEL",
-                            message=f"Invalid outline level {outline_val!r} for style {style_id}",
-                            locator="word/styles.xml",
-                        )
-                    )
+            record.outline_level = parse_outline_level(paragraph_properties, self.warnings, part="word/styles.xml")
             numid_elem = first_child(numbering_properties, "w", "numId")
             level_elem = first_child(numbering_properties, "w", "ilvl")
             numbering_id = attr(numid_elem, "w", "val") if numid_elem is not None else None

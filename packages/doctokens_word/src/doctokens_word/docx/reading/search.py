@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from doctokens_core.text.search import Locator, TextUnit
 
 from ..model import Block, InlineContainer, ParsedDocument
+from ..model.traversal import iter_runs
 
 
 def text_units(document: ParsedDocument, *, include_headers_footers: bool = False) -> Iterator[TextUnit]:
@@ -58,7 +59,7 @@ def _block(block: Block, inherited: Locator, references: dict[tuple[str, str], L
 
 
 def _objects(container: InlineContainer, locator: Locator, references: dict[tuple[str, str], Locator]) -> Iterator[TextUnit]:
-    for run in container.get("runs", []):
+    for run in iter_runs(container.get("runs", [])):
         for item in run.get("objects", []):
             kind = item["type"]
             if kind in {"footnoteRef", "endnoteRef", "commentRef"} and item.get("id"):

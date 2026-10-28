@@ -59,6 +59,8 @@ def read_blocks(owner: DocumentBodyParser) -> list[Block]:
                 # template tools); parse their w:sdtContent children.
                 _parse_sdt(owner, elem, blocks)
                 elem.clear()
+            elif direct_body_child and owner.inline.revisions.marker(elem, "word/document.xml"):
+                elem.clear()
             elif direct_body_child and lname not in {
                 "bookmarkStart",
                 "bookmarkEnd",
@@ -105,3 +107,5 @@ def _parse_sdt(
             blocks.extend(owner.parse_table(child, "word/document.xml", controls))
         elif local_name(child_tag) == "sdt":
             _parse_sdt(owner, child, blocks, controls)
+        else:
+            owner.inline.revisions.marker(child, "word/document.xml")

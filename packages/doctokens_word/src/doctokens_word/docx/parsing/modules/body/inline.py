@@ -10,13 +10,15 @@ from xml.etree import ElementTree as ET
 from doctokens_core.containers.opc.relationships import RelationshipIndex
 from doctokens_core.ooxml.equations.results import RevisionView
 
-from ....model import AssetLookup, InlineObject, ObjectLookup, ParseOptions, ParseWarning, RawHint, Run, append_warning
+from ....model import AssetLookup, InlineObject, ObjectLookup, ParseOptions, ParseWarning, RawHint, Run, RunFormat, append_warning
 from ....ooxml.content_controls import parse_content_control
-from ....ooxml.namespaces import _TAG_W_DELETION_TEXT, attr, first_child, local_name
+from ....ooxml.fields import apply_field_instruction
+from ....ooxml.namespaces import attr, first_child, local_name
 from ....ooxml.styles import StyleMap
 from ...plan import DocxFeature, DocxParsePlan
-from .equations import contains_math, deleted_math_runs, equation_object
+from .equations import equation_object
 from .objects import parse_embedded_object
+from .revisions import InlineRevisions
 from .runs import RunParser
 from .textboxes import TextboxReader
 
@@ -62,6 +64,9 @@ class InlineParser:
         self.on_comment_anchor = on_comment_anchor
         self._field_stack: list[_FieldContext] = []
         self._run_parser = RunParser(self)
+        self.revisions = InlineRevisions(self)
+        self.ruby_format: RunFormat = {}
+        self.ruby_depth = 0
         self.textbox_reader: TextboxReader | None = None
 
     def field_context_type(self) -> _FieldContext:
@@ -106,24 +111,15 @@ class InlineParser:
         if lname == "pPr":
             return
         if lname == "r":
-            self._append_run(node, part, block_id, paragraph_style_id, raw_hints, runs)
+            self._run_parser.parse(node, part, block_id, paragraph_style_id, raw_hints, runs)
             return
         if lname == "hyperlink":
             self._append_hyperlink_runs(node, part, block_id, paragraph_style_id, raw_hints, runs)
             return
-        if lname in {"ins", "moveTo"}:
-            self._append_inserted_runs(
-                node,
-                part,
-                block_id,
-                paragraph_style_id,
-                raw_hints,
-                runs,
-                label="move destination" if lname == "moveTo" else "insertion",
-            )
+        if lname in {"ins", "del", "moveTo", "moveFrom"}:
+            self.revisions.append(node, part, block_id, paragraph_style_id, raw_hints, runs)
             return
-        if lname in {"del", "moveFrom"}:
-            self._append_deleted_run(node, part, block_id, runs, label="move source" if lname == "moveFrom" else "deletion")
+        if self.revisions.marker(node, part):
             return
         if lname in {"sdt", "sdtContent", "smartTag"}:
             self._append_control_runs(node, lname, part, block_id, paragraph_style_id, raw_hints, runs)
@@ -133,7 +129,7 @@ class InlineParser:
             return
         if lname == "bookmarkStart":
             name = attr(node, "w", "name")
-            if name and not name.startswith("_"):
+            if name:
                 self._mark_bookmark(name, block_id)
             return
         if lname in {"bookmarkEnd", "proofErr", "permStart", "permEnd"}:
@@ -174,22 +170,6 @@ class InlineParser:
         for child_run in runs[start:]:
             child_run.setdefault("contentControls", []).append(control)
 
-    def _append_run(
-        self,
-        run_element: ET.Element,
-        part: str,
-        block_id: str,
-        paragraph_style_id: str | None,
-        raw_hints: list[RawHint],
-        runs: list[Run],
-    ) -> None:
-        parsed_runs = self._run_parser.parse(run_element, part, block_id, paragraph_style_id, raw_hints, runs)
-        runs.extend(
-            run
-            for run in parsed_runs
-            if run["text"] or "objects" in run or "pageBreak" in run or self.options.preserve_empty_paragraphs
-        )
-
     def _append_child_runs(
         self,
         container: ET.Element,
@@ -219,57 +199,6 @@ class InlineParser:
         for linked_run in runs[start:]:
             linked_run["link"] = link
 
-    def _append_inserted_runs(
-        self,
-        insertion: ET.Element,
-        part: str,
-        block_id: str,
-        paragraph_style_id: str | None,
-        raw_hints: list[RawHint],
-        runs: list[Run],
-        *,
-        label: str = "insertion",
-    ) -> None:
-        self._warn(
-            "REVISION_INSERTION_INCLUDED",
-            f"Encountered {label} revision; parser includes inserted text in final/review mode.",
-            part,
-            block_id,
-        )
-        if self.options.revision_mode not in {"final", "review"}:
-            return
-        start = len(runs)
-        self._append_child_runs(insertion, part, block_id, paragraph_style_id, raw_hints, runs)
-        for inserted_run in runs[start:]:
-            if self.options.revision_mode == "review":
-                inserted_run["revision"] = "inserted"
-                self._run_parser.add_revision_metadata(inserted_run, insertion)
-
-    def _append_deleted_run(self, deletion: ET.Element, part: str, block_id: str, runs: list[Run], *, label: str) -> None:
-        self._warn(
-            "REVISION_DELETION_SKIPPED",
-            f"Encountered {label} revision; deletion handling depends on revision_mode.",
-            part,
-            block_id,
-        )
-        if self.options.revision_mode not in {"original", "review"}:
-            return
-        if contains_math(deletion):
-            for run in deleted_math_runs(deletion, lambda node: self.read_equation(node, part, block_id)):
-                if self.options.revision_mode == "review":
-                    run["revision"] = "deleted"
-                    self._run_parser.add_revision_metadata(run, deletion)
-                runs.append(run)
-            return
-        deleted_text = "".join((item.text or "") for item in deletion.iter(_TAG_W_DELETION_TEXT))
-        if not deleted_text:
-            return
-        deleted_run: Run = {"text": deleted_text}
-        if self.options.revision_mode == "review":
-            deleted_run["revision"] = "deleted"
-            self._run_parser.add_revision_metadata(deleted_run, deletion)
-        runs.append(deleted_run)
-
     def read_equation(self, node: ET.Element, part: str, block_id: str) -> InlineObject:
         return equation_object(
             node,
@@ -288,7 +217,11 @@ class InlineParser:
     ) -> None:
         start = len(runs)
         self._append_child_runs(field_node, part, block_id, paragraph_style_id, raw_hints, runs)
-        self._run_parser.apply_field_instruction(attr(field_node, "w", "instr") or "", runs[start:])
+        apply_field_instruction(
+            attr(field_node, "w", "instr") or "",
+            runs[start:],
+            lambda code, message: self._warn(code, message, part, block_id),
+        )
 
     def _append_object_run(self, obj: InlineObject, raw_hints: list[RawHint], runs: list[Run]) -> None:
         if obj["type"] == "equation" and not obj.get("text"):

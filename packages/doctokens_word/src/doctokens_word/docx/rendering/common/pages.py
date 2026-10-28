@@ -29,10 +29,14 @@ def iter_block_page_segments(block: Block) -> Iterator[tuple[int, Block]]:
         if not isinstance(page_segment_records, list):
             yield page, block
             return
+        first_fragment = True
         for page_segment in page_segment_records:
             if not isinstance(page_segment, dict) or not page_segment.get("text"):
                 continue
             page_fragment = dict(block)
+            if not first_fragment:
+                page_fragment.pop("anchors", None)
+            first_fragment = False
             segment_page = cast(int, page_segment.get("page", page))
             page_fragment["page"] = segment_page
             page_fragment["text"] = str(page_segment.get("text", ""))
@@ -44,14 +48,18 @@ def iter_block_page_segments(block: Block) -> Iterator[tuple[int, Block]]:
     run_segments = split_runs_at_page_breaks(block["runs"])
     leading_empty_segments = 0
     for segment in run_segments:
-        if any(run["text"] or run.get("objects") for run in segment) or block.get("contentControls"):
+        if any(run["text"] or run.get("objects") or run.get("ruby") for run in segment) or block.get("contentControls"):
             break
         leading_empty_segments += 1
     physical_page = page - leading_empty_segments
     for segment_index, segment_runs in enumerate(run_segments):
-        if not any(run["text"] or run.get("objects") for run in segment_runs) and not block.get("contentControls"):
+        if not any(run["text"] or run.get("objects") or run.get("ruby") for run in segment_runs) and not block.get(
+            "contentControls"
+        ):
             continue
         page_fragment = dict(block)
+        if segment_index > leading_empty_segments:
+            page_fragment.pop("anchors", None)
         page_fragment["page"] = physical_page + segment_index
         page_fragment["runs"] = segment_runs
         page_fragment["text"] = "".join(run["text"] for run in segment_runs)

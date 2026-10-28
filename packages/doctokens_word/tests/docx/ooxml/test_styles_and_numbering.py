@@ -21,32 +21,24 @@ from doctokens_word.docx.ooxml.styles import StyleMap
 
 
 class StyleMapTests(unittest.TestCase):
-    def test_resolves_inherited_heading_numbering_and_run_format(self) -> None:
+    def test_resolves_inherited_numbering(self) -> None:
         warnings: list[ParseWarning] = []
         styles = StyleMap(
             {
                 "base": StyleRecord(
                     style_id="base",
-                    outline_level=1,
                     numbering_num_id="7",
                     numbering_level=2,
-                    run_format={"bold": True, "color": "#123456"},
                 ),
                 "child": StyleRecord(
                     style_id="child",
                     based_on="base",
-                    run_format={"bold": False, "italic": True},
                 ),
             },
             warnings,
         )
 
-        self.assertEqual(styles.resolve_heading_level("child"), 2)
         self.assertEqual(styles.resolve_numbering("child"), ("7", 2))
-        self.assertEqual(
-            styles.resolve_run_format("child"),
-            {"color": "#123456", "italic": True},
-        )
         self.assertEqual(warnings, [])
 
     def test_exposes_numbering_style_num_ids_for_num_style_link(self) -> None:

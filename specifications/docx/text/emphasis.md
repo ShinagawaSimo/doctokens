@@ -6,7 +6,9 @@ Only semantic DTX emits reading-format wrappers.
 
 ## Processing
 
-Wrapper order, outer to inner: revision, citation, hyperlink, mark, color, strike, underline, italic, bold, superscript, subscript, small-caps. Only present/truthy properties participate.
+Wrapper order, outer to inner: enclosing revisions in source order, citation, hyperlink, mark, color, strike, underline, italic, bold, superscript, subscript, small-caps, then ruby around its own base runs. Only present/truthy properties participate.
+
+Resolved style properties retain explicit false/clear values through basedOn, linked-style, character-style, and direct-run merging. The final run projection removes cancellations and default colors. Numbering markers use the same visible-format projection. This does not implement docDefaults, conditional table styles, or the complete style-toggle cascade.
 
 ## Fields
 
@@ -90,7 +92,7 @@ Wrapper order, outer to inner: revision, citation, hyperlink, mark, color, strik
   - `Run.format["superscript"]`
 
 - **Parsing**
-  - Sets superscript and removes subscript in the same direct format.
+  - Sets superscript true and subscript false. Both values survive inheritance merging. `baseline` explicitly clears both.
 
 - **Absence and defaults**
   - Absent/disabled: no wrapper.
@@ -107,7 +109,7 @@ Wrapper order, outer to inner: revision, citation, hyperlink, mark, color, strik
   - `Run.format["subscript"]`
 
 - **Parsing**
-  - Sets subscript and removes superscript in the same direct format.
+  - Sets subscript true and superscript false. Both values survive inheritance merging. `baseline` explicitly clears both.
 
 - **Absence and defaults**
   - Absent/disabled: no wrapper.
@@ -141,7 +143,9 @@ Wrapper order, outer to inner: revision, citation, hyperlink, mark, color, strik
   - `Run.format["color"]`
 
 - **Parsing**
-  - Normalize valid literal hex; source theme-only colors do not imply full Word theme resolution.
+  - Normalize valid literal hex. Keep black/near-black during inheritance so they can override an earlier color; omit them only after effective run resolution. Default-like colors are black or hex colors whose maximum component is <=48 and component spread is <=16.
+  - Explicit `auto` clears an inherited literal without guessing a theme/system color. Missing color leaves inheritance unchanged; source theme-only colors do not imply full Word theme resolution.
+  - Example: red paragraph style plus direct black produces ordinary text; direct green produces `<color value="#00AA00">text</color>`.
 
 - **Absence and defaults**
   - Absent/disabled: no wrapper.
@@ -175,7 +179,7 @@ Wrapper order, outer to inner: revision, citation, hyperlink, mark, color, strik
   - `Run.format["bg"]`
 
 - **Parsing**
-  - Normalize background fill; preferred over highlight.
+  - Normalize background fill; preferred over highlight. Explicit `fill="auto"` or shading `val="nil"` clears an inherited background before the visible projection.
 
 - **Absence and defaults**
   - Absent/disabled: no wrapper.

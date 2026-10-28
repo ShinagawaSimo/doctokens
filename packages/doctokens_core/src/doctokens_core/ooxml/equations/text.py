@@ -6,8 +6,8 @@ import unicodedata
 from collections.abc import Callable
 from xml.etree import ElementTree as ET
 
+from ..symbols import symbol_character
 from .support import _escape_latex, attr, first_child
-from .symbols import symbol_character
 
 HARD_BREAK = "\x00br\x00"
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"

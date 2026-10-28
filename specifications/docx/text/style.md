@@ -134,7 +134,7 @@ Missing styles.xml: `MISSING_STYLES`, empty map. Heading, numbering, and format 
   - `StyleRecord.outline_level: int | None`
 
 - **Parsing**
-  - Accept integers 0..9. Invalid values: `INVALID_OUTLINE_LEVEL`; leave None.
+  - Accept integers 0..9. An outline element with missing/invalid value reports `INVALID_OUTLINE_LEVEL`; leave None and allow inheritance. A missing element is simply absent.
 
 ### `numbering_num_id`
 
@@ -176,7 +176,7 @@ Missing styles.xml: `MISSING_STYLES`, empty map. Heading, numbering, and format 
   - `StyleRecord.run_format: RunFormat`
 
 - **Parsing**
-  - Merge inherited, linked, and direct format. See [emphasis](emphasis.md).
+  - Merge inherited, linked, and direct format. Preserve explicit false/clear values in resolved style properties so that subsequent paragraph/character/run merging cannot restore a cancelled property. Only the final visible run projection removes disabled values and default text colors. See [emphasis](emphasis.md).
 
 ### `is_custom`
 
@@ -218,4 +218,4 @@ Missing styles.xml: `MISSING_STYLES`, empty map. Heading, numbering, and format 
   - `StyleRecord.resolved_heading_level: int | None`
 
 - **Parsing**
-  - First resolved outline < 9 yields outline+1. An explicit 9 still follows basedOn in the current resolver.
+  - First explicit outline 0..8 yields outline+1. An explicit 9 stops basedOn resolution with no heading. A valid paragraph outline overrides this style result, including explicit paragraph cancellation.

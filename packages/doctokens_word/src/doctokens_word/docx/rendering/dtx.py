@@ -11,11 +11,11 @@ from doctokens_core.output.xml import append, element, serialize
 from doctokens_core.runtime.execution import checkpoint
 
 from ..model import AncillaryItem, Block, InlineContainer, InlineObject, OcrResultRecord, ParsedDocument, Run, TableBlock
-from ..model.traversal import iter_blocks
 from .common.floating import floating_textboxes, is_floating_textbox, iter_flow_page_blocks
 from .common.pages import iter_block_page_segments
-from .common.text import filter_format, merge_text_runs
+from .common.text import merge_text_runs
 from .dtx_content import _append_chart, _append_controls, _append_ocr, _append_smartart, _append_text_with_breaks
+from .dtx_runs import append_run_text, revision_parent
 
 _TABLE_ROW_LIMIT = 30
 
@@ -42,7 +42,6 @@ def _append_body(parent: ET.Element, parsed_document: ParsedDocument, density: s
     current_section: int | None = None
     container = parent
     emit_sections = any(block.get("section", 1) != 1 for block in parsed_document.blocks)
-    used_anchors = _used_anchors(parsed_document)
     for block_page, block in iter_flow_page_blocks(parsed_document):
         checkpoint("rendering DOCX blocks")
         section = int(block.get("section", 1))
@@ -53,7 +52,7 @@ def _append_body(parent: ET.Element, parsed_document: ParsedDocument, density: s
         if block_page != current_page:
             current_page = block_page
             append(container, "page", number=block_page)
-        _append_block(container, block, density, parsed_document.ocr_results, used_anchors)
+        _append_block(container, block, density, parsed_document.ocr_results)
         if block["type"] != "table" and floating_textboxes(cast(InlineContainer, block)):
             current_page = block.get("pageEnd", block_page)
     if current_page is None:
@@ -65,7 +64,6 @@ def _append_block(
     block: Block,
     density: str,
     ocr_results: dict[str, OcrResultRecord],
-    used_anchors: set[str],
 ) -> None:
     controls = block.get("contentControls", [])
     container = _append_controls(parent, controls, density)
@@ -74,12 +72,10 @@ def _append_block(
         return
     name = f"h{block['level']}" if block["type"] == "heading" else "p"
     attrs: dict[str, object] = {}
-    anchor = next((item for item in block.get("anchors", []) if item in used_anchors), "")
-    if anchor:
-        attrs["anchor"] = anchor
     if density == "semantic":
         _add_semantic_block_attrs(attrs, block)
     node = append(container, name, **attrs)
+    _append_anchors(node, block)
     if floating_textboxes(cast(InlineContainer, block)):
         for index, (page, fragment) in enumerate(iter_block_page_segments(block)):
             if index:
@@ -88,6 +84,16 @@ def _append_block(
         _append_floating(container, cast(InlineContainer, block), density, ocr_results)
     else:
         _append_inline(node, cast(InlineContainer, block), density, ocr_results)
+
+
+def _append_anchors(node: ET.Element, block: Block) -> None:
+    if block["type"] == "table":
+        return
+    anchors = block.get("anchors", [])
+    if anchors:
+        node.set("anchor", anchors[0])
+        for name in anchors[1:]:
+            append(node, "anchor", name=name)
 
 
 def _add_semantic_block_attrs(attrs: dict[str, object], block: Block) -> None:
@@ -114,16 +120,14 @@ def _append_inline(
     if not runs:
         _append_text_with_breaks(parent, container["text"])
         return
+    _append_runs(parent, runs, density, ocr_results)
+
+
+def _append_runs(parent: ET.Element, runs: list[Run], density: str, ocr_results: dict[str, OcrResultRecord]) -> None:
     for run in merge_text_runs(runs):
         content_parent = _append_controls(parent, run.get("contentControls", []), density)
-        if density == "semantic" and run.get("revision") in {"inserted", "deleted"}:
-            content_parent = append(
-                content_parent,
-                "ins" if run["revision"] == "inserted" else "del",
-                author=run.get("revisionAuthor"),
-                date=run.get("revisionDate"),
-            )
-        _append_run_text(content_parent, run, density)
+        content_parent = revision_parent(content_parent, run, density)
+        append_run_text(content_parent, run, density, lambda node, base: _append_runs(node, base, density, ocr_results))
         for inline_object in run.get("objects", []):
             if is_floating_textbox(inline_object):
                 append(content_parent, "textbox-ref", id=inline_object.get("id"))
@@ -134,47 +138,11 @@ def _append_inline(
 def _append_floating(
     parent: ET.Element, container: InlineContainer, density: str, ocr_results: dict[str, OcrResultRecord]
 ) -> None:
-    for item in floating_textboxes(container):
-        _append_inline_object(parent, item, density, ocr_results)
-
-
-def _append_run_text(parent: ET.Element, run: Run, density: str) -> None:
-    value = run["text"]
-    if not value:
-        return
-    node = parent
-    field = run.get("field")
-    if density == "semantic" and field and field.get("kind") == "citation" and field.get("key"):
-        node = append(node, "cite", key=field["key"])
-    link = run.get("link")
-    if link:
-        node = append(node, "a", href=link.get("href") or None, anchor=link.get("anchor") or None)
-    if density == "semantic":
-        node = _append_format_wrappers(node, filter_format(run))
-    _append_text_with_breaks(node, value)
-
-
-def _append_format_wrappers(parent: ET.Element, run_format: dict[str, bool | str | None]) -> ET.Element:
-    node = parent
-    if run_format.get("bg") or run_format.get("highlight"):
-        node = append(node, "mark", value=run_format.get("bg") or run_format.get("highlight"))
-    if run_format.get("color"):
-        node = append(node, "color", value=run_format["color"])
-    if run_format.get("strike"):
-        node = append(node, "s")
-    if run_format.get("underline"):
-        node = append(node, "u")
-    if run_format.get("italic"):
-        node = append(node, "i")
-    if run_format.get("bold"):
-        node = append(node, "b")
-    if run_format.get("superscript"):
-        node = append(node, "sup")
-    if run_format.get("subscript"):
-        node = append(node, "sub")
-    if run_format.get("smallCaps"):
-        node = append(node, "small-caps")
-    return node
+    for run in container.get("runs", []):
+        for item in run.get("objects", []):
+            if is_floating_textbox(item):
+                node = _append_controls(parent, run.get("contentControls", []), density)
+                _append_inline_object(revision_parent(node, run, density), item, density, ocr_results)
 
 
 def _append_inline_object(
@@ -201,9 +169,8 @@ def _append_inline_object(
         )
         if "blocks" in inline_object:
             blocks = inline_object["blocks"]
-            anchors = {name for child in iter_blocks(blocks) if child["type"] != "table" for name in child.get("anchors", [])}
             for block in blocks:
-                _append_block(node, block, density, ocr_results, anchors)
+                _append_block(node, block, density, ocr_results)
         else:
             _append_text_with_breaks(node, inline_object.get("text", ""))
     elif object_type == "equation":
@@ -265,7 +232,7 @@ def _append_cell_content(parent: ET.Element, cell: object, density: str, ocr_res
             _append_table_rows(nested, block, density, ocr_results)
             continue
         if floating_textboxes(cast(InlineContainer, block)):
-            _append_block(parent, block, density, ocr_results, set())
+            _append_block(parent, block, density, ocr_results)
             continue
         current_page: int | None = None
         for page, fragment in iter_block_page_segments(block):
@@ -273,6 +240,7 @@ def _append_cell_content(parent: ET.Element, cell: object, density: str, ocr_res
                 append(parent, "page", number=page)
             current_page = page
             paragraph = append(parent, "p")
+            _append_anchors(paragraph, fragment)
             _append_inline(paragraph, cast(InlineContainer, fragment), density, ocr_results)
 
 
@@ -329,17 +297,6 @@ def _append_supplemental(parent: ET.Element, parsed_document: ParsedDocument, de
             )
             _append_inline(node, item, density, parsed_document.ocr_results)
             _append_floating(node, item, density, parsed_document.ocr_results)
-
-
-def _used_anchors(parsed_document: ParsedDocument) -> set[str]:
-    anchors: set[str] = set()
-    for block in iter_blocks(parsed_document.blocks):
-        if block["type"] not in {"paragraph", "heading"}:
-            continue
-        for run in block.get("runs", []):
-            if (link := run.get("link")) and (anchor := link.get("anchor")):
-                anchors.add(anchor)
-    return anchors
 
 
 __all__ = ["iter_dtx"]

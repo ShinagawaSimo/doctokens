@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import cast
 
-from ....model import Block, TextBlock
-from ....model.traversal import iter_blocks
+from ....model import InlineContainer, ParsedDocument, TextBlock
+from ....model.traversal import document_blocks, iter_runs
 
 
 class BlockIdAllocator:
@@ -39,26 +39,27 @@ class BodyAnchors:
         """Keep the first visible block for a Word comment range/reference."""
         self._comment_anchors.setdefault(comment_id, block_id)
 
-    @staticmethod
-    def _discard_unreferenced_anchors(blocks: list[Block]) -> None:
-        """Avoid carrying bookmarks that are never a parsed internal-navigation target."""
-        anchored_blocks: list[TextBlock] = []
-        used: set[str] = set()
 
-        def visit(items: list[Block]) -> None:
-            for item in iter_blocks(items):
-                if item["type"] in {"paragraph", "heading"}:
-                    if item.get("anchors"):
-                        anchored_blocks.append(item)
-                    for run in item.get("runs", []):
-                        link = run.get("link")
-                        if link and link.get("anchor"):
-                            used.add(link["anchor"])
-
-        visit(blocks)
-        for item in anchored_blocks:
-            anchors = [anchor for anchor in item.get("anchors", []) if anchor in used]
-            if anchors:
-                item["anchors"] = anchors
-            else:
-                cast(dict[str, object], item).pop("anchors", None)
+def retain_referenced_bookmarks(document: ParsedDocument) -> None:
+    """Prune after every parsed story can contribute navigation references."""
+    anchored_blocks: list[TextBlock] = []
+    containers: list[InlineContainer] = []
+    for block in document_blocks(document):
+        if block["type"] != "table":
+            containers.append(block)
+            if block.get("anchors"):
+                anchored_blocks.append(block)
+    for group in (document.headers, document.footers, document.footnotes, document.endnotes, document.comments):
+        containers.extend(group)
+    used = {
+        link["anchor"]
+        for container in containers
+        for run in iter_runs(container.get("runs", []))
+        if (link := run.get("link")) and link.get("anchor") and not link.get("href")
+    }
+    for item in anchored_blocks:
+        anchors = [anchor for anchor in item.get("anchors", []) if anchor in used]
+        if anchors:
+            item["anchors"] = anchors
+        else:
+            cast(dict[str, object], item).pop("anchors", None)

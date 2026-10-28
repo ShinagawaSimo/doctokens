@@ -18,7 +18,7 @@ The main part is `word/document.xml`. Body blocks retain XML order, including co
   - `ParsedDocument.blocks: list[Block]`
 
 - **Parsing**
-  - Dispatch direct `p`, `tbl`, `sdt`, `sectPr`. Do not hoist table descendants. Skip body-level bookmark/proofing/permission markers.
+  - Dispatch direct `p`, `tbl`, `sdt`, `sectPr`. Do not hoist table descendants. Skip body-level bookmark/proofing/permission markers. Track named move-range start/end markers without emitting them as blocks; see [revisions](../text/revision.md).
 
 - **Absence and defaults**
   - No rendered blocks: DTX still emits page 1.

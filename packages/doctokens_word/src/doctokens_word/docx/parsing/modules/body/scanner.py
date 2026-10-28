@@ -20,9 +20,15 @@ from ....model import (
     append_warning,
 )
 from ....ooxml.compatibility import DocxCompatibility
-from ....ooxml.formatting import merge_paragraph_borders, parse_paragraph_alignment, parse_paragraph_borders
+from ....ooxml.formatting import (
+    merge_paragraph_borders,
+    parse_paragraph_alignment,
+    parse_paragraph_borders,
+    visible_run_format,
+)
 from ....ooxml.namespaces import first_child
 from ....ooxml.numbering import NumberingState
+from ....ooxml.outline import parse_outline_level
 from ....ooxml.package import PackageReader
 from ....ooxml.styles import StyleMap
 from ...plan import DocxFeature, DocxParsePlan
@@ -91,7 +97,6 @@ class DocumentBodyParser:
     def parse(self) -> list[Block]:
         """Stream-parse word/document.xml, preserving the original paragraph/table order."""
         blocks = read_blocks(self)
-        self._anchors._discard_unreferenced_anchors(blocks)
         if self._sections._section_index == 1:
             # A lone default section has no navigation value; omit it from the IR
             # so all densities remain free of redundant section metadata.
@@ -105,7 +110,7 @@ class DocumentBodyParser:
         part: str,
         content_controls: tuple[ContentControl, ...] = (),
     ) -> TextBlock | None:
-        """Parse a paragraph; emit a heading only when the style outline level is explicit."""
+        """Parse a paragraph using its explicit outline level before its style."""
         block_id = self.block_ids.allocate()
         self._order += 1
         section_index = self._sections._begin_section()
@@ -132,7 +137,7 @@ class DocumentBodyParser:
         numbering = self._numbering.parse(paragraph, style_id, part, block_id)
         if numbering is not None:
             # Auto-numbering is visible Word text; insert it into the text stream as a synthetic run.
-            marker_format = dict(numbering["markerFormat"]) if self.include_character_formatting else {}
+            marker_format = visible_run_format(numbering["markerFormat"]) if self.include_character_formatting else {}
             numbering_run: Run = {"text": numbering["text"]}
             if numbering["pictureBulletId"]:
                 relationship_id = self.numbering_state.numbering.picture_bullet_relationship(numbering["pictureBulletId"])
@@ -157,7 +162,7 @@ class DocumentBodyParser:
         has_objects = False
         for run in runs:
             text_parts.append(run["text"])
-            if "objects" in run:
+            if "objects" in run or "ruby" in run:
                 has_objects = True
         text = "".join(text_parts)
         # text.isspace() avoids the cost of text.strip() creating a new string.
@@ -187,7 +192,7 @@ class DocumentBodyParser:
             if run.get("pageBreak"):
                 leading_page_breaks += 1
                 continue
-            if run["text"] or run.get("objects"):
+            if run["text"] or run.get("objects") or run.get("ruby"):
                 break
         content_page = page_start + leading_page_breaks
         # Updating the shared hint immediately also lets table parsing split before
@@ -195,9 +200,16 @@ class DocumentBodyParser:
         self._page_hint = page_start + inline_page_breaks
         self._pending_page_breaks = 0
 
-        heading_level = self.styles.resolve_heading_level(style_id)
+        outline_level = parse_outline_level(paragraph_properties, self.warnings, part=part, block_id=block_id)
+        heading_level = (
+            self.styles.resolve_heading_level(style_id)
+            if outline_level is None
+            else outline_level + 1
+            if outline_level < 9
+            else None
+        )
         if heading_level is not None:
-            # Headings come only from styles.xml / outlineLvl, never guessed from text shape.
+            # Headings come only from explicit outlineLvl, never guessed from text shape.
             block: TextBlock = {
                 "id": block_id,
                 "type": "heading",
@@ -207,7 +219,7 @@ class DocumentBodyParser:
                 "styleId": style_id,
                 "text": text,
                 "level": heading_level,
-                "headingSource": "style",
+                "headingSource": "paragraph" if outline_level is not None else "style",
                 "section": section_index,
             }
         else:

@@ -16,16 +16,20 @@ Complex-field stack is reset for each paragraph. `begin` pushes; `separate` reco
   - Semantic cite or reference link.
 
 - **OOXML**
-  - `w:fldSimple/@w:instr`; complex `w:fldChar` + `w:instrText`.
+  - `w:fldSimple/@w:instr`; complex `w:fldChar` + `w:instrText`, or selected deletion `w:delInstrText`.
 
 - **IR**
   - `Run.field.kind: "citation" | "reference"`
 
 - **Parsing**
-  - Tokenize with `shlex.split`, fallback whitespace split on ValueError. Match uppercase instruction keyword. Recognize REF/PAGEREF/NOTEREF/HYPERLINK/CITATION.
+  - Recognize REF/PAGEREF/NOTEREF/HYPERLINK/CITATION case-insensitively. Use Word field tokens, not shell syntax: double quotes group arguments, `\"` represents a literal quote, and `\\` represents a literal backslash. Apostrophes are ordinary characters. Switches can adjoin quoted arguments without whitespace.
+  - Consume switch arguments before selecting the single positional argument. General `\*`, `\#`, and `\@` consume one value. HYPERLINK `\l/\o/\t`, REF `\d`, and CITATION `\l/\m/\p/\s/\v/\f` consume one value. Recognized flags are HYPERLINK `\m/\n`, REF `\f/\h/\n/\p/\r/\t/\w`, PAGEREF `\h/\p`, NOTEREF `\f/\h/\p`, and CITATION `\n/\t/\y`.
 
 - **Absence and defaults**
   - Unknown instructions leave result text unchanged.
+
+- **Diagnostics**
+  - Recognized fields with unclosed quotes, incomplete escapes, missing switch arguments, unsupported switches, or ambiguous positional arguments report `INVALID_FIELD_INSTRUCTION` at the owning part/block. Keep saved result text and add no guessed link/citation metadata. There is no whitespace-tokenizer fallback.
 
 ### `key`
 
@@ -33,7 +37,7 @@ Complex-field stack is reset for each paragraph. `begin` pushes; `separate` reco
   - Semantic `<cite key="...">result</cite>`.
 
 - **OOXML**
-  - First non-switch payload of CITATION.
+  - The single positional argument of CITATION, after consuming switch arguments.
 
 - **IR**
   - `Run.field.key: str`
@@ -53,7 +57,8 @@ Complex-field stack is reset for each paragraph. `begin` pushes; `separate` reco
   - `Run.field.anchor: str`; `Run.link`
 
 - **Parsing**
-  - REF/PAGEREF/NOTEREF use first non-switch token. HYPERLINK handling follows the source parser below.
+  - REF/PAGEREF/NOTEREF use their positional target. HYPERLINK uses its positional address as href and `\l` argument as anchor; either can appear alone. `\o` tooltip and `\t` target-window values are never addresses.
+  - Example: `HYPERLINK \l "Target"` renders `<a anchor="Target">result</a>`; `HYPERLINK "https://example.test" \l "Target"` emits both attributes and refers to the remote document fragment.
 
 - **Absence and defaults**
   - No target: no semantic link.

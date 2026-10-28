@@ -57,7 +57,7 @@ class HeadingBlockRequired(TypedDict):
     styleId: str | None
     text: str
     level: int
-    headingSource: Literal["style"]
+    headingSource: Literal["style", "paragraph"]
 
 
 class HeadingBlock(HeadingBlockRequired, total=False):

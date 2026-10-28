@@ -86,6 +86,7 @@ class AncillaryParser:
             root = self._parse_xml_part(name)
             if root is None:
                 continue
+            self.inline.revisions.ranges.clear()
             content = self.content.read(root, name)
             item_id = name.rsplit("/", 1)[-1].removesuffix(".xml")
             self._try_emit_item(item_id, f"{kind}s.{item_id}", content, rows)
@@ -107,6 +108,7 @@ class AncillaryParser:
             note_id = attr(note, "w", "id")
             if not note_id:
                 continue
+            self.inline.revisions.ranges.clear()
             content = self.content.read(note, part_name)
             self._try_emit_item(note_id, f"{group}.{note_id}", content, rows)
         return rows
@@ -125,6 +127,7 @@ class AncillaryParser:
             comment_id = attr(comment, "w", "id")
             if not comment_id:
                 continue
+            self.inline.revisions.ranges.clear()
             content = self.content.read(comment, part_name)
             row = self._try_emit_item(
                 comment_id,

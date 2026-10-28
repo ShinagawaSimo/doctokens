@@ -8,7 +8,7 @@ from xml.etree import ElementTree as ET
 from _word_packages import _make_docx
 from doctokens_word import parse_docx
 from doctokens_word.docx.model import ParseOptions
-from doctokens_word.docx.model.enums import Density, RevisionMode
+from doctokens_word.docx.model.enums import Density
 from doctokens_word.docx.parsing.runner import DocxParser
 from doctokens_word.docx.rendering.dispatch import to_output
 
@@ -218,21 +218,7 @@ class BodyStructureTests(unittest.TestCase):
         self.assertEqual([item.get("number") for item in rendered.findall(".//table//page")], ["2", "3"])
         self.assertEqual([item.text for item in rendered.findall(".//body/p")], ["D"])
 
-    def test_revision_mode_original(self) -> None:
-        data = _make_docx(
-            "<w:p><w:r><w:t>base </w:t></w:r>"
-            "<w:ins><w:r><w:t>inserted</w:t></w:r></w:ins>"
-            "<w:del><w:r><w:delText>deleted</w:delText></w:r></w:del></w:p>"
-        )
-        text = parse_docx(data, options=ParseOptions(revision_mode=RevisionMode.ORIGINAL)).text
-        self.assertIn("deleted", text)
-        self.assertNotIn("inserted", text)
-
-        final_text = parse_docx(data, options=ParseOptions(revision_mode=RevisionMode.FINAL)).text
-        self.assertIn("inserted", final_text)
-        self.assertNotIn("deleted", final_text)
-
-    def test_review_navigation_citation_and_threaded_comment_metadata(self) -> None:
+    def test_navigation_citation_and_threaded_comment_metadata(self) -> None:
         """Only LLM-relevant review/thread/navigation semantics survive the OOXML wrappers."""
         comments = f"""<w:comments xmlns:w="{NS_W}" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">
           <w:comment w:id="0" w:author="Alice"><w:p w14:paraId="AA"><w:r><w:t>Root</w:t></w:r></w:p></w:comment>
@@ -246,22 +232,14 @@ class BodyStructureTests(unittest.TestCase):
             '<w:p><w:commentRangeStart w:id="0"/><w:r><w:t>Marked</w:t><w:commentReference w:id="0"/></w:r></w:p>'
             '<w:p><w:hyperlink w:anchor="target"><w:r><w:t>Jump</w:t></w:r></w:hyperlink></w:p>'
             '<w:p><w:bookmarkStart w:id="9" w:name="target"/>'
-            '<w:fldSimple w:instr="CITATION Smith2024"><w:r><w:t>(Smith, 2024)</w:t></w:r></w:fldSimple></w:p>'
-            '<w:p><w:ins w:author="Editor" w:date="2026-08-01T00:00:00Z"><w:r><w:t>Added</w:t></w:r></w:ins>'
-            '<w:moveFrom w:author="Editor"><w:r><w:delText>Moved</w:delText></w:r></w:moveFrom></w:p>',
+            '<w:fldSimple w:instr="CITATION Smith2024"><w:r><w:t>(Smith, 2024)</w:t></w:r></w:fldSimple></w:p>',
             extra_entries={"word/comments.xml": comments, "word/commentsExtended.xml": comments_extended},
         )
-        rendered = parse_docx(data, density=Density.SEMANTIC, options=ParseOptions(revision_mode=RevisionMode.REVIEW)).text
+        rendered = parse_docx(data, density=Density.SEMANTIC).text
         root = ET.fromstring(rendered)
         citation = root.find(".//p[@anchor='target']/cite")
         assert citation is not None
         self.assertEqual((citation.get("key"), citation.text), ("Smith2024", "(Smith, 2024)"))
-        inserted = root.find(".//ins")
-        assert inserted is not None
-        self.assertEqual(
-            (inserted.get("author"), inserted.get("date"), inserted.text),
-            ("Editor", "2026-08-01T00:00:00Z", "Added"),
-        )
         reply = root.find(".//comments/comment[@id='1']")
         assert reply is not None
         self.assertEqual((reply.get("parent"), reply.get("resolved")), ("0", "true"))

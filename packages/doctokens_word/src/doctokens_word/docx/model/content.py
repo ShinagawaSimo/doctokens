@@ -200,6 +200,18 @@ class RunRequired(TypedDict):
     text: str
 
 
+class Revision(TypedDict):
+    kind: Literal["inserted", "deleted", "moved-from", "moved-to"]
+    author: str
+    date: str
+    moveName: str
+
+
+class Ruby(TypedDict):
+    annotation: str
+    baseRuns: list[Run]
+
+
 class Run(RunRequired, total=False):
     objects: list[InlineObject]
     # Internal layout marker emitted between runs at a calculated page break.
@@ -207,9 +219,8 @@ class Run(RunRequired, total=False):
     styleId: str
     format: RunFormat
     link: LinkInfo
-    revision: Literal["inserted", "deleted"]
-    revisionAuthor: str
-    revisionDate: str
+    revisions: list[Revision]
+    ruby: Ruby
     field: FieldInfo
     contentControls: list[ContentControl]
 

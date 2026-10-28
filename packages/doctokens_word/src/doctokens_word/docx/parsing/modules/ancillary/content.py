@@ -22,7 +22,7 @@ from ..body.inline import InlineParser
 
 
 def has_objects(runs: list[Run]) -> bool:
-    return any("objects" in run for run in runs)
+    return any("objects" in run or "ruby" in run for run in runs)
 
 
 class AncillaryContentParser:
@@ -37,6 +37,8 @@ class AncillaryContentParser:
         hints: list[RawHint] = []
         units: list[AncillarySearchParagraph] = []
         for child in node:
+            if self.inline.revisions.marker(child, part):
+                continue
             if child.tag == _TAG_W_PARAGRAPH:
                 style = first_child(first_child(child, "w", "pPr"), "w", "pStyle")
                 style_id = attr(style, "w", "val") if style is not None else None

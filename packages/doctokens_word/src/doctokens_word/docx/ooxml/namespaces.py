@@ -106,6 +106,7 @@ _TAG_W_ENDNOTE_REFERENCE = qualified_name("w", "endnoteReference")
 _TAG_W_COMMENT_REFERENCE = qualified_name("w", "commentReference")
 _TAG_W_FLD_CHAR = qualified_name("w", "fldChar")
 _TAG_W_INSTR_TEXT = qualified_name("w", "instrText")
+_TAG_W_DELETED_INSTR_TEXT = qualified_name("w", "delInstrText")
 _TAG_W_LAST_RENDERED_PAGE_BREAK = qualified_name("w", "lastRenderedPageBreak")
 _TAG_W_SECTION_PROPERTIES = qualified_name("w", "sectPr")
 _TAG_W_PARAGRAPH_STYLE = qualified_name("w", "pStyle")
@@ -147,6 +148,7 @@ __all__ = [
     "_TAG_W_COMMENT_RANGE_END",
     "_TAG_W_COMMENT_RANGE_START",
     "_TAG_W_COMMENT_REFERENCE",
+    "_TAG_W_DELETED_INSTR_TEXT",
     "_TAG_W_DELETION",
     "_TAG_W_DELETION_TEXT",
     "_TAG_W_DRAWING",

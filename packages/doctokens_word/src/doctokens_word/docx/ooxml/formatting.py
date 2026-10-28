@@ -96,11 +96,9 @@ def merge_run_formats(*formats: RunFormat | None) -> RunFormat:
         for key, value in fmt.items():
             if key not in VISIBLE_FORMAT_KEYS:
                 continue
-            if value is False or value is None or value == "":
-                # When explicitly disabled, remove the inherited visible format.
-                merged.pop(key, None)
-            else:
-                merged[key] = value
+            # A resolved style is merged again at the run. Keep cancellations
+            # until that final projection so earlier layers cannot reappear.
+            merged[key] = value
     return merged
 
 
@@ -109,7 +107,12 @@ def visible_run_format(fmt: RunFormat | None) -> RunFormat:
     if not fmt:
         return {}
     return {
-        key: value for key, value in fmt.items() if key in VISIBLE_FORMAT_KEYS and value is not False and value not in {None, ""}
+        key: value
+        for key, value in fmt.items()
+        if key in VISIBLE_FORMAT_KEYS
+        and value is not False
+        and value not in {None, ""}
+        and not (key == "color" and isinstance(value, str) and is_default_text_color(value))
     }
 
 
@@ -145,12 +148,9 @@ def _read_vert_align(run_properties: ET.Element, fmt: RunFormat) -> None:
     if node is None:
         return
     val = (attr(node, "w", "val") or "").lower()
-    if val == "superscript":
-        fmt["superscript"] = True
-        fmt.pop("subscript", None)
-    elif val == "subscript":
-        fmt["subscript"] = True
-        fmt.pop("superscript", None)
+    if val in {"superscript", "subscript", "baseline"}:
+        fmt["superscript"] = val == "superscript"
+        fmt["subscript"] = val == "subscript"
 
 
 def _read_color(run_properties: ET.Element, fmt: RunFormat) -> None:
@@ -158,9 +158,11 @@ def _read_color(run_properties: ET.Element, fmt: RunFormat) -> None:
     node = first_child(run_properties, "w", "color")
     if node is None:
         return
-    value = normalize_hex_color(attr(node, "w", "val"))
-    if value and not is_default_text_color(value):
-        fmt["color"] = value
+    raw_value = attr(node, "w", "val")
+    if raw_value:
+        # Automatic color cancels an inherited literal without guessing the
+        # application's theme/system color. Black is filtered after merging.
+        fmt["color"] = normalize_hex_color(raw_value)
 
 
 def _read_highlight(run_properties: ET.Element, fmt: RunFormat) -> None:
@@ -180,9 +182,11 @@ def _read_background(run_properties: ET.Element, fmt: RunFormat) -> None:
     node = first_child(run_properties, "w", "shd")
     if node is None:
         return
-    value = normalize_hex_color(attr(node, "w", "fill"))
-    if value:
-        fmt["bg"] = value
+    raw_value = attr(node, "w", "fill")
+    if (attr(node, "w", "val") or "").lower() == "nil":
+        fmt["bg"] = None
+    elif raw_value:
+        fmt["bg"] = normalize_hex_color(raw_value)
 
 
 def normalize_hex_color(value: str | None) -> str | None:

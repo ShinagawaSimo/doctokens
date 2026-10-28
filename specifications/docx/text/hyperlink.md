@@ -42,7 +42,7 @@ Plain emits display text, not hyperlink markup. Result-run links from fields use
   - `Run.link.anchor: str`
 
 - **Parsing**
-  - Copy nonempty anchor. No remote/local target execution.
+  - Copy nonempty anchor. With no href, it can retain a matching local [bookmark target](bookmark.md). With an href it identifies that document's fragment. No remote/local target execution.
 
 - **Absence and defaults**
   - Absent: omit attribute.

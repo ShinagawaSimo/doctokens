@@ -25,6 +25,7 @@ from ..model import (
 from ..ooxml.numbering import NumberingMap
 from ..ooxml.styles import StyleMap
 from .diagnostics import record_content_metrics
+from .modules.body.anchors import retain_referenced_bookmarks
 
 
 @dataclass
@@ -94,6 +95,7 @@ def _build_document(
         comments=parse_result.ancillary["comments"],
         ocr_results=parse_result.ocr_results,
     )
+    retain_referenced_bookmarks(parsed_document)
     record_content_metrics(parsed_document, metrics)
     parsed_document.metrics = metrics.snapshot()
     parsed_document.report = ParseReport(

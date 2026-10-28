@@ -18,6 +18,8 @@ def container_blocks(
 ) -> list[Block]:
     blocks: list[Block] = []
     for child in node:
+        if owner.inline.revisions.marker(child, part):
+            continue
         if child.tag == qualified_name("w", "p"):
             block = owner.parse_paragraph(child, part, controls)
             if block is not None:

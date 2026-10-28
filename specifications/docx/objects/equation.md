@@ -21,7 +21,7 @@ OMML is converted by the shared expression converter.
   - `convert_math(node, revision_mode=...)` in [equations.py](../../../packages/doctokens_word/src/doctokens_word/docx/parsing/modules/body/equations.py); XML escaping is applied after conversion. See [OMML](../../common/equation.md).
   - Pass the containing document's revision view. A formula with no retained text after filtering does not create an empty visible formula placeholder.
   - Semantic review keeps nested insertion/deletion fragments as mixed XML content inside `equation`, including author/date when saved. Concatenate `itertext()` to obtain the complete LaTeX. Structural/plain keep the selected view's formula text without these inline review wrappers.
-  - Whole inserted/deleted formulas retain the enclosing run's semantic review wrapper. Deleted formula objects keep their mathematical structure rather than becoming a concatenation of deleted letters.
+  - Whole inserted/deleted/moved formulas retain the enclosing run's semantic review wrappers: `ins`, `del`, `move-from`, or `move-to`. Deleted formula objects use ordinary inline revision dispatch and keep their mathematical structure rather than becoming a concatenation of deleted letters.
   - Conversion degradation and unknown symbol-encoding diagnostics enter the ordinary parse report with their owning part/block.
 
 ### `notation`

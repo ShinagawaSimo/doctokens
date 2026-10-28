@@ -2,7 +2,7 @@
 
 [DOCX](../README.md) / Revisions
 
-The selected view determines which saved revision text participates in output.
+The selected view determines which saved inline revision content participates in output. This does not reconstruct historical paragraph marks, table-row revisions, or historical property sets.
 
 ## Fields
 
@@ -19,27 +19,38 @@ The selected view determines which saved revision text participates in output.
 
 - **Parsing**
   - `final`: include ins/moveTo; omit del/moveFrom. `original`: inverse. `review`: include both.
+  - Selected wrappers traverse the ordinary inline parser, preserving `t` and selected `delText`, tabs, breaks, special characters, ruby, links, controls, images, text boxes, and mathematical objects in source order. Deleted field instructions can annotate cached results; they never become display text.
+  - Body paragraphs, table-cell paragraphs, text-box stories, and parsed ancillary paragraphs use the same inline visibility policy. An omitted wrapper contributes no page breaks or inline objects.
 
 - **Diagnostics**
   - Invalid enum: `ValueError`.
 
-### `revision`
+### `revisions`
 
 - **Output**
-  - Semantic `<ins>` or `<del>`.
+  - Semantic `<ins>`, `<del>`, `<move-from>`, or `<move-to>`, wrapping both text and objects. Nested revisions nest in source order, outermost first.
+  - Plain/structural retain the selected text and objects without review wrappers.
 
 - **OOXML**
   - `w:ins/w:moveTo/w:del/w:moveFrom`
 
 - **IR**
-  - `Run.revision: "inserted" | "deleted"`
+  - `Run.revisions: list[Revision]`, populated only for review.
+  - Each `Revision` has `kind: "inserted" | "deleted" | "moved-from" | "moved-to"`, `author`, `date`, and `moveName`.
 
 - **Parsing**
-  - Assign only in review mode. Deletions without mathematical objects concatenate descendant `w:delText` into one run; general deleted inline formatting/objects are not reconstructed by this path.
-  - When a deletion/move-source contains native math, recover its text and mathematical objects in source order and apply the selected view to each formula. Semantic review wraps a whole formula as `ins`/`del`; formula-internal revisions retain nested mixed-content review markers. See [equations](../objects/equation.md).
+  - Preserve all enclosing selected revision records. Adjacent text with different kinds, authors, dates, or move names cannot merge.
+  - Whole formulas retain the enclosing revision wrappers; formula-internal revisions remain mixed XML inside `equation`. See [equations](../objects/equation.md).
+  - Floating text-box references and their separately emitted stories both retain the enclosing review status.
 
 - **Absence and defaults**
   - No wrappers in final/original.
+
+- **Example**
+  - `<w:moveFrom><w:r><w:t>Moved</w:t></w:r></w:moveFrom>` contributes no final text, `Moved` in original, and `<move-from>Moved</move-from>` in semantic review.
+
+- **Limits**
+  - Existing current run properties are read. `rPrChange`, `pPrChange`, tracked paragraph-mark deletion, and table/row/cell revisions require separate reconstruction and are not covered by inline visibility.
 
 - **Diagnostics**
   - `REVISION_INSERTION_INCLUDED` and `REVISION_DELETION_SKIPPED` are emitted on encountering the respective wrappers regardless of the selected view; code names do not themselves establish visibility.
@@ -47,13 +58,13 @@ The selected view determines which saved revision text participates in output.
 ### `author`
 
 - **Output**
-  - `ins|del/@author`.
+  - `ins|del|move-from|move-to/@author`.
 
 - **OOXML**
   - Revision `@w:author`
 
 - **IR**
-  - `Run.revisionAuthor: str`
+  - `Revision.author: str`
 
 - **Parsing**
   - Copy nonempty value in review mode.
@@ -64,16 +75,30 @@ The selected view determines which saved revision text participates in output.
 ### `date`
 
 - **Output**
-  - `ins|del/@date`.
+  - `ins|del|move-from|move-to/@date`.
 
 - **OOXML**
   - Revision `@w:date`
 
 - **IR**
-  - `Run.revisionDate: str`
+  - `Revision.date: str`
 
 - **Parsing**
   - Copy nonempty source string; no timezone conversion.
 
 - **Absence and defaults**
   - Omitted.
+
+### `moveName`
+
+- **Output**
+  - `move-from|move-to/@name`, connecting the source/destination when the saved range name exists.
+- **OOXML**
+  - `w:moveFromRangeStart/@w:name` and `w:moveToRangeStart/@w:name` name the move. Each range ends at its matching `moveFromRangeEnd` or `moveToRangeEnd` with the same `@w:id` as its own start.
+- **IR**
+  - `Revision.moveName: str`.
+- **Parsing**
+  - Track active ranges across paragraphs in one story, including body-level range markers and markers in block controls. Capture the active name for the corresponding source/destination wrapper. Text-box stories have separate state; ancillary item boundaries clear range state.
+  - Numeric wrapper IDs and source/destination range IDs are not move-pair keys. Do not infer a relationship from matching text or authors. With no saved active name, retain direction without a name attribute.
+- **Example**
+  - Source and destination in ranges named `move1` produce `<move-from name="move1">text</move-from>` and `<move-to name="move1">text</move-to>` in semantic review.

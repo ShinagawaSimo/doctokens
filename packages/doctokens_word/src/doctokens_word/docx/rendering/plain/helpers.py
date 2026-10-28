@@ -7,7 +7,7 @@ from typing import cast
 from doctokens_core.output.plain import page_marker
 
 from ...model import Block, ContentControl, InlineContainer, InlineObject, OcrResultRecord, TableBlock
-from ...model.traversal import iter_blocks
+from ...model.traversal import iter_blocks, iter_runs
 from ..common import constants as _constants
 from ..common.controls import wrap_plain_control
 from ..common.floating import floating_textboxes, is_floating_textbox
@@ -87,7 +87,10 @@ def inline_text_only(
     for run in runs:
         run_parts: list[str] = []
         text = run["text"]
-        if text:
+        if ruby := run.get("ruby"):
+            base = cast(InlineContainer, {"text": text, "runs": ruby["baseRuns"]})
+            run_parts.append(inline_text_only(base, ocr_results, include_floating=False))
+        elif text:
             run_parts.append(text)
 
         if "objects" in run:
@@ -204,7 +207,7 @@ def collect_refs(block: InlineContainer, ref_type: str) -> list[str]:
     containers: list[InlineContainer] = [block]
     containers.extend(
         child
-        for run in block["runs"]
+        for run in iter_runs(block["runs"])
         for item in run.get("objects", [])
         for child in iter_blocks(item.get("blocks", []))
         if child["type"] in {"paragraph", "heading"}
@@ -212,7 +215,7 @@ def collect_refs(block: InlineContainer, ref_type: str) -> list[str]:
     return [
         ref_id
         for container in containers
-        for run in container.get("runs", [])
+        for run in iter_runs(container.get("runs", []))
         for item in run.get("objects", [])
         if item["type"] == ref_type and (ref_id := item.get("id")) is not None
     ]

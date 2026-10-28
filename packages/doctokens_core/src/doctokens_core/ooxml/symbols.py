@@ -1,4 +1,4 @@
-"""Unicode mappings for the documented Symbol character encoding.
+"""Unicode mappings for saved OOXML Symbol character codes.
 
 Extender glyphs and private font glyphs are deliberately not guessed. This table
 is encoding data; it introduces no runtime dependency on a font or PDF library.

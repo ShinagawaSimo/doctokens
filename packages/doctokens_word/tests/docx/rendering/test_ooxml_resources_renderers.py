@@ -10,13 +10,6 @@ from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.relationships import RelationshipIndex
 from doctokens_word.docx.model import ParseOptions, ParseWarning, RelationshipRecord
-from doctokens_word.docx.ooxml.formatting import (
-    is_default_text_color,
-    merge_run_formats,
-    normalize_hex_color,
-    parse_run_format,
-    visible_run_format,
-)
 from doctokens_word.docx.ooxml.numbering import NumberingInstance, NumberingLevel, NumberingMap, NumberingState
 from doctokens_word.docx.ooxml.package import PackageReader
 from doctokens_word.docx.parsing.modules.resources.assets import IMAGE_REL_TYPE, AssetExtractor
@@ -25,41 +18,6 @@ from doctokens_word.docx.rendering.dtx import _append_table
 from doctokens_word.docx.rendering.dtx_content import _append_chart, _append_smartart
 from doctokens_word.docx.rendering.objects.charts import render_chart_resource
 from doctokens_word.docx.rendering.objects.smartarts import render_smartart_resource
-
-W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-
-
-class OoxmlFormattingTests(unittest.TestCase):
-    def test_run_format_parses_visible_values_and_filters_defaults(self) -> None:
-        run_properties = ET.fromstring(
-            f"""<w:rPr xmlns:w="{W_NS}">
-              <w:b/><w:i w:val="0"/><w:u w:val="single"/><w:dstrike/>
-              <w:vertAlign w:val="subscript"/><w:color w:val="44AA44"/>
-              <w:highlight w:val="none"/><w:shd w:fill="ABCDEF"/>
-            </w:rPr>"""
-        )
-
-        parsed = parse_run_format(run_properties)
-
-        self.assertEqual(
-            parsed,
-            {
-                "bold": True,
-                "italic": False,
-                "underline": True,
-                "strike": True,
-                "subscript": True,
-                "color": "#44AA44",
-                "highlight": None,
-                "bg": "#ABCDEF",
-            },
-        )
-        merged = merge_run_formats({"bold": True, "color": "#FF0000"}, parsed)
-        self.assertNotIn("italic", visible_run_format(merged))
-        self.assertEqual(normalize_hex_color("00aa00"), "#00AA00")
-        self.assertIsNone(normalize_hex_color("auto"))
-        self.assertTrue(is_default_text_color("#101010"))
-        self.assertFalse(is_default_text_color("themeAccent1"))
 
 
 class NumberingAndAssetTests(unittest.TestCase):

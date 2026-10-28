@@ -369,7 +369,7 @@ infer the author's definitions, or reconstruct exact typography and geometry.
     without line layout. Breaks keep explicit boundaries.
   - `sym` in the known Symbol encoding uses the saved hexadecimal code and
     font name. Decode its byte-sized or U+F000-prefixed encoding using the
-    Unicode mapping in [symbols.py](../../packages/doctokens_core/src/doctokens_core/ooxml/equations/symbols.py).
+    Unicode mapping in [symbols.py](../../packages/doctokens_core/src/doctokens_core/ooxml/symbols.py).
     Extender/private glyphs and other font encodings are not guessed.
   - Run properties, field-control instructions and saved page-wrap markers add
     no mathematical characters.

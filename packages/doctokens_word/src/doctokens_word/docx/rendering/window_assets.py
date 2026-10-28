@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from ..model import Block, InlineContainer, ParsedDocument
+from ..model.traversal import iter_runs
 
 
 def referenced_image_ids(document: ParsedDocument) -> set[str]:
     used: set[str] = set()
 
     def inline(container: InlineContainer) -> None:
-        for run in container.get("runs", []):
+        for run in iter_runs(container.get("runs", [])):
             for item in run.get("objects", []):
                 if item["type"] == "image" and item.get("assetId"):
                     used.add(item["assetId"])

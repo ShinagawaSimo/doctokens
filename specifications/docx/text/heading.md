@@ -6,7 +6,7 @@ Heading identity comes from an explicit paragraph outline level or its reference
 
 ## Processing
 
-Identity, text, runs, paragraph properties, controls, and page fields have the same rules as [paragraphs](paragraph.md) and [body blocks](../document/body.md). In table cells the current DTX renderer uses `p` even when the nested IR block is a heading.
+Identity, text, runs, paragraph properties, controls, and page fields have the same rules as [paragraphs](paragraph.md) and [body blocks](../document/body.md). Cell paragraphs use the same heading and block-property projection as body paragraphs.
 
 ## Fields
 

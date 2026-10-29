@@ -18,7 +18,7 @@ Rows and cells use table-local coordinates.
   - `TableRow.rowIndex`, `TableCell.rowIndex: int`
 
 - **Parsing**
-  - 0-based; enumeration of direct tr nodes.
+  - 0-based within the selected-view rows, after expanding wrappers and filtering structural revisions.
 
 ### `isHeader`
 
@@ -26,13 +26,13 @@ Rows and cells use table-local coordinates.
   - `tr/@header="true"`; child `th` instead of `td`.
 
 - **OOXML**
-  - Presence of `w:trPr/w:tblHeader`.
+  - `w:trPr/w:tblHeader`, selected from saved history in original view.
 
 - **IR**
   - `TableRow.isHeader: bool`
 
 - **Parsing**
-  - Current parser tests element presence, not the on/off attribute.
+  - Honor the OOXML on/off value, including an explicit false.
 
 - **Absence and defaults**
   - Omitted when no element.
@@ -43,7 +43,7 @@ Rows and cells use table-local coordinates.
   - DTX th/td sequence.
 
 - **OOXML**
-  - Direct `w:tc` children.
+  - `w:tc` children, including wrapped cells.
 
 - **IR**
   - `TableRow.cells: list[TableCell]`
@@ -63,7 +63,7 @@ Rows and cells use table-local coordinates.
   - `TableCell.colIndex: int`
 
 - **Parsing**
-  - Start 0; advance by each parsed colspan.
+  - Start at row gridBefore; advance by each retained cell's gridSpan. gridAfter contributes trailing omitted positions. Cell insertion/deletion is selected before assigning coordinates.
 
 ### `colSpan`
 
@@ -77,13 +77,13 @@ Rows and cells use table-local coordinates.
   - `TableCell.colSpan: int`
 
 - **Parsing**
-  - `max(1, int(value))`.
+  - Positive integer from the selected property set; nonpositive/invalid values warn and fall back to 1.
 
 - **Absence and defaults**
   - 1.
 
 - **Diagnostics**
-  - Invalid integer: `INVALID_GRID_SPAN`, locator word/document.xml, fallback 1.
+  - `INVALID_GRID_SPAN`, owning-part locator, fallback 1.
 
 ### `rowSpan`
 
@@ -97,7 +97,7 @@ Rows and cells use table-local coordinates.
   - `TableCell.rowSpan: int`
 
 - **Parsing**
-  - Start 1. Maintain active origins for covered columns; each continuation increments each distinct origin once. No merge clears active origins for those columns.
+  - Start 1. Maintain active origins for covered columns; each continuation increments each distinct origin once across page segments. A nonmerged cell or omitted grid position clears active origins at those columns.
 
 ### `vMerge`
 
@@ -111,7 +111,7 @@ Rows and cells use table-local coordinates.
   - `TableCell.vMerge: str`
 
 - **Parsing**
-  - Element without nonempty val → continue; restart creates active origins. Current DTX retains continuation cells rather than suppressing them.
+  - Element without nonempty val → continue; restart creates active origins. DTX retains continuation cells. A tracked cellMerge selects vMergeOrig for original and vMerge for final/review, mapping cont/rest to continue/restart.
 
 - **Absence and defaults**
   - No element: absent.
@@ -142,4 +142,37 @@ Rows and cells use table-local coordinates.
   - `TableCell.blocks: list[Block]`
 
 - **Parsing**
-  - Recursively parse in source order. Nested headings currently serialize as p, with inline semantics but without their block-level heading/paragraph attributes.
+  - Recursively parse in source order. Paragraph-mark projection, headings, alignment, borders, and review metadata use the same rules as the body.
+
+### `gridBefore` and `gridAfter`
+
+- **Output**
+  - Row `@grid-before` / `@grid-after` when nonzero; corresponding empty slots in plain text.
+- **OOXML**
+  - Selected `w:trPr/w:gridBefore|w:gridAfter/@w:val`.
+- **IR**
+  - Optional nonnegative `TableRow.gridBefore` / `gridAfter`.
+- **Diagnostics**
+  - Invalid/negative values report `INVALID_TABLE_GRID_OFFSET` and use zero. Excessive total width raises ValueError according to max_table_columns.
+
+### `contentControls`
+
+- **Output**
+  - Existing content-control wrappers around rows/cells in DTX and table resources; compact control marks in plain.
+- **OOXML**
+  - Row-level and cell-level w:sdt wrappers.
+- **IR**
+  - `TableRow.contentControls`, `TableCell.contentControls`.
+- **Parsing**
+  - Keep the control at its structural level, separately from controls inside cell paragraphs. Preserve nested tables and merge positions.
+
+### `background`
+
+- **Output**
+  - Semantic cell `@background`, including full table resource output.
+- **OOXML**
+  - Table-style/conditional tcPr/shd, table defaults and row exceptions, then direct selected cell shd.
+- **IR**
+  - Optional `TableCell.background` literal color.
+- **Parsing**
+  - Resolve inheritance and explicit cancellation before output. Theme-only colors do not imply full theme resolution.

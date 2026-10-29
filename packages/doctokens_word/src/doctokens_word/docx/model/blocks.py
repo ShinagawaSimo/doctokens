@@ -6,7 +6,7 @@ from typing import Literal, TypedDict
 
 from typing_extensions import NotRequired
 
-from .content import ContentControl, ParagraphBorders, RawHint, Run
+from .content import ContentControl, ParagraphBorders, RawHint, ReviewMarkup, Revision, Run
 
 
 class NumberingLabel(TypedDict):
@@ -35,7 +35,8 @@ class ParagraphBlockRequired(TypedDict):
     text: str
 
 
-class ParagraphBlock(ParagraphBlockRequired, total=False):
+class ParagraphBlock(ParagraphBlockRequired, ReviewMarkup, total=False):
+    paragraphMark: Revision
     pageEnd: int
     pageSegments: list[dict[str, object]]
     alignment: str
@@ -60,7 +61,8 @@ class HeadingBlockRequired(TypedDict):
     headingSource: Literal["style", "paragraph"]
 
 
-class HeadingBlock(HeadingBlockRequired, total=False):
+class HeadingBlock(HeadingBlockRequired, ReviewMarkup, total=False):
+    paragraphMark: Revision
     pageEnd: int
     pageSegments: list[dict[str, object]]
     alignment: str
@@ -85,8 +87,10 @@ class TableCellRequired(TypedDict):
     blocks: list[Block]
 
 
-class TableCell(TableCellRequired, total=False):
+class TableCell(TableCellRequired, ReviewMarkup, total=False):
     vMerge: str
+    contentControls: list[ContentControl]
+    background: str
 
 
 class TableRowRequired(TypedDict):
@@ -94,8 +98,11 @@ class TableRowRequired(TypedDict):
     cells: list[TableCell]
 
 
-class TableRow(TableRowRequired, total=False):
+class TableRow(TableRowRequired, ReviewMarkup, total=False):
     isHeader: bool
+    gridBefore: int
+    gridAfter: int
+    contentControls: list[ContentControl]
 
 
 class TableBlockRequired(TypedDict):
@@ -111,7 +118,7 @@ class TableBlockRequired(TypedDict):
     section: int
 
 
-class TableBlock(TableBlockRequired, total=False):
+class TableBlock(TableBlockRequired, ReviewMarkup, total=False):
     pageEnd: int
     contentControls: list[ContentControl]
 

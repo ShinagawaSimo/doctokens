@@ -19,6 +19,7 @@ A visible paragraph becomes one paragraph block before page-window projection.
 
 - **Parsing**
   - `"".join(run["text"] for run in runs)`; objects are stored separately. Discard whitespace-only paragraphs unless objects, controls, or `preserve_empty_paragraphs` require retaining them.
+  - Project tracked paragraph marks before extraction. Adjacent source paragraphs whose intervening mark is removed become one reading paragraph; preserve their text and inline content order without adding a separator. See [revisions](revision.md).
 
 ### `styleId`
 
@@ -32,10 +33,10 @@ A visible paragraph becomes one paragraph block before page-window projection.
   - `str | None`
 
 - **Parsing**
-  - Copy explicit value; resolve properties through style `basedOn`.
+  - Use the selected current/historical pPr and a valid paragraph style reference; otherwise select the document's default paragraph style. Resolve document defaults, table context, and the style basedOn chain before direct paragraph properties.
 
 - **Absence and defaults**
-  - `None`; no style-name/size heuristic.
+  - Default paragraph style ID, or None if none is defined. No style-name/size heuristic.
 
 ### `runs`
 

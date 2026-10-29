@@ -48,7 +48,7 @@ Session binary reads and explanatory renderings have distinct result types.
   - `str | None`
 
 - **Parsing**
-  - DOCX requires start-end; start>=1; int conversion and Python slicing. End beyond table is clipped. Applied after column filter; not applied when aggregate is supplied.
+  - DOCX requires start-end with 1-based start>=1 and end>=start. Invalid/empty reversed ranges, including 1-0, raise ValueError. End beyond table is clipped. Applied after column filter; not applied when aggregate is supplied.
 
 ### `columns`
 
@@ -63,6 +63,7 @@ Session binary reads and explanatory renderings have distinct result types.
 
 - **Parsing**
   - Exact text match against first row; first matching occurrence per name; unmatched names ignored; retained positions sorted to source order.
+  - Match logical grid columns covered by the header cell, not ordinal list offsets. Retain selected cells intersecting those columns, so a row with omitted leading columns remains aligned.
 
 ### `aggregate`
 
@@ -90,7 +91,7 @@ Session binary reads and explanatory renderings have distinct result types.
   - `str | None`
 
 - **Parsing**
-  - First exact first-row cell text match; missing label → ValueError when table has rows.
+  - First exact first-row cell text match; missing label → ValueError when table has rows. Read data cells covering that header's starting grid column; omitted positions contribute no numeric value.
 
 ### `text`
 
@@ -106,3 +107,4 @@ Session binary reads and explanatory renderings have distinct result types.
 - **Parsing**
   - `syntax_version=doctokens-xml/1.0`, `media_type=application/xml`, `density=semantic`. Complete `<document density="semantic" format="docx"><resources>OBJECT</resources></document>`.
   - Tables use closed `table/tr/td` elements; aggregate output uses `table/aggregate` with `op`, `column`, and numeric text. Charts retain series and point records; SmartArt retains node and link records. XML attributes and text are escaped by the shared serializer.
+  - Table rows retain grid-before/grid-after. Cells retain spans, merge continuation, shading, and row/cell control/review wrappers; a filtered discontinuous cell can carry a 1-based column attribute. Coordinates refer to the selected logical table and are not renumbered after filtering.

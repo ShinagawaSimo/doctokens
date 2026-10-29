@@ -24,7 +24,7 @@ The main part is `word/document.xml`. Body blocks retain XML order, including co
   - No rendered blocks: DTX still emits page 1.
 
 - **Diagnostics**
-  - `UNSUPPORTED_BODY_CHILD`: other direct body children. Unhandled children inside `sdtContent` are currently skipped without this warning.
+  - `UNSUPPORTED_BODY_CHILD`: unsupported body children, including unsupported content-control contents. Nested text-box stories use `UNSUPPORTED_STORY_CHILD` for unsupported block children.
 
 ### `id`
 

@@ -31,7 +31,7 @@ def merge_text_runs(runs: list[Run]) -> list[Run]:
                 pending_signature = None
             continue
         # Runs containing inline objects are not merged; they are added to the result directly.
-        if "objects" in run or "ruby" in run:
+        if "objects" in run or "ruby" in run or "paragraphMark" in run:
             if pending_run is not None:
                 merged_runs.append(pending_run)
                 pending_run = None
@@ -51,6 +51,8 @@ def merge_text_runs(runs: list[Run]) -> list[Run]:
         pending_run = {"text": run_text}
         if "revisions" in run:
             pending_run["revisions"] = run["revisions"]
+        if "propertyChanges" in run:
+            pending_run["propertyChanges"] = run["propertyChanges"]
         if "link" in run:
             pending_run["link"] = run["link"]
         if "field" in run:
@@ -99,7 +101,10 @@ def run_output_signature(run: Run) -> RunSignature:
         for control in run.get("contentControls", [])
     )
     return (
-        tuple(tuple(sorted(revision.items())) for revision in run.get("revisions", [])),
+        (
+            tuple(tuple(sorted(revision.items())) for revision in run.get("revisions", [])),
+            tuple(tuple(sorted(change.items())) for change in run.get("propertyChanges", [])),
+        ),
         link,
         run_format,
         field_data,

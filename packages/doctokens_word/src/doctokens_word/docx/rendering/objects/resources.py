@@ -10,6 +10,8 @@ from doctokens_core.output.xml import append, element
 from ...model import ParsedDocument, TableBlock, TableRow
 from ...model.enums import ResourceType
 from ...model.traversal import document_blocks
+from ..dtx_content import _append_controls
+from ..dtx_runs import review_parent
 from .charts import render_chart_resource
 from .smartarts import render_smartart_resource
 
@@ -108,9 +110,28 @@ def _render_table_resource(
         append(node, "aggregate", str(result["aggregate_value"]), op=result["aggregate"], column=result["aggregate_column"])
     else:
         for row in _filter_and_slice_rows(all_rows, rows, columns):
-            child = append(node, "tr", isHeader=True if row.get("isHeader") else None)
+            container = review_parent(_append_controls(node, row.get("contentControls", []), "semantic"), row, "semantic")
+            child = append(
+                container,
+                "tr",
+                isHeader=True if row.get("isHeader") else None,
+                grid_before=row.get("gridBefore"),
+                grid_after=row.get("gridAfter"),
+            )
+            next_column = row.get("gridBefore", 0)
             for cell in row["cells"]:
-                append(child, "td", cell.get("text", ""))
+                container = review_parent(_append_controls(child, cell.get("contentControls", []), "semantic"), cell, "semantic")
+                append(
+                    container,
+                    "td",
+                    cell.get("text", ""),
+                    column=cell["colIndex"] + 1 if cell["colIndex"] != next_column else None,
+                    colspan=cell["colSpan"] if cell["colSpan"] != 1 else None,
+                    rowspan=cell["rowSpan"] if cell["rowSpan"] != 1 else None,
+                    v_merge=cell.get("vMerge"),
+                    background=cell.get("background"),
+                )
+                next_column = cell["colIndex"] + cell["colSpan"]
     return resource_document("docx", node)
 
 
@@ -133,7 +154,7 @@ def _slice_rows(rows: list[TableRow], spec: str) -> list[TableRow]:
         end = int(end_str)
     except (ValueError, TypeError):
         raise ValueError(f"Invalid rows range: {spec!r}") from None
-    if start < 0 or end < start:
+    if start < 0 or end <= start:
         raise ValueError(f"Invalid rows range: {spec!r}")
     return rows[start:end]
 
@@ -142,21 +163,22 @@ def _filter_columns(rows: list[TableRow], column_names: list[str]) -> list[Table
     if not rows:
         return rows
     header = rows[0]
-    header_texts = [cell["text"] for cell in header["cells"]]
-    keep_indices: list[int] = []
+    keep_indices: set[int] = set()
     for name in column_names:
-        for idx, hdr_text in enumerate(header_texts):
-            if hdr_text == name and idx not in keep_indices:
-                keep_indices.append(idx)
+        for cell in header["cells"]:
+            if cell["text"] == name:
+                keep_indices.update(range(cell["colIndex"], cell["colIndex"] + cell["colSpan"]))
                 break
-    keep_indices.sort()
 
     filtered_rows: list[TableRow] = []
     for row in rows:
-        selected_cells = [row["cells"][index] for index in keep_indices if index < len(row["cells"])]
-        filtered_row: TableRow = {"rowIndex": row["rowIndex"], "cells": selected_cells}
-        if row.get("isHeader"):
-            filtered_row["isHeader"] = True
+        selected_cells = [
+            cell
+            for cell in row["cells"]
+            if any(column in keep_indices for column in range(cell["colIndex"], cell["colIndex"] + cell["colSpan"]))
+        ]
+        filtered_row: TableRow = row.copy()
+        filtered_row["cells"] = selected_cells
         filtered_rows.append(filtered_row)
     return filtered_rows
 
@@ -187,18 +209,21 @@ def _numeric_column_values(rows: list[TableRow], column: str) -> list[float]:
         return []
     header = rows[0]
     col_idx: int | None = None
-    for idx, cell in enumerate(header["cells"]):
+    for cell in header["cells"]:
         if cell["text"] == column:
-            col_idx = idx
+            col_idx = cell["colIndex"]
             break
     if col_idx is None:
         raise ValueError(f"Column {column!r} not found in table header")
 
     values: list[float] = []
     for row in rows[1:]:
-        if col_idx >= len(row["cells"]):
+        matched_cell = next(
+            (cell for cell in row["cells"] if cell["colIndex"] <= col_idx < cell["colIndex"] + cell["colSpan"]), None
+        )
+        if matched_cell is None:
             continue
-        text = row["cells"][col_idx].get("text", "").strip()
+        text = matched_cell.get("text", "").strip()
         if not text:
             continue
         try:

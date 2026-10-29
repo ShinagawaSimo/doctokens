@@ -6,7 +6,7 @@ Styles supply explicitly declared reading properties.
 
 ## Processing
 
-Missing styles.xml: `MISSING_STYLES`, empty map. Heading, numbering, and format cycles return None/empty and report `STYLE_INHERITANCE_CYCLE`, `STYLE_NUMBERING_INHERITANCE_CYCLE`, or `STYLE_FORMAT_INHERITANCE_CYCLE`. Alignment/border cycles stop without a dedicated warning. Alignment, borders, and run formatting are extracted only with CHARACTER_FORMATTING.
+The [style reader](../../../packages/doctokens_word/src/doctokens_word/docx/ooxml/style_reader.py) reads styles.xml; the [style index](../../../packages/doctokens_word/src/doctokens_word/docx/ooxml/styles.py) resolves inheritance. Missing styles.xml reports `MISSING_STYLES` and supplies empty defaults. Cycles stop at the repeated style, retain the collected declarations, and report `STYLE_INHERITANCE_CYCLE`. BasedOn follows styles of the same type. Alignment, borders, colors, and run formatting are extracted only when character formatting is requested; heading and numbering resolution also operate at lower densities.
 
 ## Fields
 
@@ -36,7 +36,7 @@ Missing styles.xml: `MISSING_STYLES`, empty map. Heading, numbering, and format 
   - `StyleRecord.type: str`
 
 - **Parsing**
-  - Use source value or `unknown`.
+  - Use the source value; the OOXML default when the attribute is absent is `paragraph`.
 
 ### `name`
 
@@ -64,7 +64,7 @@ Missing styles.xml: `MISSING_STYLES`, empty map. Heading, numbering, and format 
   - `StyleRecord.based_on: str | None`
 
 - **Parsing**
-  - Parent style key; follow independently for headings, numbering, alignment, borders, and run format.
+  - Parent style key within the same style type. The nearest explicit property wins within a basedOn chain, including explicit false and outline 9. Borders merge by side.
 
 ### `link`
 
@@ -78,7 +78,7 @@ Missing styles.xml: `MISSING_STYLES`, empty map. Heading, numbering, and format 
   - `StyleRecord.link: str | None`
 
 - **Parsing**
-  - For paragraph run formatting, merge the referenced linked style after basedOn and before this style. Resolve its inheritance with a separate visited set.
+  - Retain the paragraph/character UI pairing. A link does not implicitly apply a second style to the same run. Paragraph and character references select their own typed hierarchy levels.
 
 ### `next`
 
@@ -176,7 +176,7 @@ Missing styles.xml: `MISSING_STYLES`, empty map. Heading, numbering, and format 
   - `StyleRecord.run_format: RunFormat`
 
 - **Parsing**
-  - Merge inherited, linked, and direct format. Preserve explicit false/clear values in resolved style properties so that subsequent paragraph/character/run merging cannot restore a cancelled property. Only the final visible run projection removes disabled values and default text colors. See [emphasis](emphasis.md).
+  - Resolve inherited properties within each style type, then combine document defaults, table, paragraph, character, and direct formatting as defined below. Preserve explicit clear values until final visible projection. See [emphasis](emphasis.md).
 
 ### `is_custom`
 
@@ -190,7 +190,7 @@ Missing styles.xml: `MISSING_STYLES`, empty map. Heading, numbering, and format 
   - `StyleRecord.is_custom: bool`
 
 - **Parsing**
-  - `value.lower() in {"1", "true"}`; default false.
+  - `value.lower() in {"1", "true", "on"}`; default false.
 
 ### `is_default`
 
@@ -204,7 +204,7 @@ Missing styles.xml: `MISSING_STYLES`, empty map. Heading, numbering, and format 
   - `StyleRecord.is_default: bool`
 
 - **Parsing**
-  - `value.lower() in {"1", "true"}`; default false. This flag alone does not apply a style to paragraphs lacking pStyle.
+  - `value.lower() in {"1", "true", "on"}`; default false. Select the default style of the requested type when its reference is absent, missing, or points to another style type.
 
 ### `resolved_heading_level`
 
@@ -219,3 +219,45 @@ Missing styles.xml: `MISSING_STYLES`, empty map. Heading, numbering, and format 
 
 - **Parsing**
   - First explicit outline 0..8 yields outline+1. An explicit 9 stops basedOn resolution with no heading. A valid paragraph outline overrides this style result, including explicit paragraph cancellation.
+
+### `document_defaults`
+
+- **Output**
+  - Effective reading properties; default/provenance records are not emitted.
+- **OOXML**
+  - `w:docDefaults/w:pPrDefault/w:pPr` and `w:rPrDefault/w:rPr`.
+- **IR**
+  - `StyleMap.defaults`, separate from source style records.
+- **Parsing**
+  - Use document defaults before table/paragraph properties and run-format layers. A default paragraph style supplies heading, numbering, alignment, borders, and run properties even without pStyle. A default character style supplies its run properties even without rStyle. Table defaults apply only inside tables.
+
+### `toggle_cascade`
+
+- **Output**
+  - Effective bold, italic, small-caps, and single-strike reading semantics.
+- **OOXML**
+  - ISO/IEC 29500-1 §17.7.3: toggle properties across style hierarchy levels.
+- **IR**
+  - Effective `Run.format` after resolution.
+- **Parsing**
+  - Resolve the nearest explicit value within each basedOn chain; do not XOR ancestors within the same level.
+  - A direct run value is absolute. Otherwise, a true document-default value makes the property true; when it is not true, XOR the resolved table, paragraph, and character values. Missing/false layer values contribute false.
+  - Example: paragraph bold=true plus character bold=true gives ordinary text; direct bold=true restores bold. Two paragraph ancestors both declaring bold=true still resolve to one paragraph-level true.
+  - Underline, double strike, vertical alignment, colors, and highlights use ordinary property precedence, not toggle XOR. Single/double strike share the final `s` wrapper.
+
+### `table_regions`
+
+- **Output**
+  - Conditional text properties in cell paragraphs; semantic cell `@background` for resolved cell shading.
+- **OOXML**
+  - `w:style[@w:type="table"]/w:tblStylePr`; table `tblStyle`, `tblLook`, row/column band sizes, and row/cell/paragraph `cnfStyle`.
+- **IR**
+  - `StyleRecord.table_regions`; effective per-cell and per-paragraph table context.
+- **Parsing**
+  - Resolve table basedOn inheritance, then wholeTable, vertical bands, horizontal bands, first/last rows, first/last columns, and corners nw/ne/sw/se, in that precedence order. Resolve each region's inheritance before combining regions.
+  - Decode tblLook hexadecimal bits and explicit on/off attributes. By default apply bands and omit edge conditions. Honor band sizes, consecutive header rows, logical grid coordinates and spans, and explicit saved cnfStyle flags. Row tblPrEx exceptions use the selected revision-view property set.
+  - Direct paragraph/run properties remain later layers; direct cell shading overrides inherited cell shading. Explicit automatic/nil shading clears inherited fill. Nested tables receive their own table-style context.
+- **Diagnostics**
+  - Invalid style band sizes report `INVALID_TABLE_BAND_SIZE`; use inherited/default size 1.
+- **Limits**
+  - This cascade restores the properties supported by the reading model. It does not introduce full theme-font resolution, unsupported typography, table widths/heights, or editable geometry.

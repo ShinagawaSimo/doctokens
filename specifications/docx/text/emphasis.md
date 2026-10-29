@@ -8,7 +8,7 @@ Only semantic DTX emits reading-format wrappers.
 
 Wrapper order, outer to inner: enclosing revisions in source order, citation, hyperlink, mark, color, strike, underline, italic, bold, superscript, subscript, small-caps, then ruby around its own base runs. Only present/truthy properties participate.
 
-Resolved style properties retain explicit false/clear values through basedOn, linked-style, character-style, and direct-run merging. The final run projection removes cancellations and default colors. Numbering markers use the same visible-format projection. This does not implement docDefaults, conditional table styles, or the complete style-toggle cascade.
+Resolved style properties retain explicit false/clear values until final visible projection. Document defaults and independently resolved table/paragraph/character layers follow the [style cascade](style.md); linked-style IDs do not add an implicit layer. Numbering markers use the same visible-format filtering. Historical run property sets are selected by [revision view](revision.md).
 
 ## Fields
 

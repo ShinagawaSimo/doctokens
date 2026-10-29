@@ -8,7 +8,7 @@ from xml.etree import ElementTree as ET
 from ....model import InlineObject, LinkInfo, RawHint, Run, RunFormat
 from ....ooxml.characters import word_character
 from ....ooxml.fields import apply_field_instruction
-from ....ooxml.formatting import merge_run_formats, parse_run_format, visible_run_format
+from ....ooxml.formatting import parse_run_format, visible_run_format
 from ....ooxml.namespaces import (
     _TAG_M_OMATH,
     _TAG_M_OMATH_PARA,
@@ -36,6 +36,7 @@ from ....ooxml.namespaces import (
     first_child,
     local_name,
 )
+from ....ooxml.property_changes import property_change, selected_properties
 from .objects import drawing_objects, parse_embedded_object
 from .ruby import ruby_run
 from .vml import pict_objects
@@ -60,7 +61,8 @@ class RunParser:
         runs: list[Run],
     ) -> None:
         """Append run fragments in source order, including object and field boundaries."""
-        run_properties = first_child(run_element, "w", "rPr")
+        current_properties = first_child(run_element, "w", "rPr")
+        run_properties = selected_properties(current_properties, str(self.owner.options.revision_mode))
         run_style_id = None
         if run_properties is not None:
             rstyle = first_child(run_properties, "w", "rStyle")
@@ -68,13 +70,22 @@ class RunParser:
         visible_format = {}
         run_format: RunFormat = {}
         if self.owner.include_character_formatting:
-            run_format = merge_run_formats(
-                self.owner.styles.resolve_run_format(paragraph_style_id),
+            run_format = self.owner.styles.run_format(
+                paragraph_style_id,
+                run_style_id,
+                self.owner.table_style,
                 self.owner.ruby_format,
-                self.owner.styles.resolve_run_format(run_style_id),
                 parse_run_format(run_properties),
             )
             visible_format = visible_run_format(run_format)
+        change = None
+        if self.owner.include_character_formatting and self.owner.options.revision_mode == "review":
+            before = selected_properties(current_properties, "original")
+            before_style = attr(first_child(before, "w", "rStyle"), "w", "val")
+            before_format = self.owner.styles.run_format(
+                paragraph_style_id, before_style, self.owner.table_style, self.owner.ruby_format, parse_run_format(before)
+            )
+            change = property_change(current_properties, "run", visible_run_format(before_format), visible_format)
         for child in run_element:
             if child.tag == _TAG_W_RUN_PROPERTIES:
                 continue
@@ -91,6 +102,8 @@ class RunParser:
                 parsed_run["styleId"] = run_style_id
             if visible_format and "ruby" not in parsed_run:
                 parsed_run["format"] = visible_format
+            if change:
+                parsed_run["propertyChanges"] = [change]
             if (
                 parsed_run["text"]
                 or parsed_run.get("objects")

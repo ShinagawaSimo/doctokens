@@ -8,6 +8,8 @@ A logical table can produce several page segments.
 
 Table block identity/page/section fields use [body](../document/body.md), [pagination](../document/pagination.md), and [sections](../document/section.md). Vertical-merge state survives segment boundaries. The table resource joins segments sharing tableId.
 
+Select structural revisions and historical property sets before computing rows, columns, conditional styles, and merge relationships. Row/cell content controls and transparent wrappers are expanded at their own structural level without hoisting nested tables. Main output, full table resources, column queries, aggregation, and search share logical grid positions.
+
 ## Fields
 
 ### `id`
@@ -44,13 +46,13 @@ Table block identity/page/section fields use [body](../document/body.md), [pagin
   - `table/tr`; DTP rows separated by LF.
 
 - **OOXML**
-  - Direct `w:tr` children.
+  - `w:tr` children, including rows wrapped in `sdt/sdtContent` or transparent containers.
 
 - **IR**
   - `list[TableRow]`
 
 - **Parsing**
-  - Retain source order. Empty table produces no segments.
+  - Retain selected-view source order. Filter inserted/deleted rows according to revision_mode. Empty selected table produces no segments. Semantic review wraps affected rows in ins/del; row controls wrap the row without duplicating their text in each cell.
 
 ### `columns`
 
@@ -58,13 +60,16 @@ Table block identity/page/section fields use [body](../document/body.md), [pagin
   - Nested-table `@columns`, plain truncation summary.
 
 - **OOXML**
-  - Sum of cell gridSpan values per row.
+  - Selected `w:tblGrid/w:gridCol`, row gridBefore/gridAfter, and cell gridSpan values.
 
 - **IR**
   - `TableBlock.columnCount: int`
 
 - **Parsing**
-  - Maximum row width observed by segment creation; current implementation does not use tblGrid to set this count.
+  - Maximum of the selected table grid width and every selected row's `gridBefore + sum(gridSpan) + gridAfter`. Compute it for the whole logical table before pagination, so segments share the same count.
+  - Omitted columns are positions without cells, not fabricated empty source cells. Plain output uses empty tab-delimited slots; XML records row grid-before/grid-after. Resource filters and aggregates match actual grid columns rather than the ordinal cell list.
+- **Limits**
+  - Reject a logical width above ParseOptions.max_table_columns before expanding padding or merge state; default 16384. This does not silently clamp the table.
 
 ### `truncated`
 

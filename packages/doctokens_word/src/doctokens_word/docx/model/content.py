@@ -207,20 +207,33 @@ class Revision(TypedDict):
     moveName: str
 
 
+class PropertyChange(TypedDict):
+    scope: str
+    before: str
+    after: str
+    author: str
+    date: str
+
+
+class ReviewMarkup(TypedDict, total=False):
+    revisions: list[Revision]
+    propertyChanges: list[PropertyChange]
+
+
 class Ruby(TypedDict):
     annotation: str
     baseRuns: list[Run]
 
 
-class Run(RunRequired, total=False):
+class Run(RunRequired, ReviewMarkup, total=False):
     objects: list[InlineObject]
     # Internal layout marker emitted between runs at a calculated page break.
     pageBreak: bool
     styleId: str
     format: RunFormat
     link: LinkInfo
-    revisions: list[Revision]
     ruby: Ruby
+    paragraphMark: Revision
     field: FieldInfo
     contentControls: list[ContentControl]
 

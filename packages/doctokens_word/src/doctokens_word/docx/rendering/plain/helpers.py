@@ -6,7 +6,7 @@ from typing import cast
 
 from doctokens_core.output.plain import page_marker
 
-from ...model import Block, ContentControl, InlineContainer, InlineObject, OcrResultRecord, TableBlock
+from ...model import Block, ContentControl, InlineContainer, InlineObject, OcrResultRecord, TableBlock, TableRow
 from ...model.traversal import iter_blocks, iter_runs
 from ..common import constants as _constants
 from ..common.controls import wrap_plain_control
@@ -226,13 +226,27 @@ def table_text_only(block: TableBlock, ocr_results: dict[str, OcrResultRecord] |
     rows = block["rows"]
     if len(rows) > _constants._TABLE_TRUNCATE_PLAIN:
         first_row = rows[0]
-        header_line = "\t".join(_plain_cell_text(cell, ocr_results) for cell in first_row["cells"])
+        header_line = _plain_row_text(first_row, ocr_results)
         total_rows = len(rows)
         column_count = block["columnCount"]
         return f"{header_line}\n[Table truncated: {total_rows} rows, {column_count} cols]"
 
-    row_texts = ["\t".join(_plain_cell_text(cell, ocr_results) for cell in row["cells"]) for row in rows]
+    row_texts = [_plain_row_text(row, ocr_results) for row in rows]
     return "\n".join(row_texts)
+
+
+def _plain_row_text(row: TableRow, ocr_results: dict[str, OcrResultRecord] | None) -> str:
+    parts: list[str] = []
+    for cell in row["cells"]:
+        parts.extend("" for _ in range(max(0, cell["colIndex"] - len(parts))))
+        parts.append(_plain_cell_text(cell, ocr_results))
+        parts.extend("" for _ in range(cell["colSpan"] - 1))
+    if not row["cells"]:
+        parts.extend("" for _ in range(row.get("gridBefore", 0)))
+    parts.extend("" for _ in range(row.get("gridAfter", 0)))
+    value = "\t".join(parts)
+    controls = row.get("contentControls", [])
+    return wrap_plain_control(value, controls) if controls else value
 
 
 def _plain_cell_text(cell: object, ocr_results: dict[str, OcrResultRecord] | None) -> str:
@@ -251,7 +265,9 @@ def _plain_cell_text(cell: object, ocr_results: dict[str, OcrResultRecord] | Non
         else:
             parts.append(inline_text_only(cast(InlineContainer, child), ocr_results))
     rendered = "\n".join(part for part in parts if part)
-    return rendered or fallback
+    value = rendered or fallback
+    controls = _controls(cell.get("contentControls"))
+    return wrap_plain_control(value, controls) if controls else value
 
 
 def _plain_excerpt(text: str, limit: int = 120) -> str:

@@ -1,201 +1,173 @@
-"""Parse DOCX tables, including nested blocks and page-separated segments."""
+"""Parse selected table geometry, controls, styles and structural revisions."""
 
 from __future__ import annotations
 
-from typing import Any
+from functools import partial
+from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
 from ....model import Block, ContentControl, TableBlock, TableCell, TableRow
-from ....ooxml.namespaces import attr, child_elements, first_child
+from ....ooxml.formatting import normalize_hex_color
+from ....ooxml.namespaces import attr, first_child, local_name, qualified_name
+from ....ooxml.property_changes import apply_property_review, selected_properties, structural_revision
+from ....ooxml.table_styles import TableStyleResolver
 from .containers import container_blocks
+from .table_geometry import RowSource, apply_vertical_merges, table_rows, vertical_merge
+
+if TYPE_CHECKING:
+    from .scanner import DocumentBodyParser
 
 
 class TableParser:
-    """Own table geometry, merge state, and table-local pagination."""
-
-    def __init__(self, owner: Any) -> None:
+    def __init__(self, owner: DocumentBodyParser) -> None:
         self.owner = owner
 
-    def parse(
-        self,
-        table: ET.Element,
-        part: str,
-        content_controls: tuple[ContentControl, ...] = (),
-    ) -> list[TableBlock]:
-        """Parse a table into one block per row-level page segment."""
-        self.owner._order += 1
-        section_index = self.owner._sections._begin_section()
-        table_id = self.owner.table_ids.allocate()
-        segment_page = self.owner._flush_pending_page_breaks()
-
-        sub_tables: list[TableBlock] = []
-        segment_rows: list[TableRow] = []
-        merge_state: dict[int, TableCell] = {}
-        widest_column_count = 0
-        page_before_row = self.owner._page_hint
-
-        for row_index, row_element in enumerate(child_elements(table, "w", "tr")):
-            row, row_width = self._parse_row(row_element, row_index, part)
-            widest_column_count = max(widest_column_count, row_width)
-            if self.owner._page_hint != page_before_row:
-                if segment_rows:
-                    self.apply_vertical_merges(segment_rows, merge_state)
-                    sub_tables.append(
-                        self._make_block(
-                            part,
-                            segment_page,
-                            segment_rows,
-                            widest_column_count,
-                            table_id,
-                            len(sub_tables) + 1,
-                            section_index,
-                            content_controls,
-                        )
-                    )
-                    segment_page = self.owner._page_hint
-                    segment_rows = []
-                self.owner._pending_page_breaks = 0
-            segment_rows.append(row)
-            page_before_row = self.owner._page_hint
-
-        if segment_rows:
-            self.apply_vertical_merges(segment_rows, merge_state)
-            sub_tables.append(
-                self._make_block(
-                    part,
-                    segment_page,
-                    segment_rows,
-                    widest_column_count,
-                    table_id,
-                    len(sub_tables) + 1,
-                    section_index,
-                    content_controls,
-                )
-            )
-
-        table_end = max((self._block_end_page(block) for block in sub_tables), default=segment_page)
-        self.owner._page_hint = max(self.owner._page_hint, table_end)
-        return sub_tables
-
-    def _make_block(
-        self,
-        part: str,
-        page: int,
-        rows: list[TableRow],
-        max_col: int,
-        table_id: str,
-        segment_index: int,
-        section_index: int,
-        content_controls: tuple[ContentControl, ...],
-    ) -> TableBlock:
-        block_id = self.owner.block_ids.allocate()
-        block: TableBlock = {
-            "id": block_id,
-            "type": "table",
-            "part": part,
-            "order": self.owner._order,
-            "page": page,
-            "tableId": table_id,
-            "segmentIndex": segment_index,
-            "rows": rows,
-            "columnCount": max_col,
-            "section": section_index,
-        }
-        if content_controls:
-            block["contentControls"] = list(content_controls)
-        block_end = max(
-            (self._block_end_page(child) for row in rows for cell in row["cells"] for child in cell["blocks"]),
-            default=page,
+    def parse(self, table: ET.Element, part: str, content_controls: tuple[ContentControl, ...] = ()) -> list[TableBlock]:
+        owner = self.owner
+        owner._order += 1
+        section = owner._sections._begin_section()
+        table_id = owner.table_ids.allocate()
+        page = owner._flush_pending_page_breaks()
+        view = str(owner.options.revision_mode)
+        sources = table_rows(table, view, owner.warnings, part, owner.options.max_table_columns)
+        grid = selected_properties(first_child(table, "w", "tblGrid"), view)
+        columns = max(
+            len(grid.findall(qualified_name("w", "gridCol"))) if grid is not None else 0,
+            max((row.width for row in sources), default=0),
         )
-        if block_end > page:
-            block["pageEnd"] = block_end
-        return block
+        current_properties = first_child(table, "w", "tblPr")
+        properties = selected_properties(current_properties, view)
+        headers = next((index for index, row in enumerate(sources) if not row.header), len(sources))
+        styles = TableStyleResolver(owner.styles, properties, len(sources), columns, headers)
+        blocks: list[TableBlock] = []
+        rows: list[TableRow] = []
+        active: dict[int, TableCell] = {}
 
-    def _block_end_page(self, block: Block) -> int:
-        end_page = int(block.get("pageEnd", block.get("page", 1)))
-        if block["type"] == "table":
-            for row in block["rows"]:
-                for cell in row["cells"]:
-                    for child in cell["blocks"]:
-                        end_page = max(end_page, self._block_end_page(child))
-        return end_page
-
-    def _parse_row(self, row_element: ET.Element, row_index: int, part: str) -> tuple[TableRow, int]:
-        cells: list[TableCell] = []
-        next_column = 0
-        is_header = first_child(first_child(row_element, "w", "trPr"), "w", "tblHeader") is not None
-        for cell_element in child_elements(row_element, "w", "tc"):
-            col_span = self._cell_col_span(cell_element)
-            vertical_merge = self._cell_v_merge(cell_element)
-            cell_blocks = container_blocks(self.owner, cell_element, part)
-            cell: TableCell = {
-                "rowIndex": row_index,
-                "colIndex": next_column,
-                "rowSpan": 1,
-                "colSpan": col_span,
-                "text": self._cell_text(cell_blocks),
-                "blocks": cell_blocks,
+        def emit() -> None:
+            if not rows:
+                return
+            apply_vertical_merges(rows, active)
+            block: TableBlock = {
+                "id": owner.block_ids.allocate(),
+                "type": "table",
+                "part": part,
+                "order": owner._order,
+                "page": page,
+                "tableId": table_id,
+                "segmentIndex": len(blocks) + 1,
+                "rows": list(rows),
+                "columnCount": columns,
+                "section": section,
             }
-            if vertical_merge:
-                cell["vMerge"] = vertical_merge
-            cells.append(cell)
-            next_column += col_span
-        row: TableRow = {"rowIndex": row_index, "cells": cells}
-        if is_header:
-            row["isHeader"] = True
-        return row, next_column
+            if content_controls:
+                block["contentControls"] = list(content_controls)
+            apply_property_review(block, current_properties, "table", view)
+            grid_change = first_child(grid, "w", "tblGridChange")
+            if view == "review" and grid_change is not None:
+                from ....ooxml.property_changes import property_change
 
-    def _cell_col_span(self, cell: ET.Element) -> int:
-        grid_span = first_child(first_child(cell, "w", "tcPr"), "w", "gridSpan")
-        value = attr(grid_span, "w", "val") if grid_span is not None else None
-        if value is None:
-            return 1
-        try:
-            return max(1, int(value))
-        except ValueError:
-            self.owner._warn("INVALID_GRID_SPAN", f"Invalid gridSpan value: {value!r}", part="word/document.xml")
-            return 1
+                old_grid = selected_properties(grid, "original")
+                change = property_change(
+                    grid,
+                    "table",
+                    {"columns": len(old_grid.findall(qualified_name("w", "gridCol"))) if old_grid is not None else 0},
+                    {"columns": columns},
+                )
+                if change:
+                    block.setdefault("propertyChanges", []).append(change)
+            end = max((self._end(child) for row in rows for cell in row["cells"] for child in cell["blocks"]), default=page)
+            if end > page:
+                block["pageEnd"] = end
+            blocks.append(block)
+
+        before = owner._page_hint
+        for index, source in enumerate(sources):
+            row = self._row(source, index, part, styles)
+            if owner._page_hint != before:
+                if rows:
+                    emit()
+                    rows.clear()
+                    page = owner._page_hint
+                owner._pending_page_breaks = 0
+            rows.append(row)
+            before = owner._page_hint
+        emit()
+        owner._page_hint = max(owner._page_hint, max((self._end(block) for block in blocks), default=page))
+        return blocks
+
+    def _row(self, source: RowSource, index: int, part: str, styles: TableStyleResolver) -> TableRow:
+        owner = self.owner
+        view = str(owner.options.revision_mode)
+        row: TableRow = {"rowIndex": index, "cells": []}
+        if source.header:
+            row["isHeader"] = True
+        if source.before:
+            row["gridBefore"] = source.before
+        if source.after:
+            row["gridAfter"] = source.after
+        if source.controls:
+            row["contentControls"] = list(source.controls)
+        row_pr = first_child(source.node, "w", "trPr")
+        apply_property_review(row, row_pr, "row", view)
+        exceptions = first_child(source.node, "w", "tblPrEx")
+        apply_property_review(row, exceptions, "row-table", view)
+        styles = styles.row_exception(selected_properties(exceptions, view))
+        revision = structural_revision(row_pr)
+        deleted_row = revision is not None and local_name(revision.tag) in {"del", "moveFrom"}
+        for cell_source in source.cells:
+            cell_pr = first_child(cell_source.node, "w", "tcPr")
+            cell_revision = structural_revision(cell_pr)
+            deleted_cell = cell_revision is not None and local_name(cell_revision.tag) == "cellDel"
+            outer_style = owner.inline.table_style
+            outer_resolver = owner.inline.table_style_for_paragraph
+            owner.inline.table_style = styles.cell(
+                index, cell_source.column, cell_source.span, source.properties, cell_source.properties
+            )
+            owner.inline.table_style_for_paragraph = partial(
+                styles.cell, index, cell_source.column, cell_source.span, source.properties, cell_source.properties
+            )
+            owner.inline.revisions.deleted_depth += int(deleted_row or deleted_cell)
+            try:
+                blocks = container_blocks(owner, cell_source.node, part)
+                background = owner.inline.table_style.cell_background
+            finally:
+                owner.inline.table_style = outer_style
+                owner.inline.table_style_for_paragraph = outer_resolver
+                owner.inline.revisions.deleted_depth -= int(deleted_row or deleted_cell)
+            cell: TableCell = {
+                "rowIndex": index,
+                "colIndex": cell_source.column,
+                "rowSpan": 1,
+                "colSpan": cell_source.span,
+                "text": self._cell_text(blocks),
+                "blocks": blocks,
+            }
+            merge = vertical_merge(cell_source.properties, view)
+            if merge:
+                cell["vMerge"] = merge
+            if cell_source.controls:
+                cell["contentControls"] = list(cell_source.controls)
+            shading = first_child(cell_source.properties, "w", "shd")
+            if shading is not None:
+                background = normalize_hex_color(attr(shading, "w", "fill"))
+                if attr(shading, "w", "val") == "nil":
+                    background = None
+            if background and owner.include_character_formatting:
+                cell["background"] = background
+            apply_property_review(cell, cell_pr, "cell", view)
+            row["cells"].append(cell)
+        return row
 
     @staticmethod
-    def _cell_v_merge(cell: ET.Element) -> str | None:
-        vmerge = first_child(first_child(cell, "w", "tcPr"), "w", "vMerge")
-        if vmerge is None:
-            return None
-        return attr(vmerge, "w", "val") or "continue"
+    def _end(block: Block) -> int:
+        return int(block.get("pageEnd", block.get("page", 1)))
 
     @staticmethod
     def _cell_text(blocks: list[Block]) -> str:
         parts: list[str] = []
         for block in blocks:
-            if block["type"] in {"paragraph", "heading"} and block["text"]:
+            if block["type"] == "table":
+                parts.extend(" | ".join(cell["text"] for cell in row["cells"]) for row in block["rows"])
+            elif block["text"]:
                 parts.append(block["text"])
-            elif block["type"] == "table":
-                for row in block["rows"]:
-                    text = " | ".join(cell["text"] for cell in row["cells"])
-                    if text.strip():
-                        parts.append(text)
         return "\n".join(parts)
-
-    @staticmethod
-    def apply_vertical_merges(rows: list[TableRow], active: dict[int, TableCell] | None = None) -> None:
-        """Add rowSpan to vertical merge origins across page-separated segments."""
-        if active is None:
-            active = {}
-        for row in rows:
-            for cell in row["cells"]:
-                columns = range(cell["colIndex"], cell["colIndex"] + cell["colSpan"])
-                v_merge = cell.get("vMerge")
-                if v_merge == "restart":
-                    for column in columns:
-                        active[column] = cell
-                elif v_merge == "continue":
-                    origins: list[TableCell] = []
-                    for column in columns:
-                        origin = active.get(column)
-                        if origin is not None and origin not in origins:
-                            origins.append(origin)
-                    for origin in origins:
-                        origin["rowSpan"] += 1
-                else:
-                    for column in columns:
-                        active.pop(column, None)

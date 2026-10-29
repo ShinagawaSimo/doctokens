@@ -64,13 +64,13 @@ Unknown run children produce `UNSUPPORTED_RUN_CHILD`; unknown paragraph wrappers
   - Semantic wrappers; see [emphasis](emphasis.md).
 
 - **OOXML**
-  - Paragraph style, run style, direct `w:rPr`.
+  - Document defaults, table/paragraph/character style levels, and the selected current/historical direct `w:rPr`.
 
 - **IR**
   - `Run.format: RunFormat`
 
 - **Parsing**
-  - Merge in that order; retain explicit false/clear values until the final visible projection. Store only visible nonempty keys. Ruby base runs also inherit their containing run's format before their own direct overrides.
+  - Apply the [style cascade](style.md), including toggle rules across independently resolved levels. Retain explicit clear values until final visible projection. Store only visible nonempty keys. Ruby base runs inherit their containing run's effective format before their own overrides. Semantic review can wrap changed formats as defined in [revisions](revision.md).
 
 ### `ruby`
 

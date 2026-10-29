@@ -14,6 +14,7 @@ VISIBLE_FORMAT_KEYS = (
     "italic",
     "underline",
     "strike",
+    "doubleStrike",
     "superscript",
     "subscript",
     "smallCaps",
@@ -65,7 +66,7 @@ def parse_paragraph_borders(paragraph_properties: ET.Element | None) -> Paragrap
         if node is None:
             continue
         style = (attr(node, "w", "val") or "").lower()
-        if style in {"", "nil", "none"}:
+        if not style:
             continue
         border: ParagraphBorder = {"style": style}
         color = normalize_hex_color(attr(node, "w", "color"))
@@ -106,14 +107,18 @@ def visible_run_format(fmt: RunFormat | None) -> RunFormat:
     """Filter down to the set of formats the final XML needs to express."""
     if not fmt:
         return {}
-    return {
+    visible: RunFormat = {
         key: value
         for key, value in fmt.items()
         if key in VISIBLE_FORMAT_KEYS
+        and key != "doubleStrike"
         and value is not False
         and value not in {None, ""}
         and not (key == "color" and isinstance(value, str) and is_default_text_color(value))
     }
+    if fmt.get("doubleStrike"):
+        visible["strike"] = True
+    return visible
 
 
 def _read_bool_format(run_properties: ET.Element, child_name: str, key: str, fmt: RunFormat) -> None:
@@ -138,8 +143,12 @@ def _read_strike(run_properties: ET.Element, fmt: RunFormat) -> None:
     double_strike = first_child(run_properties, "w", "dstrike")
     if strike is not None:
         fmt["strike"] = is_on(strike)
+        if fmt["strike"]:
+            fmt["doubleStrike"] = False
     if double_strike is not None:
-        fmt["strike"] = is_on(double_strike)
+        fmt["doubleStrike"] = is_on(double_strike)
+        if fmt["doubleStrike"]:
+            fmt["strike"] = False
 
 
 def _read_vert_align(run_properties: ET.Element, fmt: RunFormat) -> None:

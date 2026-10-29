@@ -8,19 +8,30 @@ from xml.etree import ElementTree as ET
 from doctokens_core.output.xml import append
 
 from ..model import Run, RunFormat
+from ..model.content import ReviewMarkup
 from .common.text import filter_format
 from .dtx_content import _append_text_with_breaks
 
 
-def revision_parent(parent: ET.Element, run: Run, density: str) -> ET.Element:
+def review_parent(parent: ET.Element, markup: ReviewMarkup, density: str) -> ET.Element:
     if density == "semantic":
-        for revision in run.get("revisions", []):
+        for revision in markup.get("revisions", []):
             parent = append(
                 parent,
                 {"inserted": "ins", "deleted": "del", "moved-from": "move-from", "moved-to": "move-to"}[revision["kind"]],
                 author=revision["author"] or None,
                 date=revision["date"] or None,
                 name=revision["moveName"] or None,
+            )
+        for change in markup.get("propertyChanges", []):
+            parent = append(
+                parent,
+                "format-change",
+                scope=change["scope"],
+                before=change["before"],
+                after=change["after"],
+                author=change["author"] or None,
+                date=change["date"] or None,
             )
     return parent
 

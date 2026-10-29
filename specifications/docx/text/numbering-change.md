@@ -2,7 +2,7 @@
 
 [DOCX](../README.md) / Numbering revisions
 
-In the `original` revision view, `w:numberingChange` can provide level definitions for the paragraph’s saved numbering.
+In original view, `w:pPr/w:numPr/w:numberingChange` supplies the saved previous level definitions. Review compares the current marker with the same established counter formatted by those definitions and emits a numbering format-change when they differ; final uses the current definition.
 
 ## Fields
 

@@ -131,6 +131,17 @@ def parse_docx(
 - **Parsing**
   - See [revisions](text/revision.md).
 
+### `max_table_columns`
+
+- **Output**
+  - Bounds logical grid width before padding and merge-state expansion.
+- **Source**
+  - ParseOptions.
+- **IR**
+  - `int = 16384`.
+- **Parsing**
+  - Positive non-bool integer. Count selected table grid columns and every retained row's omitted positions and spans. Raise ValueError when the logical width exceeds this allowance; do not truncate or silently change cell positions. Applies to body, nested tables, and ancillary tables.
+
 ### `ocr`
 
 - **Output**

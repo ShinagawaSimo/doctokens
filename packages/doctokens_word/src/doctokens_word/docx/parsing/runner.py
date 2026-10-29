@@ -26,7 +26,8 @@ from ..model import (
 from ..ooxml.compatibility import DocxCompatibility
 from ..ooxml.numbering import NumberingMap, NumberingParser, NumberingState
 from ..ooxml.package import PackageReader
-from ..ooxml.styles import StyleMap, StylesParser
+from ..ooxml.style_reader import StylesParser
+from ..ooxml.styles import StyleMap
 from .assembly import _build_document, _DocumentParseResult
 from .modules.ancillary.parts import AncillaryParser
 from .modules.body.scanner import DocumentBodyParser

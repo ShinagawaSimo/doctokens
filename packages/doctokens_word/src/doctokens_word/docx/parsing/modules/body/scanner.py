@@ -30,11 +30,19 @@ from ....ooxml.namespaces import first_child
 from ....ooxml.numbering import NumberingState
 from ....ooxml.outline import parse_outline_level
 from ....ooxml.package import PackageReader
+from ....ooxml.property_changes import (
+    property_change,
+    reading_properties,
+    revision_record,
+    selected_properties,
+    structural_revision,
+)
 from ....ooxml.styles import StyleMap
 from ...plan import DocxFeature, DocxParsePlan
 from .anchors import BlockIdAllocator, BodyAnchors
 from .inline import InlineParser
 from .numbering import ParagraphNumbering, _paragraph_style_id
+from .paragraph_groups import ParagraphPart
 from .sections import BodySections
 from .stream import read_blocks
 from .tables import TableParser
@@ -109,6 +117,8 @@ class DocumentBodyParser:
         paragraph: ET.Element,
         part: str,
         content_controls: tuple[ContentControl, ...] = (),
+        *,
+        paragraph_parts: list[ParagraphPart] | None = None,
     ) -> TextBlock | None:
         """Parse a paragraph using its explicit outline level before its style."""
         block_id = self.block_ids.allocate()
@@ -117,28 +127,38 @@ class DocumentBodyParser:
         # Apply the page-break count accumulated by the previous block.
         page_start = self._flush_pending_page_breaks()
 
-        style_id = _paragraph_style_id(paragraph)
-        paragraph_properties = first_child(paragraph, "w", "pPr")
+        style_id = self.styles.style_id(_paragraph_style_id(paragraph, str(self.options.revision_mode)), "paragraph")
+        current_properties = first_child(paragraph, "w", "pPr")
+        paragraph_properties = selected_properties(current_properties, str(self.options.revision_mode))
+        table_style = (
+            self.inline.table_style_for_paragraph(paragraph_properties)
+            if self.inline.table_style_for_paragraph
+            else self.inline.table_style
+        )
+        inherited = self.styles.paragraph(style_id, table_style)
         alignment = None
         borders = {}
         if self.include_character_formatting:
-            alignment = parse_paragraph_alignment(paragraph_properties) or self.styles.resolve_paragraph_alignment(style_id)
+            alignment = parse_paragraph_alignment(paragraph_properties) or inherited.alignment
             borders = merge_paragraph_borders(
-                self.styles.resolve_paragraph_borders(style_id),
+                inherited.borders,
                 parse_paragraph_borders(paragraph_properties),
             )
+            borders = {side: border for side, border in borders.items() if border.get("style") not in {"nil", "none"}}
         section_break = first_child(paragraph_properties, "w", "sectPr")
         if section_break is not None:
             # A sectPr in pPr ends the section after this paragraph; Word
             # renders the next content on a new page.
             self._sections._collect_section_refs(section_break)
-        runs, raw_hints = self.inline.paragraph_runs(paragraph, part, block_id, style_id)
+        runs, raw_hints = self.inline.paragraph_runs(paragraph, part, block_id, style_id, paragraph_parts, content_controls)
         anchors = self._anchors._bookmarks_by_block.pop(block_id, [])
-        numbering = self._numbering.parse(paragraph, style_id, part, block_id)
+        numbering = self._numbering.parse(paragraph, style_id, part, block_id, inherited)
         if numbering is not None:
             # Auto-numbering is visible Word text; insert it into the text stream as a synthetic run.
             marker_format = visible_run_format(numbering["markerFormat"]) if self.include_character_formatting else {}
             numbering_run: Run = {"text": numbering["text"]}
+            if self._numbering.last_change:
+                numbering_run["propertyChanges"] = [self._numbering.last_change]
             if numbering["pictureBulletId"]:
                 relationship_id = self.numbering_state.numbering.picture_bullet_relationship(numbering["pictureBulletId"])
                 asset = self.asset_lookup.get(("word/numbering.xml", relationship_id or ""))
@@ -201,13 +221,8 @@ class DocumentBodyParser:
         self._pending_page_breaks = 0
 
         outline_level = parse_outline_level(paragraph_properties, self.warnings, part=part, block_id=block_id)
-        heading_level = (
-            self.styles.resolve_heading_level(style_id)
-            if outline_level is None
-            else outline_level + 1
-            if outline_level < 9
-            else None
-        )
+        effective_outline = inherited.outline_level if outline_level is None else outline_level
+        heading_level = effective_outline + 1 if effective_outline is not None and effective_outline < 9 else None
         if heading_level is not None:
             # Headings come only from explicit outlineLvl, never guessed from text shape.
             block: TextBlock = {
@@ -258,6 +273,18 @@ class DocumentBodyParser:
             block["contentControls"] = list(content_controls)
         if anchors:
             block["anchors"] = anchors
+        if self.options.revision_mode == "review":
+            mark = structural_revision(first_child(current_properties, "w", "rPr"))
+            if mark is not None:
+                block["paragraphMark"] = revision_record(mark)
+            change = property_change(
+                current_properties,
+                "paragraph",
+                reading_properties(selected_properties(current_properties, "original")),
+                reading_properties(current_properties),
+            )
+            if change:
+                block["propertyChanges"] = [change]
         if self.options.include_runs:
             block["runs"] = runs
         if self.include_raw_hints and self.options.include_raw_hints and raw_hints:

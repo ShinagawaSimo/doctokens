@@ -15,7 +15,8 @@ from .common.floating import floating_textboxes, is_floating_textbox, iter_flow_
 from .common.pages import iter_block_page_segments
 from .common.text import merge_text_runs
 from .dtx_content import _append_chart, _append_controls, _append_ocr, _append_smartart, _append_text_with_breaks
-from .dtx_runs import append_run_text, revision_parent
+from .dtx_runs import append_run_text, review_parent
+from .dtx_tables import append_rows
 
 _TABLE_ROW_LIMIT = 30
 
@@ -67,6 +68,7 @@ def _append_block(
 ) -> None:
     controls = block.get("contentControls", [])
     container = _append_controls(parent, controls, density)
+    container = review_parent(container, block, density)
     if block["type"] == "table":
         _append_table(container, block, density, ocr_results)
         return
@@ -84,6 +86,8 @@ def _append_block(
         _append_floating(container, cast(InlineContainer, block), density, ocr_results)
     else:
         _append_inline(node, cast(InlineContainer, block), density, ocr_results)
+    if density == "semantic" and (mark := block.get("paragraphMark")):
+        append(node, "paragraph-break", revision=mark["kind"], author=mark["author"] or None, date=mark["date"] or None)
 
 
 def _append_anchors(node: ET.Element, block: Block) -> None:
@@ -126,8 +130,12 @@ def _append_inline(
 def _append_runs(parent: ET.Element, runs: list[Run], density: str, ocr_results: dict[str, OcrResultRecord]) -> None:
     for run in merge_text_runs(runs):
         content_parent = _append_controls(parent, run.get("contentControls", []), density)
-        content_parent = revision_parent(content_parent, run, density)
+        content_parent = review_parent(content_parent, run, density)
         append_run_text(content_parent, run, density, lambda node, base: _append_runs(node, base, density, ocr_results))
+        if density == "semantic" and (mark := run.get("paragraphMark")):
+            append(
+                content_parent, "paragraph-break", revision=mark["kind"], author=mark["author"] or None, date=mark["date"] or None
+            )
         for inline_object in run.get("objects", []):
             if is_floating_textbox(inline_object):
                 append(content_parent, "textbox-ref", id=inline_object.get("id"))
@@ -142,7 +150,7 @@ def _append_floating(
         for item in run.get("objects", []):
             if is_floating_textbox(item):
                 node = _append_controls(parent, run.get("contentControls", []), density)
-                _append_inline_object(revision_parent(node, run, density), item, density, ocr_results)
+                _append_inline_object(review_parent(node, run, density), item, density, ocr_results)
 
 
 def _append_inline_object(
@@ -200,17 +208,7 @@ def _append_table(parent: ET.Element, block: TableBlock, density: str, ocr_resul
     rows = block["rows"]
     truncated = len(rows) > _TABLE_ROW_LIMIT
     table = append(parent, "table", id=block["tableId"], truncated=True if truncated else None)
-    for row in rows[:2] if truncated else rows:
-        row_node = append(table, "tr", header=True if row.get("isHeader") else None)
-        for cell in row["cells"]:
-            cell_node = append(
-                row_node,
-                "th" if row.get("isHeader") else "td",
-                colspan=cell["colSpan"] if cell["colSpan"] != 1 else None,
-                rowspan=cell["rowSpan"] if cell["rowSpan"] != 1 else None,
-                v_merge=cell.get("vMerge"),
-            )
-            _append_cell_content(cell_node, cell, density, ocr_results)
+    append_rows(table, rows[:2] if truncated else rows, density, ocr_results, _append_cell_content)
 
 
 def _append_cell_content(parent: ET.Element, cell: object, density: str, ocr_results: dict[str, OcrResultRecord]) -> None:
@@ -229,7 +227,7 @@ def _append_cell_content(parent: ET.Element, cell: object, density: str, ocr_res
                 rows=len(block["rows"]),
                 columns=block["columnCount"],
             )
-            _append_table_rows(nested, block, density, ocr_results)
+            append_rows(nested, block["rows"], density, ocr_results, _append_cell_content)
             continue
         if floating_textboxes(cast(InlineContainer, block)):
             _append_block(parent, block, density, ocr_results)
@@ -239,23 +237,7 @@ def _append_cell_content(parent: ET.Element, cell: object, density: str, ocr_res
             if current_page is not None and page != current_page:
                 append(parent, "page", number=page)
             current_page = page
-            paragraph = append(parent, "p")
-            _append_anchors(paragraph, fragment)
-            _append_inline(paragraph, cast(InlineContainer, fragment), density, ocr_results)
-
-
-def _append_table_rows(parent: ET.Element, block: TableBlock, density: str, ocr_results: dict[str, OcrResultRecord]) -> None:
-    for row in block["rows"]:
-        row_node = append(parent, "tr", header=True if row.get("isHeader") else None)
-        for cell in row["cells"]:
-            cell_node = append(
-                row_node,
-                "th" if row.get("isHeader") else "td",
-                colspan=cell["colSpan"] if cell["colSpan"] != 1 else None,
-                rowspan=cell["rowSpan"] if cell["rowSpan"] != 1 else None,
-                v_merge=cell.get("vMerge"),
-            )
-            _append_cell_content(cell_node, cell, density, ocr_results)
+            _append_block(parent, fragment, density, ocr_results)
 
 
 def _append_assets(parent: ET.Element, parsed_document: ParsedDocument, density: str) -> None:

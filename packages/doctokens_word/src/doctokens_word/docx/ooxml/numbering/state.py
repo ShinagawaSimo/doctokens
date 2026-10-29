@@ -64,6 +64,11 @@ class NumberingState:
             result["markerFont"] = level.marker_font
         return result
 
+    def current_label(self, num_id: str, numbering_level: int, overrides: Mapping[int, NumberingLevel]) -> str:
+        """Format an already established counter using a saved previous definition."""
+        counters = self._counters.get(num_id, {})
+        return self._render_label(num_id, numbering_level, counters, overrides)
+
     def _level_for(
         self,
         num_id: str,

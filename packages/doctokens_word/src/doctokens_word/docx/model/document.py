@@ -39,6 +39,7 @@ class ParseOptions(PackageOptions):
     preserve_empty_paragraphs: bool = False
     include_runs: bool = True
     include_raw_hints: bool = True
+    max_table_columns: int = 16_384
     revision_mode: RevisionMode = RevisionMode.FINAL
     ocr: object | None = None
     ocr_workers: int = 4
@@ -47,6 +48,8 @@ class ParseOptions(PackageOptions):
     def __post_init__(self) -> None:
         object.__setattr__(self, "revision_mode", RevisionMode.parse(self.revision_mode))
         self.validate_package_options()
+        if isinstance(self.max_table_columns, bool) or not isinstance(self.max_table_columns, int) or self.max_table_columns <= 0:
+            raise ValueError("max_table_columns must be greater than zero")
         self.validate_ocr_options(self.ocr, self.ocr_workers, self.ocr_timeout)
 
 
@@ -55,7 +58,7 @@ class StyleRecord:
     """Word style summary."""
 
     style_id: str
-    type: str = "unknown"
+    type: str = "paragraph"
     name: str | None = None
     based_on: str | None = None
     link: str | None = None
@@ -69,6 +72,10 @@ class StyleRecord:
     is_custom: bool = False
     is_default: bool = False
     resolved_heading_level: int | None = None
+    table_regions: dict[str, StyleRecord] = field(default_factory=dict)
+    row_band_size: int | None = None
+    column_band_size: int | None = None
+    cell_background: str | None = None
 
 
 @dataclass

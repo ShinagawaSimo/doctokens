@@ -40,8 +40,8 @@ def qualified_name(prefix: str, local: str) -> str:
     return _core_qualified_name(prefix, local, NS)
 
 
-def attr(el: ET.Element, prefix: str, local: str, default: str | None = None) -> str | None:
-    return _core_attr(el, prefix, local, default, NS)
+def attr(el: ET.Element | None, prefix: str, local: str, default: str | None = None) -> str | None:
+    return _core_attr(el, prefix, local, default, NS) if el is not None else default
 
 
 def first_child(el: ET.Element | None, prefix: str, local: str) -> ET.Element | None:

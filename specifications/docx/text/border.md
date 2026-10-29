@@ -18,7 +18,7 @@ Border properties are extracted for semantic formatting.
   - `ParagraphBlock.borders: dict[str, ParagraphBorder]`
 
 - **Parsing**
-  - Merge inherited sides then direct sides. Empty/nil/none direct borders are discarded by extraction, so they do not explicitly clear an inherited side.
+  - Merge document defaults, table/paragraph style sides, and direct sides. Explicit nil/none clears the inherited side; remove cleared sides only at final visible projection.
 
 - **Absence and defaults**
   - No parsed borders: no attributes.
@@ -35,7 +35,7 @@ Border properties are extracted for semantic formatting.
   - `ParagraphBorder.style: str`
 
 - **Parsing**
-  - Lowercase; omit source values `""`, `nil`, `none`. Renderer default for an existing record without style is `single`.
+  - Lowercase; omit an empty source value. Preserve nil/none as internal cancellation values during inheritance. Renderer default for an existing visible record without style is `single`.
 
 ### `color`
 

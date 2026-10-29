@@ -10,14 +10,28 @@ from xml.etree import ElementTree as ET
 from doctokens_core.containers.opc.relationships import RelationshipIndex
 from doctokens_core.ooxml.equations.results import RevisionView
 
-from ....model import AssetLookup, InlineObject, ObjectLookup, ParseOptions, ParseWarning, RawHint, Run, RunFormat, append_warning
+from ....model import (
+    AssetLookup,
+    ContentControl,
+    InlineObject,
+    ObjectLookup,
+    ParseOptions,
+    ParseWarning,
+    RawHint,
+    Run,
+    RunFormat,
+    StyleRecord,
+    append_warning,
+)
 from ....ooxml.content_controls import parse_content_control
 from ....ooxml.fields import apply_field_instruction
 from ....ooxml.namespaces import attr, first_child, local_name
+from ....ooxml.property_changes import selected_properties
 from ....ooxml.styles import StyleMap
 from ...plan import DocxFeature, DocxParsePlan
 from .equations import equation_object
 from .objects import parse_embedded_object
+from .paragraph_groups import ParagraphPart
 from .revisions import InlineRevisions
 from .runs import RunParser
 from .textboxes import TextboxReader
@@ -67,6 +81,8 @@ class InlineParser:
         self.revisions = InlineRevisions(self)
         self.ruby_format: RunFormat = {}
         self.ruby_depth = 0
+        self.table_style = StyleRecord(style_id="")
+        self.table_style_for_paragraph: Callable[[ET.Element | None], StyleRecord] | None = None
         self.textbox_reader: TextboxReader | None = None
 
     def field_context_type(self) -> _FieldContext:
@@ -78,16 +94,32 @@ class InlineParser:
         part: str,
         block_id: str,
         paragraph_style_id: str | None,
+        parts: list[ParagraphPart] | None = None,
+        common_controls: tuple[ContentControl, ...] = (),
     ) -> tuple[list[Run], list[RawHint]]:
         """Parse paragraph children into runs and raw diagnostic hints."""
         runs: list[Run] = []
         raw_hints: list[RawHint] = []
         self._field_stack = []
+        outer_table_style = self.table_style
+        if self.table_style_for_paragraph is not None:
+            self.table_style = self.table_style_for_paragraph(
+                selected_properties(first_child(p, "w", "pPr"), str(self.options.revision_mode))
+            )
         try:
-            for child in p:
-                self._extract_inline_runs(child, part, block_id, paragraph_style_id, raw_hints, runs)
+            for source, controls in parts or [(p, ())]:
+                start = len(runs)
+                if local_name(source.tag) == "p":
+                    for child in source:
+                        self._extract_inline_runs(child, part, block_id, paragraph_style_id, raw_hints, runs)
+                else:
+                    self._extract_inline_runs(source, part, block_id, paragraph_style_id, raw_hints, runs)
+                if controls != common_controls:
+                    for run in runs[start:]:
+                        run.setdefault("contentControls", []).extend(controls)
         finally:
             self._field_stack = []
+            self.table_style = outer_table_style
         ordinal = 0
         for run in runs:
             for item in run.get("objects", []):

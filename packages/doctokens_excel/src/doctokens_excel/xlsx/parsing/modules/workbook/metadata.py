@@ -7,7 +7,6 @@ import re
 from doctokens_core.containers.opc.reader import PackageReader
 
 from ....model.workbook import DefinedName, SheetInfo
-from .shared_strings import _parse_shared_strings as _parse_shared_strings
 
 # SpreadsheetML main namespace
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"

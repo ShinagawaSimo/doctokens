@@ -46,6 +46,7 @@ def iter_value_rows(package: PackageReader, part: str, strings: SharedStrings, f
                 continue
             if element.tag != f"{{{NS_S}}}row":
                 if not inside_row and element is not parent:
+                    post.collect(element, format_index=formats)
                     element.clear()
                 continue
             checkpoint("searching worksheet rows")

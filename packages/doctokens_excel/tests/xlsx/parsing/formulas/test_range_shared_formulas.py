@@ -1,5 +1,5 @@
 """Implicit cell addresses and masters after slaves are producer encodings that Excel does not reliably save. The
-large selected-formula case awaits xlsx-formula-range-api.xlsx; malformed groups remain exceptions.
+malformed groups remain exceptions; ordinary selected-formula content uses native full-output goldens.
 """
 
 import io
@@ -122,18 +122,3 @@ def test_invalid_selected_group_retains_value_and_warns_once(rows: str, selected
     assert [(item.code, item.locator) for item in result.report.warnings] == [
         (code, f"xl/worksheets/sheet1.xml!{selected.split(':')[0]}")
     ]
-
-
-def test_many_out_of_range_values_do_not_enter_result() -> None:
-    other_rows = "".join(f'<row r="{row}"><c r="B{row}"><v>{row}</v></c></row>' for row in range(3, 503))
-    source = _source(
-        {
-            "Data": (
-                '<row r="1"><c r="A1"><f t="shared" ref="A1:A2" si="0">B1*2</f><v>2</v></c></row>'
-                '<row r="2"><c r="A2"><f t="shared" si="0"/><v>4</v></c></row>' + other_rows
-            )
-        }
-    )
-    result = parse_xlsx(source, density="structural", sheet="Data", range_spec="A2:A2")
-    assert _cell(result).get("formula") == "B2*2"
-    assert len(ET.fromstring(result.text).findall(".//grid/tr/cell")) == 1

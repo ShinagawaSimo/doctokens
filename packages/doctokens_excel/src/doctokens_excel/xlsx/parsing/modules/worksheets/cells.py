@@ -6,12 +6,15 @@ from contextlib import suppress
 from typing import cast
 from xml.etree import ElementTree as ET
 
+from doctokens_core.contracts.models import ParseWarning
+
 from ....model.cell import CompactCell
 from ....model.coordinates import parse_ref
 from ....model.workbook import Cell, CellControl, RichTextRun
 from ..styles.index import FormatIndex
 from ..workbook.rich_values import RichValueCatalog
 from ..workbook.shared_strings import SharedStrings
+from ..workbook.string_text import WarningSink, decode_xstring, read_string
 from .sheet_types import NS_S, RowAttrs
 
 _CELL_TYPE_MAP: dict[str, str] = {
@@ -32,7 +35,7 @@ def _row_attrs(row_elem: ET.Element) -> RowAttrs:
         hidden=row_elem.get("hidden") == "1",
         outline_level=int(outline_level_str) if outline_level_str else 0,
         collapsed=row_elem.get("collapsed") == "1",
-        style=_style_index(row_elem),
+        style=(_style_index(row_elem) or 0) if row_elem.get("customFormat", "false").lower() in {"1", "true"} else None,
     )
 
 
@@ -45,6 +48,9 @@ def _parse_cell(
     ref: str,
     rich_values: RichValueCatalog | None = None,
     *,
+    warnings: list[ParseWarning],
+    sheet_part: str,
+    column_style: int | None,
     include_rich_text: bool,
     include_style_index: bool,
     include_semantic_style: bool,
@@ -56,10 +62,20 @@ def _parse_cell(
     decoded: bool = False,
 ) -> Cell:
     col, row = coordinates if coordinates is not None else parse_ref(ref)
-    style_index = _style_index(cell_elem)
+    style_index = effective_style(cell_elem, row_attrs, column_style)
     formula_element = formula_element if decoded else cell_elem.find(f"{{{NS_S}}}f")
     cell_type = cell_elem.get("t", "n")
-    text, value_elem = _cell_text(cell_elem, cell_type, shared_strings) if include_display_text else ("", None)
+    text, value_elem, inline_rich = (
+        _cell_text(
+            cell_elem,
+            cell_type,
+            shared_strings,
+            rich=include_rich_text,
+            warn=lambda code, message: warnings.append(ParseWarning(code, message, f"{sheet_part}!{ref}")),
+        )
+        if include_display_text
+        else ("", None, None)
+    )
     formula, formula_meta = _formula_metadata(formula_element) if include_formulas else (None, {})
     source_text = text
     if include_display_text:
@@ -70,7 +86,10 @@ def _parse_cell(
         cell["blankCandidate"] = True
     _apply_row_attrs(cell, row_attrs)
     if include_rich_text:
-        _attach_rich_text(cell, cell_type, value_elem, rich_text_map)
+        if inline_rich is not None:
+            cell["rich"] = inline_rich
+        else:
+            _attach_rich_text(cell, cell_type, value_elem, rich_text_map)
     if include_display_text and cell_type in {"s", "str", "inlineStr"} and format_index is not None:
         _format_text_cell(cell, source_text, format_index.text_format_parts(style_index))
     if include_style_index and formula_element is None:
@@ -168,27 +187,37 @@ def _cell_text(
     cell_elem: ET.Element,
     cell_type: str,
     shared_strings: SharedStrings,
-) -> tuple[str, ET.Element | None]:
+    *,
+    rich: bool,
+    warn: WarningSink,
+) -> tuple[str, ET.Element | None, list[RichTextRun] | None]:
     if cell_type == "inlineStr":
-        inline_text = cell_elem.find(f"{{{NS_S}}}is/{{{NS_S}}}t")
-        return (inline_text.text or "", None) if inline_text is not None else ("", None)
+        value, runs = read_string(cell_elem.find(f"{{{NS_S}}}is"), rich=rich, warn=warn)
+        return value, None, runs
 
     value_elem = cell_elem.find(f"{{{NS_S}}}v")
     if value_elem is None or not value_elem.text:
-        return "", value_elem
+        return "", value_elem, None
 
     if cell_type == "s":
         with suppress(ValueError):
             idx = int(value_elem.text)
             if isinstance(shared_strings, dict):
-                return shared_strings.get(idx, ""), value_elem
+                return shared_strings.get(idx, ""), value_elem, None
             if 0 <= idx < len(shared_strings):
-                return shared_strings[idx], value_elem
-        return "", value_elem
+                return shared_strings[idx], value_elem, None
+        return "", value_elem, None
 
     if cell_type == "b":
-        return ("TRUE" if value_elem.text == "1" else "FALSE"), value_elem
-    return value_elem.text, value_elem
+        return ("TRUE" if value_elem.text == "1" else "FALSE"), value_elem, None
+    return decode_xstring(value_elem.text, warn) if cell_type == "str" else value_elem.text, value_elem, None
+
+
+def effective_style(cell: ET.Element, row: RowAttrs, column_style: int | None) -> int:
+    direct = _style_index(cell)
+    return (
+        direct if direct is not None else row.style if row.style is not None else column_style if column_style is not None else 0
+    )
 
 
 def _formatted_text(

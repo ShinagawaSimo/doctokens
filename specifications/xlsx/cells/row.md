@@ -4,6 +4,8 @@
 
 Row properties are copied to parsed cells and projected from the first cell of each emitted row.
 
+Row s supplies a cell-style fallback only when row customFormat is true/1. Explicit cell s takes precedence, including explicit 0. Otherwise a cell uses its column default and finally cell XF 0. A row s without customFormat does not override these defaults.
+
 ## Fields
 
 ### `number`

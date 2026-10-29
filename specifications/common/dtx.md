@@ -73,4 +73,4 @@ def element(name: str, text: str | None = None, /, **attrs: object | None) -> ET
   - Python `str`.
 
 - **Parsing**
-  - Escape XML metacharacters. Text and tail preserve inline sequence; no generic trimming. Invalid XML characters can fail serialization validation.
+  - Escape XML metacharacters. Text and tail preserve inline sequence; no generic trimming. Serialize literal CR in character data as `&#13;`, preserving it through XML line-end normalization. Invalid XML characters can fail serialization validation; source-specific decoders must define a safe projection and diagnostic for encoded characters XML 1.0 cannot represent.

@@ -35,7 +35,9 @@ def text(parent: ET.Element, value: str) -> None:
 
 def serialize(root: ET.Element) -> str:
     """Serialize one complete DTX document after validating well-formed XML."""
-    output = ET.tostring(root, encoding="unicode", short_empty_elements=True)
+    # Literal CR in XML character data is normalized to LF by readers. A
+    # character reference preserves the saved character, including Xstring CR.
+    output = ET.tostring(root, encoding="unicode", short_empty_elements=True).replace("\r", "&#13;")
     validate_xml(output)
     return output
 

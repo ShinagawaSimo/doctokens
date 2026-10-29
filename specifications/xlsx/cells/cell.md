@@ -58,13 +58,14 @@ Post-processing order is shared-formula expansion, merged cells, spills, hyperli
   - cell text or inline content.
 
 - **OOXML**
-  - s:c/@t; s:v; s:is/s:t.
+  - s:c/@t; s:v; s:is direct and rich text.
 
 - **IR**
   - `Cell.text: str`
 
 - **Parsing**
-  - inlineStr → direct is/t only; s → shared-string lookup; b → `TRUE` exactly for v="1", otherwise `FALSE`, matching Excel's displayed logical values; other types → v text. Missing/empty v → empty string. Invalid shared index → empty string without warning. Numeric t=n with nonempty text and s attribute uses display formatting. Formula caches with t=b follow the same logical-value rule.
+  - inlineStr concatenates direct/rich is text using the shared string reader; s looks up an already decoded shared string; str decodes one ST_Xstring layer from its saved v, including string formula caches. Formula expression text is a different source type and is not processed as a cell string.
+  - b → `TRUE` exactly for v="1", otherwise `FALSE`, matching displayed logical values; other types use v text. Missing/empty v → empty string. Invalid shared index → empty string without warning. Numeric t=n with nonempty text uses its effective XF even without a saved cell s attribute. Formula caches follow the same value-formatting rules without evaluating their formulas.
 
 - **Absence and defaults**
   - Empty string.
@@ -107,13 +108,14 @@ Post-processing order is shared-formula expansion, merged cells, spills, hyperli
   - Input to formatting/protection/control resolution.
 
 - **OOXML**
-  - s:c/@s.
+  - s:c/@s, row/@s with customFormat, column/@style, or implicit cell XF 0.
 
 - **IR**
   - `Cell.style: int`
 
 - **Parsing**
-  - Parse integer, omit invalid. Retained when style-index or semantic-style extraction enabled.
+  - Choose an explicit parsed cell s first, including explicit 0; otherwise use row s only when customFormat=true/1, then the containing column style, then cell-XF index 0. Invalid/noninteger references fall through the same selection; negative references do not index another Python record.
+  - Use the selected XF consistently for number/text display, formula-bar text, protection, controls, visible blank retention, and semantic font/fill properties. Persist its index only when style-index or semantic-style extraction is requested. Preview extent scans, selected reads, search/query, and resumable value rows use the same choice.
 
 ### `rich`
 
@@ -121,13 +123,13 @@ Post-processing order is shared-formula expansion, merged cells, spills, hyperli
   - Semantic run content.
 
 - **OOXML**
-  - Shared string rich runs.
+  - Shared-string or inline-string rich runs.
 
 - **IR**
   - `list[RichTextRun]`
 
 - **Parsing**
-  - Attach only for t=s and a catalog entry with formatting; see [rich text](rich-text.md).
+  - Attach for a formatted t=s catalog entry or supported rich runs in t=inlineStr. Reuse the same decoded run/text reader; see [rich text](rich-text.md).
 
 ### `richValue`
 

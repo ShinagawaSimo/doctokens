@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 from doctokens_excel import parse_xlsx
-from doctokens_excel.xlsx.parsing.modules.workbook.shared_strings import _string
+from doctokens_excel.xlsx.parsing.modules.workbook.string_text import read_string
 from doctokens_excel.xlsx.parsing.modules.worksheets.cells import _parse_cell
 
 from test_support.paths import REPO_ROOT
@@ -27,7 +27,7 @@ def test_preview_materializes_only_its_row_budget_and_reports_that_scope(density
             expected = session.render(density=density, sheet="Sheet1")
         with (
             patch("doctokens_excel.xlsx.parsing.modules.worksheets.scanner._parse_cell", wraps=_parse_cell) as decoded,
-            patch("doctokens_excel.xlsx.parsing.modules.workbook.shared_strings._string", wraps=_string) as strings,
+            patch("doctokens_excel.xlsx.parsing.modules.workbook.shared_strings.read_string", wraps=read_string) as strings,
         ):
             result = parse_xlsx(source, density=density, sheet="Sheet1")
         assert result.text == expected.text

@@ -2,7 +2,9 @@
 
 [XLSX](../README.md) / Cell styles
 
-Semantic styles use cell-XF font/fill references.
+Semantic styles use the effective cell-XF and its font/fill references. Cell XF selection is defined in [cells](../cells/cell.md#style). Font/fill IDs inherit a valid cellStyleXf parent when the corresponding apply flag is false or the direct ID is absent, matching effective number-format inheritance.
+
+Differential-style summaries retain explicitly disabled font properties as `bold=false`, `italic=false`, or `underline=false`. A false override in a saved conditional rule is not equivalent to an absent property and must not be summarized as an enabled style.
 
 ## Fields
 
@@ -18,7 +20,7 @@ Semantic styles use cell-XF font/fill references.
   - `FontInfo.bold`
 
 - **Parsing**
-  - Presence=true; val is not interpreted.
+  - Absent: false. Present with no val: true. Explicit 0/false/off: false. Source values are case-normalized for this on/off interpretation.
 
 ### `italic`
 
@@ -32,7 +34,7 @@ Semantic styles use cell-XF font/fill references.
   - `FontInfo.italic`
 
 - **Parsing**
-  - Presence=true.
+  - Same on/off interpretation as bold.
 
 ### `underline`
 
@@ -46,7 +48,7 @@ Semantic styles use cell-XF font/fill references.
   - `FontInfo.underline`
 
 - **Parsing**
-  - Presence=true.
+  - No val means single; 0/false/off/none disable underline. Other underline styles collapse to one reading underline.
 
 ### `color`
 

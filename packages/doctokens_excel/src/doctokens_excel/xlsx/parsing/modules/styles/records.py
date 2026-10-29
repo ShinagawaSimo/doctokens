@@ -79,12 +79,13 @@ def parse_theme(pkg: PackageReader) -> dict[int, str]:
 def font_info(font: ET.Element, theme: dict[int, str]) -> FontInfo:
     """Extract the semantic font properties used by the renderer."""
     info: FontInfo = {"bold": False, "italic": False, "underline": False}
-    if font.find(f"{{{NS_S}}}b") is not None:
-        info["bold"] = True
-    if font.find(f"{{{NS_S}}}i") is not None:
-        info["italic"] = True
-    if font.find(f"{{{NS_S}}}u") is not None:
-        info["underline"] = True
+    bold, italic, underline = (font.find(f"{{{NS_S}}}{tag}") for tag in ("b", "i", "u"))
+    if bold is not None:
+        info["bold"] = bold.get("val", "1").lower() not in {"0", "false", "off"}
+    if italic is not None:
+        info["italic"] = italic.get("val", "1").lower() not in {"0", "false", "off"}
+    if underline is not None:
+        info["underline"] = underline.get("val", "single").lower() not in {"0", "false", "off", "none"}
     color = font.find(f"{{{NS_S}}}color")
     if color is not None:
         resolved = resolve_color(color, theme)
@@ -112,12 +113,9 @@ def differential_style(dxf: ET.Element, theme: dict[int, str]) -> str:
     font = dxf.find(f"{{{NS_S}}}font")
     if font is not None:
         font_details = font_info(font, theme)
-        if font_details.get("bold"):
-            parts.append("bold")
-        if font_details.get("italic"):
-            parts.append("italic")
-        if font_details.get("underline"):
-            parts.append("underline")
+        for tag, key in (("b", "bold"), ("i", "italic"), ("u", "underline")):
+            if font.find(f"{{{NS_S}}}{tag}") is not None:
+                parts.append(key if font_details.get(key) else f"{key}=false")
         if color := font_details.get("color"):
             parts.append(f"color={color}")
     fill = dxf.find(f"{{{NS_S}}}fill")

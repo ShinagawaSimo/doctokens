@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 from doctokens_agent_tools import RuntimeConfig, ToolRuntime
 from doctokens_excel import find_xlsx_text
-from doctokens_excel.xlsx.parsing.modules.workbook.metadata import _parse_shared_strings
+from doctokens_excel.xlsx.parsing.modules.workbook.shared_strings import _parse_shared_strings
 from doctokens_excel.xlsx.parsing.modules.worksheets.value_rows import iter_value_rows
 
 from test_support.paths import REPO_ROOT

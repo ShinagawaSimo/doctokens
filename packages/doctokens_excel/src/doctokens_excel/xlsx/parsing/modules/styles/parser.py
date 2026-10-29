@@ -47,8 +47,8 @@ def parse_styles(
         index.register_cell_format(
             num_fmt_id,
             format_code,
-            font_id=_int_attr(xf, "fontId"),
-            fill_id=_int_attr(xf, "fillId"),
+            font_id=_effective_style_id(xf, style_xfs, "font"),
+            fill_id=_effective_style_id(xf, style_xfs, "fill"),
             locked=_protection_flag(xf, "locked", default=True),
             formula_hidden=_protection_flag(xf, "hidden", default=False),
             visible_blank=(
@@ -62,7 +62,7 @@ def parse_styles(
 def _effective_style_id(xf: ET.Element, parents: list[ET.Element], kind: str) -> int:
     parent_index = _int_attr(xf, "xfId", -1)
     parent = parents[parent_index] if 0 <= parent_index < len(parents) else None
-    if parent is not None and (xf.get(f"apply{kind.title()}") in {"0", "false"} or xf.get(f"{kind}Id") is None):
+    if parent is not None and ((xf.get(f"apply{kind.title()}") or "1").lower() in {"0", "false"} or xf.get(f"{kind}Id") is None):
         return _int_attr(parent, f"{kind}Id")
     return _int_attr(xf, f"{kind}Id")
 

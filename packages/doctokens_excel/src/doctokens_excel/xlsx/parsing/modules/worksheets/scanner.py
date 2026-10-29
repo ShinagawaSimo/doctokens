@@ -71,6 +71,8 @@ class WorksheetScanner:
             include_formulas=self.flags.formulas,
             include_cell_controls=self.flags.cell_controls,
             include_display_text=self.flags.display_text,
+            warnings=self.warnings,
+            sheet_part=self.sheet_part,
         )
         self.cell_window = cell_window
         self.columns = plan.columns
@@ -236,6 +238,7 @@ class WorksheetScanner:
                 coordinates=(col, number),
                 formula_element=formula,
                 decoded=True,
+                column_style=post.column_style(col),
             )
             cells.append(cell)
             if self.row_sink is None:

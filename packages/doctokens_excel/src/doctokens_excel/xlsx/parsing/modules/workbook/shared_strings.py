@@ -2,20 +2,31 @@
 
 from __future__ import annotations
 
+from functools import partial
 from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.reader import PackageReader
 from doctokens_core.containers.opc.xml import iterparse
+from doctokens_core.contracts.models import ParseWarning
 
 from ....model.workbook import RichTextRun
+from .string_text import read_string
 
 _NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 _SI = f"{{{_NS}}}si"
 SharedStrings = list[str] | dict[int, str]
 
 
+def _warning(warnings: list[ParseWarning], locator: str, code: str, message: str) -> None:
+    warnings.append(ParseWarning(code, message, locator))
+
+
 def _parse_shared_strings(
-    package_reader: PackageReader, *, include_rich_text: bool, needed_indices: set[int] | None = None
+    package_reader: PackageReader,
+    warnings: list[ParseWarning],
+    *,
+    include_rich_text: bool,
+    needed_indices: set[int] | None = None,
 ) -> tuple[SharedStrings, dict[int, list[RichTextRun]]]:
     part = "xl/sharedStrings.xml"
     if not package_reader.exists(part):
@@ -35,7 +46,11 @@ def _parse_shared_strings(
             if depth == 2:
                 if element.tag == _SI:
                     if needed_indices is None or index in needed_indices:
-                        value, rich = _string(element, include_rich_text)
+                        value, rich = read_string(
+                            element,
+                            rich=include_rich_text,
+                            warn=partial(_warning, warnings, f"{part}:si[{index}]"),
+                        )
                         if rich is not None:
                             rich_map[index] = rich
                         if isinstance(strings, dict):
@@ -48,29 +63,3 @@ def _parse_shared_strings(
                     root.remove(element)
             depth -= 1
     return strings, rich_map
-
-
-def _string(element: ET.Element, rich: bool) -> tuple[str, list[RichTextRun] | None]:
-    direct = element.find(f"{{{_NS}}}t")
-    if direct is not None:
-        return direct.text or "", None
-    parts: list[str] = []
-    runs: list[RichTextRun] = []
-    for run in element.findall(f"{{{_NS}}}r"):
-        text = run.find(f"{{{_NS}}}t")
-        value = text.text if text is not None and text.text else ""
-        parts.append(value)
-        properties = run.find(f"{{{_NS}}}rPr") if rich else None
-        item: RichTextRun = {"text": value}
-        if properties is not None:
-            if properties.find(f"{{{_NS}}}b") is not None:
-                item["bold"] = True
-            if properties.find(f"{{{_NS}}}i") is not None:
-                item["italic"] = True
-            if properties.find(f"{{{_NS}}}u") is not None:
-                item["underline"] = True
-            color = properties.find(f"{{{_NS}}}color")
-            if color is not None and (rgb := color.get("rgb", "")) and rgb != "00000000":
-                item["color"] = f"#{rgb[2:]}" if len(rgb) == 8 else f"#{rgb}"
-        runs.append(item)
-    return "".join(parts), runs if rich and any(len(run) > 1 for run in runs) else None

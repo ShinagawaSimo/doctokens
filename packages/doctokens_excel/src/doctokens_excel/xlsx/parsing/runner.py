@@ -16,9 +16,10 @@ from ..model.workbook import ParsedWorkbook, ParseOptions
 from .modules.styles.index import FormatIndex
 from .modules.styles.parser import parse_styles
 from .modules.workbook.features import CellControlCatalog
-from .modules.workbook.metadata import _parse_shared_strings, _parse_workbook_xml
+from .modules.workbook.metadata import _parse_workbook_xml
 from .modules.workbook.pivots import PivotCatalog
 from .modules.workbook.rich_values import RichValueCatalog
+from .modules.workbook.shared_strings import _parse_shared_strings
 from .modules.worksheets.comments import parse_threaded_comment_people
 from .modules.worksheets.drawings import parse_drawings
 from .modules.worksheets.post import parse_tables
@@ -90,7 +91,7 @@ def _parse_workbook(
             ([], {})
             if resource_only or not parse_plan.display_text
             else _parse_shared_strings(
-                package_reader, include_rich_text=parse_plan.needs(XlsxFeature.RICH_TEXT), needed_indices=needed_strings
+                package_reader, warnings, include_rich_text=parse_plan.needs(XlsxFeature.RICH_TEXT), needed_indices=needed_strings
             )
         )
         threaded_comment_people = (

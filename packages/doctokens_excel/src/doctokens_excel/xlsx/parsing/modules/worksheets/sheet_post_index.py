@@ -34,6 +34,15 @@ class SheetPostIndex:
     data_validations: list[DataValidation] = field(default_factory=list)
     conditional_formats: list[ConditionalFormat] = field(default_factory=list)
     blank_content_refs: list[str] = field(default_factory=list)
+    column_styles: list[tuple[int, int, int]] = field(default_factory=list)
+    _column_style_cache: dict[int, int | None] = field(default_factory=dict)
+
+    def column_style(self, column: int) -> int | None:
+        if column not in self._column_style_cache:
+            self._column_style_cache[column] = next(
+                (style for first, last, style in reversed(self.column_styles) if first <= column <= last), None
+            )
+        return self._column_style_cache[column]
 
     def collect(self, element: ET.Element, *, format_index: FormatIndex | None) -> None:
         """Consume one completed metadata element while its children are available."""
@@ -43,6 +52,11 @@ class SheetPostIndex:
             element.clear()
             return
         if element.tag == _TAG_S_COL:
+            if element.get("style") is not None:
+                self._column_style_cache.clear()
+                self.column_styles.append(
+                    (_safe_int(element.get("min"), 1), _safe_int(element.get("max"), 1), _safe_int(element.get("style"), 0))
+                )
             if (
                 format_index is not None
                 and element.get("style") is not None

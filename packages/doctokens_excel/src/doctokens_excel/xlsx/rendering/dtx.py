@@ -107,7 +107,8 @@ def _append_grid(
                 else:
                     data_table_groups.add(data_table_key)
             node = append(row_node, "cell", **attrs)
-            _append_cell_text(node, cell, density)
+            base = set(format_index.style_attrs(cell.get("style")).split()) if format_index is not None else set()
+            _append_cell_text(node, cell, density, base)
             for comment_id in comment_ids.get((cell["row"], cell["col"]), []):
                 append(node, "comment-ref", id=comment_id)
             expected_col = cell["col"] + cell.get("colspan", 1)
@@ -202,7 +203,7 @@ def _cell_attrs(
     return attrs
 
 
-def _append_cell_text(parent: ET.Element, cell: Cell, density: str) -> None:
+def _append_cell_text(parent: ET.Element, cell: Cell, density: str, inherited: set[str]) -> None:
     content_parent = append(parent, "a", href=cell["hyperlink"]) if cell.get("hyperlink") else parent
     rich_value = cell.get("richValue")
     if rich_value and (density == "plain" or rich_value.get("display") or rich_value.get("fallback")):
@@ -210,6 +211,9 @@ def _append_cell_text(parent: ET.Element, cell: Cell, density: str) -> None:
     elif density == "semantic" and cell.get("rich"):
         for run in cell["rich"]:
             node = content_parent
+            resets = {key: False for key in ("bold", "italic", "underline") if run.get(key) is False and key in inherited}
+            if resets:
+                node = append(node, "run", **resets)
             if run.get("bold"):
                 node = append(node, "b")
             if run.get("italic"):

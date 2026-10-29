@@ -13,7 +13,7 @@ from ....model.coordinates import col_letter, parse_ref
 from ....model.workbook import Cell
 from ....rendering._constants import _CELL_BUDGET
 from ..styles.index import FormatIndex
-from .cells import _blank_candidate, _row_attrs, _style_index
+from .cells import _blank_candidate, _row_attrs, effective_style
 from .sheet_post_index import SheetPostIndex
 from .sheet_types import NS_S, SheetParseFlags
 from .xml_stream import iter_sheet_elements
@@ -107,7 +107,7 @@ def preview_state(
                     value = cell.find(_VALUE)
                     blank = False
                     if kind == "n" and (value is None or not value.text):
-                        style = _style_index(cell) if cell.get("s") is not None else None
+                        style = effective_style(cell, attrs, post.column_style(column))
                         blank = _blank_candidate(cell, kind, value, attrs, style, formats)
                         if formats is not None and flags.cell_controls and formats.cell_control(style):
                             blank = False

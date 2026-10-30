@@ -49,10 +49,10 @@ In original view, `w:pPr/w:numPr/w:numberingChange` supplies the saved previous 
   - Second numeric capture.
 
 - **IR**
-  - Lookup in `NumberFormatRenderer._NFC_FORMATS`.
+  - Lookup in the `_NFC_FORMATS` table from `format_codes.py`.
 
 - **Parsing**
-  - Use the exact mapping in [NumberFormatRenderer](../../../packages/doctokens_word/src/doctokens_word/docx/ooxml/numbering/formats.py#L32). An unknown selector skips its definition.
+  - Use the exact mapping in [format_codes.py](../../../packages/doctokens_word/src/doctokens_word/docx/ooxml/numbering/format_codes.py). The numbering-change decoder maps NFC before passing the resolved format to the renderer. An unknown selector skips its definition.
 
 - **Diagnostics**
   - `40` or `>=60`: `APPLICATION_DEFINED_NUMBER_FORMAT`; other unknown values: `INVALID_NUMBERING_CHANGE`.

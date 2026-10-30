@@ -5,7 +5,6 @@ from __future__ import annotations
 from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.xml import attr as _core_attr
-from doctokens_core.containers.opc.xml import child_elements as _core_child_elements
 from doctokens_core.containers.opc.xml import first_child as _core_first_child
 from doctokens_core.containers.opc.xml import local_name as _core_local_name
 from doctokens_core.containers.opc.xml import qualified_name as _core_qualified_name
@@ -48,10 +47,6 @@ def first_child(element: ET.Element, prefix: str, local: str) -> ET.Element | No
     return _core_first_child(element, prefix, local, ns=NS)
 
 
-def child_elements(element: ET.Element, prefix: str, local: str) -> list[ET.Element]:
-    return _core_child_elements(element, prefix, local, ns=NS)
-
-
 # Precomputed hot-path tag names (avoid repeated string concatenation).
 _TAG_P_SLD = qualified_name("p", "sld")
 _TAG_P_CSLD = qualified_name("p", "cSld")
@@ -83,7 +78,6 @@ __all__ = [
     "_TAG_P_SPTREE",
     "_TAG_P_TXBODY",
     "attr",
-    "child_elements",
     "first_child",
     "local_name",
     "qualified_name",

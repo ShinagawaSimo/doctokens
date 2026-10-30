@@ -5,24 +5,17 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Iterator
 
-from ..model import DocumentManifest, ParsedDocument
+from ..model import ParsedDocument
 from ..model.enums import Density
 from .common.pages import iter_page_blocks
-from .objects.resources import render_resource, table_groups
+from .objects.resources import render_resource
 from .window_assets import referenced_image_ids
 
 __all__ = [
-    "build_manifest",
     "iter_output",
     "render_page_window",
     "render_resource",
-    "to_output",
 ]
-
-
-def to_output(parsed_document: ParsedDocument, density: Density | str = Density.SEMANTIC) -> str:
-    """Return the complete self-defined output string at the given density."""
-    return "".join(iter_output(parsed_document, density))
 
 
 def iter_output(parsed_document: ParsedDocument, density: Density | str = Density.SEMANTIC) -> Iterator[str]:
@@ -85,20 +78,6 @@ def _window_output(document: ParsedDocument, density: Density) -> str:
     used = referenced_image_ids(document)
     selected = dataclasses.replace(document, assets=[asset for asset in document.assets if asset["id"] in used])
     return "".join(iter_output(selected, density))
-
-
-def build_manifest(parsed_document: ParsedDocument) -> DocumentManifest:
-    """Build document metadata for LLM orientation on the first call."""
-    page_index = _build_page_index(parsed_document)
-    pages = _total_pages(parsed_document, page_index)
-    return {
-        "pages": pages,
-        "tables": len(table_groups(parsed_document)),
-        "images": len(parsed_document.assets),
-        "footnotes": len(parsed_document.footnotes),
-        "endnotes": len(parsed_document.endnotes),
-        "comments": len(parsed_document.comments),
-    }
 
 
 def describe_pages(parsed_document: ParsedDocument) -> dict[str, object]:

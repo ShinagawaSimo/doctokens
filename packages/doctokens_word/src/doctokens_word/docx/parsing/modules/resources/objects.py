@@ -24,8 +24,6 @@ from ....ooxml.package import PackageReader
 
 DIAGRAM_DATA_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData"
 DIAGRAM_LAYOUT_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout"
-# Kept as a module constant for callers that used the former extractor API.
-CHART_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
 
 
 class EmbeddedObjectExtractor:

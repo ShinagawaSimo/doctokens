@@ -11,7 +11,6 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Mapping
 from types import MappingProxyType
-from typing import ClassVar
 
 from ...model import ParseWarning, append_warning
 from .format_codes import (
@@ -19,7 +18,6 @@ from .format_codes import (
     _AIUEO_HALF_WIDTH,
     _APPLICATION_DEFINED_NFC_VALUES,
     _MAX_WORD_VALUE,
-    _NFC_FORMATS,
     _WORD_LIMITED_FORMATS,
 )
 from .format_east_asian import EastAsianNumberRenderer
@@ -32,13 +30,10 @@ from .language import cardinal_text, latin_alphabet, ordinal, ordinal_text
 class NumberFormatRenderer:
     """Format one numbering value according to Word's ``ST_NumberFormat``."""
 
-    _NFC_FORMATS: ClassVar[dict[int, str]] = _NFC_FORMATS
-
     def __init__(self, warnings: list[ParseWarning]) -> None:
         self._warnings = warnings
         self._warned_formats: set[str] = set()
         self._warned_custom_formats: set[str] = set()
-        self._warned_nfc_values: set[int] = set()
         self._warned_ranges: set[tuple[str, int]] = set()
         self._formatters: Mapping[str, Callable[[int], str]] = MappingProxyType(
             _build_formatters(EastAsianNumberRenderer(self._out_of_range))
@@ -96,17 +91,6 @@ class NumberFormatRenderer:
             )
         return str(value)
 
-    def format_from_nfc(self, value: int, nfc: int) -> str:
-        """Format a ``numberingChange/@original`` NFC value."""
-        number_format = _NFC_FORMATS.get(nfc)
-        if number_format is not None:
-            return self.format(value, number_format)
-        if self.is_application_defined_nfc(nfc):
-            self._warn_application_defined_nfc(nfc)
-        else:
-            self._warn_unknown_nfc(nfc)
-        return ""
-
     @classmethod
     def is_application_defined_nfc(cls, nfc: int) -> bool:
         """Return whether MS-OI29500 permits an NFC value to be ignored."""
@@ -154,28 +138,6 @@ class NumberFormatRenderer:
             "UNSUPPORTED_CUSTOM_NUMBER_FORMAT",
             f"Custom numbering format {description}; {fallback} is used instead.",
             part="word/numbering.xml",
-        )
-
-    def _warn_application_defined_nfc(self, nfc: int) -> None:
-        if nfc in self._warned_nfc_values:
-            return
-        self._warned_nfc_values.add(nfc)
-        append_warning(
-            self._warnings,
-            "APPLICATION_DEFINED_NUMBER_FORMAT",
-            f"Application-defined numberingChange NFC value {nfc} was ignored.",
-            part="word/document.xml",
-        )
-
-    def _warn_unknown_nfc(self, nfc: int) -> None:
-        if nfc in self._warned_nfc_values:
-            return
-        self._warned_nfc_values.add(nfc)
-        append_warning(
-            self._warnings,
-            "INVALID_NUMBERING_CHANGE",
-            f"Unknown numberingChange NFC value {nfc} was ignored.",
-            part="word/document.xml",
         )
 
     # Range diagnostics -------------------------------------------------

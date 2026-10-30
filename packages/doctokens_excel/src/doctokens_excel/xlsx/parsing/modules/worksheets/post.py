@@ -15,7 +15,7 @@ from doctokens_core.containers.opc.reader import PackageReader
 from doctokens_core.contracts.models import ParseWarning
 
 from ....model.coordinates import coord_key, parse_ref
-from ....model.workbook import Cell, PivotTableInfo, TableInfo
+from ....model.workbook import Cell, TableInfo
 from .post_common import NS_R, NS_S, _ensure_cell, _warn
 
 _REL_TABLE = f"{NS_R}/table"
@@ -165,19 +165,3 @@ def parse_tables(
             }
         )
     return tables
-
-
-# ── Pivot tables ──
-
-
-def detect_pivot_tables(
-    sheet_rels: list[RelationshipRecord],
-    *,
-    start_index: int = 1,
-) -> list[PivotTableInfo]:
-    """Detect pivot table relationships from pre-read *sheet_rels*."""
-    pivots: list[PivotTableInfo] = []
-    for rel in sheet_rels:
-        if rel.type == f"{NS_R}/pivotTable":
-            pivots.append({"id": f"pivot{start_index + len(pivots)}", "ref": "", "name": ""})
-    return pivots

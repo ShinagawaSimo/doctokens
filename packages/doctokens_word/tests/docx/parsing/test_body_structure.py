@@ -9,8 +9,8 @@ from _word_packages import _make_docx
 from doctokens_word import parse_docx
 from doctokens_word.docx.model import ParseOptions
 from doctokens_word.docx.model.enums import Density
+from doctokens_word.docx.parsing import get_render_pipeline
 from doctokens_word.docx.parsing.runner import DocxParser
-from doctokens_word.docx.rendering.dispatch import to_output
 
 NS_W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -60,7 +60,7 @@ class BodyStructureTests(unittest.TestCase):
         parsed = DocxParser().parse(data, ParseOptions())
         self.assertFalse(any(w.code == "UNSUPPORTED_PARAGRAPH_CHILD" for w in parsed.warnings))
 
-        semantic = to_output(parsed, Density.SEMANTIC)
+        semantic = "".join(get_render_pipeline(Density.SEMANTIC).render(parsed))
         root = ET.fromstring(semantic)
         controls = root.findall(".//content-control")
         dropdown = next(item for item in controls if item.get("type") == "dropDownList")
@@ -72,14 +72,14 @@ class BodyStructureTests(unittest.TestCase):
         self.assertEqual(next(item for item in controls if item.get("type") == "checkbox").get("checked"), "true")
         self.assertIsNotNone(next(item for item in controls if item.get("type") == "comboBox"))
 
-        structural = ET.fromstring(to_output(parsed, Density.STRUCTURAL))
+        structural = ET.fromstring("".join(get_render_pipeline(Density.STRUCTURAL).render(parsed)))
         structural_control = structural.find(".//content-control[@type='dropDownList']")
         assert structural_control is not None
         self.assertEqual(structural_control.get("locked"), "true")
         self.assertEqual(structural_control.get("choices"), "Open=open|Closed=closed")
         self.assertIsNone(structural_control.get("binding"))
 
-        plain = to_output(parsed, Density.PLAIN)
+        plain = "".join(get_render_pipeline(Density.PLAIN).render(parsed))
         self.assertIn("[Control dropDownList Status choices=Open=open|Closed=closed locked: Open]", plain)
         self.assertIn("[Control date format=yyyy-MM-dd: 2026-08-19]", plain)
         self.assertIn("[Control checkbox checked: Yes]", plain)
@@ -95,7 +95,7 @@ class BodyStructureTests(unittest.TestCase):
         codes = [warning.code for warning in parsed.warnings if warning.code == "UNSUPPORTED_BODY_CHILD"]
         self.assertEqual(codes, ["UNSUPPORTED_BODY_CHILD"])
         # Bookmarks are noise, not content: no warning, and the paragraph text survives.
-        self.assertEqual(_body_text_for_page(to_output(parsed, Density.STRUCTURAL)), ["Visible"])
+        self.assertEqual(_body_text_for_page("".join(get_render_pipeline(Density.STRUCTURAL).render(parsed))), ["Visible"])
 
     def test_paragraph_sectpr_advances_page_after_paragraph(self) -> None:
         """A sectPr inside pPr starts the next block on a new page."""
@@ -147,7 +147,7 @@ class BodyStructureTests(unittest.TestCase):
         """A dangling hyperlink r:id must not abort the whole parse."""
         data = _make_docx('<w:p><w:hyperlink r:id="rMissing"><w:r><w:t>link text</w:t></w:r></w:hyperlink></w:p>')
         parsed = DocxParser().parse(data, ParseOptions())
-        self.assertEqual(_body_text_for_page(to_output(parsed, Density.STRUCTURAL)), ["link text"])
+        self.assertEqual(_body_text_for_page("".join(get_render_pipeline(Density.STRUCTURAL).render(parsed))), ["link text"])
         self.assertTrue(any(w.code == "HYPERLINK_TARGET_MISSING" for w in parsed.warnings))
 
     def test_table_page_split_preserves_vertical_merge(self) -> None:
@@ -188,7 +188,7 @@ class BodyStructureTests(unittest.TestCase):
             "<w:p><w:r><w:t>D</w:t></w:r></w:p>"
         )
         parsed = DocxParser().parse(data, ParseOptions())
-        rendered = ET.fromstring(to_output(parsed, Density.SEMANTIC))
+        rendered = ET.fromstring("".join(get_render_pipeline(Density.SEMANTIC).render(parsed)))
         self.assertEqual([item.get("number") for item in rendered.findall(".//body/page")], ["1", "2", "3"])
         self.assertEqual([item.text for item in rendered.findall(".//body/p")], ["A", "B", "C", "D"])
         self.assertEqual(_body_text_for_page(parse_docx(data, page_hint=2).text), ["B"])
@@ -198,12 +198,12 @@ class BodyStructureTests(unittest.TestCase):
         """The compact parse mode retains text page segments without run metadata."""
         data = _make_docx("<w:p><w:r><w:t>A</w:t><w:lastRenderedPageBreak/><w:t>B</w:t></w:r></w:p>")
         parsed = DocxParser().parse(data, ParseOptions(include_runs=False))
-        self.assertEqual(_body_text_for_page(to_output(parsed, Density.STRUCTURAL)), ["A", "B"])
+        self.assertEqual(_body_text_for_page("".join(get_render_pipeline(Density.STRUCTURAL).render(parsed))), ["A", "B"])
 
     def test_leading_inline_break_assigns_block_to_first_content_page(self) -> None:
         data = _make_docx("<w:p><w:r><w:lastRenderedPageBreak/><w:t>B</w:t></w:r></w:p>")
         parsed = DocxParser().parse(data, ParseOptions())
-        root = ET.fromstring(to_output(parsed, Density.SEMANTIC))
+        root = ET.fromstring("".join(get_render_pipeline(Density.SEMANTIC).render(parsed)))
         self.assertEqual([item.get("number") for item in root.findall(".//body/page")], ["2"])
         self.assertEqual([item.text for item in root.findall(".//body//p")], ["B"])
 
@@ -214,7 +214,7 @@ class BodyStructureTests(unittest.TestCase):
             "<w:p><w:r><w:t>D</w:t></w:r></w:p>"
         )
         parsed = DocxParser().parse(data, ParseOptions())
-        rendered = ET.fromstring(to_output(parsed, Density.SEMANTIC))
+        rendered = ET.fromstring("".join(get_render_pipeline(Density.SEMANTIC).render(parsed)))
         self.assertEqual([item.get("number") for item in rendered.findall(".//table//page")], ["2", "3"])
         self.assertEqual([item.text for item in rendered.findall(".//body/p")], ["D"])
 

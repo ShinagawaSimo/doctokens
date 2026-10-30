@@ -101,7 +101,7 @@ the resource operation.
   - Resource data.
 
 - **OOXML**
-  - Shared series caches.
+  - Shared saved literal points, reference caches, or ChartEx dimensions.
 
 - **IR**
   - `list[ChartSeriesInfo]`

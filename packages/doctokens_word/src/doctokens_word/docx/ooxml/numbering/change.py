@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from ...model import ParseWarning, append_warning
+from .format_codes import _NFC_FORMATS
 from .formats import NumberFormatRenderer
 from .models import NumberingLevel
 
@@ -49,7 +50,7 @@ def parse_numbering_change(
         level_number = int(match.group(1))
         nfc = int(match.group(2))
         format_name = match.group(3)
-        mapped_format = NumberFormatRenderer._NFC_FORMATS.get(nfc)
+        mapped_format = _NFC_FORMATS.get(nfc)
         if mapped_format is None:
             warning_code = (
                 "APPLICATION_DEFINED_NUMBER_FORMAT"
@@ -69,7 +70,7 @@ def parse_numbering_change(
                 block_id=block_id,
             )
             continue
-        if format_name not in NumberFormatRenderer._NFC_FORMATS.values():
+        if format_name not in _NFC_FORMATS.values():
             format_name = mapped_format
         prefix = first_prefix if match is definitions[0][0] else ""
         template = f"{prefix}%{level_number}{separator}"

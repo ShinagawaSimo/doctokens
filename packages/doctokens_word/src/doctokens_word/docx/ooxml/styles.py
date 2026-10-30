@@ -111,14 +111,6 @@ class StyleMap:
             result = merge_properties(result, self._region_cache[key])
         return result
 
-    def resolve_heading_level(self, style_id: str | None) -> int | None:
-        level = self.paragraph(style_id).outline_level
-        return level + 1 if level is not None and level < 9 else None
-
-    def resolve_numbering(self, style_id: str | None) -> tuple[str, int] | None:
-        record = self.paragraph(style_id)
-        return (record.numbering_num_id, record.numbering_level or 0) if record.numbering_num_id is not None else None
-
     def numbering_style_num_ids(self) -> Mapping[str, str]:
         return MappingProxyType(
             {

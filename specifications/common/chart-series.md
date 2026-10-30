@@ -6,7 +6,7 @@ Each field belongs to ChartSeriesInfo.
 
 ## Processing
 
-Cache points: enumerate direct pt children; int(idx) or enumeration index on missing/malformed idx. A duplicate index replaces its preceding value. Value is point.text, else first descendant v, else empty. Return positions 0..max(index), filling holes with empty strings; declared ptCount does not set length. ChartEx numeric dimensions use their last lvl. ChartEx dataId resolves a catalog of chartData/data; later duplicate IDs replace earlier records.
+Saved points use the same indexed reader for literal data and reference caches. Enumerate direct pt children; int(idx) or enumeration index on missing/malformed idx. A duplicate index replaces its preceding value. Prefer the direct v child's text, including an explicitly empty v; otherwise use direct point text, as in ChartEx. Formatting whitespace around a v child is not a point value. Return positions 0..max(index), filling holes with empty strings; declared ptCount does not manufacture points or set list length. ChartEx numeric dimensions use their last lvl. ChartEx dataId resolves a catalog of chartData/data; later duplicate IDs replace earlier records.
 
 ## Fields
 
@@ -78,7 +78,7 @@ Cache points: enumerate direct pt children; int(idx) or enumeration index on mis
   - `ChartSeriesInfo.categories: `list[str]``
 
 - **Parsing**
-  - ChartML multiLvlStrCache wins, otherwise numeric/string cache. Multi-level labels join nonempty levels at each point with ` / `. ChartEx strDim joins cx:lvl similarly.
+  - ChartML multiLvlStrCache wins, otherwise read the category source's direct numLit/strLit points or numRef/numCache and strRef/strCache. Numeric categories remain saved strings. Multi-level labels join nonempty levels at each point with ` / `. ChartEx strDim joins cx:lvl similarly.
 
 - **Absence and defaults**
   - Empty list.
@@ -86,7 +86,7 @@ Cache points: enumerate direct pt children; int(idx) or enumeration index on mis
 ### `values`
 
 - **Output**
-  - Resource cached value strings.
+  - Resource saved value strings.
 
 - **OOXML**
   - c:val (fallback c:yVal); ChartEx numDim.
@@ -95,7 +95,8 @@ Cache points: enumerate direct pt children; int(idx) or enumeration index on mis
   - `ChartSeriesInfo.values: `list[str]``
 
 - **Parsing**
-  - ChartML first numCache, fallback strCache. ChartEx nonempty val, then y, then first numeric dimension. ChartML numLit/strLit do not populate the cache path.
+  - Read the first recognized direct source: numLit/strLit supplies its own indexed points; numRef/strRef supplies its matching direct numCache/strCache when saved. An absent cache is not populated by evaluating a formula, opening an embedded workbook, or searching unrelated descendant extension data.
+  - ChartEx uses nonempty val, then y, then the first numeric dimension. Preserve saved zeros, negatives, empty point positions, and lexical value strings. The same arrays drive previews, point counts, numeric min/max and full resource data.
 
 - **Absence and defaults**
   - Empty list.
@@ -106,13 +107,13 @@ Cache points: enumerate direct pt children; int(idx) or enumeration index on mis
   - Resource x coordinate strings.
 
 - **OOXML**
-  - c:xVal cache; cx:numDim[@type="x"].
+  - c:xVal literal points or reference cache; cx:numDim[@type="x"].
 
 - **IR**
   - `ChartSeriesInfo.x_values: `list[str]``
 
 - **Parsing**
-  - Use indexed cache/dimension values; omit empty list.
+  - Use indexed literal/cache/dimension values; omit empty list.
 
 ### `y_values`
 
@@ -120,13 +121,13 @@ Cache points: enumerate direct pt children; int(idx) or enumeration index on mis
   - Resource y coordinate strings.
 
 - **OOXML**
-  - c:yVal cache; cx:numDim[@type="y"].
+  - c:yVal literal points or reference cache; cx:numDim[@type="y"].
 
 - **IR**
   - `ChartSeriesInfo.y_values: `list[str]``
 
 - **Parsing**
-  - Use indexed cache/dimension values; omit empty list.
+  - Use indexed literal/cache/dimension values; omit empty list.
 
 ### `bubble_sizes`
 
@@ -134,13 +135,13 @@ Cache points: enumerate direct pt children; int(idx) or enumeration index on mis
   - Resource bubble size strings.
 
 - **OOXML**
-  - c:bubbleSize cache; cx:numDim[@type="size"].
+  - c:bubbleSize literal points or reference cache; cx:numDim[@type="size"].
 
 - **IR**
   - `ChartSeriesInfo.bubble_sizes: `list[str]``
 
 - **Parsing**
-  - Use indexed cache/dimension values; omit empty list.
+  - Use indexed literal/cache/dimension values; omit empty list.
 
 ### `preview`
 

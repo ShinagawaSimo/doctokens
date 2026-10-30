@@ -4,6 +4,8 @@
 
 Point records preserve saved string values.
 
+Literal strLit/numLit points and strRef/numRef caches feed the same arrays. Match categories, values, scatter x/y, and bubble sizes by their saved point indices rather than XML child order. Missing intermediate positions remain empty records; a declared count alone does not invent values. Full chart resources retain all decoded positions, independently of the existing body-preview policy.
+
 ## Fields
 
 ### `category`

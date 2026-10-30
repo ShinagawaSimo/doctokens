@@ -21,26 +21,6 @@ from doctokens_word.docx.ooxml.styles import StyleMap
 
 
 class StyleMapTests(unittest.TestCase):
-    def test_resolves_inherited_numbering(self) -> None:
-        warnings: list[ParseWarning] = []
-        styles = StyleMap(
-            {
-                "base": StyleRecord(
-                    style_id="base",
-                    numbering_num_id="7",
-                    numbering_level=2,
-                ),
-                "child": StyleRecord(
-                    style_id="child",
-                    based_on="base",
-                ),
-            },
-            warnings,
-        )
-
-        self.assertEqual(styles.resolve_numbering("child"), ("7", 2))
-        self.assertEqual(warnings, [])
-
     def test_exposes_numbering_style_num_ids_for_num_style_link(self) -> None:
         styles = StyleMap(
             {

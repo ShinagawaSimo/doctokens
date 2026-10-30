@@ -80,6 +80,8 @@ def parse_drawings(
                 chart["series"] = chart_data["series"]
             if "plotTypes" in chart_data:
                 chart["plotTypes"] = chart_data["plotTypes"]
+            if "axes" in chart_data:
+                chart["axes"] = chart_data["axes"]
 
     return images, charts
 

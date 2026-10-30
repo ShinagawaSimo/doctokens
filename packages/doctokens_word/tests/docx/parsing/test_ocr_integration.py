@@ -48,7 +48,7 @@ class RenderOcrTextTest(unittest.TestCase):
         """When ParsedDocument has ocr_results, standalone <img> gets <ocr-text> sibling."""
         from doctokens_word.docx.model import ContentTypes, ImageAsset, ParsedDocument
         from doctokens_word.docx.model.enums import Density
-        from doctokens_word.docx.rendering.dispatch import to_output
+        from doctokens_word.docx.parsing import get_render_pipeline
 
         assets: list[ImageAsset] = [
             {
@@ -76,7 +76,7 @@ class RenderOcrTextTest(unittest.TestCase):
             content_types=ContentTypes(defaults={}, overrides={}),
             ocr_results={"img1": {"status": "success", "text": "## Detected text\n\nSome content"}, "img2": {"status": "empty"}},
         )
-        root = ET.fromstring(to_output(parsed, Density.SEMANTIC))
+        root = ET.fromstring("".join(get_render_pipeline(Density.SEMANTIC).render(parsed)))
         assets = root.find("assets")
         self.assertIsNotNone(assets)
         assert assets is not None
@@ -88,7 +88,7 @@ class RenderOcrTextTest(unittest.TestCase):
     def test_structured_ocr_results_escape_text_and_preserve_empty(self) -> None:
         from doctokens_word.docx.model import ContentTypes, ImageAsset, ParsedDocument
         from doctokens_word.docx.model.enums import Density
-        from doctokens_word.docx.rendering.dispatch import to_output
+        from doctokens_word.docx.parsing import get_render_pipeline
 
         assets: list[ImageAsset] = [
             {"id": "img1", "type": "image", "source": "embedded", "zipPath": "media/1.png"},
@@ -108,7 +108,7 @@ class RenderOcrTextTest(unittest.TestCase):
                 "img2": {"status": "empty", "text": ""},
             },
         )
-        root = ET.fromstring(to_output(parsed, Density.SEMANTIC))
+        root = ET.fromstring("".join(get_render_pipeline(Density.SEMANTIC).render(parsed)))
         first, second = root.findall(".//assets/ocr-text")
         self.assertEqual((first.get("id"), first.text), ("img1", "A < B"))
         self.assertEqual((second.get("id"), second.get("empty")), ("img2", "true"))
@@ -117,7 +117,7 @@ class RenderOcrTextTest(unittest.TestCase):
         """Without ocr_results, no <ocr-text> elements appear."""
         from doctokens_word.docx.model import ContentTypes, ImageAsset, ParsedDocument
         from doctokens_word.docx.model.enums import Density
-        from doctokens_word.docx.rendering.dispatch import to_output
+        from doctokens_word.docx.parsing import get_render_pipeline
 
         assets: list[ImageAsset] = [
             {"id": "img1", "type": "image", "source": "embedded", "zipPath": "media/img1.png"},
@@ -132,7 +132,7 @@ class RenderOcrTextTest(unittest.TestCase):
             assets=assets,
             content_types=ContentTypes(defaults={}, overrides={}),
         )
-        root = ET.fromstring(to_output(parsed, Density.SEMANTIC))
+        root = ET.fromstring("".join(get_render_pipeline(Density.SEMANTIC).render(parsed)))
         self.assertEqual(root.find(".//assets/img").get("id"), "img1")
         self.assertEqual(root.findall(".//ocr-text"), [])
 
@@ -140,7 +140,7 @@ class RenderOcrTextTest(unittest.TestCase):
         """Inline <img> inside a paragraph gets <ocr-text> sibling."""
         from doctokens_word.docx.model import ContentTypes, ImageAsset, ParsedDocument
         from doctokens_word.docx.model.enums import Density
-        from doctokens_word.docx.rendering.dispatch import to_output
+        from doctokens_word.docx.parsing import get_render_pipeline
 
         assets: list[ImageAsset] = [
             {"id": "img7", "type": "image", "source": "embedded", "zipPath": "media/img7.png"},
@@ -166,7 +166,7 @@ class RenderOcrTextTest(unittest.TestCase):
             content_types=ContentTypes(defaults={}, overrides={}),
             ocr_results={"img7": {"status": "success", "text": "Diagram text"}},
         )
-        root = ET.fromstring(to_output(parsed, Density.SEMANTIC))
+        root = ET.fromstring("".join(get_render_pipeline(Density.SEMANTIC).render(parsed)))
         paragraph = root.find(".//body/p")
         self.assertIsNotNone(paragraph)
         assert paragraph is not None
@@ -176,7 +176,7 @@ class RenderOcrTextTest(unittest.TestCase):
     def test_supplemental_image_receives_ocr(self) -> None:
         from doctokens_word.docx.model import ContentTypes, ParsedDocument
         from doctokens_word.docx.model.enums import Density
-        from doctokens_word.docx.rendering.dispatch import to_output
+        from doctokens_word.docx.parsing import get_render_pipeline
 
         header = {
             "id": "header1",
@@ -196,7 +196,7 @@ class RenderOcrTextTest(unittest.TestCase):
             headers=cast(Any, [header]),
             ocr_results={"img-header": {"status": "success", "text": "Header OCR"}},
         )
-        semantic = to_output(parsed, Density.SEMANTIC)
+        semantic = "".join(get_render_pipeline(Density.SEMANTIC).render(parsed))
         semantic_root = ET.fromstring(semantic)
         self.assertEqual(semantic_root.findtext(".//headers/header/ocr-text"), "Header OCR")
 

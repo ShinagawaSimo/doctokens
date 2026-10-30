@@ -206,20 +206,6 @@ The [style reader](../../../packages/doctokens_word/src/doctokens_word/docx/ooxm
 - **Parsing**
   - `value.lower() in {"1", "true", "on"}`; default false. Select the default style of the requested type when its reference is absent, missing, or points to another style type.
 
-### `resolved_heading_level`
-
-- **Output**
-  - Internal style record; visible properties project through their paragraph/run fields.
-
-- **OOXML**
-  - `word/styles.xml/w:styles/w:style/outline_level and based_on`
-
-- **IR**
-  - `StyleRecord.resolved_heading_level: int | None`
-
-- **Parsing**
-  - First explicit outline 0..8 yields outline+1. An explicit 9 stops basedOn resolution with no heading. A valid paragraph outline overrides this style result, including explicit paragraph cancellation.
-
 ### `document_defaults`
 
 - **Output**

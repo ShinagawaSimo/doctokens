@@ -124,7 +124,4 @@ class StylesParser:
                     record.table_regions[kind] = props
             records[style_id] = record
         index = StyleMap(records, self.warnings, defaults=defaults)
-        for record in records.values():
-            if record.type == "paragraph":
-                record.resolved_heading_level = index.resolve_heading_level(record.style_id)
         return index

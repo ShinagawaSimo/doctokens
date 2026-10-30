@@ -113,15 +113,3 @@ def test_application_defined_numbering_change_nfc_values_are_ignored() -> None:
         "APPLICATION_DEFINED_NUMBER_FORMAT",
         "APPLICATION_DEFINED_NUMBER_FORMAT",
     ]
-
-
-def test_application_defined_nfc_has_the_same_direct_renderer_behavior() -> None:
-    warnings = []
-    renderer = NumberFormatRenderer(warnings)
-
-    assert renderer.format_from_nfc(1, 40) == ""
-    assert renderer.format_from_nfc(1, 60) == ""
-    assert [warning.code for warning in warnings] == [
-        "APPLICATION_DEFINED_NUMBER_FORMAT",
-        "APPLICATION_DEFINED_NUMBER_FORMAT",
-    ]

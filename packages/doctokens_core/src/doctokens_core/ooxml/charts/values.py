@@ -18,7 +18,8 @@ NS_CX = "http://schemas.microsoft.com/office/drawing/2014/chartex"
 
 
 def _chartml_title(root: ET.Element) -> str | None:
-    return _drawing_text(_first_descendant(root, NS_C, "title"))
+    chart = _first_direct_child(root, NS_C, "chart")
+    return _drawing_text(_first_direct_child(chart, NS_C, "title"))
 
 
 def _chartml_series_name(series_element: ET.Element) -> str | None:
@@ -33,17 +34,21 @@ def _chartml_categories(node: ET.Element | None) -> list[str]:
     if multi_level is not None:
         levels = [_indexed_point_values(level, NS_C) for level in _direct_children(multi_level, NS_C, "lvl")]
         return _flatten_category_levels(levels)
-    values = _cached_values_from(node)
-    return values
+    return _chartml_values(node)
 
 
-def _cached_values_from(node: ET.Element | None) -> list[str]:
+def _chartml_values(node: ET.Element | None) -> list[str]:
+    """Read the selected source's saved literal points or reference cache."""
     if node is None:
         return []
-    cache = _first_descendant(node, NS_C, "numCache")
-    if cache is None:
-        cache = _first_descendant(node, NS_C, "strCache")
-    return _indexed_point_values(cache, NS_C) if cache is not None else []
+    for source in node:
+        if source.tag in {f"{{{NS_C}}}numLit", f"{{{NS_C}}}strLit"}:
+            return _indexed_point_values(source, NS_C)
+        if source.tag in {f"{{{NS_C}}}numRef", f"{{{NS_C}}}strRef"}:
+            cache_name = "numCache" if source.tag == f"{{{NS_C}}}numRef" else "strCache"
+            cache = _first_direct_child(source, NS_C, cache_name)
+            return _indexed_point_values(cache, NS_C) if cache is not None else []
+    return []
 
 
 # ── ChartEx ──
@@ -103,7 +108,8 @@ def _indexed_point_values(node: ET.Element, namespace: str) -> list[str]:
     points: dict[int, str] = {}
     for fallback_index, point in enumerate(_direct_children(node, namespace, "pt")):
         index = _safe_int(point.get("idx"))
-        points[index if index is not None else fallback_index] = point.text or _first_value(point) or ""
+        value = _first_direct_child(point, namespace, "v")
+        points[index if index is not None else fallback_index] = (value.text or "") if value is not None else point.text or ""
     if not points:
         return []
     return [points.get(index, "") for index in range(max(points) + 1)]

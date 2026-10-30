@@ -96,13 +96,26 @@ Chart summaries attach to the worksheet independently of grid truncation.
   - Resource series; inline @names.
 
 - **OOXML**
-  - Shared series caches.
+  - Shared saved literal points, reference caches, or ChartEx dimensions.
 
 - **IR**
   - `list[DrawingChartSeries]`
 
 - **Parsing**
   - See [series](chart-series.md); names are nonempty names joined with comma.
+
+### `axes`
+
+- **Output**
+  - Axis child elements in structural/semantic worksheet chart summaries and complete chart resources. Plain summaries retain their existing compact chart text.
+- **OOXML**
+  - Shared ChartML plotArea catAx/valAx/dateAx/serAx records.
+- **IR**
+  - `DrawingChart.axes: list[dict[str, str]]`.
+- **Parsing**
+  - Carry the complete parsed axes from the chart-part result into its attached drawing-chart record. Preserve saved order, IDs and cross-axis references, titles, position, number format, explicit scale bounds/orientation/log base, built-in units and custom unit factors. Omit absent fields and axis data when none is saved.
+  - Example: a value-axis title USD, display unit thousands and bounds 0..100 produce `<axis display-unit="thousands" kind="valAx" maximum="100" minimum="0" title="USD"/>` plus any other saved axis attributes in both XML reading paths.
+  - Units/scales describe the source axis. Do not divide the saved point values by the display factor, infer unsaved bounds, or substitute the axis title for an absent chart title. See [shared axes](../../common/chart.md#axes).
 
 ### `plotTypes`
 

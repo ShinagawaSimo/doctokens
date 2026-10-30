@@ -29,19 +29,6 @@ def theme_xml() -> str:
 </a:theme>"""
 
 
-def ph_shape_xml(*, idx: str, ph_type: str, geometry: tuple[int, int, int, int] | None = None, shape_id: int = 2) -> str:
-    """A placeholder p:sp (as found in layouts/masters), optionally with geometry."""
-    xfrm = ""
-    if geometry:
-        x, y, cx, cy = geometry
-        xfrm = f'<a:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
-    return f"""<p:sp><p:nvSpPr><p:cNvPr id="{shape_id}" name="PH {idx}"/><p:cNvSpPr/>
-<p:nvPr><p:ph type="{ph_type}" idx="{idx}"/></p:nvPr></p:nvSpPr>
-<p:spPr>{xfrm}</p:spPr>
-<p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody>
-</p:sp>"""
-
-
 def clr_map_xml(**mapping: str) -> str:
     attrs = " ".join(f'{name}="{value}"' for name, value in mapping.items())
     return f"<p:clrMap {attrs}/>"

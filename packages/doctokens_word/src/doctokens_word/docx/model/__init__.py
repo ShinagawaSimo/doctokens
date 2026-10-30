@@ -43,7 +43,7 @@ from .content import (
     SmartArtLink,
     SmartArtNode,
 )
-from .document import DocumentManifest, OcrResultRecord, ParsedDocument, ParseOptions, StyleRecord
+from .document import OcrResultRecord, ParsedDocument, ParseOptions, StyleRecord
 
 
 def append_warning(
@@ -70,7 +70,6 @@ __all__ = [
     "ContentControl",
     "ContentControlOption",
     "ContentTypes",
-    "DocumentManifest",
     "DrawingCommon",
     "FieldInfo",
     "HeadingBlock",

@@ -2,14 +2,14 @@
 
 [COMMON](README.md) / Chart parts
 
-ChartML and ChartEx are parsed from saved caches without evaluating formulas or opening embedded workbooks.
+ChartML and ChartEx are parsed from saved literal points, reference caches, and ChartEx dimensions without evaluating formulas or opening embedded workbooks.
 
 Body chart previews in DOCX/PPTX retain the first eight series and up to eight
 saved points per series. They remain explicitly truncated and can be expanded
 through the existing resource operation; point/category boundaries use XML child
-elements, even when labels contain commas. PPTX resources retain their older
-comma-joined summary attributes for compatibility; explicit point children are
-the unambiguous data representation.
+elements, even when labels contain commas. PPTX resources also contain
+comma-joined summary attributes; explicit point children are the unambiguous
+data representation.
 
 ## Processing
 
@@ -40,13 +40,13 @@ Dispatch to ChartEx only for `{http://schemas.microsoft.com/office/drawing/2014/
   - Format-specific chart title.
 
 - **OOXML**
-  - ChartML first c:title; ChartEx chart/cx:title.
+  - ChartML chartSpace/chart/title; ChartEx chart/cx:title.
 
 - **IR**
   - `ChartInfo.title: str`
 
 - **Parsing**
-  - Concatenate descendant a:t, strip; omit if empty.
+  - Concatenate the chart title's descendant a:t, strip; omit if empty. An axis title under plotArea is independent and is never promoted to chart title when chart/title is absent.
 
 ### `series`
 
@@ -82,7 +82,7 @@ Dispatch to ChartEx only for `{http://schemas.microsoft.com/office/drawing/2014/
   - Format-specific total point count.
 
 - **OOXML**
-  - Series caches.
+  - Saved series literal/cache/dimension arrays.
 
 - **IR**
   - `int`

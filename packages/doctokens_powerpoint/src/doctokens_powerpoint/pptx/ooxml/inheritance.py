@@ -262,18 +262,6 @@ class LayoutMasterResolver:
         self._master_cache[master_part] = model
         return model
 
-    def _master_geometries(self, master_root: ET.Element) -> dict[str, tuple[int, int, int, int]]:
-        geometries: dict[str, tuple[int, int, int, int]] = {}
-        for shape in _layout_shapes(master_root):
-            ph = _find_descendant(shape, "ph")
-            if ph is None:
-                continue
-            ph_type = ph.get("type", "obj")
-            geometry = shape_geometry(shape, self._warnings)
-            if ph_type and geometry is not None:
-                geometries[ph_type] = geometry
-        return geometries
-
     def _clr_map_from(self, root: ET.Element, *, override: bool) -> dict[str, str]:
         if override:
             ovr = first_child(root, "p", "clrMapOvr")

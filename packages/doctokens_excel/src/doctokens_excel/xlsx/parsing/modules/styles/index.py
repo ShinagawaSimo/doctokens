@@ -14,7 +14,6 @@ from doctokens_excel.formatting.values import (
     builtin_format_code,
     formula_bar_value,
     number_format_color,
-    resolve_format,
     text_format_parts,
 )
 from doctokens_excel.formatting.values import format_value as format_number_value
@@ -29,8 +28,6 @@ class FormatIndex:
     def __init__(self, *, locale: str = "zh-CN") -> None:
         # cellXfs index → (numFmtId, formatCode, fontId, fillId, locked, formulaHidden)
         self._cell_formats: list[tuple[int, str, int, int, bool, bool]] = []
-        # (locale, numFmtId, formatCode) → (is_date, is_pct)
-        self._fmt_cache: dict[tuple[str, int, str], tuple[bool, bool]] = {}
         self._programs: dict[tuple[str, str], FormatProgram] = {}
         self._text_parts: dict[str, list[str | None] | None] = {}
         # style_index → resolved attribute string ("" = no styles)
@@ -46,12 +43,6 @@ class FormatIndex:
 
     def set_date_system(self, date_1904: bool) -> None:
         self.date_1904 = date_1904
-
-    def set_locale(self, locale: str) -> None:
-        """Set the workbook/UI locale used for localized built-in formats."""
-        if locale:
-            self.locale = locale
-            self._fmt_cache.clear()
 
     def register_font(self, font_info: FontInfo) -> None:
         self._fonts.append(font_info)
@@ -179,12 +170,6 @@ class FormatIndex:
         if formula_hidden:
             parts.append("formulaHidden")
         return " ".join(parts)
-
-    def _resolve(self, num_fmt_id: int, fmt_code: str, locale: str) -> tuple[bool, bool]:
-        key = (locale, num_fmt_id, fmt_code)
-        if key not in self._fmt_cache:
-            self._fmt_cache[key] = resolve_format(num_fmt_id, fmt_code, locale)
-        return self._fmt_cache[key]
 
 
 __all__ = ["FormatIndex"]

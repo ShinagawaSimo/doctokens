@@ -17,7 +17,6 @@ from .models import ChartInfo, ChartPlotInfo, ChartSeriesInfo
 from .values import (
     NS_C,
     NS_CX,
-    _cached_values_from,
     _chartex_dimension_values,
     _chartex_levels,
     _chartex_series_name,
@@ -25,6 +24,7 @@ from .values import (
     _chartml_categories,
     _chartml_series_name,
     _chartml_title,
+    _chartml_values,
     _direct_attr,
     _direct_children,
     _first_dimension,
@@ -137,10 +137,10 @@ class ChartParser:
             if value_source is None:
                 value_source = _first_direct_child(series_element, NS_C, "yVal")
             categories = _chartml_categories(category_source)
-            values = _cached_values_from(value_source)
-            x_values = _cached_values_from(_first_direct_child(series_element, NS_C, "xVal"))
-            y_values = _cached_values_from(_first_direct_child(series_element, NS_C, "yVal"))
-            bubble_sizes = _cached_values_from(_first_direct_child(series_element, NS_C, "bubbleSize"))
+            values = _chartml_values(value_source)
+            x_values = _chartml_values(_first_direct_child(series_element, NS_C, "xVal"))
+            y_values = _chartml_values(_first_direct_child(series_element, NS_C, "yVal"))
+            bubble_sizes = _chartml_values(_first_direct_child(series_element, NS_C, "bubbleSize"))
             rows.append(
                 _series_row(
                     index=start_index + offset,

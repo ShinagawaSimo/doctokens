@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Literal, TypedDict
 
 from doctokens_core.containers.opc.models import ContentTypes, RelationshipRecord
@@ -19,17 +19,6 @@ class OcrResultRecord(TypedDict, total=False):
     text: str
     error_code: str
     error_message: str
-
-
-class DocumentManifest(TypedDict):
-    """Small document overview returned before rendering or resource extraction."""
-
-    pages: int
-    tables: int
-    images: int
-    footnotes: int
-    endnotes: int
-    comments: int
 
 
 @dataclass(frozen=True)
@@ -71,7 +60,6 @@ class StyleRecord:
     run_format: RunFormat = field(default_factory=dict)
     is_custom: bool = False
     is_default: bool = False
-    resolved_heading_level: int | None = None
     table_regions: dict[str, StyleRecord] = field(default_factory=dict)
     row_band_size: int | None = None
     column_band_size: int | None = None
@@ -101,27 +89,5 @@ class ParsedDocument:
     metrics: MetricsSnapshot = field(default_factory=lambda: MetricsSnapshot(stagesMs={}, counters={}))
     report: ParseReport | None = None
 
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "metadata": self.metadata,
-            "packageInfo": self.package_info,
-            "blocks": self.blocks,
-            "relationships": [asdict(item) for item in self.relationships],
-            "styles": [asdict(item) for item in self.styles],
-            "warnings": [asdict(item) for item in self.warnings],
-            "contentTypes": self.content_types,
-            "assets": self.assets,
-            "charts": self.charts,
-            "smartarts": self.smartarts,
-            "headers": self.headers,
-            "footers": self.footers,
-            "footnotes": self.footnotes,
-            "endnotes": self.endnotes,
-            "comments": self.comments,
-            "ocrResults": self.ocr_results,
-            "metrics": self.metrics,
-            "report": self.report.to_dict() if self.report is not None else None,
-        }
 
-
-__all__ = ["DocumentManifest", "OcrResultRecord", "ParseOptions", "ParsedDocument", "StyleRecord"]
+__all__ = ["OcrResultRecord", "ParseOptions", "ParsedDocument", "StyleRecord"]

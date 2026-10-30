@@ -37,7 +37,7 @@ XLSX resources come from drawing and table metadata in the parsed scope.
   - `str`
 
 - **Parsing**
-  - Binary: drawing image only. Explanatory: chart, pivot_table. Tables are query sources; render_resource does not handle table.
+  - Binary: drawing image only. Explanatory: chart, pivot_table and explicit image-text using an original embedded image ID. Tables remain query sources. See [saved EMF text](../../common/emf.md).
 
 ### `resource_id`
 

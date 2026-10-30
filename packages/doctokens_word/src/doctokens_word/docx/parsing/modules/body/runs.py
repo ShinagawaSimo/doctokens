@@ -75,7 +75,7 @@ class RunParser:
                 run_style_id,
                 self.owner.table_style,
                 self.owner.ruby_format,
-                parse_run_format(run_properties),
+                parse_run_format(run_properties, self.owner.styles.theme),
             )
             visible_format = visible_run_format(run_format)
         change = None
@@ -83,7 +83,11 @@ class RunParser:
             before = selected_properties(current_properties, "original")
             before_style = attr(first_child(before, "w", "rStyle"), "w", "val")
             before_format = self.owner.styles.run_format(
-                paragraph_style_id, before_style, self.owner.table_style, self.owner.ruby_format, parse_run_format(before)
+                paragraph_style_id,
+                before_style,
+                self.owner.table_style,
+                self.owner.ruby_format,
+                parse_run_format(before, self.owner.styles.theme),
             )
             change = property_change(current_properties, "run", visible_run_format(before_format), visible_format)
         for child in run_element:

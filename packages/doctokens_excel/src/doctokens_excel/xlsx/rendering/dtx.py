@@ -216,16 +216,29 @@ def _append_cell_text(parent: ET.Element, cell: Cell, density: str, inherited: s
     elif density == "semantic" and cell.get("rich"):
         for run in cell["rich"]:
             node = content_parent
-            resets = {key: False for key in ("bold", "italic", "underline") if run.get(key) is False and key in inherited}
+            resets = {
+                key: False
+                for key in ("bold", "italic", "underline", "strike", "superscript", "subscript")
+                if run.get(key) is False and key in inherited
+            }
             if resets:
                 node = append(node, "run", **resets)
+            if run.get("strike"):
+                node = append(node, "s")
+            if run.get("superscript"):
+                node = append(node, "sup")
+            elif run.get("subscript"):
+                node = append(node, "sub")
             if run.get("bold"):
                 node = append(node, "b")
             if run.get("italic"):
                 node = append(node, "i")
             if run.get("underline"):
                 node = append(node, "u")
-            if run.get("color"):
+            if run.get("color") and (
+                run["color"].upper() != "#000000"
+                or any(value.startswith("color=") and value.upper() != "COLOR=#000000" for value in inherited)
+            ):
                 node = append(node, "color", value=run["color"])
             text(node, run.get("text", ""))
     else:

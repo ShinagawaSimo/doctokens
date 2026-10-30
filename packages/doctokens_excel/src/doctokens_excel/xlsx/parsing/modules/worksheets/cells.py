@@ -11,6 +11,7 @@ from doctokens_core.contracts.models import ParseWarning
 from ....model.cell import CompactCell
 from ....model.coordinates import parse_ref
 from ....model.workbook import Cell, CellControl, RichTextRun
+from ..styles.colors import SpreadsheetColors
 from ..styles.index import FormatIndex
 from ..workbook.rich_values import RichValueCatalog
 from ..workbook.shared_strings import SharedStrings
@@ -71,6 +72,7 @@ def _parse_cell(
             cell_type,
             shared_strings,
             rich=include_rich_text,
+            colors=format_index.colors if format_index is not None else SpreadsheetColors(),
             warn=lambda code, message: warnings.append(ParseWarning(code, message, f"{sheet_part}!{ref}")),
         )
         if include_display_text
@@ -190,9 +192,10 @@ def _cell_text(
     *,
     rich: bool,
     warn: WarningSink,
+    colors: SpreadsheetColors,
 ) -> tuple[str, ET.Element | None, list[RichTextRun] | None]:
     if cell_type == "inlineStr":
-        value, runs = read_string(cell_elem.find(f"{{{NS_S}}}is"), rich=rich, warn=warn)
+        value, runs = read_string(cell_elem.find(f"{{{NS_S}}}is"), rich=rich, warn=warn, colors=colors)
         return value, None, runs
 
     value_elem = cell_elem.find(f"{{{NS_S}}}v")

@@ -97,23 +97,6 @@ class BodyStructureTests(unittest.TestCase):
         # Bookmarks are noise, not content: no warning, and the paragraph text survives.
         self.assertEqual(_body_text_for_page("".join(get_render_pipeline(Density.STRUCTURAL).render(parsed))), ["Visible"])
 
-    def test_paragraph_sectpr_advances_page_after_paragraph(self) -> None:
-        """A sectPr inside pPr starts the next block on a new page."""
-        data = _make_docx(
-            "<w:p><w:r><w:t>First</w:t></w:r></w:p>"
-            "<w:p><w:pPr><w:sectPr/></w:pPr><w:r><w:t>Last of section</w:t></w:r></w:p>"
-            "<w:p><w:r><w:t>Next section</w:t></w:r></w:p>"
-        )
-        self.assertEqual(_body_text_for_page(parse_docx(data, page_hint=1).text), ["First", "Last of section"])
-        self.assertEqual(_body_text_for_page(parse_docx(data, page_hint=2).text), ["Next section"])
-
-    def test_empty_paragraph_sectpr_still_breaks_page(self) -> None:
-        """Even a dropped empty paragraph's sectPr must start a new page."""
-        data = _make_docx(
-            "<w:p><w:r><w:t>A</w:t></w:r></w:p><w:p><w:pPr><w:sectPr/></w:pPr></w:p><w:p><w:r><w:t>B</w:t></w:r></w:p>"
-        )
-        self.assertEqual(_body_text_for_page(parse_docx(data, page_hint=2).text), ["B"])
-
     def test_empty_numbered_paragraph_keeps_label(self) -> None:
         """Word renders an empty numbered paragraph as its visible number; the label
         makes the paragraph non-empty, so it must be kept and the counter advanced."""

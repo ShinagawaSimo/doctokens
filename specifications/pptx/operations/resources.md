@@ -18,7 +18,7 @@ Embedded resources are accessed through an open PPTX session.
   - `str`
 
 - **Parsing**
-  - Binary image/media. Explanatory chart/smartart/table, singular only. External binary → ValueError; missing ID → KeyError.
+  - Binary image/media. Explanatory chart/smartart/table or explicit image-text, singular only. image-text uses an original image ID; external sources raise ValueError and are not downloaded. Missing ID raises KeyError. See [saved EMF text](../../common/emf.md).
 
 ### `resource_id`
 

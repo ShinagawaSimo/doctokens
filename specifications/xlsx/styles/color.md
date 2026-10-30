@@ -18,7 +18,8 @@ Cell fonts and fills use the workbook theme when necessary.
   - Resolved string.
 
 - **Parsing**
-  - Nonempty and not 00000000 wins; length 8 → remove first 2 characters; otherwise keep as supplied. This helper does not enforce six hex digits.
+  - Require six or eight hexadecimal digits, remove the optional alpha byte
+    and normalize to uppercase RGB. Automatic color is not a guessed RGB.
 
 ### `theme`
 
@@ -32,7 +33,11 @@ Cell fonts and fills use the workbook theme when necessary.
   - Integer theme index.
 
 - **Parsing**
-  - Slots0..11:lt1,dk1,lt2,dk2,accent1..6,hlink,folHlink. Read xl/theme/theme1.xml; missing theme/scheme → Office default palette.
+  - Slots 0..11 are lt1, dk1, lt2, dk2, accent1..6, hlink, folHlink.
+    Read the workbook's theme relationship target, otherwise the conventional
+    theme1.xml path. Preserve the existing Office-default fallback for an
+    absent theme. Cell fonts, fills, differential styles, shared strings and
+    inline rich runs use the same per-workbook SpreadsheetColors context.
 
 ### `tint`
 
@@ -46,18 +51,25 @@ Cell fonts and fills use the workbook theme when necessary.
   - float.
 
 - **Parsing**
-  - Applies only to theme branch. Negative: int(c*(1+tint)); positive: int(c*(1-tint)+255*tint); clamp0..255. ValueError → base color.
+  - Apply to a resolved RGB/theme/indexed color in HLS space. Negative tint
+    scales luminance by 1+tint; positive tint uses L*(1-tint)+tint.
+    Convert back to RGB and round channels to byte values. Require a finite
+    tint within -1..1; invalid tint preserves the base property.
 
 ### `indexed`
 
 - **Output**
-  - No resolved color.
+  - Resolved RGB from the workbook's indexed palette or the default palette.
 
 - **OOXML**
   - color/@indexed.
 
 - **IR**
-  - Not retained.
+  - Per-workbook SpreadsheetColors.indexed.
 
 - **Parsing**
-  - Indexed palette colors are not resolved in this path.
+  - Read styles/colors/indexedColors/rgbColor entries as indexed overrides;
+    omitted positions retain the standard 64-entry palette. Entries 0..63
+    resolve directly, for example indexed=10 is FF0000. Indices 64/65 are
+    application/system colors and are not guessed; invalid indices cannot
+    invoke Python negative indexing.

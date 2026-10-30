@@ -137,14 +137,24 @@ Resolved style properties retain explicit false/clear values until final visible
   - Semantic `<color value="#RRGGBB">`; omitted in structural/plain.
 
 - **OOXML**
-  - `w:rPr/w:color/@w:val`
+  - `w:rPr/w:color/@w:val`, @w:themeColor, @w:themeTint, @w:themeShade.
 
 - **IR**
   - `Run.format["color"]`
 
 - **Parsing**
   - Normalize valid literal hex. Keep black/near-black during inheritance so they can override an earlier color; omit them only after effective run resolution. Default-like colors are black or hex colors whose maximum component is <=48 and component spread is <=16.
-  - Explicit `auto` clears an inherited literal without guessing a theme/system color. Missing color leaves inheritance unchanged; source theme-only colors do not imply full Word theme resolution.
+  - Resolve themeColor through the document theme part before the literal
+    fallback. Apply saved settings/clrSchemeMapping to text/background roles;
+    read srgbClr or saved sysClr/lastClr without an OS lookup. Direct formats,
+    styles/defaults, numbering markers, borders and shading share WordTheme.
+  - themeTint/themeShade are hexadecimal bytes. Convert RGB to HLS; shade
+    scales luminance by byte/255, tint uses L*(byte/255)+(1-byte/255).
+    Tint takes precedence when both are saved. Round converted RGB bytes.
+    Invalid modifiers preserve the base and report THEME_COLOR_MODIFIER_INVALID.
+    Unresolved themes preserve a saved literal and report THEME_COLOR_UNRESOLVED.
+  - Explicit auto without a usable theme clears an inherited literal.
+    Missing color leaves inheritance unchanged; unavailable colors are not guessed.
   - Example: red paragraph style plus direct black produces ordinary text; direct green produces `<color value="#00AA00">text</color>`.
 
 - **Absence and defaults**
@@ -179,7 +189,10 @@ Resolved style properties retain explicit false/clear values until final visible
   - `Run.format["bg"]`
 
 - **Parsing**
-  - Normalize background fill; preferred over highlight. Explicit `fill="auto"` or shading `val="nil"` clears an inherited background before the visible projection.
+  - Resolve themeFill/themeFillTint/themeFillShade with the same theme
+    precedence; literal fill is a fallback. Background remains preferred over
+    highlight. fill=auto without a usable theme, or shading val=nil, clears
+    the inherited background before visible projection.
 
 - **Absence and defaults**
   - Absent/disabled: no wrapper.

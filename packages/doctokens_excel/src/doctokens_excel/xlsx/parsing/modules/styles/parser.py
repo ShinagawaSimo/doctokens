@@ -9,8 +9,9 @@ from doctokens_core.containers.opc.reader import PackageReader
 
 from doctokens_excel.formatting.values import builtin_format_code
 
+from .colors import SpreadsheetColors
 from .index import FormatIndex
-from .records import NS_S, differential_style, fill_info, font_info, parse_theme
+from .records import NS_S, differential_style, fill_info, font_info
 
 StyleDetail = Literal["display", "structural", "semantic"]
 
@@ -28,17 +29,15 @@ def parse_styles(
     """
     index = FormatIndex(locale=locale)
 
-    if not pkg.exists("xl/styles.xml"):
-        return index
-
+    root = pkg.read_xml("xl/styles.xml") if pkg.exists("xl/styles.xml") else None
     include_semantic = detail == "semantic"
-    theme = parse_theme(pkg) if include_semantic else {}
-    index.theme = theme
-    root = pkg.read_xml("xl/styles.xml")
+    index.colors = SpreadsheetColors.from_package(pkg, root) if include_semantic else SpreadsheetColors()
+    if root is None:
+        return index
     custom_fmts = _parse_custom_formats(root)
 
     if include_semantic:
-        _register_semantic_records(index, root, theme)
+        _register_semantic_records(index, root, index.colors)
 
     style_xfs = _find_xfs(root, "cellStyleXfs")
     visible_fills = _visible_records(root, "fills", "fill")
@@ -91,22 +90,22 @@ def _parse_custom_formats(root: ET.Element) -> dict[int, str]:
 def _register_semantic_records(
     index: FormatIndex,
     root: ET.Element,
-    theme: dict[int, str],
+    colors: SpreadsheetColors,
 ) -> None:
     fonts = root.find(f"{{{NS_S}}}fonts")
     if fonts is not None:
         for font in fonts.findall(f"{{{NS_S}}}font"):
-            index.register_font(font_info(font, theme))
+            index.register_font(font_info(font, colors))
 
     fills = root.find(f"{{{NS_S}}}fills")
     if fills is not None:
         for fill in fills.findall(f"{{{NS_S}}}fill"):
-            index.register_fill(fill_info(fill, theme))
+            index.register_fill(fill_info(fill, colors))
 
     dxfs = root.find(f"{{{NS_S}}}dxfs")
     if dxfs is not None:
         for dxf in dxfs.findall(f"{{{NS_S}}}dxf"):
-            index.register_differential_style(differential_style(dxf, theme))
+            index.register_differential_style(differential_style(dxf, colors))
 
 
 def _find_xfs(root: ET.Element, name: str) -> list[ET.Element]:

@@ -6,6 +6,7 @@ from typing import cast
 from xml.etree import ElementTree as ET
 
 from doctokens_core.ooxml.charts.axes import append_chart_axes
+from doctokens_core.ooxml.charts.rendering import append_plots
 from doctokens_core.output.xml import append
 
 from ..model.coordinates import col_letter
@@ -144,6 +145,7 @@ def _append_sheet_metadata(
             group=chart.get("group"),
         )
         append_chart_axes(chart_node, chart.get("axes", []))
+        append_plots(chart_node, chart.get("plots", []))
         if chart.get("unparsed"):
             append(chart_node, "unsupported", type="chart")
     for shape in sheet.get("drawing_shapes", []):

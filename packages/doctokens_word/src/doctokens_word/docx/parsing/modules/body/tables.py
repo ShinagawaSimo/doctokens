@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
 from ....model import Block, ContentControl, TableBlock, TableCell, TableRow
-from ....ooxml.formatting import normalize_hex_color
 from ....ooxml.namespaces import attr, first_child, local_name, qualified_name
 from ....ooxml.property_changes import apply_property_review, selected_properties, structural_revision
 from ....ooxml.table_styles import TableStyleResolver
@@ -149,7 +148,7 @@ class TableParser:
                 cell["contentControls"] = list(cell_source.controls)
             shading = first_child(cell_source.properties, "w", "shd")
             if shading is not None:
-                background = normalize_hex_color(attr(shading, "w", "fill"))
+                background = owner.styles.theme.color(shading, fill=True)
                 if attr(shading, "w", "val") == "nil":
                     background = None
             if background and owner.include_character_formatting:

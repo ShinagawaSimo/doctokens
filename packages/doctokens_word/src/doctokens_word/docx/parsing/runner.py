@@ -172,7 +172,7 @@ class DocxParser:
         styles: StyleMap,
     ) -> NumberingMap:
         with metrics.stage("numbering"):
-            return NumberingParser(package, warnings, styles.numbering_style_num_ids()).parse()
+            return NumberingParser(package, warnings, styles.numbering_style_num_ids(), theme=styles.theme).parse()
 
     @staticmethod
     def _index_resources(

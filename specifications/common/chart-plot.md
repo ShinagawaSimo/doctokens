@@ -2,7 +2,7 @@
 
 [COMMON](README.md) / Chart plots
 
-Plot membership is retained for combination charts.
+Plot membership is retained for combination charts and saved grouping/axis relationships.
 
 ## Fields
 
@@ -47,3 +47,39 @@ Plot membership is retained for combination charts.
 
 - **Parsing**
   - Global series indices in traversal order. ChartEx series with the same layoutId share one plot record.
+
+### `grouping`
+
+- **Output**
+  - plot/@grouping in structural/semantic summaries and complete resources.
+- **OOXML**
+  - Direct c:grouping/@val, including clustered, stacked and percentStacked.
+- **Parsing**
+  - Preserve the saved discriminator; cached values are not recalculated as percentages.
+
+### `direction`
+
+- **Output**
+  - plot/@direction.
+- **OOXML**
+  - c:barDir/@val.
+- **Parsing**
+  - Retain bar/col without editable geometry.
+
+### `axis_ids`
+
+- **Output**
+  - plot/@axes, a space-separated list of saved IDs; series/@plot identifies ownership.
+- **OOXML**
+  - Direct plot c:axId/@val in source order.
+- **Parsing**
+  - Axis titles/units stay on matching axis records. No primary/secondary
+    assignment is inferred from values, ranges or element proximity.
+
+### `unsupported`
+
+- **Output**
+  - `<unsupported type="chart-plot" source="SOURCE" index="N"/>`.
+- **Parsing**
+  - Retain an unreadable chart-family element instead of treating it as absent.
+    Known axis/extension/property nodes do not become unknown plots.

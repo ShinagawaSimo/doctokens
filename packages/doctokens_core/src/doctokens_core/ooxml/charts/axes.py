@@ -5,12 +5,16 @@ from __future__ import annotations
 from xml.etree import ElementTree as ET
 
 from ...output.xml import append
+from .semantics import saved_text
 
 _C = "{http://schemas.openxmlformats.org/drawingml/2006/chart}"
 _A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+_CX = "{http://schemas.microsoft.com/office/drawing/2014/chartex}"
 
 
 def parse_chart_axes(root: ET.Element) -> list[dict[str, str]]:
+    if root.tag == _CX + "chartSpace":
+        return _chartex_axes(root)
     area = root.find(".//" + _C + "plotArea")
     if area is None:
         return []
@@ -43,6 +47,34 @@ def parse_chart_axes(root: ET.Element) -> list[dict[str, str]]:
         fmt = node.find(_C + "numFmt")
         if fmt is not None and fmt.get("formatCode") is not None:
             axis["num_format"] = fmt.get("formatCode", "")
+        axes.append(axis)
+    return axes
+
+
+def _chartex_axes(root: ET.Element) -> list[dict[str, str]]:
+    area = root.find(_CX + "chart/" + _CX + "plotArea")
+    if area is None:
+        return []
+    axes = []
+    for source in area.findall(_CX + "axis"):
+        axis = {"kind": "axis", **source.attrib}
+        title = source.find(_CX + "title/" + _CX + "tx")
+        if value := saved_text(title, _CX):
+            axis["title"] = value
+        scaling = source.find(_CX + "valScaling")
+        if scaling is None:
+            scaling = source.find(_CX + "catScaling")
+        if scaling is not None:
+            axis["kind"] = "valAx" if scaling.tag == _CX + "valScaling" else "catAx"
+            for key, value in scaling.attrib.items():
+                if value != "auto":
+                    axis[{"min": "minimum", "max": "maximum"}.get(key, key)] = value
+        fmt = source.find(_CX + "numFmt")
+        if fmt is not None and fmt.get("formatCode"):
+            axis["num_format"] = fmt.get("formatCode", "")
+        units = source.find(_CX + "units")
+        if units is not None:
+            axis.update(units.attrib)
         axes.append(axis)
     return axes
 

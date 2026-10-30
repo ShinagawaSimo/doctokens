@@ -24,7 +24,6 @@ from .blocks import (
 from .content import (
     AssetLookup,
     Chart,
-    ChartPlot,
     ChartSeries,
     ContentControl,
     ContentControlOption,
@@ -65,7 +64,6 @@ __all__ = [
     "AssetLookup",
     "Block",
     "Chart",
-    "ChartPlot",
     "ChartSeries",
     "ContentControl",
     "ContentControlOption",

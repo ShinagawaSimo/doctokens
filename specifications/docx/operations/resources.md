@@ -18,7 +18,7 @@ Session binary reads and explanatory renderings have distinct result types.
   - `str`
 
 - **Parsing**
-  - Binary: image. Explanatory: chart/smartart/table, singular only; invalid/plural → ValueError. Unknown resource → KeyError. External image bytes → ValueError.
+  - Binary: image. Explanatory: chart/smartart/table or explicit image-text using an original image ID; invalid/plural kinds raise ValueError. Unknown IDs raise KeyError; external images are not downloaded. See [saved EMF text](../../common/emf.md).
 
 ### `resource_id`
 

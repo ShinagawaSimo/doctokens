@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from doctokens_core.containers.opc.limits import PackageLimits
 from doctokens_core.containers.opc.reader import PackageReader
 from doctokens_core.contracts.models import ParseReport, ParseResult, ResourceDescriptor, Source
+from doctokens_core.output.image_text import image_text_resource
 from doctokens_core.output.resources import resource_document
 from doctokens_core.output.xml import element
 from doctokens_core.runtime.session import SessionLifecycle
@@ -199,6 +200,18 @@ class XlsxReadSession:
 
     def render_resource(self, kind: str, resource_id: str) -> ParseResult:
         workbook = self._require_open()
+        if kind == "image-text":
+            descriptor = next((item for item in self.resources if item.kind == "image" and item.id == resource_id), None)
+            if descriptor is None:
+                raise KeyError(f"image {resource_id!r} not found")
+            if descriptor.source == "external" or descriptor.part is None or self._package is None:
+                raise ValueError("image-text requires an original embedded image")
+            return _result(
+                workbook,
+                image_text_resource(self._package, descriptor.part, resource_id, "xlsx"),
+                "semantic",
+                {"kind": "resource", "resource_kind": kind, "id": resource_id},
+            )
         if kind == "chart":
             for sheet in workbook["sheets"]:
                 for chart in sheet.get("charts", []):

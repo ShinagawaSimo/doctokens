@@ -10,6 +10,7 @@ from doctokens_core.containers.opc.xml import iterparse
 from doctokens_core.contracts.models import ParseWarning
 
 from ....model.workbook import RichTextRun
+from ..styles.colors import SpreadsheetColors
 from .string_text import read_string
 
 _NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -26,6 +27,7 @@ def _parse_shared_strings(
     warnings: list[ParseWarning],
     *,
     include_rich_text: bool,
+    colors: SpreadsheetColors,
     needed_indices: set[int] | None = None,
 ) -> tuple[SharedStrings, dict[int, list[RichTextRun]]]:
     part = "xl/sharedStrings.xml"
@@ -49,6 +51,7 @@ def _parse_shared_strings(
                         value, rich = read_string(
                             element,
                             rich=include_rich_text,
+                            colors=colors,
                             warn=partial(_warning, warnings, f"{part}:si[{index}]"),
                         )
                         if rich is not None:

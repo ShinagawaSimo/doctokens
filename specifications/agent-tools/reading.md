@@ -4,6 +4,18 @@
 
 ## Fields
 
+### `image-text`
+
+- **Source**
+  - render_docx_resource, render_pptx_resource or render_xlsx_resource with
+    kind=image-text and an original image resource_id.
+- **Processing**
+  - Explicit [saved EMF text](../common/emf.md), using the fixed record/text
+    budgets and partial limitations. It returns text XML, not a rendered image.
+    Default body reading, find_document_text and OCR behavior are unchanged.
+  - Resource listing identifies embedded EMF entries with
+    text_render_kind=image-text. This adds no duplicate image descriptor.
+
 ### `path` and `document_id`
 
 - **Source**

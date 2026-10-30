@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, TypedDict
 
+from doctokens_core.ooxml.charts.models import ChartLabel, ChartPlotInfo
 from doctokens_core.ooxml.equations.results import MathRevision
 
 if TYPE_CHECKING:
@@ -86,12 +87,10 @@ class ChartSeries(ChartSeriesRequired, total=False):
     bubbleSizes: list[str]
     categoryFormula: str
     hidden: bool
-
-
-class ChartPlot(TypedDict, total=False):
-    index: int
-    chartType: str
-    seriesIndices: list[int]
+    labels: list[ChartLabel]
+    label_options: dict[str, str]
+    trendlines: list[dict[str, str]]
+    axis_ids: list[str]
 
 
 class ChartRequired(TypedDict):
@@ -108,7 +107,7 @@ class Chart(ChartRequired, total=False):
     title: str
     sourcePart: str
     relationshipId: str
-    plots: list[ChartPlot]
+    plots: list[ChartPlotInfo]
     axes: list[dict[str, str]]
 
 
@@ -183,7 +182,7 @@ class InlineObject(InlineObjectRequired, total=False):
     seriesCount: int
     pointCount: int
     series: list[ChartSeries]
-    plots: list[ChartPlot]
+    plots: list[ChartPlotInfo]
     nodeCount: int
     linkCount: int
     rawLinkCount: int
@@ -244,7 +243,6 @@ RawHint = dict[str, object] | InlineObject
 __all__ = [
     "AssetLookup",
     "Chart",
-    "ChartPlot",
     "ChartSeries",
     "ContentControl",
     "ContentControlOption",

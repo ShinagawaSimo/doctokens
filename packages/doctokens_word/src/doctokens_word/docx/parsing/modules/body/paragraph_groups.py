@@ -60,7 +60,7 @@ class BlockCollector:
             if name == "tbl":
                 self.blocks.extend(self.owner.parse_table(node, self.part, controls))
             elif name == "sectPr":
-                self.owner._sections._collect_section_refs(node)
+                self.owner._sections._collect_section_refs(node, str(self.owner.options.revision_mode))
                 self.owner._pending_page_breaks += 1
                 self.owner._sections._section_break_pending = True
             else:

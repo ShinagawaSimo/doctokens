@@ -11,6 +11,7 @@ from doctokens_word.docx.ooxml.numbering.change import parse_numbering_change
 from doctokens_word.docx.ooxml.numbering.models import NumberingLevel, bullet_symbol
 from doctokens_word.docx.ooxml.numbering.parser import NumberingMap, NumberingParser
 from doctokens_word.docx.ooxml.numbering.state import NumberingState
+from doctokens_word.docx.ooxml.theme import WordTheme
 
 
 def test_numbering_support_is_split_into_explicit_modules() -> None:
@@ -77,6 +78,7 @@ def test_numbering_xml_preserves_custom_format_language_and_bullet_font() -> Non
         """
     )
     parser = NumberingParser.__new__(NumberingParser)
+    parser.theme = WordTheme()
 
     level = parser._parse_level(level_xml)
 

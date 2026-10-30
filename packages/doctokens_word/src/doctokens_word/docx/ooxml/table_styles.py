@@ -5,7 +5,6 @@ from __future__ import annotations
 from xml.etree import ElementTree as ET
 
 from ..model import StyleRecord
-from .formatting import normalize_hex_color
 from .namespaces import attr, first_child
 from .styles import StyleMap
 
@@ -70,7 +69,7 @@ class TableStyleResolver:
         shading = first_child(properties, "w", "shd")
         self.direct_background = None
         if shading is not None:
-            self.direct_background = normalize_hex_color(attr(shading, "w", "fill")) or ""
+            self.direct_background = styles.theme.color(shading, fill=True) or ""
             if attr(shading, "w", "val") == "nil":
                 self.direct_background = ""
 

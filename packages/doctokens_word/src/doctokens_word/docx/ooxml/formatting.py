@@ -8,6 +8,7 @@ from xml.etree import ElementTree as ET
 
 from ..model import ParagraphBorder, ParagraphBorders, RunFormat
 from .namespaces import attr, first_child, is_on
+from .theme import WordTheme
 
 VISIBLE_FORMAT_KEYS = (
     "bold",
@@ -24,7 +25,7 @@ VISIBLE_FORMAT_KEYS = (
 )
 
 
-def parse_run_format(run_properties: ET.Element | None) -> RunFormat:
+def parse_run_format(run_properties: ET.Element | None, theme: WordTheme) -> RunFormat:
     """Extract lightweight formatting from w:rPr that the final text may need to preserve."""
     if run_properties is None:
         return {}
@@ -36,9 +37,9 @@ def parse_run_format(run_properties: ET.Element | None) -> RunFormat:
     _read_strike(run_properties, fmt)
     _read_vert_align(run_properties, fmt)
     _read_bool_format(run_properties, "smallCaps", "smallCaps", fmt)
-    _read_color(run_properties, fmt)
+    _read_color(run_properties, fmt, theme)
     _read_highlight(run_properties, fmt)
-    _read_background(run_properties, fmt)
+    _read_background(run_properties, fmt, theme)
     return fmt
 
 
@@ -53,7 +54,7 @@ def parse_paragraph_alignment(paragraph_properties: ET.Element | None) -> str | 
     return value.lower() if value else None
 
 
-def parse_paragraph_borders(paragraph_properties: ET.Element | None) -> ParagraphBorders:
+def parse_paragraph_borders(paragraph_properties: ET.Element | None, theme: WordTheme) -> ParagraphBorders:
     """Read visible paragraph border sides and their colors."""
     if paragraph_properties is None:
         return {}
@@ -69,7 +70,7 @@ def parse_paragraph_borders(paragraph_properties: ET.Element | None) -> Paragrap
         if not style:
             continue
         border: ParagraphBorder = {"style": style}
-        color = normalize_hex_color(attr(node, "w", "color"))
+        color = theme.color(node, literal="color")
         if color:
             border["color"] = color
         size = attr(node, "w", "sz")
@@ -162,16 +163,15 @@ def _read_vert_align(run_properties: ET.Element, fmt: RunFormat) -> None:
         fmt["subscript"] = val == "subscript"
 
 
-def _read_color(run_properties: ET.Element, fmt: RunFormat) -> None:
-    """Read the font color; theme color mapping is deferred to a later theme parsing pass."""
+def _read_color(run_properties: ET.Element, fmt: RunFormat, theme: WordTheme) -> None:
+    """Resolve a saved theme color before the source's explicit fallback."""
     node = first_child(run_properties, "w", "color")
     if node is None:
         return
-    raw_value = attr(node, "w", "val")
-    if raw_value:
+    if attr(node, "w", "val") is not None or attr(node, "w", "themeColor") is not None:
         # Automatic color cancels an inherited literal without guessing the
         # application's theme/system color. Black is filtered after merging.
-        fmt["color"] = normalize_hex_color(raw_value)
+        fmt["color"] = theme.color(node)
 
 
 def _read_highlight(run_properties: ET.Element, fmt: RunFormat) -> None:
@@ -186,25 +186,15 @@ def _read_highlight(run_properties: ET.Element, fmt: RunFormat) -> None:
         fmt["highlight"] = None
 
 
-def _read_background(run_properties: ET.Element, fmt: RunFormat) -> None:
+def _read_background(run_properties: ET.Element, fmt: RunFormat, theme: WordTheme) -> None:
     """Read the run's shading background color."""
     node = first_child(run_properties, "w", "shd")
     if node is None:
         return
-    raw_value = attr(node, "w", "fill")
     if (attr(node, "w", "val") or "").lower() == "nil":
         fmt["bg"] = None
-    elif raw_value:
-        fmt["bg"] = normalize_hex_color(raw_value)
-
-
-def normalize_hex_color(value: str | None) -> str | None:
-    """Normalize OOXML six-digit colors to #RRGGBB; other valid values are kept as-is."""
-    if not value or value.lower() == "auto":
-        return None
-    if re.fullmatch(r"[0-9A-Fa-f]{6}", value):
-        return "#" + value.upper()
-    return value
+    elif attr(node, "w", "fill") is not None or attr(node, "w", "themeFill") is not None:
+        fmt["bg"] = theme.color(node, fill=True)
 
 
 def is_default_text_color(value: str) -> bool:

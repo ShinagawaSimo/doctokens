@@ -6,6 +6,7 @@ import base64
 import re
 
 from doctokens_core.ooxml.charts.axes import append_chart_axes
+from doctokens_core.ooxml.charts.rendering import append_annotations, append_plots
 from doctokens_core.output.resources import resource_document
 from doctokens_core.output.xml import append, element
 
@@ -81,11 +82,14 @@ def _render_chart(parsed_presentation: ParsedPresentation, resource_id: str) -> 
         plots=",".join(plot.get("chart_type", "unknown") for plot in plots) if is_combination and plots else None,
     )
     append_chart_axes(node, chart.get("axes", []))
+    append_plots(node, plots)
     for series_index, series_item in enumerate(series, start=1):
         child = append(
             node,
             "series",
             id=series_index,
+            plot=series_item.get("plot_index"),
+            axes=" ".join(series_item.get("axis_ids", [])) or None,
             name=series_item.get("name") or None,
             categories=",".join(series_item.get("categories", [])),
             values=",".join(series_item.get("values", [])),
@@ -96,6 +100,9 @@ def _render_chart(parsed_presentation: ParsedPresentation, resource_id: str) -> 
             hidden=True if series_item.get("hidden") else None,
             min=f"{series_item['min']:g}" if series_item.get("min") is not None else None,
             max=f"{series_item['max']:g}" if series_item.get("max") is not None else None,
+        )
+        append_annotations(
+            child, series_item.get("labels", []), series_item.get("label_options", {}), series_item.get("trendlines", [])
         )
         arrays = [
             ("category", series_item.get("categories", [])),

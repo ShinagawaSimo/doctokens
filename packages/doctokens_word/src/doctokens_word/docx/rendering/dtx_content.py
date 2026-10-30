@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from xml.etree import ElementTree as ET
 
 from doctokens_core.ooxml.charts.axes import append_chart_axes
+from doctokens_core.ooxml.charts.rendering import append_annotations, append_plots
 from doctokens_core.output.xml import append, text
 
 from ..model import ContentControl, InlineObject, OcrResultRecord
@@ -29,8 +30,17 @@ def _append_chart(parent: ET.Element, chart: InlineObject) -> None:
         attrs["names"] = ",".join(names)
     node = append(parent, "chart", **attrs)
     append_chart_axes(node, chart.get("axes", []))
+    append_plots(node, chart.get("plots", []))
     for ordinal, item in enumerate(series[:8]):
-        child = append(node, "series", index=item.get("index", ordinal), name=item.get("name"))
+        child = append(
+            node,
+            "series",
+            index=item.get("index", ordinal),
+            name=item.get("name"),
+            plot=item.get("plotIndex"),
+            axes=" ".join(item.get("axis_ids", [])) or None,
+        )
+        append_annotations(child, item.get("labels", []), item.get("label_options", {}), item.get("trendlines", []), preview=True)
         arrays = [
             ("category", item.get("categories", [])),
             ("value", item.get("values", [])),

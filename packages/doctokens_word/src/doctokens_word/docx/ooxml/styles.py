@@ -7,6 +7,7 @@ from types import MappingProxyType
 
 from ..model import ParseWarning, RunFormat, StyleRecord, append_warning
 from .formatting import merge_paragraph_borders, merge_run_formats
+from .theme import WordTheme
 
 _TOGGLES = {"bold", "italic", "smallCaps", "strike"}
 
@@ -34,11 +35,17 @@ class StyleMap:
     """Per-document style index; every hierarchy level resolves independently."""
 
     def __init__(
-        self, records: dict[str, StyleRecord], warnings: list[ParseWarning], *, defaults: StyleRecord | None = None
+        self,
+        records: dict[str, StyleRecord],
+        warnings: list[ParseWarning],
+        *,
+        defaults: StyleRecord | None = None,
+        theme: WordTheme | None = None,
     ) -> None:
         self.records: Mapping[str, StyleRecord] = MappingProxyType(dict(records))
         self.warnings = warnings
         self.defaults = defaults or StyleRecord(style_id="")
+        self.theme = theme or WordTheme(warnings=warnings)
         self._cache: dict[str, StyleRecord] = {}
         self._region_cache: dict[tuple[str, str], StyleRecord] = {}
         self.default_ids = {record.type: key for key, record in records.items() if record.is_default}

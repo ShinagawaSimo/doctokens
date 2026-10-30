@@ -21,7 +21,10 @@ Page numbers describe stored pagination hints. They are not calculated by laying
   - Start at 1. Flush preceding pending breaks. Add the count of manual-page-break hints to this paragraph start; count leading calculated-break sentinels to find its first content page.
 
 - **Absence and defaults**
-  - Empty paragraphs without objects/controls are discarded unless requested; their calculated/manual breaks are discarded. Section breaks on discarded paragraphs still leave a pending page.
+  - Empty paragraphs without objects/controls are discarded unless requested;
+    their calculated/manual breaks retain the existing discard policy.
+    Section boundaries still advance membership; only a non-continuous start
+    keeps the existing provisional page advance.
 
 - **Notes**
   - Manual breaks currently shift the paragraph as a whole and add a newline; calculated breaks retain an inline boundary.

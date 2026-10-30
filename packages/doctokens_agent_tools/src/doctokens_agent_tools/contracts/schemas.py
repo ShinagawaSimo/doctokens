@@ -126,7 +126,7 @@ Aggregate = Literal["sum", "count", "avg", "min", "max"]
 
 class DocxResourceArgs(ResourceArgs):
     options: DocxOptions = Field(default_factory=DocxOptions)
-    kind: Literal["table", "chart", "smartart"]
+    kind: Literal["table", "chart", "smartart", "image-text"]
     rows: str | None = None
     columns: list[str] | None = None
     aggregate: Aggregate | None = None
@@ -135,7 +135,7 @@ class DocxResourceArgs(ResourceArgs):
 
 class PptxResourceArgs(ResourceArgs):
     options: PptxOptions = Field(default_factory=PptxOptions)
-    kind: Literal["table", "chart", "smartart"]
+    kind: Literal["table", "chart", "smartart", "image-text"]
     rows: str | None = None
     columns: list[int] | None = None
     aggregate: Aggregate | None = None
@@ -144,7 +144,7 @@ class PptxResourceArgs(ResourceArgs):
 
 class XlsxResourceArgs(ResourceArgs):
     options: XlsxOptions = Field(default_factory=XlsxOptions)
-    kind: Literal["chart", "pivot_table"]
+    kind: Literal["chart", "pivot_table", "image-text"]
 
 
 class FindArgs(BaseSourceArgs):

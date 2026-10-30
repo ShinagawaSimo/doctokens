@@ -32,6 +32,7 @@ class ResourceType(StringEnum):
 
     IMAGES = "images"
     IMAGE = "image"
+    IMAGE_TEXT = "image-text"
     CHARTS = "charts"
     CHART = "chart"
     SMARTARTS = "smartarts"

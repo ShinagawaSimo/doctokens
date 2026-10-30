@@ -2,48 +2,22 @@
 
 [DOCX](../README.md) / Chart plots
 
-Only combination charts retain a plot collection.
+DOCX chart records retain shared ChartPlotInfo without a second field-name map.
+The [common plot definition](../../common/chart-plot.md) defines source indices,
+grouping, direction, explicit axis IDs, membership and unreadable-family markers.
 
 ## Fields
 
-### `index`
+### `plots`
 
 - **Output**
-  - Resource plot ordinal.
-
-- **OOXML**
-  - Shared ChartPlotInfo.index.
-
+  - plot children in structural/semantic body previews and full chart resources.
 - **IR**
-  - `ChartPlot.index: int`
-
+  - Chart.plots and InlineObject.plots: list[ChartPlotInfo].
 - **Parsing**
-  - Copy 1-based ordinal.
-
-### `chartType`
-
-- **Output**
-  - Resource plot family.
-
-- **OOXML**
-  - Shared ChartPlotInfo.chart_type.
-
-- **IR**
-  - `ChartPlot.chartType: str`
-
-- **Parsing**
-  - Copy family.
-
-### `seriesIndices`
-
-- **Output**
-  - Resource plot membership.
-
-- **OOXML**
-  - Shared ChartPlotInfo.series_indices.
-
-- **IR**
-  - `ChartPlot.seriesIndices: list[int]`
-
-- **Parsing**
-  - Copy global series ordinals in their plot order.
+  - Keep combination plots and plots whose explicit grouping/axis references
+    distinguish their reading meaning. The series' plotIndex references the
+    plot index; it is not a guessed primary/secondary assignment.
+  - Full resources retain all plots and annotations. Existing body previews
+    retain at most eight series and eight points per series; associated labels
+    and saved trendlines follow the same bounded reading policy.

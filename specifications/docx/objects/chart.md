@@ -112,7 +112,8 @@ Series conversion: shared snake_case keys become DOCX camelCase keys. See [serie
   - `list[ChartPlot]`
 
 - **Parsing**
-  - Shared index/chart_type/series_indices → index/chartType/seriesIndices. Removed by summary plan.
+  - Retain shared ChartPlotInfo fields directly. Compact grouping/direction and
+    axis ownership remain available in the bounded summary and full resources.
 
 ### `part`
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 from doctokens_core.contracts.models import Density, ParseReport, ParseResult, ResourceDescriptor, Source
+from doctokens_core.output.image_text import image_text_resource
 from doctokens_core.runtime.session import SessionLifecycle
 from doctokens_core.text.search import TextSearchOptions, TextSearchResult, search_text
 
@@ -154,6 +155,18 @@ class DocxReadSession:
     ) -> ParseResult:
         document = self._require_open()
         resource_type = ResourceType.parse(kind)
+        if resource_type is ResourceType.IMAGE_TEXT:
+            descriptor = next((item for item in self.resources if item.kind == "image" and item.id == resource_id), None)
+            if descriptor is None:
+                raise KeyError(f"image {resource_id!r} not found")
+            if descriptor.source == "external" or descriptor.part is None or self._package is None:
+                raise ValueError("image-text requires an original embedded image")
+            return _result(
+                document,
+                image_text_resource(self._package, descriptor.part, resource_id, "docx"),
+                "semantic",
+                {"kind": "resource", "resource_kind": kind, "id": resource_id},
+            )
         if resource_type.is_plural:
             raise ValueError("resource kind must be singular")
         if resource_type is ResourceType.IMAGE:

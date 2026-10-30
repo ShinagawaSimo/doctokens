@@ -13,7 +13,9 @@ from dataclasses import dataclass
 from xml.etree import ElementTree as ET
 
 from .axes import parse_chart_axes
+from .construction import chart_info, series_row
 from .models import ChartInfo, ChartPlotInfo, ChartSeriesInfo
+from .semantics import axis_ids, series_labels, trendlines
 from .values import (
     NS_C,
     NS_CX,
@@ -34,7 +36,6 @@ from .values import (
     _local_name,
     _namespace,
     _summary_chart_type,
-    _to_float,
     _true_value,
     _unique_in_order,
 )
@@ -63,8 +64,6 @@ _CHART_TYPE_MAP: dict[str, str] = {
     "surface3DChart": "surface3d",
 }
 
-MAX_PREVIEW_POINTS = 8
-
 
 # ── Output types ──
 
@@ -88,7 +87,10 @@ class ChartParser:
 
     def parse(self, root: ET.Element) -> ChartInfo:
         if _namespace(root.tag) == NS_CX and _local_name(root.tag) == "chartSpace":
-            return self._parse_chartex(root)
+            result = self._parse_chartex(root)
+            if axes := parse_chart_axes(root):
+                result["axes"] = axes
+            return result
         result = self._parse_chartml(root)
         if axes := parse_chart_axes(root):
             result["axes"] = axes
@@ -102,6 +104,10 @@ class ChartParser:
             for chart_element in plot_area:
                 chart_type = _CHART_TYPE_MAP.get(_local_name(chart_element.tag))
                 if chart_type is None:
+                    if _local_name(chart_element.tag).endswith("Chart"):
+                        plots.append(
+                            {"index": len(plots) + 1, "chart_type": "unknown", "unsupported": True, "source": chart_element.tag}
+                        )
                     continue
                 plot_index = len(plots) + 1
                 plot_series = self._parse_chartml_series(chart_element, chart_type, plot_index, len(series))
@@ -111,10 +117,16 @@ class ChartParser:
                     "chart_type": chart_type,
                     "series_indices": [item["index"] for item in plot_series],
                 }
+                if grouping := _direct_attr(chart_element, NS_C, "grouping", "val"):
+                    plot["grouping"] = grouping
+                if direction := _direct_attr(chart_element, NS_C, "barDir", "val"):
+                    plot["direction"] = direction
+                if axes := axis_ids(chart_element):
+                    plot["axis_ids"] = axes
                 plots.append(plot)
 
-        chart_types = _unique_in_order(plot["chart_type"] for plot in plots)
-        return _chart_info(
+        chart_types = _unique_in_order(plot["chart_type"] for plot in plots if not plot.get("unsupported"))
+        return chart_info(
             chart_type=_summary_chart_type(chart_types),
             title=_chartml_title(root),
             series=series,
@@ -142,7 +154,7 @@ class ChartParser:
             y_values = _chartml_values(_first_direct_child(series_element, NS_C, "yVal"))
             bubble_sizes = _chartml_values(_first_direct_child(series_element, NS_C, "bubbleSize"))
             rows.append(
-                _series_row(
+                series_row(
                     index=start_index + offset,
                     plot_index=plot_index,
                     chart_type=chart_type,
@@ -157,6 +169,21 @@ class ChartParser:
                     hidden=False,
                 )
             )
+            row = rows[-1]
+            inherited_labels, inherited_options = series_labels(chart_element)
+            labels, options = series_labels(series_element)
+            indexed_labels = {item["index"]: item for item in inherited_labels if "index" in item}
+            for label in labels:
+                if "index" in label:
+                    indexed_labels[label["index"]] = label
+            labels = list(indexed_labels.values()) + [item for item in labels if "index" not in item]
+            options = {**inherited_options, **options}
+            if labels:
+                row["labels"] = labels
+            if options:
+                row["label_options"] = options
+            if trends := trendlines(series_element):
+                row["trendlines"] = trends
         return rows
 
     def _parse_chartex(self, root: ET.Element) -> ChartInfo:
@@ -177,7 +204,7 @@ class ChartParser:
                 data = catalog.get(data_id) if data_id is not None else None
                 dimensions = data.numeric_dimensions if data is not None else {}
                 values = dimensions.get("val") or dimensions.get("y") or _first_dimension(dimensions)
-                row = _series_row(
+                row = series_row(
                     index=len(series) + 1,
                     plot_index=plot["index"],
                     chart_type=chart_type,
@@ -191,11 +218,18 @@ class ChartParser:
                     category_formula=data.formulas.get("cat") if data is not None else None,
                     hidden=_true_value(series_element.get("hidden")),
                 )
+                labels, options = series_labels(series_element, chartex=True)
+                if labels:
+                    row["labels"] = labels
+                if options:
+                    row["label_options"] = options
+                if axes := axis_ids(series_element, chartex=True):
+                    row["axis_ids"] = axes
                 series.append(row)
                 plot["series_indices"].append(row["index"])
 
         plots = list(plots_by_type.values())
-        return _chart_info(
+        return chart_info(
             chart_type=_summary_chart_type([plot["chart_type"] for plot in plots]),
             title=_chartex_title(chart),
             series=series,
@@ -231,90 +265,3 @@ class ChartParser:
                         formulas[dimension_type] = formula
             catalog[data_id] = _ChartExData(categories, dimensions, formulas)
         return catalog
-
-
-# ── IR construction ──
-
-
-def _chart_info(
-    *,
-    chart_type: str,
-    title: str | None,
-    series: list[ChartSeriesInfo],
-    plots: list[ChartPlotInfo],
-) -> ChartInfo:
-    result: ChartInfo = {
-        "chart_type": chart_type,
-        "series": series,
-        "series_count": len(series),
-        "point_count": sum(_series_point_count(item) for item in series),
-    }
-    if chart_type == "combination":
-        result["plots"] = plots
-    else:
-        for series_item in series:
-            series_item.pop("plot_index", None)
-            series_item.pop("chart_type", None)
-    if title:
-        result["title"] = title
-    return result
-
-
-def _series_row(
-    *,
-    index: int,
-    plot_index: int,
-    chart_type: str,
-    categories: list[str],
-    values: list[str],
-    x_values: list[str],
-    y_values: list[str],
-    bubble_sizes: list[str],
-    name: str | None,
-    formula: str | None,
-    category_formula: str | None,
-    hidden: bool,
-) -> ChartSeriesInfo:
-    point_count = max(len(categories), len(values), len(x_values), len(y_values), len(bubble_sizes))
-    preview_items: list[str] = []
-    for item_index in range(min(point_count, MAX_PREVIEW_POINTS)):
-        category = categories[item_index] if item_index < len(categories) else str(item_index + 1)
-        value = values[item_index] if item_index < len(values) else ""
-        preview_items.append(f"{category}={value}" if value else category)
-    row: ChartSeriesInfo = {
-        "index": index,
-        "plot_index": plot_index,
-        "chart_type": chart_type,
-        "categories": categories,
-        "values": values,
-        "preview": "; ".join(preview_items),
-    }
-    if x_values:
-        row["x_values"] = x_values
-    if y_values:
-        row["y_values"] = y_values
-    if bubble_sizes:
-        row["bubble_sizes"] = bubble_sizes
-    if name:
-        row["name"] = name
-    if formula:
-        row["formula"] = formula
-    if category_formula:
-        row["category_formula"] = category_formula
-    if hidden:
-        row["hidden"] = True
-    numbers = [number for value in values if (number := _to_float(value)) is not None]
-    if numbers:
-        row["min"] = min(numbers)
-        row["max"] = max(numbers)
-    return row
-
-
-def _series_point_count(series: ChartSeriesInfo) -> int:
-    return max(
-        len(series.get("categories", [])),
-        len(series.get("values", [])),
-        len(series.get("x_values", [])),
-        len(series.get("y_values", [])),
-        len(series.get("bubble_sizes", [])),
-    )

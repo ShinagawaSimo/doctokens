@@ -19,6 +19,7 @@ from doctokens_excel.formatting.values import (
 from doctokens_excel.formatting.values import format_value as format_number_value
 
 from ....model.workbook import CellControl
+from .colors import SpreadsheetColors
 from .records import FillInfo, FontInfo
 
 
@@ -40,7 +41,7 @@ class FormatIndex:
         self._visible_blank_styles: set[int] = set()
         self.date_1904 = False
         self.locale = locale
-        self.theme: dict[int, str] = {}
+        self.colors = SpreadsheetColors()
 
     def set_date_system(self, date_1904: bool) -> None:
         self.date_1904 = date_1904
@@ -150,6 +151,7 @@ class FormatIndex:
                     parts.append("italic")
                 if font.get("underline"):
                     parts.append("underline")
+                parts.extend(key for key in ("strike", "superscript", "subscript") if font.get(key))
                 color = font.get("color")
                 if color and color.upper() != "#000000":
                     parts.append(f"color={color}")

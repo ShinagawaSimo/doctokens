@@ -33,3 +33,4 @@ Package access, serialization, public result types, and parsers shared by more t
 - [Chart series](chart-series.md)
 - [Chart plots](chart-plot.md)
 - [OMML expressions](equation.md)
+- [Saved EMF text](emf.md)

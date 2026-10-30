@@ -10,7 +10,6 @@ from doctokens_core.ooxml.charts.parser import CHART_RELATIONSHIP_TYPES, ChartPa
 
 from ....model import (
     Chart,
-    ChartPlot,
     ChartSeries,
     ObjectLookup,
     ParseWarning,
@@ -160,6 +159,17 @@ def _chart_summary(chart: Chart) -> Chart:
             "pointCount": item.get("pointCount", 0),
             "preview": item.get("preview", ""),
         }
+        if ordinal < 8:
+            if item.get("labels"):
+                summary["labels"] = [label for label in item["labels"] if label.get("index", 8) < 8]
+            if item.get("label_options"):
+                summary["label_options"] = item["label_options"]
+            if item.get("trendlines"):
+                summary["trendlines"] = item["trendlines"][:8]
+            if "plotIndex" in item:
+                summary["plotIndex"] = item["plotIndex"]
+            if item.get("axis_ids"):
+                summary["axis_ids"] = item["axis_ids"]
         if item.get("name"):
             summary["name"] = item["name"]
         if ordinal < 8:
@@ -169,7 +179,6 @@ def _chart_summary(chart: Chart) -> Chart:
         series.append(summary)
     result = cast(Chart, dict(chart))
     result["series"] = series
-    result.pop("plots", None)
     return result
 
 
@@ -223,6 +232,9 @@ def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> Chart:
             row["categoryFormula"] = s["category_formula"]
         if s.get("hidden"):
             row["hidden"] = True
+        for key in ("labels", "label_options", "trendlines", "axis_ids"):
+            if key in s:
+                row[key] = s[key]
         series.append(row)
 
     chart: Chart = {
@@ -239,16 +251,8 @@ def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> Chart:
         chart["axes"] = info["axes"]
     if title:
         chart["title"] = title
-    plots: list[ChartPlot] = []
-    for source_plot in info.get("plots", []):
-        plot: ChartPlot = {
-            "index": source_plot["index"],
-            "chartType": source_plot["chart_type"],
-            "seriesIndices": source_plot.get("series_indices", []),
-        }
-        plots.append(plot)
-    if plots:
-        chart["plots"] = plots
+    if info.get("plots"):
+        chart["plots"] = info["plots"]
     return chart
 
 

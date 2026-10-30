@@ -11,6 +11,7 @@ from ...model import ParseWarning
 from ..formatting import parse_run_format
 from ..namespaces import attr, child_elements, first_child, is_on, qualified_name
 from ..package import PackageReader
+from ..theme import WordTheme
 from .models import NumberingInstance, NumberingLevel
 
 
@@ -102,7 +103,10 @@ class NumberingParser:
         package: PackageReader,
         warnings: list[ParseWarning],
         numbering_style_num_ids: Mapping[str, str] | None = None,
+        *,
+        theme: WordTheme | None = None,
     ) -> None:
+        self.theme = theme or WordTheme(warnings=warnings)
         self.package = package
         self.warnings = warnings
         self.numbering_style_num_ids = numbering_style_num_ids or {}
@@ -174,7 +178,7 @@ class NumberingParser:
             level_text=level_text,
             suffix=self._child_attr(lvl, "suff", "val") or "tab",
             paragraph_style_id=self._child_attr(lvl, "pStyle", "val"),
-            marker_format=parse_run_format(run_properties),
+            marker_format=parse_run_format(run_properties, self.theme),
             marker_font=self._run_font(run_properties),
             picture_bullet_id=self._child_attr(lvl, "lvlPicBulletId", "val"),
             restart_level=self._parse_int(self._child_attr(lvl, "lvlRestart", "val")),

@@ -30,6 +30,9 @@ class RichTextRun(TypedDict, total=False):
     italic: bool
     underline: bool
     color: str
+    strike: bool
+    superscript: bool
+    subscript: bool
 
 
 class ThreadedComment(ThreadedAnnotation, total=False):

@@ -2,7 +2,9 @@
 
 [DOCX](../README.md) / Chart series
 
-DOCX adapts the shared chart series record.
+DOCX adapts the shared chart series record. Saved labels, trendlines and axis
+relationships use [common semantics](../../common/chart-series.md); the body
+preview and full resource keep their existing distinct bounds.
 
 ## Fields
 

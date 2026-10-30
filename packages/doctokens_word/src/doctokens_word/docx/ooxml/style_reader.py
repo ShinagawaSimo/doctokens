@@ -5,11 +5,12 @@ from __future__ import annotations
 from xml.etree import ElementTree as ET
 
 from ..model import ParseWarning, StyleRecord, append_warning
-from .formatting import normalize_hex_color, parse_paragraph_alignment, parse_paragraph_borders, parse_run_format
+from .formatting import parse_paragraph_alignment, parse_paragraph_borders, parse_run_format
 from .namespaces import attr, first_child, qualified_name
 from .outline import parse_outline_level
 from .package import PackageReader
 from .styles import StyleMap
+from .theme import WordTheme
 
 
 def _properties(
@@ -20,6 +21,7 @@ def _properties(
     cell: ET.Element | None,
     warnings: list[ParseWarning],
     formatting: bool,
+    theme: WordTheme,
 ) -> None:
     record.outline_level = parse_outline_level(paragraph, warnings, part="word/styles.xml")
     num_pr = first_child(paragraph, "w", "numPr")
@@ -35,14 +37,13 @@ def _properties(
             )
     if formatting:
         record.alignment = parse_paragraph_alignment(paragraph)
-        record.borders = parse_paragraph_borders(paragraph)
-        record.run_format = parse_run_format(run)
+        record.borders = parse_paragraph_borders(paragraph, theme)
+        record.run_format = parse_run_format(run, theme)
         shading = first_child(cell, "w", "shd")
         if shading is None:
             shading = first_child(table, "w", "shd")
-        fill = attr(shading, "w", "fill")
-        if fill is not None:
-            record.cell_background = normalize_hex_color(fill) or ""
+        if shading is not None:
+            record.cell_background = theme.color(shading, fill=True) or ""
         if attr(shading, "w", "val") == "nil":
             record.cell_background = ""
     for name, field in (("tblStyleRowBandSize", "row_band_size"), ("tblStyleColBandSize", "column_band_size")):
@@ -66,6 +67,7 @@ class StylesParser:
         self.formatting = include_character_formatting
 
     def parse(self) -> StyleMap:
+        theme = WordTheme.from_package(self.package, self.warnings) if self.formatting else WordTheme(warnings=self.warnings)
         if not self.package.exists("word/styles.xml"):
             append_warning(
                 self.warnings,
@@ -73,7 +75,7 @@ class StylesParser:
                 "word/styles.xml is missing; style resolution is limited.",
                 part="word/styles.xml",
             )
-            return StyleMap({}, self.warnings)
+            return StyleMap({}, self.warnings, theme=theme)
         root = self.package.read_xml("word/styles.xml")
         defaults = StyleRecord(style_id="")
         doc_defaults = first_child(root, "w", "docDefaults")
@@ -85,6 +87,7 @@ class StylesParser:
             None,
             self.warnings,
             self.formatting,
+            theme,
         )
         records: dict[str, StyleRecord] = {}
         for style in root.findall(qualified_name("w", "style")):
@@ -107,6 +110,7 @@ class StylesParser:
                 first_child(style, "w", "tcPr"),
                 self.warnings,
                 self.formatting,
+                theme,
             )
             for region in style.findall(qualified_name("w", "tblStylePr")):
                 kind = attr(region, "w", "type")
@@ -120,8 +124,9 @@ class StylesParser:
                         first_child(region, "w", "tcPr"),
                         self.warnings,
                         self.formatting,
+                        theme,
                     )
                     record.table_regions[kind] = props
             records[style_id] = record
-        index = StyleMap(records, self.warnings, defaults=defaults)
+        index = StyleMap(records, self.warnings, defaults=defaults, theme=theme)
         return index

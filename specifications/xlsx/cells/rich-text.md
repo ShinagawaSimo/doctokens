@@ -6,7 +6,11 @@ Shared-string and inline-string run formatting use the same parser and semantic 
 
 ## Processing
 
-Retain all runs only when at least one has an explicit supported property, including an explicit false. Wrapper order is hyperlink, an optional run reset, bold, italic, underline, color. Rich-value display can take precedence over these runs. Lower densities retain the same decoded concatenated reading text without emphasis wrappers.
+Retain all runs only when at least one has an explicit supported property,
+including an explicit false. Wrapper order is hyperlink, optional run reset,
+strike, superscript/subscript, bold, italic, underline, color.
+Rich-value display can take precedence. Lower densities keep the same decoded
+concatenated text without emphasis wrappers.
 
 ## Fields
 
@@ -72,13 +76,46 @@ Retain all runs only when at least one has an explicit supported property, inclu
   - Nested color/@value.
 
 - **OOXML**
-  - s:rPr/s:color/@rgb.
+  - s:rPr/s:color/@rgb, @theme, @indexed and @tint.
 
 - **IR**
   - `str`
 
 - **Parsing**
-  - Skip empty or 00000000; strip first 2 characters from 8-character values; add #. No theme/indexed/tint resolution on rich runs.
+  - Use the workbook's [color context](../styles/color.md), equally for shared
+    and inline strings. Default black produces no wrapper unless it is needed
+    to clear an inherited nonblack cell/style-range color. No font decoding
+    provenance is added to reading output.
+
+### `strike`
+
+- **Output**
+  - Semantic `s` wrapper; cell-wide styles use strike=true.
+- **OOXML**
+  - rPr/strike or effective font/strike.
+- **Parsing**
+  - Absent inherits. Explicit false clears a strike cell/style-range context
+    through a run reset only when needed.
+
+### `superscript`
+
+- **Output**
+  - Semantic `sup`; effective cell font uses superscript=true.
+- **OOXML**
+  - rPr/vertAlign[@val="superscript"] or effective font/vertAlign.
+- **Parsing**
+  - Preserve the reading identity without an exact baseline offset. A saved
+    baseline clears both vertical identities; explicit subscript clears sup.
+
+### `subscript`
+
+- **Output**
+  - Semantic `sub`; effective cell font uses subscript=true.
+- **OOXML**
+  - rPr/vertAlign[@val="subscript"] or effective font/vertAlign.
+- **Parsing**
+  - The same inheritance/reset rule as superscript. For example H2O with
+    the 2 subscript and struck reads `H<s><sub>2</sub></s>O`.
 
 ## Examples
 

@@ -33,6 +33,10 @@ class ChartSeriesInfo(TypedDict, total=False):
     formula: str
     category_formula: str
     hidden: bool
+    labels: list[ChartLabel]
+    label_options: dict[str, str]
+    trendlines: list[dict[str, str]]
+    axis_ids: list[str]
 
 
 class ChartPlotInfo(TypedDict, total=False):
@@ -41,6 +45,20 @@ class ChartPlotInfo(TypedDict, total=False):
     index: int
     chart_type: str
     series_indices: list[int]
+    grouping: str
+    direction: str
+    axis_ids: list[str]
+    unsupported: bool
+    source: str
+
+
+class ChartLabel(TypedDict, total=False):
+    index: int
+    text: str
+    position: str
+    deleted: bool
+    options: dict[str, str]
+    unsupported: bool
 
 
 class ChartInfo(TypedDict, total=False):

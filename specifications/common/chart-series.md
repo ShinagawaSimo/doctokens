@@ -10,6 +10,49 @@ Saved points use the same indexed reader for literal data and reference caches. 
 
 ## Fields
 
+### `labels`
+
+- **Output**
+  - series/label with zero-based index, optional position/deleted and saved text.
+    label-options retains saved visibility and separator declarations.
+- **OOXML**
+  - c:dLbls/c:dLbl/c:idx and c:tx rich text/strRef cache.
+    c15:datalabelsRange/c15:dlblRangeCache/c:pt supplies explicitly indexed
+    range labels (DrawingML 2012 chart namespace).
+    ChartEx dataLabels/dataLabel/dataLabelHidden retains indices, position,
+    hidden state and visibility declarations.
+- **Parsing**
+  - Direct labels override plot defaults and saved range text at that index.
+    Preserve paragraph/soft-break text. Do not open external workbooks or
+    generate numeric/percentage labels from visibility flags.
+  - DOCX/PPTX previews retain at most eight labels for points 0..7 in the first
+    eight series; full resources retain all saved labels. XLSX keeps its compact
+    body summary, with annotations in full chart resources.
+  - A label reference with no saved cache retains an unsupported chart-label
+    marker; an explicitly empty saved label remains empty. The reader does
+    not fetch/compute missing label text.
+
+### `trendlines`
+
+- **Output**
+  - series/trendline: saved type, name, order/period, forward/backward, intercept,
+    display-equation/display-r-squared and label when available.
+- **OOXML**
+  - c:trendline and c:trendlineLbl/c:tx.
+- **Parsing**
+  - Read saved configuration/text only. A saved y=2x+1 remains readable;
+    an enabled equation without saved text never causes fitting/reconstruction.
+    DOCX/PPTX previews cap at eight trendlines; full resources retain all.
+
+### `axis_ids`
+
+- **Output**
+  - series/@axes for explicit ChartEx axis references.
+- **OOXML**
+  - cx:series/cx:axisId.
+- **Parsing**
+  - Preserve source ID order; use the matching axis metadata for meaning.
+
 ### `index`
 
 - **Output**
@@ -36,7 +79,8 @@ Saved points use the same indexed reader for literal data and reference caches. 
   - `ChartSeriesInfo.plot_index: `int``
 
 - **Parsing**
-  - 1-based plot index; retained for combination charts only.
+  - 1-based plot index whenever plot metadata is retained, including explicit
+    grouping/axis relationships on a single-family chart.
 
 ### `chart_type`
 
@@ -50,7 +94,7 @@ Saved points use the same indexed reader for literal data and reference caches. 
   - `ChartSeriesInfo.chart_type: `str``
 
 - **Parsing**
-  - Same mapping as chart_type; retained for combination charts only.
+  - Same mapping as chart_type; retained with plot ownership.
 
 ### `name`
 

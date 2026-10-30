@@ -8,6 +8,26 @@ Differential-style summaries retain explicitly disabled font properties as `bold
 
 ## Fields
 
+### `strike`
+
+- **Output**
+  - Cell/style-range strike=true.
+- **OOXML**
+  - The effective font's strike element.
+- **Parsing**
+  - Read the saved boolean. Rich-run false values clear this context only
+    where explicitly declared.
+
+### `superscript` and `subscript`
+
+- **Output**
+  - Cell/style-range vertical reading identity.
+- **OOXML**
+  - Effective font/vertAlign.
+- **Parsing**
+  - Preserve superscript/subscript and explicit baseline cancellation.
+    No editable font offset is emitted.
+
 ### `bold`
 
 - **Output**

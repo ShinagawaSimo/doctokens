@@ -2,6 +2,8 @@
 
 from typing import TypedDict
 
+from doctokens_core.ooxml.charts.models import ChartLabel, ChartPlotInfo
+
 
 class DrawingImage(TypedDict, total=False):
     id: str
@@ -36,6 +38,10 @@ class DrawingChartSeries(TypedDict, total=False):
     yValues: list[str]
     bubbleSizes: list[str]
     hidden: bool
+    labels: list[ChartLabel]
+    label_options: dict[str, str]
+    trendlines: list[dict[str, str]]
+    axis_ids: list[str]
 
 
 class DrawingChart(TypedDict, total=False):
@@ -46,6 +52,7 @@ class DrawingChart(TypedDict, total=False):
     series_count: int
     part: str
     series: list[DrawingChartSeries]
+    plots: list[ChartPlotInfo]
     plotTypes: list[str]
     axes: list[dict[str, str]]
     group: str

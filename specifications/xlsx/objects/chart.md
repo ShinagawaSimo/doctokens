@@ -5,6 +5,12 @@
 Chart summaries attach to worksheets and chart sheets independently of grid
 truncation, using the same saved chart decoder and complete resource reader.
 
+Explicit grouping/direction/axis references appear as compact plot children in
+both XML body densities. Full resources retain custom point labels, saved
+trendline text/configuration and explicit series axis relationships as defined
+in [shared series semantics](../../common/chart-series.md). The body remains a
+compact series summary and does not expand to all points or annotations.
+
 ## Fields
 
 ### `id`

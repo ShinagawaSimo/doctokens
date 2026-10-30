@@ -13,7 +13,9 @@ data representation.
 
 ## Processing
 
-Dispatch to ChartEx only for `{http://schemas.microsoft.com/office/drawing/2014/chartex}chartSpace`; otherwise use ChartML. Unknown plot elements are skipped. The shared extractor emits no warnings; format adapters handle missing parts and parse exceptions.
+Dispatch to ChartEx only for `{http://schemas.microsoft.com/office/drawing/2014/chartex}chartSpace`; otherwise use ChartML.
+Unknown chart-family elements retain unsupported plot records. Format adapters
+handle missing parts and parse exceptions.
 
 ## Fields
 
@@ -102,7 +104,9 @@ Dispatch to ChartEx only for `{http://schemas.microsoft.com/office/drawing/2014/
   - `list[ChartPlotInfo]`
 
 - **Parsing**
-  - Retain only when chart_type == combination. Single-family charts also remove per-series plot_index/chart_type. See [plots](chart-plot.md).
+  - Retain for combination charts or explicit grouping/axis relationships.
+    Keep per-series plot ownership whenever plots remain. A simple family
+    without these fields retains the compact projection. See [plots](chart-plot.md).
 
 ### `axes`
 
@@ -117,5 +121,7 @@ Dispatch to ChartEx only for `{http://schemas.microsoft.com/office/drawing/2014/
     explicit minimum/maximum/log base/orientation, built-in display unit and
     custom display-unit factor. Values remain saved lexical strings; units and
     formats are not used to recalculate the chart's underlying cached numbers.
-  - Omit unspecified fields. ChartEx-specific axis encodings are not interpreted
-    by this standard ChartML reader.
+  - ChartEx plotArea/axis retains saved id/hidden, valScaling min/max/major/minor
+    units or catScaling fields, saved title text, number format and units.
+    Auto limits are not calculated. Series' cx:axisId values preserve the
+    relationship. Unspecified fields remain absent; axis titles are not chart titles.

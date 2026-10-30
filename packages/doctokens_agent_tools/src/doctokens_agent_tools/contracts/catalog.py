@@ -35,10 +35,17 @@ OPERATIONS: dict[str, tuple[type[s.Arguments], str]] = {
     ),
     "render_docx_resource": (
         s.DocxResourceArgs,
-        "Read full chart/SmartArt data or table rows/columns/aggregation; columns use header names.",
+        "Read full chart/SmartArt data, table rows/columns/aggregation, or explicit image-text "
+        "(saved EMF text only); columns use header names.",
     ),
-    "render_pptx_resource": (s.PptxResourceArgs, "Read chart/SmartArt/table details; table columns use zero-based indices."),
-    "render_xlsx_resource": (s.XlsxResourceArgs, "Read chart details or the supported pivot-table summary."),
+    "render_pptx_resource": (
+        s.PptxResourceArgs,
+        "Read chart/SmartArt/table details or explicit image-text (saved EMF text only); table columns use zero-based indices.",
+    ),
+    "render_xlsx_resource": (
+        s.XlsxResourceArgs,
+        "Read chart details, pivot-table summary, or explicit image-text (saved EMF text only).",
+    ),
     "find_xlsx_cells": (
         s.FindArgs,
         "Search saved cell values, formulas, comments, hyperlinks, or defined names; literal case-sensitive matching.",

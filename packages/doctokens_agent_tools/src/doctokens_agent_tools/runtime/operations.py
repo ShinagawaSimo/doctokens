@@ -147,6 +147,8 @@ class Operations:
                     {"chart", "pivot_table"} if document.format == "xlsx" else {"chart", "smartart", "table"}
                 )
                 data["queryable"] = document.format == "xlsx" and resource.kind == "table"
+                if resource.kind == "image" and resource.source != "external" and (resource.part or "").lower().endswith(".emf"):
+                    data["text_render_kind"] = "image-text"
                 resources.append(data)
             return self.presenter.metadata(document, {"resources": resources})
         if isinstance(args, BinaryArgs):

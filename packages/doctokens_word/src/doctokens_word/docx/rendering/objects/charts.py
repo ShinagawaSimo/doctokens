@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from doctokens_core.ooxml.charts.axes import append_chart_axes
+from doctokens_core.ooxml.charts.rendering import append_annotations, append_plots
 from doctokens_core.output.resources import resource_document
 from doctokens_core.output.xml import append, element
 
@@ -21,29 +22,23 @@ def render_chart_resource(chart: Chart) -> str:
     )
     combination = chart.get("chartType") == "combination"
     append_chart_axes(node, chart.get("axes", []))
-    if chart.get("plots"):
-        node.set("plots", ",".join(str(p.get("chartType", "unknown")) for p in chart["plots"]))
-    if combination:
-        for plot in chart.get("plots") or []:
-            indices = plot.get("seriesIndices", [])
-            append(
-                node,
-                "plot",
-                index=plot.get("index", 0),
-                type=plot.get("chartType", "unknown"),
-                series=",".join(str(i) for i in indices) if indices else None,
-            )
+    if combination and chart.get("plots"):
+        node.set("plots", ",".join(str(p.get("chart_type", "unknown")) for p in chart["plots"]))
+    append_plots(node, chart.get("plots", []))
     for series in chart.get("series") or []:
         child = append(
             node,
             "series",
             index=series.get("index", 0),
+            plot=series.get("plotIndex"),
+            axes=" ".join(series.get("axis_ids", [])) or None,
             name=series.get("name") or None,
             min=series.get("min"),
             max=series.get("max"),
             type=series.get("chartType") if combination else None,
             hidden=True if series.get("hidden") else None,
         )
+        append_annotations(child, series.get("labels", []), series.get("label_options", {}), series.get("trendlines", []))
         arrays = [
             ("category", series.get("categories", [])),
             ("value", series.get("values", [])),

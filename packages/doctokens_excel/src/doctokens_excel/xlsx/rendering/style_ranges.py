@@ -82,7 +82,7 @@ def _range_ref(start_col: int, start_row: int, end_col: int, end_row: int) -> st
 
 def _add_style_attrs(attrs: dict[str, object], value: str) -> None:
     for item in value.split():
-        if item in {"bold", "italic", "underline"}:
+        if item in {"bold", "italic", "underline", "strike", "superscript", "subscript"}:
             attrs[item] = True
         elif "=" in item:
             key, style_value = item.split("=", 1)

@@ -7,6 +7,7 @@ from xml.etree import ElementTree as ET
 from doctokens_core.contracts.models import ParseWarning
 
 from ....model.rules import ConditionalFormat
+from ..styles.colors import SpreadsheetColors
 from ..styles.index import FormatIndex
 from ..styles.records import differential_style
 from .rule_values import X14, XM, boolean, integer
@@ -83,7 +84,7 @@ def parse_conditional_formats(
                 item["dxfStyle"] = style
         inline = rule.find(f"{{{X14}}}dxf")
         if inline is not None:
-            style = differential_style(inline, formats.theme if formats is not None else {})
+            style = differential_style(inline, formats.colors if formats is not None else SpreadsheetColors())
             if style:
                 item["dxfStyle"] = style
         for key in ("operator", "text", "timePeriod"):

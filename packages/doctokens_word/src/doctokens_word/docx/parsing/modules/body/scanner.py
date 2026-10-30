@@ -105,6 +105,7 @@ class DocumentBodyParser:
     def parse(self) -> list[Block]:
         """Stream-parse word/document.xml, preserving the original paragraph/table order."""
         blocks = read_blocks(self)
+        self._sections.correct_continuous_pages(blocks)
         if self._sections._section_index == 1:
             # A lone default section has no navigation value; omit it from the IR
             # so all densities remain free of redundant section metadata.
@@ -142,14 +143,12 @@ class DocumentBodyParser:
             alignment = parse_paragraph_alignment(paragraph_properties) or inherited.alignment
             borders = merge_paragraph_borders(
                 inherited.borders,
-                parse_paragraph_borders(paragraph_properties),
+                parse_paragraph_borders(paragraph_properties, self.styles.theme),
             )
             borders = {side: border for side, border in borders.items() if border.get("style") not in {"nil", "none"}}
         section_break = first_child(paragraph_properties, "w", "sectPr")
         if section_break is not None:
-            # A sectPr in pPr ends the section after this paragraph; Word
-            # renders the next content on a new page.
-            self._sections._collect_section_refs(section_break)
+            self._sections._collect_section_refs(section_break, str(self.options.revision_mode))
         runs, raw_hints = self.inline.paragraph_runs(paragraph, part, block_id, style_id, paragraph_parts, content_controls)
         anchors = self._anchors._bookmarks_by_block.pop(block_id, [])
         numbering = self._numbering.parse(paragraph, style_id, part, block_id, inherited)
@@ -197,8 +196,8 @@ class DocumentBodyParser:
             # rendering, so drop them without advancing the page number.
             self._pending_page_breaks = 0
             if section_break is not None:
-                # Even an empty paragraph's sectPr still starts a new page in Word.
                 self._pending_page_breaks = 1
+                self._sections._section_break_pending = True
             return None
 
         manual_page_breaks = sum(1 for hint in raw_hints if hint.get("type") == "manualPageBreak")
@@ -290,8 +289,8 @@ class DocumentBodyParser:
         if self.include_raw_hints and self.options.include_raw_hints and raw_hints:
             block["rawHints"] = raw_hints
         if section_break is not None:
-            # The section break follows this paragraph; the next block starts
-            # on a new page.
+            # Provisional next-page hint; section-start type is known at the
+            # next section's ending properties and corrected after traversal.
             self._pending_page_breaks += 1
             self._sections._section_break_pending = True
         return block

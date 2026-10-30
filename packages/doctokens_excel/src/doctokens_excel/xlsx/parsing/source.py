@@ -13,6 +13,7 @@ from doctokens_core.containers.opc.reader import PackageReader
 from doctokens_core.contracts.models import ParseReport, ParseResult, ParseWarning, Source
 
 from ..model.workbook import Cell, ParsedWorkbook, ParseOptions, SheetInfo
+from .modules.styles.colors import SpreadsheetColors
 from .modules.styles.parser import parse_styles
 from .modules.workbook.metadata import _parse_workbook_xml
 from .modules.workbook.shared_strings import _parse_shared_strings
@@ -44,7 +45,9 @@ class OperationSource:
             date_1904, self.sheets, self.names, self.links = _parse_workbook_xml(
                 self.package, include_defined_names=False, include_external_links=False
             )
-            self.strings, self.rich = _parse_shared_strings(self.package, self.warnings, include_rich_text=False)
+            self.strings, self.rich = _parse_shared_strings(
+                self.package, self.warnings, include_rich_text=False, colors=SpreadsheetColors()
+            )
             self.formats = parse_styles(self.package, detail="display", locale=self.options.locale)
             self.formats.set_date_system(date_1904)
         except BaseException:

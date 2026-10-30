@@ -7,6 +7,7 @@ from collections.abc import Callable
 from xml.etree import ElementTree as ET
 
 from ....model.workbook import RichTextRun
+from ..styles.colors import SpreadsheetColors
 from ..styles.records import font_info
 
 _NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
@@ -42,7 +43,9 @@ def decode_xstring(value: str, warn: WarningSink) -> str:
     return "".join(pieces)
 
 
-def read_string(element: ET.Element | None, *, rich: bool, warn: WarningSink) -> tuple[str, list[RichTextRun] | None]:
+def read_string(
+    element: ET.Element | None, *, rich: bool, warn: WarningSink, colors: SpreadsheetColors
+) -> tuple[str, list[RichTextRun] | None]:
     if element is None:
         return "", None
     parts: list[str] = []
@@ -58,13 +61,17 @@ def read_string(element: ET.Element | None, *, rich: bool, warn: WarningSink) ->
             item: RichTextRun = {"text": value}
             properties = child.find(_NS + "rPr") if rich else None
             if properties is not None:
-                font = font_info(properties, {})
+                font = font_info(properties, colors)
                 if properties.find(_NS + "b") is not None:
                     item["bold"] = font["bold"]
                 if properties.find(_NS + "i") is not None:
                     item["italic"] = font["italic"]
                 if properties.find(_NS + "u") is not None:
                     item["underline"] = font["underline"]
+                if properties.find(_NS + "strike") is not None:
+                    item["strike"] = font["strike"]
+                if properties.find(_NS + "vertAlign") is not None:
+                    item["superscript"], item["subscript"] = font["superscript"], font["subscript"]
                 if color := font.get("color"):
                     item["color"] = color
             runs.append(item)

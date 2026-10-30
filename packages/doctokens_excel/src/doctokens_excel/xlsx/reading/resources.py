@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from doctokens_core.contracts.models import ResourceDescriptor
 from doctokens_core.ooxml.charts.axes import append_chart_axes
+from doctokens_core.ooxml.charts.rendering import append_annotations, append_plots
 from doctokens_core.output.resources import resource_document
 from doctokens_core.output.xml import append, element
 
@@ -68,11 +69,14 @@ def _render_chart_resource(chart: DrawingChart) -> str:
     append_chart_axes(node, chart.get("axes", []))
     if chart.get("unparsed"):
         append(node, "unsupported", type="chart")
+    append_plots(node, chart.get("plots", []))
     for series in chart.get("series", []):
         child = append(
             node,
             "series",
             index=series.get("index", 0),
+            plot=series.get("plotIndex"),
+            axes=" ".join(series.get("axis_ids", [])) or None,
             name=series.get("name") or None,
             min=series.get("min"),
             max=series.get("max"),
@@ -80,6 +84,7 @@ def _render_chart_resource(chart: DrawingChart) -> str:
             bubbleSizes=",".join(series["bubbleSizes"]) if series.get("bubbleSizes") else None,
             hidden=True if series.get("hidden") else None,
         )
+        append_annotations(child, series.get("labels", []), series.get("label_options", {}), series.get("trendlines", []))
         for point in series.get("points", []):
             append(
                 child,

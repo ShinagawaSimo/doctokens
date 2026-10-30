@@ -4,7 +4,10 @@
 
 Main output contains chart identity, title, family, counts, explicit saved-axis
 metadata and a bounded point preview. Complete series remain available through
-the resource operation.
+the resource operation. Compact plot grouping/direction and explicit axis
+relationships are retained when saved. Custom point labels and saved trendline
+text/configuration follow the eight-series/eight-point preview boundary;
+complete resources retain all annotations. See [shared series](../../common/chart-series.md).
 
 ## Fields
 

@@ -55,6 +55,9 @@ def parse_chart_part(pkg: PackageReader, chart_part: str, warnings: list[ParseWa
             series_item["bubbleSizes"] = source_series["bubble_sizes"]
         if source_series.get("hidden"):
             series_item["hidden"] = True
+        for key in ("labels", "label_options", "trendlines", "axis_ids"):
+            if key in source_series:
+                series_item[key] = source_series[key]
         # Full data points
         categories = source_series.get("categories", [])
         values = source_series.get("values", [])
@@ -89,6 +92,8 @@ def parse_chart_part(pkg: PackageReader, chart_part: str, warnings: list[ParseWa
     if result["type"] in {"", "unknown"}:
         result["unparsed"] = True
         _warn(warnings, "CHART_TYPE_UNSUPPORTED", "Saved chart has no supported readable chart type", chart_part)
+    if chart_info.get("plots"):
+        result["plots"] = chart_info["plots"]
     if chart_info.get("axes"):
         result["axes"] = chart_info["axes"]
     plot_types = [plot.get("chart_type", "unknown") for plot in chart_info.get("plots", [])]

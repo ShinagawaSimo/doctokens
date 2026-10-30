@@ -181,7 +181,7 @@ class DocumentBodyParser:
         has_objects = False
         for run in runs:
             text_parts.append(run["text"])
-            if "objects" in run or "ruby" in run:
+            if "objects" in run or "ruby" in run or run.get("contentControls"):
                 has_objects = True
         text = "".join(text_parts)
         # text.isspace() avoids the cost of text.strip() creating a new string.
@@ -211,7 +211,7 @@ class DocumentBodyParser:
             if run.get("pageBreak"):
                 leading_page_breaks += 1
                 continue
-            if run["text"] or run.get("objects") or run.get("ruby"):
+            if run["text"] or run.get("objects") or run.get("ruby") or run.get("contentControls"):
                 break
         content_page = page_start + leading_page_breaks
         # Updating the shared hint immediately also lets table parsing split before

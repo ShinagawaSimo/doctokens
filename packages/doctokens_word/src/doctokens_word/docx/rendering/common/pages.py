@@ -48,14 +48,16 @@ def iter_block_page_segments(block: Block) -> Iterator[tuple[int, Block]]:
     run_segments = split_runs_at_page_breaks(block["runs"])
     leading_empty_segments = 0
     for segment in run_segments:
-        if any(run["text"] or run.get("objects") or run.get("ruby") for run in segment) or block.get("contentControls"):
+        if any(
+            run["text"] or run.get("objects") or run.get("ruby") or run.get("contentControls") for run in segment
+        ) or block.get("contentControls"):
             break
         leading_empty_segments += 1
     physical_page = page - leading_empty_segments
     for segment_index, segment_runs in enumerate(run_segments):
-        if not any(run["text"] or run.get("objects") or run.get("ruby") for run in segment_runs) and not block.get(
-            "contentControls"
-        ):
+        if not any(
+            run["text"] or run.get("objects") or run.get("ruby") or run.get("contentControls") for run in segment_runs
+        ) and not block.get("contentControls"):
             continue
         page_fragment = dict(block)
         if segment_index > leading_empty_segments:

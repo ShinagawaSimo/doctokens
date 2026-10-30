@@ -8,7 +8,7 @@ from xml.etree import ElementTree as ET
 from doctokens_core.output.xml import append
 
 from ..model import OcrResultRecord, TableRow
-from .dtx_content import _append_controls
+from .dtx_controls import append_controls
 from .dtx_runs import review_parent
 
 
@@ -20,7 +20,7 @@ def append_rows(
     append_cell: Callable[[ET.Element, object, str, dict[str, OcrResultRecord]], None],
 ) -> None:
     for row in rows:
-        container = review_parent(_append_controls(parent, row.get("contentControls", []), density), row, density)
+        container = review_parent(append_controls(parent, row.get("contentControls", []), density), row, density)
         node = append(
             container,
             "tr",
@@ -29,7 +29,7 @@ def append_rows(
             grid_after=row.get("gridAfter"),
         )
         for cell in row["cells"]:
-            container = review_parent(_append_controls(node, cell.get("contentControls", []), density), cell, density)
+            container = review_parent(append_controls(node, cell.get("contentControls", []), density), cell, density)
             child = append(
                 container,
                 "th" if row.get("isHeader") else "td",

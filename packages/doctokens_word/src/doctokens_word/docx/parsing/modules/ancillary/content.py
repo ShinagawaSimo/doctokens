@@ -19,7 +19,7 @@ from ..body.table_geometry import table_rows
 
 
 def has_objects(runs: list[Run]) -> bool:
-    return any("objects" in run or "ruby" in run or "paragraphMark" in run for run in runs)
+    return any("objects" in run or "ruby" in run or "paragraphMark" in run or run.get("contentControls") for run in runs)
 
 
 class AncillaryContentParser:

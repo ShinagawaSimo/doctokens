@@ -10,7 +10,7 @@ from doctokens_core.output.xml import append, element
 from ...model import ParsedDocument, TableBlock, TableRow
 from ...model.enums import ResourceType
 from ...model.traversal import document_blocks
-from ..dtx_content import _append_controls
+from ..dtx_controls import append_controls, finish_controls
 from ..dtx_runs import review_parent
 from .charts import render_chart_resource
 from .smartarts import render_smartart_resource
@@ -110,7 +110,7 @@ def _render_table_resource(
         append(node, "aggregate", str(result["aggregate_value"]), op=result["aggregate"], column=result["aggregate_column"])
     else:
         for row in _filter_and_slice_rows(all_rows, rows, columns):
-            container = review_parent(_append_controls(node, row.get("contentControls", []), "semantic"), row, "semantic")
+            container = review_parent(append_controls(node, row.get("contentControls", []), "semantic"), row, "semantic")
             child = append(
                 container,
                 "tr",
@@ -120,7 +120,7 @@ def _render_table_resource(
             )
             next_column = row.get("gridBefore", 0)
             for cell in row["cells"]:
-                container = review_parent(_append_controls(child, cell.get("contentControls", []), "semantic"), cell, "semantic")
+                container = review_parent(append_controls(child, cell.get("contentControls", []), "semantic"), cell, "semantic")
                 append(
                     container,
                     "td",
@@ -132,6 +132,7 @@ def _render_table_resource(
                     background=cell.get("background"),
                 )
                 next_column = cell["colIndex"] + cell["colSpan"]
+    finish_controls(node)
     return resource_document("docx", node)
 
 

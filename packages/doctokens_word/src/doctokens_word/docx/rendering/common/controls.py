@@ -1,49 +1,41 @@
-"""Compact rendering helpers for Word content controls."""
+"""Plain control markers and contiguous control-content grouping."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 
 from ...model import ContentControl
 
 
 def wrap_plain_control(content: str, controls: Sequence[ContentControl]) -> str:
-    """Add one compact fill/select hint around plain text without XML noise."""
     for control in reversed(controls):
-        label = _plain_label(control)
-        content = f"[Control {label}: {content}]"
+        label = control.get("label")
+        if not content and "checked" in control:
+            content = "checked" if control["checked"] else "unchecked"
+        marker = f"[content-control] {label}:" if label else "[content-control]"
+        content = f"{marker} {content}" if content else marker
     return content
 
 
-def _plain_label(control: ContentControl) -> str:
-    control_type = str(control.get("controlType") or "unknown")
-    label = str(control.get("alias") or control.get("tag") or "")
-    label_parts = [control_type]
-    if label:
-        label_parts.append(label)
-    options = _option_text(control)
-    if options:
-        label_parts.append(f"choices={options}")
-    if control.get("dateFormat"):
-        label_parts.append(f"format={control['dateFormat']}")
-    if "checked" in control:
-        label_parts.append("checked" if control["checked"] else "unchecked")
-    if control.get("lock") in {"sdtLocked", "contentLocked"}:
-        label_parts.append("locked")
-    return " ".join(label_parts)
+def controlled_text(segments: Iterable[tuple[str, Sequence[ContentControl]]]) -> str:
+    """Keep a control marker once across adjacent formatted source runs."""
+    active: list[ContentControl] = []
+    buffers: list[list[str]] = [[]]
 
+    def close() -> None:
+        value = "".join(buffers.pop())
+        buffers[-1].append(wrap_plain_control(value, [active.pop()]))
 
-def _option_text(control: ContentControl) -> str:
-    options = control.get("options") or []
-    values: list[str] = []
-    for option in options:
-        display = str(option.get("display") or "")
-        value = str(option.get("value") or "")
-        if display and value and display != value:
-            values.append(f"{display}={value}")
-        elif display or value:
-            values.append(display or value)
-    return "|".join(values)
-
-
-__all__ = ["wrap_plain_control"]
+    for value, controls in segments:
+        shared = 0
+        while shared < min(len(active), len(controls)) and active[shared] is controls[shared]:
+            shared += 1
+        while len(active) > shared:
+            close()
+        for control in controls[shared:]:
+            active.append(control)
+            buffers.append([])
+        buffers[-1].append(value)
+    while active:
+        close()
+    return "".join(buffers[0])

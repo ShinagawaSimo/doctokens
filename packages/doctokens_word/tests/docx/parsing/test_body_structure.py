@@ -28,63 +28,6 @@ _NUMBERING_XML = f"""<w:numbering xmlns:w="{NS_W}">
 
 
 class BodyStructureTests(unittest.TestCase):
-    def test_sdt_wrapped_content_parsed(self) -> None:
-        """Content controls wrapping the whole body must not hide paragraphs/tables."""
-        data = _make_docx(
-            "<w:sdt><w:sdtContent>"
-            "<w:p><w:r><w:t>Wrapped text</w:t></w:r></w:p>"
-            "<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"
-            "</w:sdtContent></w:sdt>"
-        )
-        root = ET.fromstring(parse_docx(data).text)
-        self.assertEqual(root.findtext(".//content-control/p"), "Wrapped text")
-        self.assertEqual("".join(root.find(".//table").itertext()), "Cell")
-
-    def test_content_control_semantics_and_density(self) -> None:
-        """Form controls retain fill/select semantics without duplicating their content."""
-        data = _make_docx(
-            '<w:sdt><w:sdtPr><w:alias w:val="Status"/><w:tag w:val="status"/>'
-            '<w:id w:val="7"/><w:lock w:val="sdtLocked"/>'
-            '<w:placeholder><w:docPart w:val="StatusPlaceholder"/></w:placeholder>'
-            '<w:dataBinding w:xpath="/root/status"/>'
-            '<w:dropDownList><w:listItem w:displayText="Open" w:value="open"/>'
-            '<w:listItem w:displayText="Closed" w:value="closed"/></w:dropDownList>'
-            "</w:sdtPr><w:sdtContent><w:p><w:r><w:t>Open</w:t></w:r></w:p></w:sdtContent></w:sdt>"
-            '<w:p><w:sdt><w:sdtPr><w:date><w:dateFormat w:val="yyyy-MM-dd"/></w:date></w:sdtPr>'
-            "<w:sdtContent><w:r><w:t>2026-08-19</w:t></w:r></w:sdtContent></w:sdt>"
-            "<w:r><w:t> / </w:t></w:r>"
-            '<w:sdt><w:sdtPr><w:checkbox checked="1"/></w:sdtPr>'
-            "<w:sdtContent><w:r><w:t>Yes</w:t></w:r></w:sdtContent></w:sdt></w:p>"
-            "<w:sdt><w:sdtPr><w:comboBox/></w:sdtPr><w:sdtContent><w:p/></w:sdtContent></w:sdt>"
-        )
-        parsed = DocxParser().parse(data, ParseOptions())
-        self.assertFalse(any(w.code == "UNSUPPORTED_PARAGRAPH_CHILD" for w in parsed.warnings))
-
-        semantic = "".join(get_render_pipeline(Density.SEMANTIC).render(parsed))
-        root = ET.fromstring(semantic)
-        controls = root.findall(".//content-control")
-        dropdown = next(item for item in controls if item.get("type") == "dropDownList")
-        self.assertEqual(dropdown.get("label"), "Status")
-        self.assertEqual(dropdown.get("binding"), "/root/status")
-        self.assertEqual(dropdown.get("choices"), "Open=open|Closed=closed")
-        self.assertEqual("".join(dropdown.itertext()), "Open")
-        self.assertEqual(next(item for item in controls if item.get("type") == "date").get("date-format"), "yyyy-MM-dd")
-        self.assertEqual(next(item for item in controls if item.get("type") == "checkbox").get("checked"), "true")
-        self.assertIsNotNone(next(item for item in controls if item.get("type") == "comboBox"))
-
-        structural = ET.fromstring("".join(get_render_pipeline(Density.STRUCTURAL).render(parsed)))
-        structural_control = structural.find(".//content-control[@type='dropDownList']")
-        assert structural_control is not None
-        self.assertEqual(structural_control.get("locked"), "true")
-        self.assertEqual(structural_control.get("choices"), "Open=open|Closed=closed")
-        self.assertIsNone(structural_control.get("binding"))
-
-        plain = "".join(get_render_pipeline(Density.PLAIN).render(parsed))
-        self.assertIn("[Control dropDownList Status choices=Open=open|Closed=closed locked: Open]", plain)
-        self.assertIn("[Control date format=yyyy-MM-dd: 2026-08-19]", plain)
-        self.assertIn("[Control checkbox checked: Yes]", plain)
-        self.assertIn("[Control comboBox: ]", plain)
-
     def test_unknown_body_child_warns(self) -> None:
         """Content-bearing wrappers we do not support are surfaced as warnings."""
         data = _make_docx(

@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from xml.etree import ElementTree as ET
 
 from doctokens_core.ooxml.charts.axes import append_chart_axes
 from doctokens_core.ooxml.charts.rendering import append_annotations, append_plots
 from doctokens_core.output.xml import append, text
 
-from ..model import ContentControl, InlineObject, OcrResultRecord
+from ..model import InlineObject, OcrResultRecord
 from .common.ocr import ocr_text
 
 
@@ -80,50 +79,6 @@ def _append_ocr(parent: ET.Element, asset_id: str | None, results: dict[str, Ocr
         append(parent, "ocr-text", id=asset_id, empty=True)
     else:
         append(parent, "ocr-text", id=asset_id, error=True)
-
-
-def _append_controls(parent: ET.Element, controls: Sequence[ContentControl], density: str) -> ET.Element:
-    node = parent
-    for control in controls:
-        attrs: dict[str, object] = {"type": control.get("controlType", "unknown")}
-        label = control.get("alias") or control.get("tag")
-        if label:
-            attrs["label"] = label
-        if density == "semantic":
-            if control.get("tag") and control.get("tag") != label:
-                attrs["tag"] = control["tag"]
-            binding = control.get("binding") or {}
-            if binding.get("xpath"):
-                attrs["binding"] = binding["xpath"]
-            attrs.update(
-                {
-                    key: value
-                    for key, value in (
-                        ("lock", control.get("lock")),
-                        ("placeholder", control.get("placeholder")),
-                        ("date_format", control.get("dateFormat")),
-                    )
-                    if value
-                }
-            )
-            if "checked" in control:
-                attrs["checked"] = bool(control["checked"])
-        elif control.get("lock") in {"sdtLocked", "contentLocked"}:
-            attrs["locked"] = True
-        choices = _control_choices(control)
-        if choices:
-            attrs["choices"] = choices
-        node = append(node, "content-control", **attrs)
-    return node
-
-
-def _control_choices(control: ContentControl) -> str:
-    choices: list[str] = []
-    for option in control.get("options", []):
-        display = str(option.get("display") or "")
-        value = str(option.get("value") or "")
-        choices.append(f"{display}={value}" if display and value and display != value else display or value)
-    return "|".join(item for item in choices if item)
 
 
 def _append_text_with_breaks(parent: ET.Element, value: str) -> None:

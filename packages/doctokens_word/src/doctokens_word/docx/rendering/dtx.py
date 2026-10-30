@@ -14,7 +14,8 @@ from ..model import AncillaryItem, Block, InlineContainer, InlineObject, OcrResu
 from .common.floating import floating_textboxes, is_floating_textbox, iter_flow_page_blocks
 from .common.pages import iter_block_page_segments
 from .common.text import merge_text_runs
-from .dtx_content import _append_chart, _append_controls, _append_ocr, _append_smartart, _append_text_with_breaks
+from .dtx_content import _append_chart, _append_ocr, _append_smartart, _append_text_with_breaks
+from .dtx_controls import append_controls, finish_controls
 from .dtx_runs import append_run_text, review_parent
 from .dtx_tables import append_rows
 
@@ -35,6 +36,7 @@ def iter_dtx(parsed_document: ParsedDocument, density: str) -> Iterator[str]:
     _append_body(body, parsed_document, density)
     _append_assets(root, parsed_document, density)
     _append_supplemental(root, parsed_document, density)
+    finish_controls(root)
     yield serialize(root)
 
 
@@ -67,7 +69,7 @@ def _append_block(
     ocr_results: dict[str, OcrResultRecord],
 ) -> None:
     controls = block.get("contentControls", [])
-    container = _append_controls(parent, controls, density)
+    container = append_controls(parent, controls, density)
     container = review_parent(container, block, density)
     if block["type"] == "table":
         _append_table(container, block, density, ocr_results)
@@ -129,7 +131,7 @@ def _append_inline(
 
 def _append_runs(parent: ET.Element, runs: list[Run], density: str, ocr_results: dict[str, OcrResultRecord]) -> None:
     for run in merge_text_runs(runs):
-        content_parent = _append_controls(parent, run.get("contentControls", []), density)
+        content_parent = append_controls(parent, run.get("contentControls", []), density)
         content_parent = review_parent(content_parent, run, density)
         append_run_text(content_parent, run, density, lambda node, base: _append_runs(node, base, density, ocr_results))
         if density == "semantic" and (mark := run.get("paragraphMark")):
@@ -149,7 +151,7 @@ def _append_floating(
     for run in container.get("runs", []):
         for item in run.get("objects", []):
             if is_floating_textbox(item):
-                node = _append_controls(parent, run.get("contentControls", []), density)
+                node = append_controls(parent, run.get("contentControls", []), density)
                 _append_inline_object(review_parent(node, run, density), item, density, ocr_results)
 
 

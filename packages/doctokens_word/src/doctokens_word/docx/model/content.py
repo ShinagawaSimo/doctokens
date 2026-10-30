@@ -33,25 +33,12 @@ class FieldInfo(TypedDict, total=False):
     anchor: str
 
 
-class ContentControlOption(TypedDict, total=False):
-    display: str
-    value: str
-
-
 class ContentControl(TypedDict, total=False):
-    type: Literal["contentControl"]
     controlType: str
-    id: str
-    tag: str
-    alias: str
-    lock: str
-    placeholder: str
-    binding: dict[str, str]
-    options: list[ContentControlOption]
+    label: str
+    lock: Literal["content", "control", "both"]
+    options: list[str]
     checked: bool
-    dateFormat: str
-    multiLine: bool
-    temporary: bool
 
 
 class ImageAssetRequired(TypedDict):
@@ -245,7 +232,6 @@ __all__ = [
     "Chart",
     "ChartSeries",
     "ContentControl",
-    "ContentControlOption",
     "DrawingCommon",
     "FieldInfo",
     "ImageAsset",

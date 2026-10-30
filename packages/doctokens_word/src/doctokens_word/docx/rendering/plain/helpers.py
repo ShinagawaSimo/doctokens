@@ -9,7 +9,7 @@ from doctokens_core.output.plain import page_marker
 from ...model import Block, ContentControl, InlineContainer, InlineObject, OcrResultRecord, TableBlock, TableRow
 from ...model.traversal import iter_blocks, iter_runs
 from ..common import constants as _constants
-from ..common.controls import wrap_plain_control
+from ..common.controls import controlled_text, wrap_plain_control
 from ..common.floating import floating_textboxes, is_floating_textbox
 from ..common.ocr import ocr_text
 from ..common.pages import iter_block_page_segments
@@ -83,7 +83,7 @@ def inline_text_only(
         controls = _controls(block.get("contentControls"))
         return wrap_plain_control(content, controls) if controls else content
 
-    parts: list[str] = []
+    parts: list[tuple[str, list[ContentControl]]] = []
     for run in runs:
         run_parts: list[str] = []
         text = run["text"]
@@ -99,8 +99,8 @@ def inline_text_only(
             )
         run_content = "".join(run_parts)
         controls = _controls(run.get("contentControls"))
-        parts.append(wrap_plain_control(run_content, controls) if controls else run_content)
-    content = "".join(parts)
+        parts.append((run_content, controls))
+    content = controlled_text(parts)
     controls = _controls(block.get("contentControls"))
     content = wrap_plain_control(content, controls) if controls else content
     return _with_floating_stories(content, block, ocr_results) if include_floating else content

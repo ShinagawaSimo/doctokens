@@ -2,214 +2,122 @@
 
 [DOCX](../README.md) / Content controls
 
-A control supplies metadata around its saved content; it does not perform binding or interaction.
+A control retains its saved content and an optional human-readable label.
+Plain emits `[content-control] LABEL: VALUE` or `[content-control] VALUE`.
+Structural DTX retains the content's ordinary blocks and inline elements inside
+`content-control`, with only an optional `label` attribute.
+
+Semantic DTX adds useful type, choice, current-state and lock information.
+One unadorned paragraph is inlined; headings, multiple paragraphs, tables,
+objects, paragraph properties and review marks retain their reading structure.
+Adjacent fragments of the same source control are grouped before projection.
+Distinct controls remain distinct even when their metadata and values agree.
+Source IDs are not read or emitted for this grouping.
 
 ## Fields
-
-### `type`
-
-- **Output**
-  - `content-control/@type`.
-
-- **OOXML**
-  - Recognized local child name of `w:sdtPr`.
-
-- **IR**
-  - `ContentControl.controlType: str`
-
-- **Parsing**
-  - Map text/richText/picture/date/comboBox/dropDownList/checkbox/group/repeatingSection/citation; docPartList/docPartObj → buildingBlock. Last recognized type wins.
-
-- **Absence and defaults**
-  - `unknown`.
 
 ### `label`
 
 - **Output**
-  - `content-control/@label` in both XML densities.
-
+  - Optional `content-control/@label` in both XML densities.
+  - Optional label following the plain control marker.
 - **OOXML**
-  - `w:alias/@w:val`, then `w:tag/@w:val`.
-
+  - `w:sdtPr/w:alias/@w:val`.
 - **IR**
-  - `ContentControl.alias`, `ContentControl.tag`
-
+  - `ContentControl.label: str`.
 - **Parsing**
-  - `alias or tag`; omit if empty.
+  - Copy nonempty alias text. Do not use the programmatic tag as a fallback.
+  - Preserve the saved content when no label exists.
 
-### `id`
+### `type`
 
 - **Output**
-  - Internal source identifier.
-
+  - Semantic `content-control/@type`; omitted from structural and plain.
 - **OOXML**
-  - `w:id/@w:val`
-
+  - Recognized type child of `w:sdtPr`.
 - **IR**
-  - `ContentControl.id: str`
-
+  - `ContentControl.controlType: str`.
 - **Parsing**
-  - Copy nonempty value; no current DTX ID attribute.
+  - Recognize text, richText, picture, date, comboBox, dropDownList, checkbox,
+    group, repeatingSection and citation. docPartList/docPartObj map to
+    buildingBlock. Last recognized type wins.
+  - Unknown type is not emitted as a redundant default.
 
-### `tag`
+### `choice`
 
 - **Output**
-  - Semantic `@tag`.
-
+  - Direct semantic `content-control/choice` children, without a choices wrapper.
+  - Character data is the readable candidate text; the current matching
+    candidate carries `checked="true"`.
 - **OOXML**
-  - `w:tag/@w:val`
-
+  - comboBox/dropDownList `w:listItem/@w:displayText`, falling back to
+    `@w:value` only when displayText is empty.
+  - Current display comes from retained `w:sdtContent`.
 - **IR**
-  - `ContentControl.tag: str`
-
+  - `ContentControl.options: list[str]`.
 - **Parsing**
-  - Emit only if nonempty and different from label.
-
-### `lock`
-
-- **Output**
-  - Semantic `@lock`; structural `locked="true"` for sdtLocked/contentLocked.
-
-- **OOXML**
-  - `w:lock/@w:val`
-
-- **IR**
-  - `ContentControl.lock: str`
-
-- **Parsing**
-  - Copy nonempty value; does not enforce document editing protection.
-
-### `placeholder`
-
-- **Output**
-  - Semantic `@placeholder`.
-
-- **OOXML**
-  - `w:placeholder/w:docPart/@w:val`
-
-- **IR**
-  - `ContentControl.placeholder: str`
-
-- **Parsing**
-  - Copy nonempty value.
-
-### `binding`
-
-- **Output**
-  - Semantic `@binding` containing XPath.
-
-- **OOXML**
-  - `w:dataBinding/@w:xpath`, `@w:storeItemID`, `@w:prefixMappings`
-
-- **IR**
-  - `ContentControl.binding: dict[str,str]`
-
-- **Parsing**
-  - Retain nonempty keys; output only `xpath`. See [binding fields](control-binding.md).
-
-### `choices`
-
-- **Output**
-  - `@choices="A|B=value"` in both XML densities.
-
-- **OOXML**
-  - comboBox/dropDownList child listItem.
-
-- **IR**
-  - `ContentControl.options: list[ContentControlOption]`
-
-- **Parsing**
-  - Preserve source order; join nonempty display/value summaries with `|`.
-
-### `display`
-
-- **Output**
-  - Choice display text.
-
-- **OOXML**
-  - `w:listItem/@w:displayText`
-
-- **IR**
-  - `ContentControlOption.display: str`
-
-- **Parsing**
-  - If empty, use value.
-
-### `value`
-
-- **Output**
-  - Choice `=value` suffix only when different from display.
-
-- **OOXML**
-  - `w:listItem/@w:value`
-
-- **IR**
-  - `ContentControlOption.value: str`
-
-- **Parsing**
-  - If empty, use display; omit item if both empty.
+  - Retain distinct nonempty readable candidates in source order. Do not
+    retain a separate internal value or output a display=value pair.
+  - Match the complete saved display exactly, across adjacent formatted runs.
+    Put its existing inline content in the matching choice once, preserving
+    emphasis and links. Do not repeat the current value in a p.
+  - A comboBox value outside the declared candidates becomes one additional
+    choice with `checked="true" listed="false"`. This identifies a saved custom
+    entry, without inventing another declared option.
+  - An unmatched dropDownList display remains in a `value` element; no declared
+    candidate is guessed to be selected. Empty display selects no candidate.
+  - Unexpected multi-block/object content is retained as ordinary content with
+    unselected candidates, rather than guessing a selection from flattened text.
+  - Plain/structural omit candidates and retain only the current content.
 
 ### `checked`
 
 - **Output**
-  - Semantic `@checked="true|false"`.
-
+  - Semantic `choice/@checked` for a list's current candidate or a checkbox state.
+  - For a checkbox, explicit true and false are both meaningful. Unknown is
+    omitted, rather than converted to false.
 - **OOXML**
-  - Local attribute `checked` on the checkbox type node.
-
+  - `w14:checkbox/w14:checked/@w14:val`, where w14 is
+    `http://schemas.microsoft.com/office/word/2010/wordml`.
 - **IR**
-  - `ContentControl.checked: bool`
-
+  - Optional `ContentControl.checked: bool`.
 - **Parsing**
-  - Lowercase value outside `0/false/off/none` is true.
+  - Decode 1/true/on and 0/false/off case-insensitively.
+  - A semantic checkbox has one choice containing its saved inline content
+    and, when known, its checked attribute.
+  - Lower densities retain the displayed checkbox value without an extra
+    state attribute. If no content is present but the saved state is known,
+    use checked/unchecked as the readable current value.
+  - An empty control remains represented; it is not an unreadable-element failure.
 
-- **Absence and defaults**
-  - Absent attribute: no member.
-
-- **Notes**
-  - The current extractor does not read the usual nested checkbox/checked element; that source form does not populate this field.
-
-### `date-format`
+### `lock`
 
 - **Output**
-  - Semantic `@date-format`.
-
+  - Semantic `content-control/@lock="content|control|both"`.
 - **OOXML**
-  - `w:date/w:dateFormat/@w:val`
-
+  - `w:sdtPr/w:lock/@w:val`.
 - **IR**
-  - `ContentControl.dateFormat: str`
-
+  - Optional `ContentControl.lock: Literal["content", "control", "both"]`.
 - **Parsing**
-  - Copy nonempty format string; no date computation.
+  - contentLocked → content: the saved content cannot be edited.
+  - sdtLocked → control: the control cannot be removed; its content may remain editable.
+  - sdtContentLocked → both.
+  - unlocked, absent and unrecognized values add no lock attribute.
+  - Plain/structural omit lock metadata. The parser describes saved restrictions;
+    it does not enforce them or derive document-wide editing permission.
 
-### `multiLine`
+## Excluded source fields
 
-- **Output**
-  - No public attribute.
+Control tags, source IDs, dataBinding XPath/storeItemID/prefixMappings,
+placeholder docPart identifiers, date-format strings, multiLine and temporary
+settings are not extracted. Their saved visible content remains readable.
+The reader does not evaluate bindings, change control values or compute dates.
 
-- **OOXML**
-  - `w:text/@w:multiLine`
+## Example
 
-- **IR**
-  - Declared `ContentControl.multiLine: bool`
-
-- **Parsing**
-  - Current parser handles text in its earlier type branch and continues, so the later multiLine branch is unreachable.
-
-- **Absence and defaults**
-  - Not populated by that source path.
-
-### `temporary`
-
-- **Output**
-  - No public attribute.
-
-- **OOXML**
-  - `w:temporary/@w:val`
-
-- **IR**
-  - `ContentControl.temporary: bool`
-
-- **Parsing**
-  - Current bool helper returns false for absent val and false tokens; no editing action.
+```xml
+<content-control label="Status" lock="content" type="dropDownList">
+  <choice checked="true">Open</choice>
+  <choice>Closed</choice>
+</content-control>
+```

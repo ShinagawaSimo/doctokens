@@ -114,7 +114,7 @@ class InlineParser:
                         self._extract_inline_runs(child, part, block_id, paragraph_style_id, raw_hints, runs)
                 else:
                     self._extract_inline_runs(source, part, block_id, paragraph_style_id, raw_hints, runs)
-                if controls != common_controls:
+                if tuple(map(id, controls)) != tuple(map(id, common_controls)):
                     for run in runs[start:]:
                         run.setdefault("contentControls", []).extend(controls)
         finally:
@@ -194,13 +194,15 @@ class InlineParser:
             return
         control = parse_content_control(node)
         if self.include_raw_hints:
-            raw_hints.append(dict(control))
+            raw_hints.append({"type": "contentControl", **control})
         start = len(runs)
         content = first_child(node, "w", "sdtContent")
         if content is not None:
             self._append_child_runs(content, part, block_id, paragraph_style_id, raw_hints, runs)
+        if len(runs) == start:
+            runs.append({"text": ""})
         for child_run in runs[start:]:
-            child_run.setdefault("contentControls", []).append(control)
+            child_run.setdefault("contentControls", []).insert(0, control)
 
     def _append_child_runs(
         self,

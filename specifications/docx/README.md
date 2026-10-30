@@ -50,7 +50,6 @@ WordprocessingML is read from `word/document.xml` and supporting parts. Body blo
 ## Content controls
 
 - [Content controls](text/control.md)
-- [Content-control bindings](text/control-binding.md)
 
 ## Tables
 

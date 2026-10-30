@@ -75,7 +75,8 @@ class BlockCollector:
             return
         paragraphs = [item for item in self.pending if local_name(item[0].tag) == "p"]
         last = paragraphs[-1][0]
-        common = paragraphs[0][1] if all(item[1] == paragraphs[0][1] for item in paragraphs) else ()
+        first_controls = paragraphs[0][1]
+        common = first_controls if all(tuple(map(id, item[1])) == tuple(map(id, first_controls)) for item in paragraphs) else ()
         block = self.owner.parse_paragraph(last, self.part, common, paragraph_parts=list(self.pending))
         if block is not None:
             self.blocks.append(block)

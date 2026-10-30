@@ -73,7 +73,7 @@ def parse_docx(
   - `int = 1`
 
 - **Parsing**
-  - Positive non-bool int; span other than 1 requires page_hint. Window rendering removes headers, footers, comments; retains assets and notes from the parsed document.
+  - Positive non-bool int; span other than 1 requires page_hint. Window rendering removes headers and footers, retains related comment threads, and retains assets and notes from the parsed document.
 
 ### `preserve_empty_paragraphs`
 

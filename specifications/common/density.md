@@ -16,7 +16,8 @@ the future, non-public `full` density; no `full` API is introduced here.
 | Feature | DOCX plain / structural | DOCX semantic / session |
 | --- | --- | --- |
 | Body, image index, notes, comments, object summaries | Yes | Yes |
-| Run formatting, headers/footers, comment threading, object details, optional OCR | No | Yes |
+| Comment threading and saved review status | Yes | Yes |
+| Run formatting, headers/footers, object details, optional OCR | No | Yes |
 | Raw hints | No | Session only, subject to options |
 
 | Feature | PPTX plain / structural | PPTX semantic / session |
@@ -33,6 +34,11 @@ the future, non-public `full` density; no `full` API is introduced here.
 | Rich text and semantic styles | No | No | Yes |
 
 XLSX number-format display processing is available in every density. Resource identifiers and diagnostics are plan-dependent; comparisons across plans must use the source owner and reference, not assume identical resource numbering.
+
+Across formats, plain comments retain text and review status. Structural adds
+known authors, dates, reply links, IDs and supported targets; semantic retains
+additional useful inline semantics or mentioned people. Status is
+active/resolved/closed/unknown; absence of readable source state is not active.
 
 ## Fields
 

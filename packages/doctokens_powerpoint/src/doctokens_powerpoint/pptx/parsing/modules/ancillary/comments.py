@@ -11,8 +11,10 @@ from ....model.presentation import CommentItem, Run
 from ....ooxml.compatibility import read_content_part
 from ....ooxml.namespaces import NS
 from ....ooxml.package import PackageReader
-from ...comment_anchors import MODERN_NS, read_anchors, walk_anchors
+from ....ooxml.run_format import character_format
+from ...comment_anchors import MODERN_NS, read_target
 from ..slides.runs import paragraph_runs
+from ..slides.text import HyperlinkLookup
 
 _CLASSIC_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
 _MODERN_REL = "http://schemas.microsoft.com/office/2018/10/relationships/"
@@ -25,10 +27,22 @@ _FAMILIES = (
 class CommentsParser:
     """Use exact source namespaces and direct bodies; never mix reply bodies."""
 
-    def __init__(self, pkg: PackageReader, relationships: RelationshipIndex, warnings: list[ParseWarning]) -> None:
+    def __init__(
+        self,
+        pkg: PackageReader,
+        relationships: RelationshipIndex,
+        warnings: list[ParseWarning],
+        *,
+        theme: dict[str, str],
+        hyperlinks: HyperlinkLookup,
+        include_formatting: bool,
+    ) -> None:
         self._pkg = pkg
         self._relationships = relationships
         self._warnings = warnings
+        self._theme = theme
+        self._hyperlinks = hyperlinks
+        self._include_formatting = include_formatting
 
     def parse(self) -> list[CommentItem]:
         comments: list[CommentItem] = []
@@ -46,7 +60,7 @@ class CommentsParser:
                             record.source_part,
                         )
                     )
-                    comments.append(self._unparsed(len(comments) + 1, record.source_part, modern))
+                    comments.append(self._unparsed(len(comments) + 1, record.source_part))
                     continue
                 if (record.source_part, part) in seen:
                     continue
@@ -55,13 +69,13 @@ class CommentsParser:
                     root = read_content_part(self._pkg, part, self._warnings)
                 except ET.ParseError as exc:
                     self._warnings.append(ParseWarning("COMMENTS_XML_INVALID", f"Invalid comments XML: {exc}", part))
-                    comments.append(self._unparsed(len(comments) + 1, record.source_part, modern))
+                    comments.append(self._unparsed(len(comments) + 1, record.source_part))
                     continue
                 if root.tag != f"{{{namespace}}}cmLst":
                     self._warnings.append(
                         ParseWarning("COMMENTS_ROOT_UNSUPPORTED", f"Unsupported comments root: {root.tag}", part)
                     )
-                    comments.append(self._unparsed(len(comments) + 1, record.source_part, modern))
+                    comments.append(self._unparsed(len(comments) + 1, record.source_part))
                     continue
                 if not modern:
                     self._warnings.append(
@@ -82,24 +96,16 @@ class CommentsParser:
                                 part,
                             )
                         )
-                        comments.append(self._unparsed(len(comments) + 1, record.source_part, modern))
+                        comments.append(self._unparsed(len(comments) + 1, record.source_part))
                         continue
                     item = self._item(element, authors, part, modern)
                     item["id"] = f"cmt{len(comments) + 1}"
                     if record.source_part.startswith("ppt/slides/"):
                         item["slideId"] = record.source_part
                     if modern:
-                        anchors = read_anchors(element)
-                        if anchors:
-                            item["anchors"] = anchors
-                        slide_id = next(
-                            (
-                                a["attributes"].get("sldId")
-                                for a in walk_anchors(anchors)
-                                if a["kind"] == "sldMk" and a["attributes"].get("sldId")
-                            ),
-                            None,
-                        )
+                        slide_id, target = read_target(element)
+                        if target is not None:
+                            item["target"] = target
                         if slide_id:
                             item["slideId"] = slide_id
                     comments.append(item)
@@ -118,7 +124,7 @@ class CommentsParser:
                                         part,
                                     )
                                 )
-                                child = self._unparsed(len(comments) + 1, record.source_part, True)
+                                child = self._unparsed(len(comments) + 1, record.source_part)
                             child["id"] = f"cmt{len(comments) + 1}"
                             child["parentCommentId"] = item["id"]
                             if "slideId" in item:
@@ -129,36 +135,28 @@ class CommentsParser:
     def _item(self, node: ET.Element, authors: dict[str, str], part: str, modern: bool) -> CommentItem:
         namespace = MODERN_NS if modern else NS["p"]
         body = node.find(f"{{{namespace}}}{'txBody' if modern else 'text'}")
-        runs = _body_runs(body, part, self._warnings) if modern else []
+        runs = _body_runs(body, part, self._warnings, self._theme, self._hyperlinks, self._include_formatting) if modern else []
         value = "".join(run.get("text", "") for run in runs) if modern else "".join(body.itertext()) if body is not None else ""
-        item: CommentItem = {"text": value, "author": authors.get(node.get("authorId", ""), "")}
-        if any("unparsed" in run or "equation" in run for run in runs):
+        item: CommentItem = {"text": value, "author": authors.get(node.get("authorId", ""), ""), "status": "unknown"}
+        if any("unparsed" in run or "equation" in run or "format" in run or "link" in run for run in runs):
             item["runs"] = runs
         if modern:
-            item["modern"] = True
             status = node.get("status", "active")
-            if status in {"active", "resolved", "closed"}:
-                item["status"] = status
+            if status == "active":
+                item["status"] = "active"
+            elif status == "resolved":
+                item["status"] = "resolved"
+            elif status == "closed":
+                item["status"] = "closed"
             else:
                 self._warnings.append(ParseWarning("COMMENT_STATUS_INVALID", f"Invalid comment status: {status}", part))
         if date := node.get("created" if modern else "dt"):
             item["date"] = date
-        position = node.find(f"{{{namespace}}}pos")
-        if position is not None:
-            for key in ("x", "y"):
-                raw = position.get(key)
-                if raw is not None:
-                    try:
-                        item[key] = int(raw)
-                    except ValueError:
-                        self._warnings.append(ParseWarning("COMMENT_POSITION_INVALID", f"Invalid {key}: {raw}", part))
         return item
 
     @staticmethod
-    def _unparsed(index: int, source: str, modern: bool) -> CommentItem:
-        item: CommentItem = {"id": f"cmt{index}", "text": "[Unparsed comments]", "unparsed": True}
-        if modern:
-            item["modern"] = True
+    def _unparsed(index: int, source: str) -> CommentItem:
+        item: CommentItem = {"id": f"cmt{index}", "text": "[Unparsed comments]", "unparsed": True, "status": "unknown"}
         if source.startswith("ppt/slides/"):
             item["slideId"] = source
         return item
@@ -179,7 +177,14 @@ class CommentsParser:
         return authors
 
 
-def _body_runs(body: ET.Element | None, part: str, warnings: list[ParseWarning]) -> list[Run]:
+def _body_runs(
+    body: ET.Element | None,
+    part: str,
+    warnings: list[ParseWarning],
+    theme: dict[str, str],
+    hyperlinks: HyperlinkLookup,
+    include_formatting: bool,
+) -> list[Run]:
     """Preserve empty paragraphs, whitespace and saved field text without list guesses."""
     if body is None:
         return []
@@ -193,7 +198,13 @@ def _body_runs(body: ET.Element | None, part: str, warnings: list[ParseWarning])
             runs.append({"text": "\n"})
         first = False
         if child.tag == a + "p":
-            runs.extend(paragraph_runs(child, part, warnings, {}, {}, {}, include_formatting=False))
+            properties = child.find(a + "pPr/" + a + "defRPr")
+            defaults = (
+                character_format(properties, theme, {}, warnings, part) if include_formatting and properties is not None else {}
+            )
+            runs.extend(
+                paragraph_runs(child, part, warnings, theme, {}, hyperlinks, defaults, include_formatting=include_formatting)
+            )
         else:
             warnings.append(ParseWarning("COMMENT_BODY_CHILD_UNSUPPORTED", f"Unsupported comment body child: {child.tag}", part))
             runs.append({"text": "[Unparsed comment content]", "unparsed": "comment-content"})

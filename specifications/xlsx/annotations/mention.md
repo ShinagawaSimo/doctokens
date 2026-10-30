@@ -2,48 +2,21 @@
 
 [XLSX](../README.md) / Comment mentions
 
-Mention offsets are retained without editing comment text.
+Explicitly mentioned people add reading information independently of the
+comment author. Mention locations are not an editable text-range projection.
 
 ## Fields
 
 ### `person`
 
 - **Output**
-  - Internal display name.
-
+  - Semantic `comment/mention/@person`. Plain/structural omit mention metadata.
 - **OOXML**
-  - mention/@personId → people catalog.
-
+  - mention/@personId resolved through the workbook people catalog.
 - **IR**
-  - `AnnotationMention.person: str`
-
+  - `AnnotationMention.person: str`.
 - **Parsing**
-  - Skip mention if person cannot resolve.
-
-### `start`
-
-- **Output**
-  - Internal offset.
-
-- **OOXML**
-  - mention/@startIndex.
-
-- **IR**
-  - `int`
-
-- **Parsing**
-  - Parse integer; missing/invalid omitted; no bounds validation against comment text.
-
-### `length`
-
-- **Output**
-  - Internal length.
-
-- **OOXML**
-  - mention/@length.
-
-- **IR**
-  - `int`
-
-- **Parsing**
-  - Parse integer; missing/invalid omitted.
+  - Retain distinct nonempty display names in source mention order.
+  - Skip a mention whose person cannot resolve; preserve the comment text.
+  - Raw person IDs, startIndex and length are not retained or emitted. No
+    unvalidated offset is presented as an exact range in the readable comment.

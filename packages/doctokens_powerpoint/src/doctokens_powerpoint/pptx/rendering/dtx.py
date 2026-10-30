@@ -10,7 +10,6 @@ from doctokens_core.runtime.execution import checkpoint
 
 from ..model.presentation import (
     ChartRecord,
-    CommentAnchor,
     CommentItem,
     OcrResultRecord,
     Paragraph,
@@ -35,7 +34,7 @@ def iter_dtx(presentation: ParsedPresentation, density: str) -> Iterator[str]:
     for slide in presentation.slides:
         checkpoint("rendering PPTX slides")
         _append_slide(root, slide, density, smartarts, charts, presentation.ocr_results)
-    _append_comments(root, presentation.comments)
+    _append_comments(root, presentation.comments, density)
     yield serialize(root)
 
 
@@ -249,7 +248,7 @@ def _append_table_cells(parent: ET.Element, shape: ShapeBlock, row_index: int, d
             text(node, cell.get("text", ""))
 
 
-def _append_comments(parent: ET.Element, comments: list[CommentItem]) -> None:
+def _append_comments(parent: ET.Element, comments: list[CommentItem], density: str) -> None:
     if not comments:
         return
     group = append(parent, "comments")
@@ -259,26 +258,17 @@ def _append_comments(parent: ET.Element, comments: list[CommentItem]) -> None:
             "comment",
             None if comment.get("runs") or comment.get("unparsed") else comment["text"],
             id=comment["id"],
-            author=comment.get("author"),
-            date=comment.get("date"),
+            author=comment.get("author") or None,
+            date=comment.get("date") or None,
             parent=comment.get("parentCommentId"),
             slide=comment.get("slideId"),
             shape=comment.get("shapeId"),
-            status=comment.get("status") if comment.get("status") not in {None, "active"} else None,
+            status=comment.get("status", "unknown"),
         )
         if comment.get("unparsed"):
             append(node, "unsupported", type="comments")
         elif comment.get("runs"):
-            append_runs(node, comment["runs"], comment["text"], "structural")
-        for anchor in comment.get("anchors", []):
-            _append_anchor(node, anchor)
-
-
-def _append_anchor(parent: ET.Element, anchor: CommentAnchor, *, root: bool = True) -> None:
-    attributes = {**anchor["attributes"], "kind": anchor["kind"]}
-    node = append(parent, "anchor" if root else "moniker", **attributes)
-    for child in anchor["children"]:
-        _append_anchor(node, child, root=False)
+            append_runs(node, comment["runs"], comment["text"], density)
 
 
 def _append_ocr(parent: ET.Element, asset_id: str | None, values: Mapping[str, OcrResultRecord]) -> None:

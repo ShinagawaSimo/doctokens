@@ -61,4 +61,4 @@ placeholders. This rule describes these readers, not every object decoder.
   - `ParsedPresentation.comments`
 
 - **Parsing**
-  - Both XML densities; plain appends [Comments] with [cmtN: text].
+  - Both XML densities retain text/status and supported metadata. Plain appends [Comments] with [comment status=STATUS] text, without IDs/authors/dates/target metadata.

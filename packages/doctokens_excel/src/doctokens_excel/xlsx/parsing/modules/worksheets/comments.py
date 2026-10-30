@@ -8,12 +8,12 @@ from xml.etree import ElementTree as ET
 from doctokens_core.containers.opc.models import RelationshipRecord
 from doctokens_core.containers.opc.reader import PackageReader
 from doctokens_core.containers.opc.xml import local_name
-from doctokens_core.contracts.annotations import AnnotationMention, valid_parent_links
+from doctokens_core.contracts.annotations import AnnotationMention, ThreadedAnnotation, valid_parent_links
 from doctokens_core.contracts.models import ParseWarning
 
 from ....model.coordinates import parse_ref
-from ....model.workbook import Cell, ThreadedComment
-from .post_common import NS_R, NS_S, _as_bool, _ensure_cell, _safe_int, _warn
+from ....model.workbook import Cell
+from .post_common import NS_R, NS_S, _ensure_cell, _warn
 
 _REL_COMMENTS = f"{NS_R}/comments"
 
@@ -82,7 +82,7 @@ def _apply_legacy_comments(
         author_id_str = comment.get("authorId", "0")
         try:
             author_id = int(author_id_str)
-            cell["commentAuthor"] = authors[author_id] if author_id < len(authors) else ""
+            cell["commentAuthor"] = authors[author_id] if 0 <= author_id < len(authors) else ""
         except (ValueError, IndexError):
             cell["commentAuthor"] = ""
         text_elem = comment.find(f"{{{NS_S}}}text")
@@ -141,7 +141,7 @@ def _apply_threaded_comments(
         _warn(warnings, "THREADED_COMMENTS_XML_INVALID", f"Invalid threaded comments XML: {exc}", part)
         return
 
-    pending: list[tuple[ThreadedComment, str, str | None]] = []
+    pending: list[tuple[ThreadedAnnotation, str, str | None]] = []
     raw_to_display: dict[str, str] = {}
     per_cell_index: dict[str, int] = {}
     for element in root:
@@ -157,15 +157,21 @@ def _apply_threaded_comments(
             continue
         ordinal = per_cell_index.get(ref, 0) + 1
         per_cell_index[ref] = ordinal
-        item: ThreadedComment = {"id": f"thread-{ref}-{ordinal}", "text": _threaded_comment_text(element)}
+        item: ThreadedAnnotation = {"id": f"thread-{ref}-{ordinal}", "text": _threaded_comment_text(element)}
         author = people.get(element.get("personId", ""), "")
         if author:
             item["author"] = author
         date = element.get("dT")
         if date:
             item["date"] = date
-        if _as_bool(element.get("done")):
-            item["resolved"] = True
+        done = element.get("done", "0").lower()
+        item["status"] = "unknown"
+        if done in {"1", "true", "on"}:
+            item["status"] = "resolved"
+        elif done in {"0", "false", "off"}:
+            item["status"] = "active"
+        else:
+            _warn(warnings, "COMMENT_STATUS_INVALID", "Invalid threaded-comment completion state", part)
         mentions = _threaded_mentions(element, people)
         if mentions:
             item["mentions"] = mentions
@@ -174,7 +180,9 @@ def _apply_threaded_comments(
         pending.append((item, raw_id, element.get("parentId")))
         cell.setdefault("threadedComments", []).append(item)
 
-    links, _dangling = valid_parent_links((raw_id, parent_id) for _item, raw_id, parent_id in pending)
+    links, invalid = valid_parent_links((raw_id, parent_id) for _item, raw_id, parent_id in pending)
+    if invalid:
+        _warn(warnings, "COMMENT_PARENT_INVALID", "Comment parents contain invalid links", part)
     for item, raw_id, _parent_id in pending:
         parent_raw_id = links.get(raw_id)
         if parent_raw_id:
@@ -194,12 +202,6 @@ def _threaded_mentions(element: ET.Element, people: Mapping[str, str]) -> list[A
         person = people.get(descendant.get("personId", ""), "")
         if not person:
             continue
-        mention: AnnotationMention = {"person": person}
-        start = _safe_int(descendant.get("startIndex"))
-        length = _safe_int(descendant.get("length"))
-        if start is not None:
-            mention["start"] = start
-        if length is not None:
-            mention["length"] = length
-        mentions.append(mention)
+        if not any(mention.get("person") == person for mention in mentions):
+            mentions.append({"person": person})
     return mentions

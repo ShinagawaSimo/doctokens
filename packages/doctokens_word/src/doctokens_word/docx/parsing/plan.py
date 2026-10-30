@@ -38,6 +38,7 @@ _RENDER_BASE = (
     | DocxFeature.FOOTNOTES
     | DocxFeature.ENDNOTES
     | DocxFeature.COMMENTS
+    | DocxFeature.COMMENT_THREADING
     | DocxFeature.EMBEDDED_SUMMARY
 )
 _FULL = (

@@ -88,26 +88,23 @@ def _cell_text(cell: Cell) -> str:
     control = cell.get("cellControl")
     if control and control.get("kind") == "checkbox":
         value = control.get("state", cell["text"])
-        return f"[Checkbox {value}]"
-    rich_value = cell.get("richValue")
-    if rich_value:
+        value = f"[Checkbox {value}]"
+    elif rich_value := cell.get("richValue"):
         if rich_value.get("imagePart") or rich_value.get("imageUrl"):
-            return str(rich_value.get("alt") or rich_value.get("display") or "[Image]")
-        return str(rich_value.get("display") or rich_value.get("fallback") or cell["text"])
-    value = cell["text"]
+            value = str(rich_value.get("alt") or rich_value.get("display") or "[Image]")
+        else:
+            value = str(rich_value.get("display") or rich_value.get("fallback") or cell["text"])
+    else:
+        value = cell["text"]
     comments: list[str] = []
     if cell.get("comment") is not None:
-        author = cell.get("commentAuthor", "")
-        comments.append(f"[Comment{' by ' + author if author else ''}: {cell['comment']}]")
-    for comment in cell.get("threadedComments", []):
-        qualifiers = [str(comment["author"])] if comment.get("author") else []
-        if comment.get("parentId"):
-            qualifiers.append("reply")
-        if comment.get("resolved"):
-            qualifiers.append("resolved")
-        label = f" ({', '.join(qualifiers)})" if qualifiers else ""
-        comments.append(f"[Comment{label}: {comment.get('text', '')}]")
-    return value + (" " + " ".join(comments) if comments else "")
+        comments.append(f"[comment status=unknown] {cell['comment']}".rstrip())
+    comments.extend(
+        f"[comment status={comment.get('status', 'unknown')}] {comment.get('text', '')}".rstrip()
+        for comment in cell.get("threadedComments", [])
+    )
+    suffix = " ".join(comments)
+    return value + (" " if value and suffix else "") + suffix
 
 
 def _iter_interactive_filters(workbook: ParsedWorkbook) -> Iterator[str]:

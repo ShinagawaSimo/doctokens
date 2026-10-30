@@ -26,6 +26,7 @@ from ..ooxml.package import PackageReader
 from .modules.ancillary.parts import NotesParser
 from .modules.resources.objects import EmbeddedObjectExtractor
 from .modules.slides.scanner import SlideParser
+from .navigation import normalize_link
 from .plan import PptxParsePlan
 
 PRESENTATION_PART = "ppt/presentation.xml"
@@ -71,19 +72,7 @@ def _normalize_slide_navigation(
     target_by_part = {reference.part: f"#slide{index}" for index, reference in enumerate(slide_references, start=1)}
 
     def normalize(target: str) -> str:
-        if target in target_by_part:
-            return target_by_part[target]
-        marker = "ppaction://hlinkshowjump?jump="
-        if not target.startswith(marker):
-            return target
-        jump = target.removeprefix(marker).lower()
-        target_index = {
-            "nextslide": min(slide_number + 1, len(slide_references)),
-            "previousslide": max(slide_number - 1, 1),
-            "firstslide": 1,
-            "lastslide": len(slide_references),
-        }.get(jump)
-        return f"#slide{target_index}" if target_index else target
+        return normalize_link(target, target_by_part, slide_number, len(slide_references))
 
     for shape in slide["shapes"]:
         link = shape.get("link")
@@ -211,13 +200,13 @@ class _SlideSequence:
                     ParseWarning(code="SLIDE_XML_INVALID", message=f"Invalid slide XML: {exc}", locator=ref.part)
                 )
                 continue
-            comment_anchors = [
-                anchor
+            comment_targets = [
+                item["target"]
                 for item in self._parse_context.comments
                 if item.get("slideId") in {ref.part, ref.slide_id, ref.relationship_id, f"slide{slide_number + 1}"}
-                for anchor in item.get("anchors", [])
+                if "target" in item
             ]
-            hidden, shapes, background = self._parser.parse_slide(slide_root, ref.part, comment_anchors=comment_anchors)
+            hidden, shapes, background = self._parser.parse_slide(slide_root, ref.part, comment_targets=comment_targets)
             slide_number += 1
             note_sources: list[str] = []
             slide = SlideBlock(

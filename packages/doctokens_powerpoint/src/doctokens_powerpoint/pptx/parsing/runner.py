@@ -54,10 +54,7 @@ class PptxParser:
             charts = parse_context.objects.loaded_charts
             smartarts = parse_context.objects.loaded_smartarts
             if parse_context.comments:
-                _CommentAttachmentPlan(parse_context.comments, slide_sequence.refs).attach_all(
-                    slides,
-                    parse_context.slide_size,
-                )
+                _CommentAttachmentPlan(parse_context.comments, slide_sequence.refs).attach_all(slides)
             ocr_results = (
                 self._run_ocr(package_reader, parse_context.assets, slides, options)
                 if resolved_plan.needs(PptxFeature.OCR)
@@ -139,7 +136,16 @@ class PptxParser:
             ),
             notes=(NotesParser(package_reader, relationships, warnings) if plan.needs(PptxFeature.NOTES) else None),
             comments=(
-                CommentsParser(package_reader, relationships, warnings).parse() if plan.needs(PptxFeature.COMMENTS) else []
+                CommentsParser(
+                    package_reader,
+                    relationships,
+                    warnings,
+                    theme=theme,
+                    hyperlinks=hyperlinks,
+                    include_formatting=plan.needs(PptxFeature.TEXT_FORMATTING),
+                ).parse()
+                if plan.needs(PptxFeature.COMMENTS)
+                else []
             ),
             presentation_root=presentation_root,
             slide_size=self._parse_slide_size(presentation_root, warnings),

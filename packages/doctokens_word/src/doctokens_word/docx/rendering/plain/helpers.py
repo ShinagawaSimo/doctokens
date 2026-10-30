@@ -25,7 +25,6 @@ def block_text_only(
     block: Block,
     footnote_map: dict[str, str],
     endnote_order: list[str],
-    comment_order: list[str],
     ocr_results: dict[str, OcrResultRecord] | None = None,
 ) -> str:
     """Render a parsed block as plain text."""
@@ -57,10 +56,6 @@ def block_text_only(
     for endnote_id in collect_refs(block, "endnoteRef"):
         if endnote_id not in endnote_order:
             endnote_order.append(endnote_id)
-
-    for comment_id in collect_refs(block, "commentRef"):
-        if comment_id not in comment_order:
-            comment_order.append(comment_id)
 
     return text
 
@@ -138,7 +133,7 @@ def plain_object_placeholder(
     if object_type == "endnoteRef":
         return f"[ed{inline_object.get('id') or ''}]"
     if object_type == "commentRef":
-        return f"[cmt{inline_object.get('id') or ''}]"
+        return ""
     if object_type == "equation":
         return _string_field(inline_object.get("text", ""))
     if object_type == "textbox":

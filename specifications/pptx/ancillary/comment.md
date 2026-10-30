@@ -2,200 +2,131 @@
 
 [PPTX](../README.md) / Comments
 
-Comments follow slides in both XML densities. Plain appends a Comments section.
-Per-slide references identify comments whose saved ownership can be resolved.
+Classic PresentationML and modern PowerPoint comments use their own namespaces,
+relationships and author catalogs. Root comments and saved replies are read
+separately. All densities retain text and review state. Plain emits
+`[comment status=STATUS] TEXT` without IDs or collaboration/target metadata;
+both XML densities retain useful identities, ownership and reply relationships.
 
 ## Processing
 
-The [comment parser](../../../packages/doctokens_powerpoint/src/doctokens_powerpoint/pptx/parsing/modules/ancillary/comments.py)
-supports two distinct package structures:
+Classic comments use PresentationML/main cmLst/cm/text and the standard
+comments/commentAuthors relationships. Modern comments use
+`http://schemas.microsoft.com/office/powerpoint/2018/8/main` cmLst/cm/txBody and
+replyLst/reply, with `http://schemas.microsoft.com/office/2018/10/relationships/`
+comments and authors relationships.
 
-- Classic PresentationML:
-  - Namespace: `http://schemas.openxmlformats.org/presentationml/2006/main`.
-  - Comments relationship:
-    `http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments`.
-  - Authors relationship: the same base URI plus `commentAuthors`.
-  - Read direct p:cmLst/p:cm and p:cmAuthorLst/p:cmAuthor.
-- Modern PowerPoint:
-  - Namespace: `http://schemas.microsoft.com/office/powerpoint/2018/8/main`
-    (p188 below; the actual source prefix is arbitrary).
-  - Comments relationship:
-    `http://schemas.microsoft.com/office/2018/10/relationships/comments`.
-  - Authors relationship: the same base URI plus `authors`.
-  - Read direct p188:cmLst/p188:cm and p188:authorLst/p188:author.
-  - Read direct replyLst/reply under each comment, in saved order, after its parent.
-
-Classic author IDs and modern author IDs belong to separate maps. Unsupported
-root namespaces are not accepted by local-name coincidence. The
-[Open XML SDK comment schema](https://github.com/dotnet/Open-XML-SDK/blob/main/data/schemas/schemas_microsoft_com_office_powerpoint_2018_8_main.json)
-defines the modern source structure.
+Unsupported namespaces are not accepted by local-name coincidence. Read direct
+comment bodies only; replies never become part of the parent's text.
 
 ## Fields
 
 ### `id`
 
 - **Output**
-  - comment/@id and comment-ref/@id.
+  - `comment/@id` and per-slide `comment-ref/@id` in both XML densities.
 - **IR**
-  - `CommentItem.id: str`.
+  - `CommentItem.id`.
 - **Parsing**
-  - Allocate cmt1, cmt2, ... across classic parts, modern parts and replies.
-    A reply's generated parent ID points to the enclosing root comment.
-    A placeholder for an unreadable comments part also receives one navigation ID.
+  - Allocate cmt1, cmt2, ... across retained classic/modern parts and replies.
+  - An unreadable part retains one navigable placeholder.
 
 ### `text`
 
 - **Output**
-  - Comment character data; plain uses `[cmtN: text]`.
+  - Comment character data; semantic adds supported inline reading marks.
 - **OOXML**
-  - Classic p:cm/p:text; modern p188:cm/p188:txBody and reply/p188:txBody.
+  - Classic p:text; modern direct txBody DrawingML paragraphs and runs.
 - **IR**
-  - `CommentItem.text: str`; optional runs for equations/unreadable regions.
+  - `CommentItem.text` and optional `runs`.
 - **Parsing**
-  - Classic text preserves all character data in the direct p:text child.
-  - Modern text reads direct DrawingML paragraphs, saved a:r/a:t and a:fld/a:t,
-    soft breaks and tabs. Separate paragraphs with LF, preserving empty
-    paragraphs, leading/trailing spaces and XML-decoded characters.
-  - Read only the current comment's direct body. Reply bodies never become
-    part of the parent's text. Formatting properties do not enter the text.
-    Native equations use the existing inline equation reader.
-  - A missing optional txBody or an explicitly empty body is empty content,
-    not a decoding failure. Empty comments retain identity and ownership.
+  - Preserve spaces, empty paragraphs, saved field text, LF and tabs.
+  - Modern semantic/session reads retain direct/inherited paragraph run
+    emphasis, theme-resolvable colors, hyperlinks and equations. Structural
+    projects the same readable content without character emphasis.
+  - Missing optional or explicitly empty bodies remain valid empty comments.
 
 ### `author`
 
 - **Output**
-  - comment/@author.
+  - Nonempty `comment/@author` in structural/semantic; omitted from plain.
 - **OOXML**
-  - Classic cm/@authorId to cmAuthor/@id and @name.
-  - Modern cm or reply/@authorId to author/@id and @name.
-- **IR**
-  - `CommentItem.author: str`.
+  - authorId resolved through the corresponding family author catalog.
 - **Parsing**
-  - Resolve through the corresponding format-family author map.
-    Missing/unreadable authors leave an empty author; readable comment text
-    remains available without an unreadable-element placeholder.
+  - Keep the display name; omit unresolved/empty authors without inventing one.
 
 ### `date`
 
 - **Output**
-  - comment/@date.
+  - Nonempty `comment/@date` in structural/semantic; omitted from plain.
 - **OOXML**
-  - Classic cm/@dt; modern cm or reply/@created.
-- **IR**
-  - `CommentItem.date: str`.
+  - Classic dt or modern created.
 - **Parsing**
-  - Copy a nonempty saved timestamp; do not infer missing dates.
+  - Preserve the saved timestamp without conversion.
 
-### `parentCommentId`
+### `parent`
 
 - **Output**
-  - Reply comment/@parent.
+  - Reply `comment/@parent` in both XML densities.
 - **OOXML**
   - Modern root cm/replyLst/reply containment.
-- **IR**
-  - `CommentItem.parentCommentId: str`.
 - **Parsing**
-  - Use the enclosing root comment's generated ID. Replies inherit its slide
-    association and resolved shape association. The source anchor is emitted
-    once on the parent, without repeating it on each reply.
+  - Use the enclosing comment's generated ID. A reply inherits the declared
+    slide association and, without its own target, the resolved parent shape.
 
 ### `status`
 
 - **Output**
-  - comment/@status for resolved or closed; omit active.
+  - `comment/@status="active|resolved|closed|unknown"`; plain uses the same state.
 - **OOXML**
-  - Modern cm or reply/@status.
+  - Modern comment/reply status.
 - **IR**
-  - `CommentItem.status: str`.
+  - `CommentItem.status: AnnotationStatus`.
 - **Parsing**
-  - Retain active, resolved or closed; missing status uses active.
-    Invalid values emit COMMENT_STATUS_INVALID and do not hide the comment.
-    No state is guessed from task progress or the text of a reply.
+  - Modern missing status uses the format's active default. Preserve resolved
+    and closed independently. Invalid values emit COMMENT_STATUS_INVALID and
+    remain unknown. Classic comments and unreadable placeholders are unknown.
+  - Do not infer completion from the message or the existence of replies.
 
-### `slideId`
+### `slide`
 
 - **Output**
-  - comment/@slide; comment-ref inside the associated slide.
+  - `comment/@slide="slideN"` and references under the associated slide.
 - **OOXML**
-  - Owning slide relationship; modern source pc:sldMk/@sldId when saved.
-- **IR**
-  - `CommentItem.slideId: str`.
+  - Owning slide relationship or explicit command sldMk/@sldId.
 - **Parsing**
-  - Resolve source slide IDs/parts against the validated presentation slide
-    list and rewrite to slideN. Explicit modern moniker slide IDs take priority.
-    Modern comments without a valid slide locator are not assigned to the
-    only available slide by inference. Existing classic lone-slide attachment
-    remains separate. Window reads include comments of the selected slides.
+  - Resolve through validated slide references. An unresolved locator remains
+    unresolved; the existence of only one slide does not assign ownership.
 
-### `anchors`
+### `shape`
 
 - **Output**
-  - Parent comment/anchor with @kind; nested moniker elements retain their
-    source local kind, attributes and hierarchy.
-  - Example:
-    `<anchor kind="deMkLst"><moniker kind="sldMkLst"><moniker kind="sldMk" sldId="256"/></moniker><moniker id="2" kind="spMk"/></anchor>`.
+  - `comment/@shape` and `comment-ref/@shape` when exact resolution succeeds.
 - **OOXML**
-  - `pc = http://schemas.microsoft.com/office/powerpoint/2013/main/command`:
-    sldMkLst, sldLayoutMkLst, sldMasterMkLst.
-  - `oac = http://schemas.microsoft.com/office/drawing/2013/main/command`:
-    deMkLst, txBodyMkLst, txMkLst, tcMkLst, trMkLst, gridColMkLst.
-  - p188:unknownAnchor.
+  - The final supported drawing moniker id and/or creationId, matched against
+    cNvPr and DrawingML creation identity on the resolved slide.
 - **IR**
-  - `CommentItem.anchors: list[CommentAnchor]`.
+  - Internal `CommentTarget` retains only identities needed for matching.
 - **Parsing**
-  - Preserve each direct supported anchor tree, including shape/group
-    monikers, text ranges and table indices. Source IDs are not rewritten.
-    A saved unknownAnchor stays explicit. A source range is not interpreted as
-    a guessed visible-text offset.
-  - Raw source anchors remain available even when their target is absent,
-    points to a template/group or cannot resolve to a retained shape.
-
-### `shapeId`
-
-- **Output**
-  - comment/@shape and comment-ref/@shape when exact resolution succeeds.
-- **OOXML**
-  - Final oac shape/picture/connector/graphic-frame moniker @id and/or @creationId.
-  - Source shape cNvPr/@id and DrawingML 2014 creationId/@id.
-- **IR**
-  - `CommentItem.shapeId: str`; source identities on ShapeBlock.
-- **Parsing**
-  - Require all saved identity components to agree with exactly one shape on
-    the resolved slide. Ancestor group IDs do not identify a child by
-    themselves. Retain an otherwise decorative shape when an exact modern
-    comment targets it, then resolve its final compact shape-id.
-  - Modern positions never replace source anchors with a nearest-shape guess.
-    Classic position-based inference remains available only when internal
-    geometry fields exist; default public plans do not populate them.
-
-### `x` and `y`
-
-- **Output**
-  - Internal saved position only.
-- **OOXML**
-  - Direct classic p:pos or modern p188:pos/@x, @y.
-- **IR**
-  - Optional integer fields on CommentItem.
-- **Parsing**
-  - Parse valid integers; invalid values emit COMMENT_POSITION_INVALID.
-    Modern positions are not used for shape attachment.
+  - Require all declared components to match one retained shape. Group
+    ancestors alone do not identify a child. Template/master targets are not
+    matched against ordinary slide shapes by coincident IDs.
+  - Retain a shape explicitly targeted by a modern comment before decoration
+    filtering, then refer to its final compact shape-id.
+  - Do not parse comment x/y positions or infer a nearest shape.
+  - Raw anchor/moniker trees, source GUIDs, source namespaces and unconverted
+    text/table offsets are not retained as public comment fields. The reader
+    does not claim to reconstruct exact character ranges.
 
 ### `unparsed`
 
 - **Output**
-  - An unreadable part produces a navigable comment containing
-    `<unsupported type="comments"/>`; plain uses `[Unparsed comments]`.
-  - Unsupported content inside a readable body retains an inline unsupported
-    marker at that location while preserving surrounding text.
+  - A known unreadable part/body retains unsupported markers in XML and readable
+    Unparsed labels in plain, with status unknown.
 - **Diagnostics**
   - COMMENTS_PART_MISSING, COMMENTS_XML_INVALID, COMMENTS_ROOT_UNSUPPORTED,
-    COMMENT_BODY_CHILD_UNSUPPORTED; classic parts also report
-    LEGACY_COMMENTS_PARSED for their missing modern thread metadata.
+    COMMENT_BODY_CHILD_UNSUPPORTED and COMMENT_ELEMENT_UNSUPPORTED.
 - **Parsing**
-  - A known comments relationship whose part cannot be read establishes the
-    existence of comment content, without establishing its count or text.
-    Emit one part placeholder rather than silently losing that relationship.
-    Generated placeholder text is not searchable source text.
-    Unknown elements in comment/reply lists emit COMMENT_ELEMENT_UNSUPPORTED
-    with a placeholder; extension-list metadata does not create one.
+  - A readable saved fallback represents the content once. Generated labels
+    are not searched as source text. Format/author/default fallback alone is
+    not an unreadable-element placeholder.

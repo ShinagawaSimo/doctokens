@@ -120,17 +120,22 @@ def _append_grid(
     if comments:
         group = append(grid, "comments")
         for comment_id, cell, comment in comments:
-            append(
+            node = append(
                 group,
                 "comment",
                 str(comment.get("text", "")),
                 id=comment_id,
                 cell=cell["ref"],
-                author=comment.get("author"),
-                date=comment.get("date"),
+                author=comment.get("author") or None,
+                date=comment.get("date") or None,
                 parent=comment.get("parentId"),
-                resolved=True if comment.get("resolved") else None,
+                status=comment.get("status", "unknown"),
             )
+            mentions = comment.get("mentions")
+            if density == "semantic" and isinstance(mentions, list):
+                for mention in mentions:
+                    if isinstance(mention, dict) and mention.get("person"):
+                        append(node, "mention", person=mention["person"])
 
 
 def _comment_records(rows: list[list[Cell]]) -> list[tuple[str, Cell, dict[str, object]]]:
@@ -143,7 +148,7 @@ def _comment_records(rows: list[list[Cell]]) -> list[tuple[str, Cell, dict[str, 
                     (
                         f"comment{legacy_index}",
                         cell,
-                        {"text": cell["comment"], "author": cell.get("commentAuthor", "")},
+                        {"text": cell["comment"], "author": cell.get("commentAuthor", ""), "status": "unknown"},
                     )
                 )
                 legacy_index += 1

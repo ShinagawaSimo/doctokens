@@ -144,31 +144,17 @@ class BodyStructureTests(unittest.TestCase):
         self.assertEqual([item.get("number") for item in rendered.findall(".//table//page")], ["2", "3"])
         self.assertEqual([item.text for item in rendered.findall(".//body/p")], ["D"])
 
-    def test_navigation_citation_and_threaded_comment_metadata(self) -> None:
-        """Only LLM-relevant review/thread/navigation semantics survive the OOXML wrappers."""
-        comments = f"""<w:comments xmlns:w="{NS_W}" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">
-          <w:comment w:id="0" w:author="Alice"><w:p w14:paraId="AA"><w:r><w:t>Root</w:t></w:r></w:p></w:comment>
-          <w:comment w:id="1" w:author="Bob"><w:p w14:paraId="BB"><w:r><w:t>Reply</w:t></w:r></w:p></w:comment>
-        </w:comments>"""
-        comments_extended = """<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">
-          <w15:commentEx w15:paraId="AA"/>
-          <w15:commentEx w15:paraId="BB" w15:paraIdParent="AA" w15:done="1"/>
-        </w15:commentsEx>"""
+    def test_navigation_citation(self) -> None:
+        """Preserve the independent citation/navigation coverage of this case."""
         data = _make_docx(
-            '<w:p><w:commentRangeStart w:id="0"/><w:r><w:t>Marked</w:t><w:commentReference w:id="0"/></w:r></w:p>'
             '<w:p><w:hyperlink w:anchor="target"><w:r><w:t>Jump</w:t></w:r></w:hyperlink></w:p>'
             '<w:p><w:bookmarkStart w:id="9" w:name="target"/>'
-            '<w:fldSimple w:instr="CITATION Smith2024"><w:r><w:t>(Smith, 2024)</w:t></w:r></w:fldSimple></w:p>',
-            extra_entries={"word/comments.xml": comments, "word/commentsExtended.xml": comments_extended},
+            '<w:fldSimple w:instr="CITATION Smith2024"><w:r><w:t>(Smith, 2024)</w:t></w:r></w:fldSimple></w:p>'
         )
-        rendered = parse_docx(data, density=Density.SEMANTIC).text
-        root = ET.fromstring(rendered)
+        root = ET.fromstring(parse_docx(data, density=Density.SEMANTIC).text)
         citation = root.find(".//p[@anchor='target']/cite")
         assert citation is not None
         self.assertEqual((citation.get("key"), citation.text), ("Smith2024", "(Smith, 2024)"))
-        reply = root.find(".//comments/comment[@id='1']")
-        assert reply is not None
-        self.assertEqual((reply.get("parent"), reply.get("resolved")), ("0", "true"))
 
 
 def _body_text_for_page(output: str) -> list[str]:

@@ -2,108 +2,99 @@
 
 [XLSX](../README.md) / Threaded comments
 
-Modern comments retain their source conversation order within each cell.
+Modern conversations retain source order within their cell. All densities keep
+text and review status. Plain appends `[comment status=STATUS] TEXT` without
+authors, dates, IDs, parents or target attributes. Structural/semantic retain
+those useful fields; semantic additionally identifies explicitly mentioned people.
 
 ## Processing
 
-Read only first threadedComment relationship for the sheet. Missing part → THREADED_COMMENTS_PART_MISSING; invalid XML → THREADED_COMMENTS_XML_INVALID. Invalid ref is skipped; absent target cells follow the same creation rule as legacy notes.
+Read the first supported threadedComment relationship for each sheet. Missing
+parts emit THREADED_COMMENTS_PART_MISSING; invalid XML emits
+THREADED_COMMENTS_XML_INVALID. Skip invalid cell references. Full-sheet reads
+can create an annotated empty cell; selected parse windows only annotate
+selected existing cells. Checkbox and rich-value cells retain their comments.
 
 ## Fields
 
 ### `id`
 
 - **Output**
-  - comment/@id; comment-ref/@id.
-
+  - `comment/@id` and `comment-ref/@id` in both XML densities.
 - **OOXML**
-  - threadedComment/@ref and per-cell ordinal.
-
+  - Source ref and per-cell ordinal; raw source IDs are temporary link keys.
 - **IR**
-  - `ThreadedComment.id: str`
-
+  - `ThreadedAnnotation.id`.
 - **Parsing**
-  - thread-{ref}-{ordinal}, starting1. Source @id maps to this generated ID.
+  - Use thread-{ref}-{ordinal}, starting at 1, within the owning sheet.
 
 ### `text`
 
 - **Output**
-  - comment character data.
-
+  - Comment character data; plain text follows the status marker.
 - **OOXML**
-  - Direct local-name text child.
-
-- **IR**
-  - `str`
-
+  - Direct text child.
 - **Parsing**
-  - Join itertext; missing → empty.
+  - Join saved character data; missing text is empty content.
 
 ### `author`
 
 - **Output**
-  - comment/@author.
-
+  - Nonempty `comment/@author` in structural/semantic.
 - **OOXML**
-  - @personId → xl/persons/person.xml person/@id,@displayName.
-
-- **IR**
-  - `str`
-
+  - personId resolved through xl/persons/person.xml.
 - **Parsing**
-  - Retain nonempty resolved display name. Missing people catalog → no author. Invalid people XML → COMMENT_PEOPLE_XML_INVALID.
+  - Keep the human-readable display name; omit an unresolved name.
+  - Invalid people XML emits COMMENT_PEOPLE_XML_INVALID.
 
 ### `date`
 
 - **Output**
-  - comment/@date.
-
+  - Nonempty `comment/@date` in structural/semantic.
 - **OOXML**
-  - threadedComment/@dT.
-
-- **IR**
-  - `str`
-
+  - Threaded comment dT.
 - **Parsing**
-  - Copy nonempty string.
+  - Preserve the saved timestamp without conversion or reconstruction.
 
-### `parentId`
+### `parent`
 
 - **Output**
-  - comment/@parent.
-
+  - `comment/@parent` in both XML densities.
 - **OOXML**
-  - threadedComment/@parentId.
-
-- **IR**
-  - `str`
-
+  - Source parentId matched to a known source ID, then rewritten to the generated ID.
 - **Parsing**
-  - Validate source-ID links, then map to generated IDs. Dangling/self/cyclic links are excluded by valid_parent_links without a parser warning.
+  - Exclude missing/self/cyclic links and emit COMMENT_PARENT_INVALID for invalid
+    targets or cycles. Preserve independently readable messages.
 
-### `resolved`
+### `status`
 
 - **Output**
-  - comment/@resolved=true.
-
-- **OOXML**
-  - threadedComment/@done.
-
+  - `comment/@status="active|resolved|closed|unknown"`; plain uses the same vocabulary.
 - **IR**
-  - `bool`
-
+  - `ThreadedAnnotation.status: AnnotationStatus`.
+- **OOXML**
+  - done, default false for a readable modern comment.
 - **Parsing**
-  - Present lower-case value outside 0/false/off/none → true; store true only.
+  - 1/true/on → resolved; 0/false/off → active, case-insensitively.
+  - Invalid values emit COMMENT_STATUS_INVALID and remain unknown.
+  - The supported Excel completion field does not produce closed. Legacy notes
+    have unknown status, rather than an invented active/resolved state.
+
+### `cell`
+
+- **Output**
+  - `comment/@cell` and positional cell/comment-ref.
+- **Parsing**
+  - Use the original cell reference in the enclosing sheet. Do not infer a
+    target from neighboring values or from comment text.
 
 ### `mentions`
 
 - **Output**
-  - Internal mention ranges.
-
-- **OOXML**
-  - Descendant mention.
-
+  - Semantic direct `comment/mention/@person` children.
 - **IR**
-  - `list[AnnotationMention]`
-
+  - `ThreadedAnnotation.mentions`; only readable person names are retained.
 - **Parsing**
-  - Retain recognized people; see [mentions](mention.md). No DTX mention elements.
+  - Resolve explicit source people and emit each distinct display name once.
+    Do not extract raw mention offsets, lengths or source person IDs into the
+    reading model. See [mentions](mention.md).

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Literal, TypedDict
 
 from doctokens_core.containers.opc.options import PackageOptions
+from doctokens_core.contracts.annotations import AnnotationStatus
 from doctokens_core.contracts.models import MetricsSnapshot, ParseReport, ParseWarning
 from doctokens_core.ooxml.charts.models import ChartPlotInfo, ChartSeriesInfo
 
@@ -277,13 +278,11 @@ class PresentationSection(TypedDict):
     slideIds: list[str]
 
 
-class CommentAnchor(TypedDict):
-    """A saved source anchor tree, separate from any resolved public shape."""
+class CommentTarget(TypedDict, total=False):
+    """Saved identities needed for exact target resolution, not output fields."""
 
-    kind: str
-    namespace: str
-    attributes: dict[str, str]
-    children: list[CommentAnchor]
+    drawingId: str
+    creationId: str
 
 
 class CommentItem(TypedDict, total=False):
@@ -296,11 +295,8 @@ class CommentItem(TypedDict, total=False):
     parentCommentId: str
     slideId: str
     shapeId: str
-    x: int
-    y: int
-    status: str
-    anchors: list[CommentAnchor]
-    modern: bool
+    status: AnnotationStatus
+    target: CommentTarget
     runs: list[Run]
     unparsed: bool
 

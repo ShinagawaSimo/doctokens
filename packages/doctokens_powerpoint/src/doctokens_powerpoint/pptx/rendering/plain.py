@@ -26,7 +26,9 @@ def iter_plain(parsed_presentation: ParsedPresentation) -> Iterator[str]:
         yield _slide_body(slide, smartarts)
     if parsed_presentation.comments:
         yield "\n\n[Comments]\n"
-        yield "\n".join(f"[{item['id']}: {item['text']}]" for item in parsed_presentation.comments)
+        yield "\n".join(
+            f"[comment status={item.get('status', 'unknown')}] {item['text']}".rstrip() for item in parsed_presentation.comments
+        )
 
 
 def _slide_body(slide: SlideBlock, smartarts: dict[str, SmartArtRecord]) -> str:

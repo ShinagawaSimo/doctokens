@@ -29,13 +29,12 @@ def iter_plain(parsed_document: ParsedDocument, *, first_page: int | None = None
             endnote_map[endnote["id"]] = endnote_text
 
     endnote_order: list[str] = []
-    comment_order: list[str] = []
     comment_map: dict[str, str] = {}
     for comment in parsed_document.comments:
         comment_text = inline_text_only(comment, ocr_results)
         comment_id = comment.get("id")
-        if comment_text and comment_id is not None:
-            comment_map[comment_id] = comment_text
+        if comment_id is not None:
+            comment_map[comment_id] = f"[comment status={comment.get('status', 'unknown')}] {comment_text}".rstrip()
 
     page_segments = list(iter_flow_page_blocks(parsed_document))
     initial_page = first_page or (page_segments[0][0] if page_segments else 1)
@@ -51,7 +50,7 @@ def iter_plain(parsed_document: ParsedDocument, *, first_page: int | None = None
         if emit_sections and section != current_section:
             current_section = section
             parts.append(f"[Section {section}]")
-        block_text = block_text_only(block, footnote_map, endnote_order, comment_order, ocr_results)
+        block_text = block_text_only(block, footnote_map, endnote_order, ocr_results)
         if block_text:
             parts.append(block_text)
         if block["type"] != "table" and floating_textboxes(block):
@@ -76,12 +75,7 @@ def iter_plain(parsed_document: ParsedDocument, *, first_page: int | None = None
             if endnote_text:
                 yield f"\n[ed{endnote_id}: {endnote_text}]"
 
-    comment_ids = list(comment_order)
-    seen_comment_ids = set(comment_ids)
-    comment_ids.extend(c for c in comment_map if c not in seen_comment_ids)
-    if comment_ids:
+    if comment_map:
         yield "\n\n[Comments]"
-        for comment_id in comment_ids:
-            comment_text = comment_map.get(comment_id, "")
-            if comment_text:
-                yield f"\n[cmt{comment_id}: {comment_text}]"
+        for comment_text in comment_map.values():
+            yield f"\n{comment_text}"

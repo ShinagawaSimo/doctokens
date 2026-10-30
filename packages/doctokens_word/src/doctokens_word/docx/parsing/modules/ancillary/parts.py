@@ -7,6 +7,7 @@ from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.relationships import RelationshipIndex
 from doctokens_core.containers.opc.xml import local_attr
+from doctokens_core.contracts.annotations import valid_parent_links
 
 from ....model import (
     AncillaryContent,
@@ -136,11 +137,13 @@ class AncillaryParser:
                 rows,
                 author=attr(comment, "w", "author") or "",
                 date=attr(comment, "w", "date") or "",
+                keep_empty=True,
             )
             if row is not None:
+                row["status"] = "unknown"
                 anchor = self._comment_anchors.get(comment_id)
                 if anchor:
-                    row["anchor"] = anchor
+                    row["targetBlock"] = anchor
                 paragraph_id = self._last_paragraph_id(comment)
                 if paragraph_id:
                     comment_by_paragraph_id[paragraph_id] = comment_id
@@ -159,9 +162,10 @@ class AncillaryParser:
         *,
         author: str = "",
         date: str = "",
+        keep_empty: bool = False,
     ) -> AncillaryItem | None:
         """Build and append an AncillaryItem if the content is non-empty."""
-        if not (content["text"].strip() or has_objects(content["runs"])):
+        if not keep_empty and not (content["text"].strip() or has_objects(content["runs"])):
             return None
         row: AncillaryItem = {
             "id": item_id,
@@ -226,8 +230,22 @@ class AncillaryParser:
                         part=part_name,
                         block_id=comment_id,
                     )
-            if _word_bool(local_attr(element, "done")):
-                item["resolved"] = True
+            saved_done = local_attr(element, "done")
+            done = "0" if saved_done is None else saved_done.lower()
+            if done in {"1", "true", "on"}:
+                item["status"] = "resolved"
+            elif done in {"0", "false", "off"}:
+                item["status"] = "active"
+            else:
+                append_warning(self.warnings, "COMMENT_STATUS_INVALID", "Invalid comment completion state.", part=part_name)
+        links, invalid = valid_parent_links((str(item["id"]), item.get("parentId")) for item in rows)
+        for item in rows:
+            parent_id = links.get(str(item["id"]))
+            item.pop("parentId", None)
+            if parent_id is not None:
+                item["parentId"] = parent_id
+        if invalid:
+            append_warning(self.warnings, "COMMENT_PARENT_INVALID", "Comment parents contain invalid links.", part=part_name)
 
     def _parse_xml_part(self, part_name: str) -> ET.Element | None:
         """Read an XML part; log a warning and return None on failure."""
@@ -247,8 +265,3 @@ class AncillaryParser:
         """Generate a lightweight locator id for ancillary inline warnings."""
         self._block_index += 1
         return f"{part}#{self._block_index}"
-
-
-def _word_bool(value: str | None) -> bool:
-    """Interpret the OOXML on/off lexical values used by comment completion state."""
-    return value is not None and value.lower() not in {"0", "false", "off", "none"}

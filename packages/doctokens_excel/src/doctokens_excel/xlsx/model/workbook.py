@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TypedDict
 
 from doctokens_core.containers.opc.options import PackageOptions
-from doctokens_core.contracts.annotations import AnnotationMention, ThreadedAnnotation
+from doctokens_core.contracts.annotations import ThreadedAnnotation
 from doctokens_core.contracts.models import ParseReport
 
 from . import drawing, rules
@@ -33,12 +33,6 @@ class RichTextRun(TypedDict, total=False):
     strike: bool
     superscript: bool
     subscript: bool
-
-
-class ThreadedComment(ThreadedAnnotation, total=False):
-    """A modern cell comment, with its conversation linkage resolved locally."""
-
-    mentions: list[AnnotationMention]
 
 
 class Cell(TypedDict, total=False):
@@ -69,7 +63,7 @@ class Cell(TypedDict, total=False):
     hyperlink: str  # resolved URL or internal ref from <hyperlink> + rels
     comment: str  # comment text from legacy or threaded comment
     commentAuthor: str  # author name for the comment
-    threadedComments: list[ThreadedComment]  # modern comments and replies on this cell
+    threadedComments: list[ThreadedAnnotation]  # modern comments and replies on this cell
     style: int  # index into cellXfs for style lookup
     rich: list[RichTextRun]  # formatted text runs [{text, bold, italic, color}]
     richValue: RichCellValue  # modern entity/image value resolved from richData

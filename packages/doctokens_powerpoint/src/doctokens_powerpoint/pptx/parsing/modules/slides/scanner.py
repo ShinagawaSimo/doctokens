@@ -9,7 +9,7 @@ from doctokens_core.contracts.models import ParseWarning
 from ....model.presentation import (
     AssetLookup,
     ChartLookup,
-    CommentAnchor,
+    CommentTarget,
     LayoutContext,
     LayoutLookup,
     ParagraphStyle,
@@ -104,7 +104,7 @@ class SlideParser:
         root: ET.Element,
         part: str,
         *,
-        comment_anchors: list[CommentAnchor] | None = None,
+        comment_targets: list[CommentTarget] | None = None,
     ) -> tuple[bool, list[ShapeBlock], SlideBackground | None]:
         """Return hidden state, shapes, and the explicit slide background."""
         if local_name(root.tag) != "sld":
@@ -118,14 +118,14 @@ class SlideParser:
         hidden = root.get("show") == "0"
         context = self._resolver.resolve(part, root) if self._resolver is not None else _minimal_layout_context()
         background = self._geometry._background(root, part, context) if self.include_geometry else None
-        return hidden, self._shapes(root, part, context, comment_anchors or []), background
+        return hidden, self._shapes(root, part, context, comment_targets or []), background
 
     def _shapes(
         self,
         root: ET.Element,
         part: str,
         context: LayoutContext,
-        comment_anchors: list[CommentAnchor],
+        comment_targets: list[CommentTarget],
     ) -> list[ShapeBlock]:
         c_sld = first_child(root, "p", "cSld")
         sp_tree = first_child(c_sld, "p", "spTree") if c_sld is not None else None
@@ -202,7 +202,7 @@ class SlideParser:
             creation = next(iter(node.iter("{http://schemas.microsoft.com/office/drawing/2014/main}creationId")), None)
             if creation is not None and creation.get("id"):
                 shape["creationId"] = creation.get("id", "")
-            if any(matches_shape([anchor], shape) for anchor in comment_anchors):
+            if any(matches_shape(target, shape) for target in comment_targets):
                 shape["commentAnchor"] = True
             shapes.append(shape)
 

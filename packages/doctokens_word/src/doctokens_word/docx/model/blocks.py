@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
+from doctokens_core.contracts.annotations import AnnotationStatus
 from typing_extensions import NotRequired
 
 from .content import ContentControl, ParagraphBorders, RawHint, ReviewMarkup, Revision, Run
@@ -152,9 +153,9 @@ class AncillaryItem(AncillaryItemRequired, total=False):
     rawHints: list[RawHint]
     author: str | None
     date: str | None
-    anchor: str
+    targetBlock: str
     parentId: str
-    resolved: bool
+    status: AnnotationStatus
 
 
 class AncillaryResult(TypedDict):

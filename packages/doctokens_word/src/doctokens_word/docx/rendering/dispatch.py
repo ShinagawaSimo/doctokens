@@ -7,6 +7,7 @@ from collections.abc import Iterator
 
 from ..model import ParsedDocument
 from ..model.enums import Density
+from .common.comments import window_comments
 from .common.pages import iter_page_blocks
 from .objects.resources import render_resource
 from .window_assets import referenced_image_ids
@@ -69,7 +70,7 @@ def render_page_window(
         blocks=selected_blocks,
         headers=[],
         footers=[],
-        comments=[],
+        comments=window_comments(parsed_document, selected_blocks),
     )
     return _window_output(selected_document, resolved_density)
 

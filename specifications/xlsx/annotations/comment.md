@@ -6,7 +6,7 @@ Legacy comments are represented as cell notes; threaded conversations are indepe
 
 ## Processing
 
-Invalid cell ref is skipped. Missing part → COMMENTS_PART_MISSING; invalid XML → COMMENTS_XML_INVALID. Plain appends comment text to ordinary cell values; checkbox/rich-value early-return paths do not append these comments.
+Invalid cell ref is skipped. Missing part → COMMENTS_PART_MISSING; invalid XML → COMMENTS_XML_INVALID. Plain appends text/status to ordinary, checkbox and rich-value cells without author/ID metadata. Both XML densities retain known authors, IDs and cell targets.
 
 ## Fields
 
@@ -36,7 +36,7 @@ Invalid cell ref is skipped. Missing part → COMMENTS_PART_MISSING; invalid XML
   - `Cell.commentAuthor: str`
 
 - **Parsing**
-  - int index, default 0; invalid/out-of-range → empty. Negative indices follow Python list indexing when within bounds.
+  - Nonnegative int index, default 0; invalid/negative/out-of-range → empty. Omit empty author attributes, rather than selecting another author.
 
 ### `id`
 
@@ -65,3 +65,11 @@ Invalid cell ref is skipped. Missing part → COMMENTS_PART_MISSING; invalid XML
 
 - **Parsing**
   - Use original/created cell ref. Only emitted rows contribute comments; a shadow cell can contribute a comment record without a cell comment-ref.
+
+### `status`
+
+- **Output**
+  - `comment/@status="unknown"`; plain `[comment status=unknown] TEXT`.
+- **Parsing**
+  - Legacy cell notes do not declare modern review completion. Do not invent
+    active/resolved state from their content or from the absence of a flag.

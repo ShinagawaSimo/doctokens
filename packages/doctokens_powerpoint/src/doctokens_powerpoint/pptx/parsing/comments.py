@@ -1,73 +1,42 @@
-"""Attach saved presentation comments to their slides and source shapes."""
+"""Attach comments through validated slide ownership and exact source identities."""
 
 from __future__ import annotations
 
 from ..model.presentation import CommentItem, CommentRef, SlideBlock
 from .comment_anchors import matches_shape
+from .navigation import normalize_link
 from .slide_sequence import _SlideReference
 
 
-def attach_comments(
-    comments: list[CommentItem],
-    slides: list[SlideBlock],
-    slide_size: tuple[int, int] | None,
-    *,
-    infer_single: bool = True,
-) -> None:
-    """Resolve comment slide/shape references without discarding raw IDs."""
+def attach_comments(comments: list[CommentItem], slides: list[SlideBlock]) -> None:
     slide_by_locator = {locator: slide for slide in slides for locator in (slide["id"], slide["part"], slide["sldId"]) if locator}
     by_id = {item["id"]: item for item in comments}
     for comment in comments:
         locator = comment.get("slideId")
         slide = slide_by_locator.get(locator) if isinstance(locator, str) else None
-        if slide is None and infer_single and len(slides) == 1 and not comment.get("modern"):
-            slide = slides[0]
         if slide is None:
             continue
         comment["slideId"] = slide["id"]
         reference: CommentRef = {"id": comment["id"]}
-        if comment.get("modern"):
-            targets = [
-                shape for shape in slide["shapes"] if any(matches_shape([anchor], shape) for anchor in comment.get("anchors", []))
-            ]
+        if "target" in comment:
+            targets = [shape for shape in slide["shapes"] if matches_shape(comment["target"], shape)]
             if len(targets) == 1:
                 comment["shapeId"] = targets[0]["id"]
                 reference["shapeId"] = targets[0]["id"]
-            elif not comment.get("anchors"):
-                parent = by_id.get(comment.get("parentCommentId", ""), {})
-                if parent_shape := parent.get("shapeId"):
-                    comment["shapeId"] = parent_shape
-                    reference["shapeId"] = parent_shape
-            if reference not in slide["commentRefs"]:
-                slide["commentRefs"].append(reference)
-            continue
-        x = comment.get("x")
-        y = comment.get("y")
-        if not isinstance(x, int) or not isinstance(y, int):
-            if reference not in slide["commentRefs"]:
-                slide["commentRefs"].append(reference)
-            continue
-        if slide_size is not None and (abs(x) > 1000 or abs(y) > 1000):
-            x = round(x / slide_size[0] * 1000)
-            y = round(y / slide_size[1] * 1000)
-        positioned = [shape for shape in slide["shapes"] if shape.get("x") is not None and shape.get("y") is not None]
-        if positioned:
-            nearest = min(
-                positioned,
-                key=lambda shape: abs(shape["x"] + shape.get("w", 0) // 2 - x) + abs(shape["y"] + shape.get("h", 0) // 2 - y),
-            )
-            comment["shapeId"] = nearest["id"]
-            reference["shapeId"] = nearest["id"]
+        elif parent_shape := by_id.get(comment.get("parentCommentId", ""), {}).get("shapeId"):
+            comment["shapeId"] = parent_shape
+            reference["shapeId"] = parent_shape
         if reference not in slide["commentRefs"]:
             slide["commentRefs"].append(reference)
 
 
 class _CommentAttachmentPlan:
-    """Group raw comments by validated slide locator before slide parsing."""
+    """Group saved comments by validated slide owner before attaching targets."""
 
     def __init__(self, comments: list[CommentItem], refs: tuple[_SlideReference, ...]) -> None:
+        self._comments = comments
+        self._targets = {ref.part: f"#slide{index}" for index, ref in enumerate(refs, 1)}
         self.by_slide_part: dict[str, list[CommentItem]] = {}
-        self.unresolved: list[CommentItem] = []
         by_locator: dict[str, str] = {}
         for index, ref in enumerate(refs, start=1):
             by_locator[ref.part] = ref.part
@@ -78,18 +47,16 @@ class _CommentAttachmentPlan:
         for comment in comments:
             locator = comment.get("slideId")
             part = by_locator.get(locator) if isinstance(locator, str) else None
-            if part is None:
-                self.unresolved.append(comment)
-            else:
+            if part is not None:
                 self.by_slide_part.setdefault(part, []).append(comment)
 
-    def attach(self, slide: SlideBlock, slide_size: tuple[int, int] | None) -> None:
-        comments = self.by_slide_part.pop(slide["part"], [])
-        if comments:
-            attach_comments(comments, [slide], slide_size, infer_single=False)
-
-    def attach_all(self, slides: list[SlideBlock], slide_size: tuple[int, int] | None) -> None:
+    def attach_all(self, slides: list[SlideBlock]) -> None:
         for slide in slides:
-            self.attach(slide, slide_size)
-        if self.unresolved and len(slides) == 1:
-            attach_comments(self.unresolved, slides, slide_size, infer_single=True)
+            comments = self.by_slide_part.pop(slide["part"], [])
+            if comments:
+                attach_comments(comments, [slide])
+        numbers = {slide["id"]: slide["n"] for slide in slides}
+        for comment in self._comments:
+            for run in comment.get("runs", []):
+                if link := run.get("link"):
+                    run["link"] = normalize_link(link, self._targets, numbers.get(comment.get("slideId", "")), len(self._targets))

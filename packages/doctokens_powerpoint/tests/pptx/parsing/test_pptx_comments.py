@@ -50,7 +50,8 @@ def test_unreadable_comment_part_retains_a_placeholder(body: str | None, code: s
     assert code in [warning.code for warning in result.report.warnings]
     assert result.text == (
         '<presentation density="semantic" format="pptx"><slide number="1"><comment-ref id="cmt1" /></slide>'
-        '<comments><comment id="cmt1" slide="slide1"><unsupported type="comments" /></comment></comments></presentation>'
+        '<comments><comment id="cmt1" slide="slide1" status="unknown">'
+        '<unsupported type="comments" /></comment></comments></presentation>'
     )
 
 
@@ -61,5 +62,5 @@ def test_invalid_comment_status_does_not_hide_the_comment() -> None:
     assert "COMMENT_STATUS_INVALID" in [warning.code for warning in result.report.warnings]
     assert result.text == (
         '<presentation density="structural" format="pptx"><slide number="1"><comment-ref id="cmt1" /></slide>'
-        '<comments><comment author="" id="cmt1" slide="slide1" /></comments></presentation>'
+        '<comments><comment id="cmt1" slide="slide1" status="unknown" /></comments></presentation>'
     )

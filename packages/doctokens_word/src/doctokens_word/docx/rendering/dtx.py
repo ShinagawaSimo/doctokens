@@ -272,12 +272,11 @@ def _append_supplemental(parent: ET.Element, parsed_document: ParsedDocument, de
                 group,
                 singular,
                 id=item.get("id"),
-                locator=item.get("loc"),
+                locator=item.get("loc") if group_name != "comments" else None,
                 author=item.get("author"),
                 date=item.get("date"),
-                anchor=item.get("anchor"),
                 parent=item.get("parentId"),
-                resolved=True if item.get("resolved") else None,
+                status=item.get("status", "unknown") if group_name == "comments" else None,
             )
             _append_inline(node, item, density, parsed_document.ocr_results)
             _append_floating(node, item, density, parsed_document.ocr_results)

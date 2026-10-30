@@ -2,156 +2,110 @@
 
 [DOCX](../README.md) / Comments
 
-Saved ancillary content is parsed independently of body layout.
-
-## Processing
-
-XML read failure: `ANCILLARY_XML_PARSE_FAILED`; omit the failed part. DTX includes retained comments in both XML densities. Plain appends referenced comments, then unreferenced comments, under `[Comments]` as `[cmt<ID>: text]`.
+All densities retain comment text and its saved review status. Plain emits
+`[comment status=STATUS] TEXT` in source comment order, without IDs, authors,
+dates, targets or parent metadata. Both XML densities retain IDs, known authors,
+dates, explicit reply parents and positional `comment-ref` relationships.
+Semantic additionally retains supported inline reading semantics.
 
 ## Fields
 
 ### `id`
 
 - **Output**
-  - `supplemental/comments/comment/@id`.
-
+  - `supplemental/comments/comment/@id` and positional `comment-ref/@id`.
 - **OOXML**
-  - `word/comments.xml/w:comments/w:comment`; `@w:id`
-
+  - `word/comments.xml/w:comments/w:comment/@w:id` and body references.
 - **IR**
-  -  `AncillaryItem.id: str | None`
-
+  - `AncillaryItem.id`.
 - **Parsing**
-  - Copy nonempty source id; skip missing IDs.
-
-### `locator`
-
-- **Output**
-  - `comment/@locator`.
-
-- **OOXML**
-  - Derived from group and ID.
-
-- **IR**
-  - `AncillaryItem.loc: str`
-
-- **Parsing**
-  - `"comments." + id`.
+  - Preserve a nonempty source ID; skip comments with no required ID.
+  - Keep an explicitly empty comment, including a parent with nonempty replies.
+  - Plain does not emit IDs or unresolved ID markers.
 
 ### `text`
 
 - **Output**
-  - DTX `comment` character data and inline elements.
-
+  - Comment character data with supported inline elements in XML.
+  - Plain text after the status marker.
 - **OOXML**
-  - `word/comments.xml/w:comments/w:comment`
-
+  - Comment p/tbl/sdt/sdtContent/smartTag contents.
 - **IR**
-  - `AncillaryItem.text: str`
-
+  - `AncillaryItem.text` and `runs`.
 - **Parsing**
-  - Join retained paragraph content with LF. Flatten table cells with ` | ` and rows with LF. Skip whitespace-only content without objects.
+  - Join retained paragraph content with LF and flattened table cells with
+    ` | `. Use the ordinary saved-content and revision-view readers.
+  - Semantic retains supported emphasis, links, controls, equations and review
+    marks. Structural retains content and ordinary references without emphasis.
+  - Generated unreadable-object labels do not become searchable source text.
 
-### `runs`
+### `status`
 
 - **Output**
-  - DTX inline semantics; DTP readable content.
-
+  - `comment/@status="active|resolved|closed|unknown"` in both XML densities;
+    plain always identifies the same state.
 - **OOXML**
-  - `word/comments.xml/w:comments/w:comment` child p/tbl/sdt/sdtContent/smartTag.
-
+  - A matching `word/commentsExtended.xml` commentEx record and its done value.
 - **IR**
-  - `AncillaryItem.runs: list[Run]`
-
+  - `AncillaryItem.status: AnnotationStatus`.
 - **Parsing**
-  - Use the inline parser; insert separator runs between retained containers. Retain controls around their runs; tables have no table IR here.
-
-### `rawHints`
-
-- **Output**
-  - Internal diagnostic detail.
-
-- **OOXML**
-  - `word/comments.xml/w:comments/w:comment`
-
-- **IR**
-  - `AncillaryItem.rawHints: list[RawHint]`
-
-- **Parsing**
-  - Keep only if RAW_HINTS, include_raw_hints, and nonempty.
+  - Read thread/status metadata at every body-reading density and in sessions.
+  - A readable matching commentEx defaults done to false: active. Recognized
+    1/true/on means resolved; 0/false/off means active, case-insensitively.
+  - Missing/unreadable thread metadata or an invalid done value leaves unknown.
+    Invalid values emit COMMENT_STATUS_INVALID.
+  - Word's supported completion metadata does not produce closed; the shared
+    vocabulary preserves that distinct state when another format saves it.
+  - Do not infer status from comment wording or from a reply's presence.
 
 ### `author`
 
 - **Output**
-  - `comment/@author`.
-
+  - Nonempty `comment/@author` in structural and semantic; omitted from plain.
 - **OOXML**
-  - `w:comment/@w:author`
-
-- **IR**
-  - `AncillaryItem.author: str`
-
+  - Comment `@w:author`.
 - **Parsing**
-  - Copy nonempty string.
+  - Preserve the saved human-readable value; omit an absent/empty value.
 
 ### `date`
 
 - **Output**
-  - `comment/@date`.
-
+  - Nonempty `comment/@date` in structural and semantic; omitted from plain.
 - **OOXML**
-  - `w:comment/@w:date`
-
-- **IR**
-  - `AncillaryItem.date: str`
-
+  - Comment `@w:date`.
 - **Parsing**
-  - Copy nonempty string without conversion.
-
-### `anchor`
-
-- **Output**
-  - `comment/@anchor`.
-
-- **OOXML**
-  - Body comment-range/reference association.
-
-- **IR**
-  - `AncillaryItem.anchor: str`
-
-- **Parsing**
-  - Use the body parser comment-anchor lookup if present.
+  - Preserve the saved timestamp without timezone conversion or reconstruction.
 
 ### `parent`
 
 - **Output**
-  - `comment/@parent`.
-
+  - Reply `comment/@parent` referring to a retained comment ID.
 - **OOXML**
-  - `word/commentsExtended.xml/*/commentEx/@paraIdParent` (local names).
-
+  - commentEx `@paraIdParent` matched to the parent's last paragraph paraId.
 - **IR**
-  - `AncillaryItem.parentId: str`
-
+  - `AncillaryItem.parentId`.
 - **Parsing**
-  - Map the last paragraph paraId of each retained comment to its comment ID. Resolve parent through this map.
+  - Keep only known, non-self, acyclic links. Unresolved parents emit
+    COMMENT_PARENT_UNRESOLVED; invalid self/cyclic links emit COMMENT_PARENT_INVALID.
+  - Parent means a conversation reply, not the location the comment discusses.
 
-- **Absence and defaults**
-  - Absent for roots.
-
-- **Diagnostics**
-  - Unresolved parent: `COMMENT_PARENT_UNRESOLVED`, locator `word/commentsExtended.xml:<comment-id>`.
-
-### `resolved`
+### `target`
 
 - **Output**
-  - `comment/@resolved="true"`.
-
-- **OOXML**
-  - `commentEx/@done`
-
+  - The position of `comment-ref` in retained body/table/text-box content
+    identifies the supported target context.
 - **IR**
-  - `AncillaryItem.resolved: bool`
-
+  - Internal `AncillaryItem.targetBlock` supports selecting relevant comments.
 - **Parsing**
-  - Store true when Word bool helper accepts done; false is not stored. Thread metadata requires COMMENT_THREADING.
+  - Do not emit an internal block number as comment/@anchor: that number is
+    not a public body target. Do not repeat the derived comments.ID locator.
+  - Page windows retain referenced/associated comments and their explicit
+    connected thread context, without importing unrelated comments.
+  - References identify reading context, not a reconstructed exact character range.
+
+## Limits
+
+Ancillary XML failures remain diagnostics under the existing ancillary reader.
+Unsupported or missing source content is not silently declared empty or active.
+No raw paragraph IDs, programmatic locations, source paths or decoder
+provenance are added to the routine comment projection.

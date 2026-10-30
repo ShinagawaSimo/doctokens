@@ -33,6 +33,7 @@ def parse_styles(
 
     include_semantic = detail == "semantic"
     theme = parse_theme(pkg) if include_semantic else {}
+    index.theme = theme
     root = pkg.read_xml("xl/styles.xml")
     custom_fmts = _parse_custom_formats(root)
 

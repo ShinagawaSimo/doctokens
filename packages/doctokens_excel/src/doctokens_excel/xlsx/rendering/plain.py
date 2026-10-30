@@ -36,31 +36,48 @@ def iter_plain_window(window: ReadingWindow, sheet: SheetInfo) -> Iterator[str]:
 
 def _iter_sheet(sheet: SheetInfo, workbook: ParsedWorkbook, *, emit_globals: bool) -> Iterator[str]:
     name = escape_text(sheet["name"], quote=True)
-    if sheet.get("kind") == "chartsheet":
-        yield f"<chartsheet name={name}>\n"
-        return
     attrs = f"name={name}"
     state = sheet.get("state", "visible")
     if state == "hidden":
         attrs += " hidden"
     elif state == "veryHidden":
         attrs += " veryHidden"
-    yield f"<sheet {attrs}>\n"
+    is_chart_sheet = sheet.get("kind") == "chartsheet"
+    yield f"<{'chartsheet' if is_chart_sheet else 'sheet'} {attrs}>\n"
     if sheet.get("filter_range"):
         yield f"[Filter {sheet['filter_range']}]\n"
     if emit_globals:
         yield from _iter_interactive_filters(workbook)
+    for validation in sheet.get("data_validations", []):
+        if validation.get("unparsed"):
+            yield "[Unparsed data validation]\n"
+    for condition in sheet.get("conditional_formats", []):
+        if condition.get("unparsed"):
+            yield "[Unparsed conditional format]\n"
     for image in sheet.get("images", []):
-        yield f"[Image {image['id']} at {image['ref']}]\n"
+        description = f": {image['alt']}" if image.get("alt") else ""
+        yield f"[Image {image['id']} at {image['ref']}{description}]\n"
+        if image.get("unparsed"):
+            yield "[Unparsed image]\n"
     for chart in sheet.get("charts", []):
         title = f" {chart['title']}" if chart.get("title") else ""
         names = ", ".join(_chart_names(chart))
         yield f"[Chart{title}{': ' + names if names else ''}]\n"
+        if chart.get("unparsed"):
+            yield "[Unparsed chart]\n"
+    for shape in sheet.get("drawing_shapes", []):
+        if shape["kind"] == "unsupported":
+            yield f"[Unparsed drawing: {shape.get('name', 'object')}]\n"
+        elif shape.get("text"):
+            yield shape["text"] + "\n"
+        elif shape.get("alt") or shape.get("title"):
+            yield f"[Shape: {shape.get('alt') or shape.get('title')}]\n"
     for pivot in sheet.get("pivot_tables", []):
         yield f"[PivotTable{' ' + pivot['name'] if pivot.get('name') else ''}]\n"
     for table in sheet.get("tables", []):
         yield _table_summary(table)
-    yield from iter_plain_window(reading_window(sheet, "plain"), sheet)
+    if not is_chart_sheet:
+        yield from iter_plain_window(reading_window(sheet, "plain"), sheet)
 
 
 def _hidden_column(column: int, ranges: list[tuple[int, int]] | None) -> bool:

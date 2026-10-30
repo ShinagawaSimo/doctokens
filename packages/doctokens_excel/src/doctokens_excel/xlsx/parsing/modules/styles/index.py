@@ -40,6 +40,7 @@ class FormatIndex:
         self._visible_blank_styles: set[int] = set()
         self.date_1904 = False
         self.locale = locale
+        self.theme: dict[int, str] = {}
 
     def set_date_system(self, date_1904: bool) -> None:
         self.date_1904 = date_1904

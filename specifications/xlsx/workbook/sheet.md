@@ -46,7 +46,15 @@ Sheet order is the workbook sheet-list order.
   - `SheetInfo.kind: str`
 
 - **Parsing**
-  - Exact chartsheet URI → chartsheet; all other types → worksheet. Chartsheets emit name only and skip worksheet/drawing extraction.
+  - Exact chartsheet URI → chartsheet; all other types → worksheet.
+    A chartsheet has no worksheet grid. Read its root/drawing/@r:id, validate
+    the owning drawing relationship and use the existing image/chart reader.
+    Both XML densities emit chart summaries inside chart-sheet; plain emits
+    the chart-sheet boundary and compact object summaries. Complete chart
+    values remain available through chart resources.
+  - A missing/invalid chart-sheet part or unresolved drawing binding emits
+    CHART_SHEET_UNREADABLE and a visible drawing placeholder. An absent grid
+    is not fabricated. A chart sheet cannot accept range_spec.
 
 ### `state`
 
@@ -60,7 +68,8 @@ Sheet order is the workbook sheet-list order.
   - `SheetInfo.state: str`
 
 - **Parsing**
-  - Default visible. Retain every sheet regardless of visibility. Chartsheet output omits visibility.
+  - Default visible. Retain every sheet regardless of visibility. Both
+    worksheet and chart-sheet output retain non-default visibility.
 
 ### `rows`
 

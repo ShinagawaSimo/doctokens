@@ -9,6 +9,8 @@ from doctokens_core.containers.opc.options import PackageOptions
 from doctokens_core.contracts.annotations import AnnotationMention, ThreadedAnnotation
 from doctokens_core.contracts.models import ParseReport
 
+from . import drawing, rules
+
 
 @dataclass(frozen=True)
 class ParseOptions(PackageOptions):
@@ -57,7 +59,7 @@ class Cell(TypedDict, total=False):
     shadow: bool  # merge: true for cells covered by a merge anchor
     spillRange: str  # dynamic array: A1-style spill range on the anchor cell
     spillFrom: str  # dynamic array: A1 ref of the source cell on spill recipients
-    dynamicArray: bool  # true when the formula carries the dynamic-array aca marker
+    dynamicArray: bool  # established by cell/@cm and XLDAPR dynamic-array metadata
     hidden: bool  # row hidden state
     outlineLevel: int  # row outline level (0 = none)
     collapsed: bool  # row collapsed state
@@ -109,97 +111,6 @@ class TableInfo(TypedDict, total=False):
     ref: str  # A1 range e.g. "A5:K250001"
     columns: list[str]  # declared column names
     totalsRow: bool  # True when totals row is shown
-
-
-FilterColumn = TypedDict(
-    "FilterColumn",
-    {
-        "col": int,
-        "type": str,
-        "values": list[str],
-        "blank": bool,
-        "calendarType": str,
-        "operator": str,
-        "value": str,
-        "value2": str,
-        "and": bool,
-        "top": bool,
-        "percent": bool,
-        "rank": str,
-        "filterValue": str,
-        "dxfId": int,
-        "cellColor": bool,
-        "iconSet": str,
-        "iconId": int,
-        "dateGroup": list[dict[str, str]],
-    },
-    total=False,
-)
-
-
-class DataValidation(TypedDict, total=False):
-    ranges: str
-    type: str
-    formula1: str
-    allowBlank: bool
-
-
-class ConditionalFormat(TypedDict, total=False):
-    ranges: str
-    priority: int
-    ruleType: str
-    formulas: list[str]
-    dxfId: int
-    stopIfTrue: bool
-    operator: str
-    text: str
-    rank: int
-    percent: bool
-    formatKind: str
-    formatDetails: dict[str, object]
-    dxfStyle: str
-
-
-class DrawingImage(TypedDict, total=False):
-    id: str
-    ref: str
-    alt: str
-    part: str
-
-
-class ChartPoint(TypedDict, total=False):
-    category: str
-    value: str
-    x: str
-    y: str
-    bubbleSize: str
-
-
-class DrawingChartSeries(TypedDict, total=False):
-    index: int
-    pointCount: int
-    name: str
-    min: float
-    max: float
-    points: list[ChartPoint]
-    plotIndex: int
-    chartType: str
-    xValues: list[str]
-    yValues: list[str]
-    bubbleSizes: list[str]
-    hidden: bool
-
-
-class DrawingChart(TypedDict, total=False):
-    id: str
-    ref: str
-    type: str
-    title: str
-    series_count: int
-    part: str
-    series: list[DrawingChartSeries]
-    plotTypes: list[str]
-    axes: list[dict[str, str]]
 
 
 class PivotTableInfo(TypedDict, total=False):
@@ -276,11 +187,12 @@ class SheetInfo(TypedDict, total=False):
     sheet_protection: bool  # True when <sheetProtection> is present
     tables: list[TableInfo]  # [{id, name, ref, columns, totalsRow}]
     filter_range: str  # A1 range from <autoFilter> (structural only)
-    filter_cols: list[FilterColumn]  # Structured autoFilter column rules.
-    data_validations: list[DataValidation]  # [{ranges, type, formula1, allowBlank}]
-    conditional_formats: list[ConditionalFormat]  # Rule conditions plus visual-format semantics.
-    images: list[DrawingImage]  # [{id, ref, alt}] from drawing anchors
-    charts: list[DrawingChart]  # [{id, ref, type, title, series_count}]
+    filter_cols: list[rules.FilterColumn]  # Structured autoFilter column rules.
+    data_validations: list[rules.DataValidation]  # [{ranges, type, formula1, allowBlank}]
+    conditional_formats: list[rules.ConditionalFormat]  # Rule conditions plus visual-format semantics.
+    images: list[drawing.DrawingImage]  # [{id, ref, alt}] from drawing anchors
+    drawing_shapes: list[drawing.DrawingShape]
+    charts: list[drawing.DrawingChart]  # [{id, ref, type, title, series_count}]
     pivot_tables: list[PivotTableInfo]  # [{id, ref, name}] detected pivot tables
 
 

@@ -8,7 +8,7 @@ from doctokens_core.output.plain import render_plain
 from ..model.workbook import ParsedWorkbook
 from ..parsing import get_render_pipeline
 from ..rendering.dtx import render_sheet_dtx
-from ..rendering.plain import iter_plain_window
+from ..rendering.plain import _iter_sheet, iter_plain_window
 from ..rendering.window import reading_window
 from .search import _sheet
 from .support import _result
@@ -29,7 +29,12 @@ def render_selection(workbook: ParsedWorkbook, density: str, sheet: str | None, 
             raise ValueError("range_spec requires a worksheet, not a chartsheet")
         window = reading_window(sheet_info, density, range_spec=range_spec)
         if density == "plain":
-            text = render_plain("density=plain\n" + "".join(iter_plain_window(window, sheet_info)), format_name="xlsx")
+            content = (
+                "".join(_iter_sheet(sheet_info, workbook, emit_globals=False))
+                if sheet_info.get("kind") == "chartsheet"
+                else "".join(iter_plain_window(window, sheet_info))
+            )
+            text = render_plain(content, format_name="xlsx")
         else:
             text = render_sheet_dtx(workbook, sheet_info, density, window=window)
         selection = {"kind": "range" if range_spec is not None else "sheet", "sheet": sheet, "windows": [window.metadata]}

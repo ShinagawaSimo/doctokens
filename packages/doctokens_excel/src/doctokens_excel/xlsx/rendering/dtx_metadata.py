@@ -88,10 +88,47 @@ def _append_sheet_metadata(
                 )
             append(filter_node, "condition", **attrs)
     for validation in sheet.get("data_validations", []):
-        append(parent, "data-validation", ref=validation.get("ranges"), type=validation.get("type"))
+        attrs = {"ref": validation.get("ranges"), "type": validation.get("type")}
+        for old, new in (
+            ("operator", "operator"),
+            ("formula1", "formula1"),
+            ("formula2", "formula2"),
+            ("errorStyle", "error_style"),
+            ("imeMode", "ime_mode"),
+            ("promptTitle", "prompt_title"),
+            ("prompt", "prompt"),
+            ("errorTitle", "error_title"),
+            ("error", "error"),
+        ):
+            if (value := validation.get(old)) is not None:
+                attrs[new] = value
+        for old, new in (
+            ("allowBlank", "allow_blank"),
+            ("showInputMessage", "show_input_message"),
+            ("showErrorMessage", "show_error_message"),
+        ):
+            if validation.get(old):
+                attrs[new] = True
+        if validation.get("type") == "list" and validation.get("showDropDown"):
+            attrs["dropdown"] = False
+        node = append(parent, "data-validation", **attrs)
+        if validation.get("unparsed"):
+            append(node, "unsupported", type="data-validation")
     _append_conditional_formats(parent, sheet, density)
     for image in sheet.get("images", []):
-        append(parent, "img", id=image.get("id"), ref=image.get("ref"))
+        node = append(
+            parent,
+            "img",
+            id=image.get("id"),
+            ref=image.get("ref"),
+            alt=image.get("alt") or None,
+            title=image.get("title"),
+            group=image.get("group"),
+            href=image.get("href"),
+            link=image.get("link"),
+        )
+        if image.get("unparsed"):
+            append(node, "unsupported", type="image")
     for chart in sheet.get("charts", []):
         chart_node = append(
             parent,
@@ -104,8 +141,39 @@ def _append_sheet_metadata(
             names=",".join(_chart_names(chart)) or None,
             title=chart.get("title"),
             truncated=True,
+            group=chart.get("group"),
         )
         append_chart_axes(chart_node, chart.get("axes", []))
+        if chart.get("unparsed"):
+            append(chart_node, "unsupported", type="chart")
+    for shape in sheet.get("drawing_shapes", []):
+        attrs = {
+            "id": shape.get("id"),
+            "ref": shape.get("ref") or None,
+            "group": shape.get("group"),
+            "alt": shape.get("alt"),
+            "title": shape.get("title"),
+            "link": shape.get("link"),
+        }
+        if shape["kind"] == "unsupported":
+            append(parent, "unsupported", type="drawing", source=shape.get("name"), **attrs)
+        elif shape["kind"] == "group":
+            append(parent, "drawing-group", name=shape.get("name") or None, **attrs)
+        elif shape.get("paragraphs"):
+            node = append(
+                parent,
+                "textbox",
+                kind="connector" if shape.get("kind") == "connector" else None,
+                from_shape=shape.get("fromShape"),
+                to_shape=shape.get("toShape"),
+                **attrs,
+            )
+            for paragraph in shape["paragraphs"]:
+                append(node, "p", paragraph)
+        else:
+            append(
+                parent, "shape", kind=shape.get("kind"), from_shape=shape.get("fromShape"), to_shape=shape.get("toShape"), **attrs
+            )
     for pivot in sheet.get("pivot_tables", []):
         pivot_attrs: dict[str, object] = {
             "id": pivot.get("id"),
@@ -152,6 +220,11 @@ def _append_conditional_formats(parent: ET.Element, sheet: SheetInfo, density: s
             "rank": conditional_format.get("rank"),
             "percent": True if conditional_format.get("percent") else None,
             "format": conditional_format.get("formatKind"),
+            "bottom": True if conditional_format.get("bottom") else None,
+            "above_average": False if conditional_format.get("aboveAverage") is False else None,
+            "equal_average": True if conditional_format.get("equalAverage") else None,
+            "std_dev": conditional_format.get("stdDev"),
+            "time_period": conditional_format.get("timePeriod"),
         }
         formulas = conditional_format.get("formulas", [])
         if len(formulas) == 1:
@@ -160,7 +233,9 @@ def _append_conditional_formats(parent: ET.Element, sheet: SheetInfo, density: s
             attrs["formulas"] = " | ".join(formulas)
         if density == "semantic" and conditional_format.get("formatDetails"):
             attrs["details"] = _conditional_details(conditional_format["formatDetails"])
-        append(container, "rule", **attrs)
+        node = append(container, "rule", **attrs)
+        if conditional_format.get("unparsed"):
+            append(node, "unsupported", type="conditional-format")
 
 
 def _append_pivot_context(parent: ET.Element, metadata: WorkbookMetadata, density: str) -> None:
@@ -218,7 +293,7 @@ def _conditional_details(details: object) -> str:
         return ""
     values: list[str] = []
     for key, value in details.items():
-        if key in {"stops", "thresholds"} and isinstance(value, list):
+        if isinstance(value, list):
             records = [
                 ":".join(f"{item_key}={item_value}" for item_key, item_value in item.items())
                 for item in value

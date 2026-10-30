@@ -254,10 +254,6 @@ def _formula_metadata(formula_elem: ET.Element | None) -> tuple[str | None, Cell
         formula_range = formula_elem.get("ref", "")
         if formula_range:
             metadata["formulaRange"] = formula_range
-        if formula_elem.get("aca") == "1":
-            # aca marks true dynamic-array formulas; classic CSE arrays share
-            # the t="array"/ref shape but do not spill.
-            metadata["dynamicArray"] = True
     elif formula_type == "dataTable":
         metadata["formulaType"] = "dataTable"
         if formula_range := formula_elem.get("ref", ""):

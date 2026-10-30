@@ -7,7 +7,8 @@ from typing import NamedTuple
 
 from doctokens_core.contracts.models import ParseWarning
 
-from ....model.workbook import Cell, ConditionalFormat, DataValidation, FilterColumn
+from ....model.rules import ConditionalFormat, DataValidation, FilterColumn
+from ....model.workbook import Cell
 from ...plan import XlsxFeature, XlsxParsePlan
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"

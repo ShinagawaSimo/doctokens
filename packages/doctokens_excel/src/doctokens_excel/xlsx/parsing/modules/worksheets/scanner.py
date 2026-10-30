@@ -16,8 +16,10 @@ from ....model.coordinates import col_letter, parse_ref
 from ....model.workbook import Cell, RichTextRun
 from ...plan import XlsxParsePlan
 from ..styles.index import FormatIndex
+from ..workbook.dynamic_arrays import DynamicArrayCatalog
 from ..workbook.rich_values import RichValueCatalog
 from ..workbook.shared_strings import SharedStrings
+from .arrays import array_source
 from .cells import _parse_cell, _row_attrs
 from .data_tables import read_data_table
 from .formulas import SharedFormulaMaster
@@ -51,6 +53,7 @@ class WorksheetScanner:
         cell_window: tuple[int, int, int, int] | None,
         row_sink: Callable[[int, list[Cell]], bool] | None = None,
         prepared_preview: PreparedPreview | None = None,
+        dynamic_arrays: DynamicArrayCatalog | None = None,
     ) -> None:
         self.package = package
         self.sheet_part = sheet_part
@@ -63,6 +66,13 @@ class WorksheetScanner:
         self.flags = SheetParseFlags.from_plan(plan)
         self.plan = plan
         self.warnings: list[ParseWarning] = []
+        self.dynamic_arrays = (
+            dynamic_arrays
+            if dynamic_arrays is not None
+            else DynamicArrayCatalog.from_package(package, self.warnings)
+            if self.flags.formulas
+            else DynamicArrayCatalog()
+        )
         self._parse_cell = partial(
             _parse_cell,
             include_rich_text=self.flags.rich_text,
@@ -93,7 +103,7 @@ class WorksheetScanner:
 
         working = SheetWorkingSet(self.flags)
         saw_root = False
-        post = SheetPostIndex(self.flags)
+        post = SheetPostIndex(self.flags, warnings=self.warnings, part=self.sheet_part)
         previous_row = 0
         ordered_rows = True
         with self.package.open_entry(self.sheet_part) as stream:
@@ -118,6 +128,7 @@ class WorksheetScanner:
                 post.collect(element, format_index=self.format_index)
         if not saw_root:
             raise PackageError(f"Empty worksheet part: {self.sheet_part}")
+        post.finish()
         if self.plan.formula_only and not ordered_rows:
             return WorksheetScanner(
                 self.package,
@@ -130,6 +141,7 @@ class WorksheetScanner:
                 self.rich_values,
                 replace(self.plan, formula_only=False),
                 self.cell_window,
+                dynamic_arrays=self.dynamic_arrays,
             ).parse()
         if self.row_sink is not None:
             return SheetParseResult(
@@ -195,6 +207,10 @@ class WorksheetScanner:
             if formula is not None and formula.get("ref"):
                 post.blank_content_refs.append(formula.get("ref", ""))
             if self.flags.formulas and formula is not None:
+                if formula.get("t") == "array" and self.dynamic_arrays.is_dynamic(element.get("cm"), f"{self.sheet_part}!{ref}"):
+                    source = array_source(ref, formula.get("ref", ""), self.warnings, self.sheet_part)
+                    if source is not None:
+                        working.spill_sources.append(source)
                 if formula.get("t") == "shared":
                     si, shared_ref = formula.get("si"), formula.get("ref")
                     if si is not None and shared_ref is not None:
@@ -273,6 +289,7 @@ def parse_sheet(
     cell_window: tuple[int, int, int, int] | None = None,
     row_sink: Callable[[int, list[Cell]], bool] | None = None,
     prepared_preview: PreparedPreview | None = None,
+    dynamic_arrays: DynamicArrayCatalog | None = None,
 ) -> SheetParseResult:
     """Parse a worksheet XML part into typed cell rows and sheet-level metadata."""
     return WorksheetScanner(
@@ -288,4 +305,5 @@ def parse_sheet(
         cell_window,
         row_sink,
         prepared_preview,
+        dynamic_arrays,
     ).parse()

@@ -15,13 +15,16 @@ from doctokens_core.runtime.planning import ParsePurpose
 from ..model.workbook import ParsedWorkbook, ParseOptions
 from .modules.styles.index import FormatIndex
 from .modules.styles.parser import parse_styles
+from .modules.workbook.catalog_parts import _CatalogParts
+from .modules.workbook.dynamic_arrays import DynamicArrayCatalog
 from .modules.workbook.features import CellControlCatalog
 from .modules.workbook.metadata import _parse_workbook_xml
 from .modules.workbook.pivots import PivotCatalog
 from .modules.workbook.rich_values import RichValueCatalog
 from .modules.workbook.shared_strings import _parse_shared_strings
+from .modules.worksheets.chartsheets import parse_chart_sheet
 from .modules.worksheets.comments import parse_threaded_comment_people
-from .modules.worksheets.drawings import parse_drawings
+from .modules.worksheets.drawings import DrawingResult, parse_drawings
 from .modules.worksheets.post import parse_tables
 from .modules.worksheets.scanner import parse_sheet
 from .modules.worksheets.sheet_types import SheetParseResult
@@ -59,8 +62,14 @@ def _parse_workbook(
         if parse_plan.sheet_names is not None:
             worksheet_infos = [sheet_info for sheet_info in worksheet_infos if sheet_info["name"] in parse_plan.sheet_names]
         resource_only = parse_plan.purpose is ParsePurpose.RESOURCE
+        catalog_parts = _CatalogParts(package_reader, warnings)
+        dynamic_arrays = (
+            DynamicArrayCatalog.from_package(package_reader, warnings, parts=catalog_parts)
+            if parse_plan.needs(XlsxFeature.FORMULAS)
+            else DynamicArrayCatalog()
+        )
         rich_values = (
-            RichValueCatalog.from_package(package_reader, warnings=warnings)
+            RichValueCatalog.from_package(package_reader, warnings=warnings, parts=catalog_parts)
             if parse_plan.needs(XlsxFeature.RICH_VALUES)
             else RichValueCatalog()
         )
@@ -100,12 +109,12 @@ def _parse_workbook(
         next_table_index = 0
         next_image_index = 1
         next_chart_index = 1
+        next_shape_index = 1
         next_pivot_index = 1
 
         for sheet_info in worksheet_infos:
+            sheet_relationships = relationships[sheet_info["part"]]
             if sheet_info.get("kind") != "chartsheet":
-                sheet_relationships = relationships[sheet_info["part"]]
-
                 sheet_result = (
                     SheetParseResult([], [], False, "", [], [], [], [], [])
                     if resource_only or not parse_plan.scan_cells
@@ -121,6 +130,7 @@ def _parse_workbook(
                         plan=parse_plan,
                         cell_window=parse_plan.cell_window,
                         prepared_preview=prepared.get(sheet_info["part"]),
+                        dynamic_arrays=dynamic_arrays,
                     )
                 )
                 sheet_info["rows"] = sheet_result.rows
@@ -150,24 +160,6 @@ def _parse_workbook(
                 next_table_index += len(tables)
                 sheet_info["tables"] = tables
 
-                # Parse drawing (images, shapes) + charts + pivots
-                images, charts = (
-                    parse_drawings(
-                        sheet_relationships,
-                        package_reader,
-                        image_start=next_image_index,
-                        chart_start=next_chart_index,
-                        warnings=warnings,
-                    )
-                    if parse_plan.needs(XlsxFeature.DRAWINGS)
-                    else ([], [])
-                )
-                next_image_index += len(images)
-                next_chart_index += len(charts)
-                if images:
-                    sheet_info["images"] = images
-                if charts:
-                    sheet_info["charts"] = charts
                 pivots = (
                     pivot_catalog.tables_for_relationships(sheet_relationships, start_index=next_pivot_index)
                     if parse_plan.needs(XlsxFeature.PIVOTS)
@@ -176,6 +168,38 @@ def _parse_workbook(
                 next_pivot_index += len(pivots)
                 if pivots:
                     sheet_info["pivot_tables"] = pivots
+
+            if parse_plan.needs(XlsxFeature.DRAWINGS):
+                if sheet_info.get("kind") == "chartsheet":
+                    drawing_result = parse_chart_sheet(
+                        package_reader,
+                        sheet_info["part"],
+                        sheet_relationships,
+                        image_start=next_image_index,
+                        chart_start=next_chart_index,
+                        shape_start=next_shape_index,
+                        warnings=warnings,
+                    )
+                else:
+                    drawing_result = parse_drawings(
+                        sheet_relationships,
+                        package_reader,
+                        image_start=next_image_index,
+                        chart_start=next_chart_index,
+                        shape_start=next_shape_index,
+                        warnings=warnings,
+                    )
+            else:
+                drawing_result = DrawingResult(next_shape=next_shape_index)
+            next_image_index += len(drawing_result.images)
+            next_chart_index += len(drawing_result.charts)
+            next_shape_index = drawing_result.next_shape
+            if drawing_result.images:
+                sheet_info["images"] = drawing_result.images
+            if drawing_result.charts:
+                sheet_info["charts"] = drawing_result.charts
+            if drawing_result.shapes:
+                sheet_info["drawing_shapes"] = drawing_result.shapes
 
     workbook_manifest: dict[str, object] = {
         "sheetCount": len(worksheet_infos),

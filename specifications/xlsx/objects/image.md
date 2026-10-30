@@ -12,13 +12,14 @@ Images are referenced by package location without eager binary reads.
   - img/@id.
 
 - **OOXML**
-  - First resolvable a:blip/@r:embed per anchor.
+  - Each native xdr:pic and its a:blip embedded or linked relationship.
 
 - **IR**
   - `DrawingImage.id: str`
 
 - **Parsing**
-  - image1,image2,... across accepted sheet objects. r:link is not used.
+  - image1,image2,... across accepted worksheet/chart-sheet objects.
+    Grouped pictures are independent occurrences.
 
 ### `ref`
 
@@ -37,16 +38,17 @@ Images are referenced by package location without eager binary reads.
 ### `alt`
 
 - **Output**
-  - Internal empty string; no DTX alt.
+  - img/@alt in both XML densities; included in the plain image description.
 
 - **OOXML**
-  - No alternative-text extraction on this path.
+  - That picture's own xdr:cNvPr/@descr, otherwise its @title.
 
 - **IR**
   - `str`
 
 - **Parsing**
-  - Assigned empty string.
+  - Preserve the saved nonempty description; never substitute an unrelated
+    shape's text. If @title is also saved and differs, retain img/@title.
 
 ### `part`
 
@@ -60,4 +62,25 @@ Images are referenced by package location without eager binary reads.
   - `str`
 
 - **Parsing**
-  - Require nonempty target to index; target existence/type is not validated in _parse_drawing_anchor. Resource descriptor source is embedded; unreadable targets fail when read_resource opens them.
+  - Require an image relationship for successful embedded binding and verify
+    its target exists. Missing targets retain the picture's identity and an
+    unsupported child plus DRAWING_IMAGE_MISSING.
+
+### `href`
+
+- **Output**
+  - img/@href; external image resource descriptor.
+- **OOXML**
+  - a:blip/@r:link to an external image relationship.
+- **Parsing**
+  - Preserve the saved URI. Never download it or treat the URI as a package
+    part. Resource reads remain bounded to available original package bytes.
+
+### `link`
+
+- **Output**
+  - img/@link.
+- **OOXML**
+  - That picture's cNvPr/a:hlinkClick/@r:id.
+- **Parsing**
+  - Retain an explicitly saved click target independently of the image source.

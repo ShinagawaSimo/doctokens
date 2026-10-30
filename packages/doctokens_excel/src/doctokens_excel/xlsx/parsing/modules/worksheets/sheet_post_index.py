@@ -5,11 +5,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from xml.etree import ElementTree as ET
 
+from doctokens_core.contracts.models import ParseWarning
+
 from ....model.coordinates import col_letter
-from ....model.workbook import ConditionalFormat, DataValidation, FilterColumn
+from ....model.rules import ConditionalFormat, DataValidation, FilterColumn
 from ..styles.index import FormatIndex
-from .rules import _parse_auto_filter_element, _parse_conditional_format_element, _parse_data_validations_element, _safe_int
+from .conditional_formats import merge_conditional_formats, parse_conditional_formats
+from .filters import _parse_auto_filter_element
+from .rule_values import X14, XM
+from .rule_values import integer as _safe_int
 from .sheet_types import NS_R, NS_S, SheetParseFlags
+from .validations import parse_validations
 
 _TAG_S_COL = f"{{{NS_S}}}col"
 _TAG_S_MERGE_CELL = f"{{{NS_S}}}mergeCell"
@@ -25,6 +31,8 @@ class SheetPostIndex:
     """Small sheet-level declarations collected during the primary XML scan."""
 
     flags: SheetParseFlags
+    warnings: list[ParseWarning] = field(default_factory=list)
+    part: str = ""
     hidden_cols: list[tuple[int, int]] = field(default_factory=list)
     merge_refs: list[str] = field(default_factory=list)
     hyperlinks: list[tuple[str, str, str]] = field(default_factory=list)
@@ -33,6 +41,7 @@ class SheetPostIndex:
     filter_cols: list[FilterColumn] = field(default_factory=list)
     data_validations: list[DataValidation] = field(default_factory=list)
     conditional_formats: list[ConditionalFormat] = field(default_factory=list)
+    extended_formats: list[ConditionalFormat] = field(default_factory=list)
     blank_content_refs: list[str] = field(default_factory=list)
     column_styles: list[tuple[int, int, int]] = field(default_factory=list)
     _column_style_cache: dict[int, int | None] = field(default_factory=dict)
@@ -84,11 +93,33 @@ class SheetPostIndex:
         elif element.tag == _TAG_S_AUTO_FILTER:
             self.filter_range, self.filter_cols = _parse_auto_filter_element(element)
             element.clear()
-        elif element.tag == _TAG_S_DATA_VALIDATIONS:
-            self.data_validations = _parse_data_validations_element(element)
+        elif element.tag in {_TAG_S_DATA_VALIDATIONS, f"{{{X14}}}dataValidations"}:
+            self.data_validations.extend(parse_validations(element, self.warnings, self.part))
             element.clear()
-        elif element.tag == _TAG_S_CONDITIONAL_FORMATTING:
+        elif element.tag in {_TAG_S_CONDITIONAL_FORMATTING, f"{{{X14}}}conditionalFormatting"}:
             # Conditions are not evaluated. Retain possible visible semantics.
-            self.blank_content_refs.append(element.get("sqref", ""))
-            self.conditional_formats.extend(_parse_conditional_format_element(element, format_index))
+            extended = element.tag == f"{{{X14}}}conditionalFormatting"
+            ranges = element.findtext(f"{{{XM}}}sqref", "") if extended else element.get("sqref", "")
+            self.blank_content_refs.append(ranges)
+            target = self.extended_formats if extended else self.conditional_formats
+            target.extend(parse_conditional_formats(element, format_index, self.warnings, self.part))
             element.clear()
+
+    def finish(self) -> None:
+        self.conditional_formats = merge_conditional_formats(self.conditional_formats, self.extended_formats)
+        for rule in self.conditional_formats:
+            kind = rule.get("ruleType")
+            missing_formula = kind in {"cellIs", "expression"} and not rule.get("formulas")
+            missing_visual = kind in {"colorScale", "dataBar", "iconSet"} and not rule.get("formatKind")
+            if not rule.get("ranges") or not kind or missing_formula or missing_visual:
+                rule["unparsed"] = True
+                self.warnings.append(
+                    ParseWarning(
+                        "CONDITIONAL_FORMAT_UNSUPPORTED", "Conditional format lacks a saved type, range or body", self.part
+                    )
+                )
+        unique: list[DataValidation] = []
+        for validation in self.data_validations:
+            if validation not in unique:
+                unique.append(validation)
+        self.data_validations = unique

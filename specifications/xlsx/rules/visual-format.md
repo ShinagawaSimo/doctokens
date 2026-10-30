@@ -60,7 +60,8 @@ Visual-format dictionaries retain source strings.
   - `str`
 
 - **Parsing**
-  - Copy literal/formula string.
+  - Core cfvo/@val supplies a literal/formula string. x14:cfvo uses direct
+    xm:f text instead; map it to the same value field, including zero.
 
 ### `gte`
 
@@ -82,7 +83,7 @@ Visual-format dictionaries retain source strings.
   - Stop/bar field.
 
 - **OOXML**
-  - color/@rgb, @theme, @indexed.
+  - color/@rgb, @theme, @indexed; x14 data bars also use fillColor.
 
 - **IR**
   - `str`
@@ -187,3 +188,79 @@ Visual-format dictionaries retain source strings.
 
 - **Parsing**
   - Copy complete attribute dictionary; add thresholds. Attribute vocabulary is open and source-defined.
+
+### `negativeBarColorSameAsPositive`
+
+- **Output**
+  - Semantic data-bar details field.
+- **OOXML**
+  - x14:dataBar/@negativeBarColorSameAsPositive.
+- **Parsing**
+  - Retain a saved source boolean string; do not synthesize a color.
+
+### `negativeBarBorderColorSameAsPositive`
+
+- **Output**
+  - Semantic data-bar details field.
+- **OOXML**
+  - x14:dataBar/@negativeBarBorderColorSameAsPositive.
+- **Parsing**
+  - Retain the saved flag independently of negative fill behavior.
+
+### `axisPosition`
+
+- **Output**
+  - Semantic data-bar details field.
+- **OOXML**
+  - x14:dataBar/@axisPosition.
+- **Parsing**
+  - Retain the source value; do not derive a pixel coordinate.
+
+### `borderColor`
+
+- **Output**
+  - Semantic data-bar details field.
+- **OOXML**
+  - x14:dataBar/x14:borderColor.
+- **Parsing**
+  - Retain the saved RGB/theme/indexed source color using the existing color
+    reference policy. This reader does not evaluate the conditional style.
+
+### `negativeFillColor`
+
+- **Output**
+  - Semantic data-bar details field.
+- **OOXML**
+  - x14:dataBar/x14:negativeFillColor.
+- **Parsing**
+  - Retain the saved source color.
+
+### `negativeBorderColor`
+
+- **Output**
+  - Semantic data-bar details field.
+- **OOXML**
+  - x14:dataBar/x14:negativeBorderColor.
+- **Parsing**
+  - Retain the saved source color.
+
+### `axisColor`
+
+- **Output**
+  - Semantic data-bar details field.
+- **OOXML**
+  - x14:dataBar/x14:axisColor.
+- **Parsing**
+  - Retain the saved source color.
+
+### `icons`
+
+- **Output**
+  - Semantic icon-set details records.
+- **OOXML**
+  - x14:iconSet/x14:cfIcon attributes, including iconSet and iconId.
+- **Parsing**
+  - Preserve saved custom-icon order and attribute values alongside thresholds.
+    Do not substitute a different built-in icon set. Serialize record lists
+    with the existing colon-separated field and semicolon-separated record
+    notation used for stops/thresholds.

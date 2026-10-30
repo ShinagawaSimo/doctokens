@@ -2,7 +2,8 @@
 
 [XLSX](../README.md) / Drawing charts
 
-Chart summaries attach to the worksheet independently of grid truncation.
+Chart summaries attach to worksheets and chart sheets independently of grid
+truncation, using the same saved chart decoder and complete resource reader.
 
 ## Fields
 
@@ -88,7 +89,11 @@ Chart summaries attach to the worksheet independently of grid truncation.
   - `str`
 
 - **Parsing**
-  - Missing → CHART_PART_MISSING; read/parse exception → CHART_XML_INVALID; retain placeholder summary.
+  - Missing → CHART_PART_MISSING; invalid XML/value/required structure →
+    CHART_XML_INVALID. Retain the chart identity and add
+    `<unsupported type="chart"/>` in the body and full resource. Unknown chart
+    type also remains marked unreadable with CHART_TYPE_UNSUPPORTED;
+    plain adds `[Unparsed chart]`.
 
 ### `series`
 

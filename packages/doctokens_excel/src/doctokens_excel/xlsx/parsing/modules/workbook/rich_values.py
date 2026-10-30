@@ -34,8 +34,14 @@ class RichValueCatalog:
     _rich_part: str | None = None
 
     @classmethod
-    def from_package(cls, pkg: PackageReader, *, warnings: list[ParseWarning]) -> RichValueCatalog:
-        parts = _CatalogParts(pkg, warnings)
+    def from_package(
+        cls,
+        pkg: PackageReader,
+        *,
+        warnings: list[ParseWarning],
+        parts: _CatalogParts | None = None,
+    ) -> RichValueCatalog:
+        parts = parts if parts is not None else _CatalogParts(pkg, warnings)
         metadata_part = "xl/metadata.xml" if pkg.exists("xl/metadata.xml") else None
         if metadata_part is None:
             return cls(_parts=parts)

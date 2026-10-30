@@ -49,12 +49,17 @@ def _append_sheet(
     emit_globals: bool,
     window: ReadingWindow | None = None,
 ) -> None:
-    if sheet.get("kind") == "chartsheet":
-        append(parent, "chart-sheet", name=sheet["name"])
-        return
     visibility = sheet.get("state", "visible")
-    node = append(parent, "sheet", name=sheet["name"], visibility=visibility if visibility != "visible" else None)
+    is_chart_sheet = sheet.get("kind") == "chartsheet"
+    node = append(
+        parent,
+        "chart-sheet" if is_chart_sheet else "sheet",
+        name=sheet["name"],
+        visibility=visibility if visibility != "visible" else None,
+    )
     _append_sheet_metadata(node, sheet, workbook, density, emit_globals)
+    if is_chart_sheet:
+        return
     if density in {"structural", "semantic"}:
         selected = window if window is not None else reading_window(sheet, density)
         _append_grid(node, selected.rows, workbook, density, next_row=selected.next_row)

@@ -7,7 +7,8 @@ from doctokens_core.ooxml.charts.axes import append_chart_axes
 from doctokens_core.output.resources import resource_document
 from doctokens_core.output.xml import append, element
 
-from ..model.workbook import DrawingChart, ParsedWorkbook
+from ..model.drawing import DrawingChart
+from ..model.workbook import ParsedWorkbook
 
 
 def _resource_descriptors(workbook: ParsedWorkbook) -> tuple[ResourceDescriptor, ...]:
@@ -17,7 +18,7 @@ def _resource_descriptors(workbook: ParsedWorkbook) -> tuple[ResourceDescriptor,
             ResourceDescriptor(
                 id=image["id"],
                 kind="image",
-                source="embedded",
+                source="external" if image.get("href") else "embedded",
                 locator=f"{sheet['name']}!{image.get('ref', '')}",
                 part=image.get("part"),
             )
@@ -65,6 +66,8 @@ def _render_chart_resource(chart: DrawingChart) -> str:
         title=chart.get("title") or None,
     )
     append_chart_axes(node, chart.get("axes", []))
+    if chart.get("unparsed"):
+        append(node, "unsupported", type="chart")
     for series in chart.get("series", []):
         child = append(
             node,

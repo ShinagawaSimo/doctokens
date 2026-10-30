@@ -20,8 +20,6 @@ def read_sheet_relationships(
 ) -> dict[str, list[RelationshipRecord]]:
     records: dict[str, list[RelationshipRecord]] = {}
     for sheet in sheets:
-        if sheet.get("kind") == "chartsheet":
-            continue
         part = sheet["part"]
         try:
             records[part] = list(package.read_relationships_for_part(part))

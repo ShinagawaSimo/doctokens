@@ -4,6 +4,21 @@
 
 Rules describe conditions and formatting; they do not calculate effective per-cell styles.
 
+## Processing
+
+Read both core s:conditionalFormatting and worksheet-extension
+x14:conditionalFormattings/x14:conditionalFormatting. The namespaces are
+s=SpreadsheetML/main, x14=`http://schemas.microsoft.com/office/spreadsheetml/2009/9/main`,
+and xm=`http://schemas.microsoft.com/office/excel/2006/main`.
+Extended ranges use direct xm:sqref; expressions use direct xm:f.
+
+When a core rule's extLst/ext/x14:id matches an x14:cfRule/@id
+(case-insensitive), merge only that explicitly linked representation.
+Keep the core priority/conditions when the extension omits them; overlay
+saved extension attributes and merge visual-detail keys. Emit one effective
+rule, without the decoder's source ID. Independent extension rules remain
+separate and in saved order. No positional or similar-formula matching occurs.
+
 ## Fields
 
 ### `ranges`
@@ -12,7 +27,7 @@ Rules describe conditions and formatting; they do not calculate effective per-ce
   - conditional-format/@ref
 
 - **OOXML**
-  - `s:conditionalFormatting/@sqref`
+  - `s:conditionalFormatting/@sqref`; x14:conditionalFormatting/xm:sqref.
 
 - **IR**
   - `ConditionalFormat.ranges`
@@ -54,7 +69,7 @@ Rules describe conditions and formatting; they do not calculate effective per-ce
   - rule/@formula or @formulas
 
 - **OOXML**
-  - `s:cfRule/s:formula/text()`
+  - `s:cfRule/s:formula/text()`; x14:cfRule/xm:f.
 
 - **IR**
   - `ConditionalFormat.formulas`
@@ -88,7 +103,7 @@ Rules describe conditions and formatting; they do not calculate effective per-ce
   - `ConditionalFormat.stopIfTrue`
 
 - **Parsing**
-  - Exactly 1 → true; DTX omits false.
+  - XML boolean 1/true → true, 0/false → false; DTX omits false.
 
 ### `operator`
 
@@ -144,7 +159,7 @@ Rules describe conditions and formatting; they do not calculate effective per-ce
   - `ConditionalFormat.percent`
 
 - **Parsing**
-  - Store/output only true for 1.
+  - Store/output only true for XML boolean 1/true.
 
 ### `formatKind`
 
@@ -152,7 +167,7 @@ Rules describe conditions and formatting; they do not calculate effective per-ce
   - rule/@format
 
 - **OOXML**
-  - `s:cfRule/s:colorScale`, `s:cfRule/s:dataBar`, `s:cfRule/s:iconSet`.
+  - Core or x14 cfRule/colorScale, dataBar, iconSet.
 
 - **IR**
   - `ConditionalFormat.formatKind`
@@ -186,4 +201,67 @@ Rules describe conditions and formatting; they do not calculate effective per-ce
   - `ConditionalFormat.dxfStyle`
 
 - **Parsing**
-  - Resolved compact font/fill/numberFormat/alignment string; available with semantic format index. Lower-density session rendering can retain this string.
+  - Resolve core dxfId through the semantic format index. Extended direct
+    x14:dxf uses its SpreadsheetML font/fill/numFmt/alignment children through
+    the same compact differential-style reader. Lower-density session rendering
+    can retain a previously resolved string.
+
+### `aboveAverage`
+
+- **Output**
+  - rule/@above-average=false for below-average conditions; omit true.
+- **OOXML**
+  - cfRule/@aboveAverage in either namespace.
+- **Parsing**
+  - Default true; honor an explicit false.
+
+### `equalAverage`
+
+- **Output**
+  - @equal-average=true when enabled.
+- **OOXML**
+  - cfRule/@equalAverage.
+- **Parsing**
+  - Default false.
+
+### `bottom`
+
+- **Output**
+  - @bottom=true for bottom-ranked conditions.
+- **OOXML**
+  - cfRule/@bottom.
+- **Parsing**
+  - Default false; keep it distinct from top ranking.
+
+### `stdDev`
+
+- **Output**
+  - @std-dev.
+- **OOXML**
+  - cfRule/@stdDev.
+- **Parsing**
+  - Retain a saved integer; do not calculate the sample deviation.
+
+### `timePeriod`
+
+- **Output**
+  - @time-period.
+- **OOXML**
+  - cfRule/@timePeriod.
+- **Parsing**
+  - Retain the saved discriminator without using the current clock to
+    evaluate the rule.
+
+### `unparsed`
+
+- **Output**
+  - An existing unreadable rule contains
+    `<unsupported type="conditional-format"/>`.
+    Plain emits `[Unparsed conditional format]` for that failed declaration.
+- **Diagnostics**
+  - CONDITIONAL_FORMAT_UNSUPPORTED for unknown rule/list content or missing
+    required type/range/body. RULE_BOOLEAN_INVALID uses the scalar default.
+- **Parsing**
+  - Conditions with readable cached cell values never replace those values
+    by calculated formatting. Unknown elements are not silently treated as
+    empty rules. Optional attribute/default fallback alone adds no placeholder.

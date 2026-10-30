@@ -2,7 +2,13 @@
 
 [XLSX](../README.md) / Workbook / Optional catalog diagnostics
 
-Rich values, cell controls, pivot caches and tables, slicers, and timelines use optional XML parts. Their parsing failures preserve independently readable cells and catalog entries. An absent optional feature with no reference to it produces no catalog warning. Package-level errors, including limits and invalid package paths, retain their normal failure behavior.
+Rich values, dynamic-array cell metadata, cell controls, pivot caches and tables,
+slicers, and timelines use optional XML parts. Their parsing failures preserve
+independently readable cells and catalog entries. An absent optional feature with
+no reference to it produces no catalog warning. Package-level errors, including
+limits and invalid package paths, retain their normal failure behavior. Rich-value
+and dynamic-array readers share one per-parse diagnostic context for metadata
+parts, so an invalid shared part is not reported twice.
 
 ## Warning fields
 

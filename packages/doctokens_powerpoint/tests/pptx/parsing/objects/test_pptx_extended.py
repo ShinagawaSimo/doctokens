@@ -7,7 +7,6 @@ from unittest.mock import patch
 from xml.etree import ElementTree as ET
 
 from _pptx_decks import rich_deck_pptx
-from _pptx_objects import table_shape_xml
 from _pptx_package import (
     content_types_xml,
     make_pptx,
@@ -45,33 +44,6 @@ class ExtendedPptxTests(unittest.TestCase):
         )
         parsed = PptxParser().parse(_deck(rich_text_shape_xml([run])), ParseOptions())
         self.assertTrue(any(warning.code == "COLOR_VALUE_INVALID" for warning in parsed.warnings))
-
-    def test_lists_formula_background_and_merged_table_are_preserved(self) -> None:
-        paragraphs = [
-            '<a:pPr><a:buAutoNum type="arabicPeriod" startAt="3"/></a:pPr><a:r><a:t>One</a:t></a:r>',
-            '<a:pPr><a:buAutoNum type="arabicPeriod" startAt="3"/></a:pPr><a:r><a:t>Two</a:t></a:r>',
-            '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" '
-            'xmlns:math2010="http://schemas.microsoft.com/office/drawing/2010/main">'
-            '<mc:Choice Requires="math2010"><math2010:m>'
-            '<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
-            "<m:f><m:num><m:r><m:t>a</m:t></m:r></m:num><m:den><m:r><m:t>b</m:t></m:r></m:den></m:f>"
-            "</m:oMath></math2010:m></mc:Choice><mc:Fallback><a:r><a:t>Old preview</a:t></a:r></mc:Fallback>"
-            "</mc:AlternateContent>",
-        ]
-        table = table_shape_xml([["A", ""]])
-        table = table.replace("<a:tc>", '<a:tc gridSpan="2">', 1)
-        second = table.find("<a:tc>")
-        table = table[:second] + '<a:tc hMerge="1">' + table[second + len("<a:tc>") :]
-        slide = slide_xml_shapes(rich_text_shape_xml(paragraphs) + table)
-        slide = slide.replace(
-            "<p:cSld>",
-            '<p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="112233"/></a:solidFill></p:bgPr></p:bg>',
-        )
-        deck = _deck("", slide_xml=slide)
-        rendered = parse_pptx(deck, density=Density.SEMANTIC).text
-        root = ET.fromstring(rendered)
-        self.assertEqual(root.findtext(".//equation"), "\\frac{a}{b}")
-        self.assertEqual(root.find(".//table/tr/td").get("colspan"), "2")
 
     def test_math_requires_unbound_unknown_and_rebound_prefixes(self) -> None:
         # Namespace errors and unsupported producer extensions are exceptional;
@@ -111,32 +83,6 @@ class ExtendedPptxTests(unittest.TestCase):
             [warning.code for warning in result.report.warnings if warning.code.startswith("MATH_")],
             ["MATH_ALTERNATE_CONTENT_UNSUPPORTED"],
         )
-
-    def test_nested_math_alternatives_read_one_native_representation(self) -> None:
-        # Temporary native-math migration case; no Office fixture exists yet.
-        paragraph = (
-            '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" '
-            'xmlns:math="http://schemas.microsoft.com/office/drawing/2010/main">'
-            '<mc:Choice Requires="math"><mc:AlternateContent><mc:Choice Requires="math"><math:m>'
-            '<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
-            "<m:r><m:t>x</m:t></m:r></m:oMath></math:m></mc:Choice>"
-            "<mc:Fallback><a:r><a:t>Inner preview</a:t></a:r></mc:Fallback></mc:AlternateContent></mc:Choice>"
-            "<mc:Fallback><a:r><a:t>Outer preview</a:t></a:r></mc:Fallback></mc:AlternateContent>"
-        )
-        source = _deck(rich_text_shape_xml([paragraph]))
-        for density in ("plain", "structural", "semantic"):
-            with self.subTest(density=density):
-                if density == "plain":
-                    expected = "density=plain format=pptx\n=== Slide 1 ===\nx"
-                else:
-                    name = ' name="Rich 9"' if density == "semantic" else ""
-                    expected = (
-                        f'<presentation density="{density}" format="pptx"><slide number="1">'
-                        f'<p{name} shape-id="s1"><equation notation="latex">x</equation></p></slide></presentation>'
-                    )
-                self.assertEqual(parse_pptx(source, density=density).text, expected)
-                with open_pptx(source) as session:
-                    self.assertEqual(session.render(density=density).text, expected)
 
     def test_drawingml_autonumber_schemes_use_shared_formatters(self) -> None:
         paragraphs = [

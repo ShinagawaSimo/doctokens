@@ -11,7 +11,9 @@ the source shape sequence or activate public geometry output.
 
 ## Processing
 
-Retain textless shapes when they have alt, title, link, fromShape, or toShape; also retain any shape addressed by a retained connector. The name alone does not retain decoration.
+Retain textless shapes when they have alt, title, link, fromShape, or toShape;
+also retain shapes addressed by a retained connector or an exact modern comment
+anchor. The name alone does not retain decoration.
 
 ## Fields
 
@@ -33,7 +35,8 @@ Retain textless shapes when they have alt, title, link, fromShape, or toShape; a
 ### `type`
 
 - **Output**
-  - `p|title|textbox`, `img`, `table`, `chart`, `smartart`, `media`, or `shape`.
+  - `p|title|textbox`, `img`, `table`, `chart`, `smartart`, `media`, `shape`,
+    or `unsupported`.
 
 - **OOXML**
   - sp/pic/graphicFrame/media/cxnSp.
@@ -45,7 +48,37 @@ Retain textless shapes when they have alt, title, link, fromShape, or toShape; a
   - Dispatch by source local name; graphicFrame dispatches by graphicData/@uri.
 
 - **Diagnostics**
-  - `UNSUPPORTED_SHAPE_TYPE`, `GRAPHIC_FRAME_MISSING_DATA` skip unsupported frames/shapes.
+  - Unsupported source shapes and frames or failed object dispatch retain
+    `<unsupported type="shape" source="SOURCE_NAME" shape-id="sN"/>` and their
+    existing diagnostics. Plain emits `[Unparsed shape: SOURCE_NAME]`.
+    Shape-tree property/extension containers do not represent independent
+    visible elements and produce no placeholders.
+
+### `AlternateContent`
+
+- **Output**
+  - Exactly one selected representation in the original shape/group position.
+    No readable representation yields an unsupported shape with
+    `source="AlternateContent"` and SHAPE_ALTERNATE_CONTENT_UNSUPPORTED.
+- **OOXML**
+  - mc:AlternateContent directly inside p:spTree or p:grpSp, including nested
+    choices and groups.
+- **Parsing**
+  - Resolve Choice/@Requires in the original namespace scope. The first
+    supported and readable Choice wins; otherwise use an explicit readable
+    Fallback. Unknown, unbound and locally rebound requirements are rejected.
+  - Supported requirement namespaces are PresentationML, DrawingML/main,
+    ChartML, DiagramML, Office Math, DrawingML 2010, PowerPoint 2010 and ChartEx.
+    Branch content must also be readable: sp, pic, cxnSp, grpSp or a graphicFrame
+    with a supported table/chart/ChartEx/diagram/OLE URI. A namespace alone does
+    not establish support for unknown content such as p:contentPart.
+  - Recurse through nested alternatives and group content. Rejected branches
+    produce neither text nor diagnostics from their descendants. A selected
+    empty branch remains empty; it does not imply decoding failure. A readable
+    fallback already represents the element and gets no extra placeholder.
+  - Alias prefixes are supported. Source order, group ownership, connector IDs
+    and inherited defaults use the selected tree. No rendering or OLE execution
+    is performed to recover text from an unreadable representation.
 
 ### `shape-id`
 

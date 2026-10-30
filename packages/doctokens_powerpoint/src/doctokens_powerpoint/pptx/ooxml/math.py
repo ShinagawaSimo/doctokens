@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from typing import cast
 from xml.etree import ElementTree as ET
 
 from doctokens_core.contracts.models import ParseWarning
 
 from .namespaces import NS
-from .package import PackageReader
+from .unsupported import unparsed_element
 
 TEXT_MATH = "{http://schemas.microsoft.com/office/drawing/2010/main}m"
 _M = f"{{{NS['m']}}}"
@@ -21,37 +20,8 @@ _INLINE = _MATH | {f"{{{NS['a']}}}{name}" for name in ("r", "br", "tab", "fld")}
 _SUPPORTED = frozenset((NS["a"], NS["m"], "http://schemas.microsoft.com/office/drawing/2010/main"))
 
 
-def read_math_part(package: PackageReader, part: str, warnings: list[ParseWarning]) -> ET.Element:
-    """Record real namespace bindings, then select only paragraph math content."""
-    bindings: dict[str, str] = {}
-    pending: list[tuple[str, str]] = []
-    stack: list[list[tuple[str, str | None]]] = []
-    supported_choices: set[ET.Element] = set()
-    root: ET.Element | None = None
-    with package.open_entry(part) as stream:
-        for event, item in ET.iterparse(stream, events=("start-ns", "start", "end")):
-            if event == "start-ns":
-                pending.append(cast(tuple[str, str], item))
-                continue
-            element = cast(ET.Element, item)
-            if event == "start":
-                previous = [(prefix, bindings.get(prefix)) for prefix, _uri in pending]
-                bindings.update(pending)
-                pending.clear()
-                stack.append(previous)
-                if element.tag == _CHOICE:
-                    prefixes = element.get("Requires", "").split()
-                    if prefixes and all(bindings.get(prefix) in _SUPPORTED for prefix in prefixes):
-                        supported_choices.add(element)
-                continue
-            for prefix, uri in stack.pop():
-                if uri is None:
-                    bindings.pop(prefix, None)
-                else:
-                    bindings[prefix] = uri
-            root = element
-    if root is None:
-        raise ET.ParseError("empty XML part")
+def normalize_math(root: ET.Element, supported_choices: set[ET.Element], warnings: list[ParseWarning], part: str) -> None:
+    """Select paragraph math only after outer shape alternatives are resolved."""
     for paragraph in root.iter(_PARAGRAPH):
         children: list[ET.Element] = []
         for child in paragraph:
@@ -63,10 +33,10 @@ def read_math_part(package: PackageReader, part: str, warnings: list[ParseWarnin
                 warnings.append(
                     ParseWarning("MATH_ALTERNATE_CONTENT_UNSUPPORTED", "Math has no readable Choice or Fallback", part)
                 )
+                children.append(unparsed_element("equation"))
             else:
                 children.extend(selected)
         paragraph[:] = children
-    return root
 
 
 def _contains_math(node: ET.Element) -> bool:

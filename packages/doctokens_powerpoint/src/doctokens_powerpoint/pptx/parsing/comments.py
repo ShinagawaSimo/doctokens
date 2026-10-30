@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ..model.presentation import CommentItem, CommentRef, SlideBlock
+from .comment_anchors import matches_shape
 from .slide_sequence import _SlideReference
 
 
@@ -15,15 +16,31 @@ def attach_comments(
 ) -> None:
     """Resolve comment slide/shape references without discarding raw IDs."""
     slide_by_locator = {locator: slide for slide in slides for locator in (slide["id"], slide["part"], slide["sldId"]) if locator}
+    by_id = {item["id"]: item for item in comments}
     for comment in comments:
         locator = comment.get("slideId")
         slide = slide_by_locator.get(locator) if isinstance(locator, str) else None
-        if slide is None and infer_single and len(slides) == 1:
+        if slide is None and infer_single and len(slides) == 1 and not comment.get("modern"):
             slide = slides[0]
         if slide is None:
             continue
         comment["slideId"] = slide["id"]
         reference: CommentRef = {"id": comment["id"]}
+        if comment.get("modern"):
+            targets = [
+                shape for shape in slide["shapes"] if any(matches_shape([anchor], shape) for anchor in comment.get("anchors", []))
+            ]
+            if len(targets) == 1:
+                comment["shapeId"] = targets[0]["id"]
+                reference["shapeId"] = targets[0]["id"]
+            elif not comment.get("anchors"):
+                parent = by_id.get(comment.get("parentCommentId", ""), {})
+                if parent_shape := parent.get("shapeId"):
+                    comment["shapeId"] = parent_shape
+                    reference["shapeId"] = parent_shape
+            if reference not in slide["commentRefs"]:
+                slide["commentRefs"].append(reference)
+            continue
         x = comment.get("x")
         y = comment.get("y")
         if not isinstance(x, int) or not isinstance(y, int):

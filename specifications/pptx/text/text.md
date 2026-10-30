@@ -9,7 +9,8 @@ A text shape retains its DrawingML paragraph boundaries and inline reading conte
 An `a:fld` uses its saved direct `a:t` and `a:rPr` through the ordinary run
 reader, including inherited formatting and hyperlinks. Fields are not evaluated
 or renumbered; a missing cached text does not produce a guessed value. Unknown
-paragraph children emit `UNSUPPORTED_PARAGRAPH_CHILD`; pPr/endParaRPr are skipped.
+paragraph children emit `UNSUPPORTED_PARAGRAPH_CHILD` and retain an inline
+`unsupported` marker; pPr/endParaRPr/extLst are formatting infrastructure.
 Pending breaks/tabs are flushed before runs, fields and equations and at paragraph end.
 
 List labels and placeholder roles are reading content in every density.
@@ -87,7 +88,10 @@ inherited numbering instead of letting the master label reappear.
 
 - **Parsing**
   - Use [OMML conversion](../../common/equation.md); also store LaTeX as text for plain output. Empty conversion yields no run.
-  - [Native math alternatives](../../../packages/doctokens_powerpoint/src/doctokens_powerpoint/pptx/ooxml/math.py) are selected while reading slide and notes XML. Resolve every Choice/@Requires prefix in its actual namespace scope, including aliases and local rebindings. A math Choice must require only supported DrawingML/main, Office Math or DrawingML 2010 namespaces, and contain readable inline math/runs/fields/breaks/tabs.
-  - Select the first supported Choice, otherwise the explicit Fallback, preserving source order and reading only one branch. An explicitly empty selected branch stays empty. With no readable branch or Fallback, emit MATH_ALTERNATE_CONTENT_UNSUPPORTED and omit that math alternative.
+  - [Native math alternatives](../../../packages/doctokens_powerpoint/src/doctokens_powerpoint/pptx/ooxml/math.py) are selected by the [content reader](../../../packages/doctokens_powerpoint/src/doctokens_powerpoint/pptx/ooxml/compatibility.py) while reading slides, notes, comments, layouts and masters. Resolve every Choice/@Requires prefix in its actual namespace scope, including aliases and local rebindings. A math Choice must require only supported DrawingML/main, Office Math or DrawingML 2010 namespaces, and contain readable inline math/runs/fields/breaks/tabs.
+  - Select the first supported Choice, otherwise the explicit Fallback, preserving source order and reading only one branch. An explicitly empty selected branch stays empty. With no readable branch or Fallback, emit MATH_ALTERNATE_CONTENT_UNSUPPORTED and retain `<unsupported type="equation"/>` at its inline position; plain uses `[Unparsed equation]`.
   - Resolve nested mathematical alternatives recursively, including alternatives within a selected native math zone. Namespace requirements use their original scopes at every level. An unreadable inner branch can make an outer Choice unreadable; rejected branches neither leak preview text nor emit conversion diagnostics.
-  - This selection applies only to paragraph alternatives containing mathematical content. Shape-level alternatives and OLE previews keep their separate dispatch behavior. Math uses all densities; formatting/geometry density choices do not disable its extraction.
+  - This selector handles paragraph alternatives containing mathematical content.
+    [Shape alternatives](../shapes/shape.md#alternatecontent) are selected first;
+    OLE preview dispatch remains separate. Math uses all densities;
+    formatting/geometry density choices do not disable its extraction.

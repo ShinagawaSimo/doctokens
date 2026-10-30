@@ -17,6 +17,7 @@ def _is_meaningful_shape(shape: ShapeBlock) -> bool:
         or shape.get("toShape")
         or shape.get("headEnd")
         or shape.get("tailEnd")
+        or shape.get("commentAnchor")
     )
 
 

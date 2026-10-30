@@ -22,6 +22,3 @@ _PRESENTATION_OVERRIDE = (
     '<Override PartName="/ppt/presentation.xml" '
     'ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>'
 )
-
-
-P15_NS = "http://schemas.microsoft.com/office/powerpoint/2012/main"

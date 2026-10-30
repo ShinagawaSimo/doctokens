@@ -5,7 +5,7 @@ from __future__ import annotations
 import zipfile
 from io import BytesIO
 
-from _pptx_namespaces import _PRESENTATION_OVERRIDE, A_NS, P14_NS, P15_NS, P_NS, R_NS
+from _pptx_namespaces import _PRESENTATION_OVERRIDE, A_NS, P14_NS, P_NS, R_NS
 
 
 def make_pptx(entries: dict[str, str | bytes]) -> bytes:
@@ -182,26 +182,6 @@ def slide_rels_xml(rel_xml: str) -> str:
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 {rel_xml}
 </Relationships>"""
-
-
-def comment_authors_xml() -> str:
-    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p15:cmAuthorLst xmlns:p15="{P15_NS}">
-<p15:cmAuthor id="0" name="Alice" initials="A" lastIndex="2" clrIdx="0"/>
-<p15:cmAuthor id="1" name="Bob" initials="B" lastIndex="2" clrIdx="1"/>
-</p15:cmAuthorLst>"""
-
-
-def comments_xml() -> str:
-    """Modern threaded comments: one root comment and one reply (parentId)."""
-    a = "http://schemas.openxmlformats.org/drawingml/2006/main"
-    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p15:cmLst xmlns:p15="{P15_NS}" xmlns:a="{a}">
-<p15:cm authorId="0" dt="2026-08-13T10:00:00" idx="1">
-<p15:pos x="0" y="0"/><p15:text><a:r><a:t>Nice slide</a:t></a:r></p15:text></p15:cm>
-<p15:cm authorId="1" dt="2026-08-13T11:00:00" idx="2" parentId="1">
-<p15:pos x="0" y="0"/><p15:text><a:r><a:t>Agreed</a:t></a:r></p15:text></p15:cm>
-</p15:cmLst>"""
 
 
 def notes_slide_xml(paragraphs: list[list[tuple[str, str]]]) -> str:

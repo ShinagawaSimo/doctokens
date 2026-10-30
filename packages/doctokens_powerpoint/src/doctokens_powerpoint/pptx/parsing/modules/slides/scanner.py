@@ -9,6 +9,7 @@ from doctokens_core.contracts.models import ParseWarning
 from ....model.presentation import (
     AssetLookup,
     ChartLookup,
+    CommentAnchor,
     LayoutContext,
     LayoutLookup,
     ParagraphStyle,
@@ -20,6 +21,8 @@ from ....model.presentation import (
 from ....ooxml.inheritance import LayoutMasterResolver
 from ....ooxml.namespaces import attr, first_child, local_name
 from ....ooxml.text_styles import TextStyleParser, merge_paragraph_style
+from ....ooxml.unsupported import UNPARSED
+from ...comment_anchors import matches_shape
 from ...plan import PptxFeature, PptxParsePlan
 from .geometry import SlideGeometry, _GroupTransform
 from .objects import SlideObjectParser
@@ -35,6 +38,7 @@ from .shape_details import (
     _resolve_connector_endpoints,
     _shape_name,
 )
+from .tables import TableParser
 from .text import DrawingTextParser, HyperlinkLookup
 
 
@@ -86,9 +90,22 @@ class SlideParser:
             shape_runs,
             include_formatting=self.include_formatting,
         )
-        self._objects = SlideObjectParser(warnings, asset_lookup, chart_lookup, smartart_lookup, layout_lookup)
+        self._objects = SlideObjectParser(
+            warnings,
+            asset_lookup,
+            chart_lookup,
+            smartart_lookup,
+            layout_lookup,
+            TableParser(warnings, self._text_parser, include_formatting=self.include_formatting),
+        )
 
-    def parse_slide(self, root: ET.Element, part: str) -> tuple[bool, list[ShapeBlock], SlideBackground | None]:
+    def parse_slide(
+        self,
+        root: ET.Element,
+        part: str,
+        *,
+        comment_anchors: list[CommentAnchor] | None = None,
+    ) -> tuple[bool, list[ShapeBlock], SlideBackground | None]:
         """Return hidden state, shapes, and the explicit slide background."""
         if local_name(root.tag) != "sld":
             self._warnings.append(
@@ -101,9 +118,15 @@ class SlideParser:
         hidden = root.get("show") == "0"
         context = self._resolver.resolve(part, root) if self._resolver is not None else _minimal_layout_context()
         background = self._geometry._background(root, part, context) if self.include_geometry else None
-        return hidden, self._shapes(root, part, context), background
+        return hidden, self._shapes(root, part, context, comment_anchors or []), background
 
-    def _shapes(self, root: ET.Element, part: str, context: LayoutContext) -> list[ShapeBlock]:
+    def _shapes(
+        self,
+        root: ET.Element,
+        part: str,
+        context: LayoutContext,
+        comment_anchors: list[CommentAnchor],
+    ) -> list[ShapeBlock]:
         c_sld = first_child(root, "p", "cSld")
         sp_tree = first_child(c_sld, "p", "spTree") if c_sld is not None else None
         if sp_tree is None:
@@ -124,7 +147,7 @@ class SlideParser:
         def visit(node: ET.Element, transform: _GroupTransform, groups: tuple[ShapeGroup, ...] = ()) -> None:
             nonlocal ordinal, z_index, group_count
             name = local_name(node.tag)
-            if name in {"nvGrpSpPr", "grpSpPr"}:
+            if name in {"nvGrpSpPr", "grpSpPr", "extLst"}:
                 return
             if name == "grpSp":
                 group_count += 1
@@ -146,20 +169,25 @@ class SlideParser:
             elif name == "media":
                 shape = self._objects._media_shape(node, part, candidate_ordinal)
             elif name == "graphicFrame":
-                shape = self._objects._graphic_frame_shape(node, part, candidate_ordinal)
+                shape = self._objects._graphic_frame_shape(node, part, candidate_ordinal, context)
             elif name == "cxnSp":
                 shape = self._connector_shape(node, candidate_ordinal)
             else:
-                self._warnings.append(
-                    ParseWarning(
-                        code="UNSUPPORTED_SHAPE_TYPE",
-                        message=f"Unsupported shape type: {name}",
-                        locator=part,
+                if node.tag != UNPARSED:
+                    self._warnings.append(
+                        ParseWarning(
+                            code="UNSUPPORTED_SHAPE_TYPE",
+                            message=f"Unsupported shape type: {name}",
+                            locator=part,
+                        )
                     )
-                )
-                return
+                shape = None
             if shape is None:
-                return
+                shape = {
+                    "id": f"s{candidate_ordinal}",
+                    "type": "unsupported",
+                    "sourceKind": node.get("source", name) if node.tag == UNPARSED else name,
+                }
             ordinal += 1
             shape["z"] = z_index
             if groups:
@@ -169,7 +197,13 @@ class SlideParser:
                 self._attach_shape_navigation(shape, node, part)
             drawing_id = _drawing_id(node)
             if drawing_id:
+                shape["drawingId"] = drawing_id
                 drawing_id_to_shape_id[drawing_id] = shape["id"]
+            creation = next(iter(node.iter("{http://schemas.microsoft.com/office/drawing/2014/main}creationId")), None)
+            if creation is not None and creation.get("id"):
+                shape["creationId"] = creation.get("id", "")
+            if any(matches_shape([anchor], shape) for anchor in comment_anchors):
+                shape["commentAnchor"] = True
             shapes.append(shape)
 
         for child in sp_tree:

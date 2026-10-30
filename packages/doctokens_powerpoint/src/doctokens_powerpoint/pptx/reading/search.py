@@ -33,18 +33,25 @@ def text_units(presentation: ParsedPresentation) -> Iterator[TextUnit]:
                         # shape_runs inserts exactly one synthetic list-prefix
                         # run before the source runs. It is navigation markup,
                         # not a character sequence from the paragraph itself.
-                        value = "".join(run.get("text", "") for run in runs[1:])
+                        value = "".join("\ufffc" if run.get("unparsed") else run.get("text", "") for run in runs[1:])
+                    elif runs:
+                        value = "".join("\ufffc" if run.get("unparsed") else run.get("text", "") for run in runs)
                     else:
                         value = paragraph.get("text", "")
                     yield TextUnit(value, {**locator, "paragraph": index})
             elif shape.get("text"):
                 yield TextUnit(shape["text"], locator)
-        for index, text in enumerate((slide.get("notes") or "").splitlines(), 1):
+        for index, text in enumerate(slide.get("notesSearch", (slide.get("notes") or "").splitlines()), 1):
             yield TextUnit(text, {"slide_start": slide["n"], "source": "notes", "paragraph": index})
         for reference in slide.get("commentRefs", []):
             item = comments.get(reference.get("id"))
-            if item is not None:
-                for index, text in enumerate(item.get("text", "").splitlines(), 1):
+            if item is not None and not item.get("unparsed"):
+                value = (
+                    "".join("\ufffc" if run.get("unparsed") else run.get("text", "") for run in item["runs"])
+                    if item.get("runs")
+                    else item.get("text", "")
+                )
+                for index, text in enumerate(value.splitlines(), 1):
                     yield TextUnit(
                         text, {"slide_start": slide["n"], "source": "comment", "item_id": item.get("id", ""), "paragraph": index}
                     )

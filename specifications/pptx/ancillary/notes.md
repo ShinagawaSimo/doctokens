@@ -24,4 +24,24 @@ Notes are attached to their source slide.
   - None when no content.
 
 - **Diagnostics**
-  - NOTES_PART_MISSING or NOTES_XML_INVALID → None.
+  - NOTES_PART_MISSING, NOTES_XML_INVALID or NOTES_MISSING_SPTREE retain
+    `[Unparsed speaker notes]` for a present notes relationship that cannot
+    be read. No notes relationship remains ordinary absence.
+  - An unreadable selected shape alternative in the note tree retains its
+    unreadable-shape marker; readable alternatives and property containers
+    do not create an extra marker. Notes remain a flattened text projection
+    in both XML densities, including these markers.
+
+### `notesSearch`
+
+- **Output**
+  - Internal source lines used by text search.
+- **OOXML**
+  - The same retained note shapes and paragraphs.
+- **IR**
+  - `SlideBlock.notesSearch: list[str]`.
+- **Parsing**
+  - Preserve the note text's existing line boundaries, including separation
+    between shapes. Replace generated inline unreadable-content markers by
+    a boundary; do not search the generated label or join text across a gap.
+    An unreadable whole part contributes no searchable source text.

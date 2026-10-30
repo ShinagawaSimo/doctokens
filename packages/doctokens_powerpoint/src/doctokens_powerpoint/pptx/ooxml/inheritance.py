@@ -15,6 +15,7 @@ from doctokens_core.contracts.models import ParseWarning
 
 from ..model.presentation import LayoutContext, ParagraphStyle, PlaceholderInfo
 from .colors import DEFAULT_COLOR_MAP
+from .compatibility import read_content_part
 from .namespaces import first_child, local_name
 from .package import PackageReader
 from .text_styles import TextStyleParser, _find_descendant, _layout_shapes, _merge_text_styles
@@ -288,4 +289,4 @@ class LayoutMasterResolver:
         return None
 
     def _read_xml(self, part: str) -> ET.Element:
-        return self._pkg.read_xml(part)
+        return read_content_part(self._pkg, part, self._warnings)

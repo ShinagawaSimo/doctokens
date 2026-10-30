@@ -7,12 +7,11 @@ from xml.etree import ElementTree as ET
 from doctokens_core.contracts.models import ParseWarning
 from doctokens_core.ooxml.charts.parser import CHART_EX_GRAPHIC_DATA_URI
 
-from ....model.presentation import AssetLookup, ChartLookup, LayoutLookup, ShapeBlock, SmartArtLookup, TableCell
-from ....ooxml.namespaces import attr, first_child, local_name, qualified_name
-from .lists import integer as _parse_int
+from ....model.presentation import AssetLookup, ChartLookup, LayoutContext, LayoutLookup, ShapeBlock, SmartArtLookup
+from ....ooxml.namespaces import attr, first_child, qualified_name
 from .media import media_shape
-from .runs import _drawingml_bool, tx_body_text
 from .shape_details import _find_descendant, _shape_alt, _shape_name
+from .tables import TableParser
 
 
 class SlideObjectParser:
@@ -25,13 +24,14 @@ class SlideObjectParser:
         charts: ChartLookup,
         smartarts: SmartArtLookup,
         layouts: LayoutLookup,
+        tables: TableParser,
     ) -> None:
         self._warnings = warnings
         self._asset_lookup = assets
         self._chart_lookup = charts
         self._smartart_lookup = smartarts
         self._layout_lookup = layouts
-        self._table_index = 0
+        self._tables = tables
 
     def _picture_shape(self, pic: ET.Element, part: str, ordinal: int) -> ShapeBlock | None:
         media = media_shape(pic, part, ordinal, self._asset_lookup, self._warnings)
@@ -75,7 +75,7 @@ class SlideObjectParser:
     def _media_shape(self, media: ET.Element, part: str, ordinal: int) -> ShapeBlock | None:
         return media_shape(media, part, ordinal, self._asset_lookup, self._warnings, standalone=True)
 
-    def _graphic_frame_shape(self, frame: ET.Element, part: str, ordinal: int) -> ShapeBlock | None:
+    def _graphic_frame_shape(self, frame: ET.Element, part: str, ordinal: int, context: LayoutContext) -> ShapeBlock | None:
         graphic_data = _find_descendant(frame, "graphicData")
         if graphic_data is None:
             self._warnings.append(
@@ -88,7 +88,7 @@ class SlideObjectParser:
             return None
         uri = graphic_data.get("uri", "")
         if uri == "http://schemas.openxmlformats.org/drawingml/2006/table":
-            return self._table_shape(frame, part, ordinal)
+            return self._tables.parse(frame, part, ordinal, context)
         if uri == "http://schemas.openxmlformats.org/drawingml/2006/chart":
             return self._chart_shape(frame, part, ordinal)
         if uri == CHART_EX_GRAPHIC_DATA_URI:
@@ -224,89 +224,3 @@ class SlideObjectParser:
             if category:
                 shape["layoutType"] = category
         return shape
-
-    def _table_shape(self, frame: ET.Element, part: str, ordinal: int) -> ShapeBlock | None:
-        tbl = _find_descendant(frame, "tbl")
-        if tbl is None:
-            self._warnings.append(
-                ParseWarning(code="TABLE_MISSING_TBL", message="graphicFrame table without a:tbl", locator=part)
-            )
-            return None
-        rows: list[list[str]] = []
-        table_cells: list[list[TableCell]] = []
-        column_widths: list[int] = []
-        grid = first_child(tbl, "a", "tblGrid")
-        if grid is not None:
-            for column in grid:
-                if local_name(column.tag) == "gridCol":
-                    width = _parse_int(column.get("w"), 0)
-                    if width > 0:
-                        column_widths.append(width)
-        for child in tbl:
-            if local_name(child.tag) != "tr":
-                continue
-            row: list[str] = []
-            cell_row: list[TableCell] = []
-            for cell in child:
-                if local_name(cell.tag) != "tc":
-                    continue
-                tx_body = first_child(cell, "a", "txBody")
-                source_paragraphs: list[str] = []
-                text = tx_body_text(tx_body, part, self._warnings, source_paragraphs=source_paragraphs) or ""
-                row.append(text)
-                cell_info: TableCell = {"text": text, "searchParagraphs": source_paragraphs}
-                col_span = _parse_int(cell.get("gridSpan"), 1)
-                row_span = _parse_int(cell.get("rowSpan"), 1)
-                if col_span > 1:
-                    cell_info["colSpan"] = col_span
-                if row_span > 1:
-                    cell_info["rowSpan"] = row_span
-                if _drawingml_bool(cell.get("hMerge")):
-                    cell_info["hMerge"] = True
-                if _drawingml_bool(cell.get("vMerge")):
-                    cell_info["vMerge"] = True
-                cell_row.append(cell_info)
-            rows.append(row)
-            table_cells.append(cell_row)
-        self._normalize_table_merges(table_cells)
-        self._table_index += 1
-        shape: ShapeBlock = {
-            "id": f"s{ordinal}",
-            "type": "table",
-            "name": _shape_name(frame) or "",
-            "rows": rows,
-            "tableId": f"table{self._table_index}",
-        }
-        shape["tableCells"] = table_cells
-        if column_widths:
-            shape["columnWidths"] = column_widths
-        return shape
-
-    @staticmethod
-    def _normalize_table_merges(rows: list[list[TableCell]]) -> None:
-        """Infer spans when producers emit only hMerge/vMerge continuations."""
-        explicit_row_spans = {id(cell) for row in rows for cell in row if "rowSpan" in cell}
-        for row in rows:
-            anchor: TableCell | None = None
-            explicit_col_span = False
-            for cell in row:
-                if cell.get("hMerge"):
-                    if anchor is not None and not explicit_col_span:
-                        anchor["colSpan"] = anchor.get("colSpan", 1) + 1
-                else:
-                    anchor = cell
-                    explicit_col_span = "colSpan" in cell
-        for row_index, row in enumerate(rows):
-            for column_index, cell in enumerate(row):
-                if not cell.get("vMerge"):
-                    continue
-                for previous_index in range(row_index - 1, -1, -1):
-                    previous_row = rows[previous_index]
-                    if column_index >= len(previous_row):
-                        continue
-                    anchor = previous_row[column_index]
-                    if anchor.get("vMerge"):
-                        continue
-                    if id(anchor) not in explicit_row_spans:
-                        anchor["rowSpan"] = row_index - previous_index + 1
-                    break

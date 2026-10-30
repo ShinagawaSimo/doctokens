@@ -20,7 +20,8 @@ from ..ooxml.theme import ThemeParser
 from .comments import _CommentAttachmentPlan
 from .diagnostics import record_metrics
 from .manifest import presentation_manifest
-from .modules.ancillary.parts import CommentsParser, NotesParser
+from .modules.ancillary.comments import CommentsParser
+from .modules.ancillary.parts import NotesParser
 from .modules.resources.assets import AssetExtractor
 from .modules.resources.objects import EmbeddedObjectExtractor
 from .plan import PptxFeature, PptxParsePlan

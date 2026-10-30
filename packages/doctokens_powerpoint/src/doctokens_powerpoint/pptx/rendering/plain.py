@@ -37,6 +37,8 @@ def _slide_body(slide: SlideBlock, smartarts: dict[str, SmartArtRecord]) -> str:
 
 
 def _shape_text(shape: ShapeBlock, smartarts: dict[str, SmartArtRecord]) -> str:
+    if shape["type"] == "unsupported":
+        return f"[Unparsed shape: {shape.get('sourceKind', 'shape')}]"
     if shape["type"] == "text":
         if paragraphs := shape.get("paragraphs"):
             lines = []

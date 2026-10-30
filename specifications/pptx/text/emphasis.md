@@ -2,7 +2,9 @@
 
 [PPTX](../README.md) / Text emphasis
 
-Semantic DTX nests wrappers in the order color, underline, italic, bold, hyperlink.
+Semantic DTX nests wrappers in the order color, highlight, strike, baseline,
+underline, italic, bold, hyperlink. Adjacent runs merge only when all effective
+public formats and the hyperlink agree.
 
 ## Processing
 
@@ -16,13 +18,14 @@ Semantic/session inheritance: master and layout style â†’ shape role/type/idx â†
   - `<b>...</b>`.
 
 - **OOXML**
-  - a:rPr/@b or child a:b.
+  - a:rPr/@b; inherited a:defRPr/@b.
 
 - **IR**
   - `Run.format.bold: bool`
 
 - **Parsing**
-  - Present attribute â†’ lower-case value outside 0/false/off/no is true; otherwise child presence true. False overrides inherited true.
+  - Present attribute â†’ lower-case value outside 0/false/off/no is true.
+    False overrides inherited true. DrawingML stores this as an attribute.
 
 ### `italic`
 
@@ -30,7 +33,7 @@ Semantic/session inheritance: master and layout style â†’ shape role/type/idx â†
   - `<i>...</i>`.
 
 - **OOXML**
-  - a:rPr/@i or child a:i.
+  - a:rPr/@i; inherited a:defRPr/@i.
 
 - **IR**
   - `Run.format.italic: bool`
@@ -44,13 +47,67 @@ Semantic/session inheritance: master and layout style â†’ shape role/type/idx â†
   - `<u>...</u>`.
 
 - **OOXML**
-  - a:rPr/@u or child a:u/@val.
+  - a:rPr/@u; inherited a:defRPr/@u.
 
 - **IR**
   - `Run.format.underline: bool`
 
 - **Parsing**
-  - False for exact none/0/false/off; present other value true. Child missing val also true.
+  - The DrawingML value none clears inherited underline; other saved line
+    styles retain underline semantics without reproducing their geometry.
+
+### `strike`
+
+- **Output**
+  - `<s>...</s>` in semantic output.
+- **OOXML**
+  - a:rPr/@strike; inherited a:defRPr/@strike.
+- **IR**
+  - `Run.format.strike: bool`.
+- **Parsing**
+  - sngStrike and dblStrike enable the reading property; noStrike clears it.
+    The number of strokes is not an editable-layout projection.
+
+### `superscript`
+
+- **Output**
+  - `<sup>...</sup>` in semantic output.
+- **OOXML**
+  - a:rPr/@baseline; inherited a:defRPr/@baseline.
+- **IR**
+  - `Run.format.superscript: bool`.
+- **Parsing**
+  - A positive saved integer enables superscript and clears subscript.
+    Zero clears both. A non-integer emits TEXT_BASELINE_INVALID and leaves
+    readable text and inherited formatting available; no element placeholder
+    is added for a failed format value. The offset magnitude is not emitted.
+
+### `subscript`
+
+- **Output**
+  - `<sub>...</sub>` in semantic output.
+- **OOXML**
+  - The same baseline attribute.
+- **IR**
+  - `Run.format.subscript: bool`.
+- **Parsing**
+  - A negative integer enables subscript and clears superscript.
+    Example: x followed by a run containing 2 with baseline=30000 becomes
+    `x<sup>2</sup>`; baseline=-25000 becomes `x<sub>2</sub>`.
+
+### `highlight`
+
+- **Output**
+  - `<mark value="#RRGGBB">...</mark>` in semantic output.
+- **OOXML**
+  - a:rPr/a:highlight or inherited a:defRPr/a:highlight, with a color child.
+- **IR**
+  - `Run.format.highlight: str`.
+- **Parsing**
+  - Resolve the first readable color with the existing DrawingML color
+    resolver. Black is a meaningful highlight and is retained. Missing
+    highlight inherits; unsupported color encodings do not create a guessed
+    highlight. Transparency follows the existing [color policy](color.md).
 
 ### `color`
 
@@ -64,4 +121,6 @@ Semantic/session inheritance: master and layout style â†’ shape role/type/idx â†
   - `Run.format.color: str`
 
 - **Parsing**
-  - First resolved non-default color; see [colors](color.md). Near-black direct colors are omitted rather than explicitly clearing inherited colors.
+  - First resolved color; see [colors](color.md). A resolved default/near-black
+    color clears inherited non-default color and emits no color wrapper.
+    This same reader handles direct and inherited character properties.

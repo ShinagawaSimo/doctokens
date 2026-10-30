@@ -1,17 +1,9 @@
-"""Modern threaded comments (p15): authors, threads, plain rendering."""
+"""Damaged comment parts; normal content requires native files and reviewed goldens."""
 
 from __future__ import annotations
 
-import unittest
-import zipfile
-from io import BytesIO
-from pathlib import Path
-from tempfile import TemporaryDirectory
-from xml.etree import ElementTree as ET
-
+import pytest
 from _pptx_package import (
-    comment_authors_xml,
-    comments_xml,
     content_types_xml,
     make_pptx,
     presentation_rels_xml,
@@ -19,130 +11,55 @@ from _pptx_package import (
     root_rels_xml,
     slide_rels_xml,
     slide_xml_shapes,
-    text_shape_xml,
 )
-from doctokens_powerpoint import open_pptx, parse_pptx
-from doctokens_powerpoint import parse_pptx as parse_pptx_result
-from doctokens_powerpoint.pptx.model.enums import Density
-from doctokens_powerpoint.pptx.model.presentation import ParseOptions
-from doctokens_powerpoint.pptx.parsing.runner import PptxParser
+from doctokens_powerpoint import parse_pptx
 
-_COMMENTS_REL = (
-    '<Relationship Id="rId30" '
-    'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" '
-    'Target="comments/comment1.xml"/>'
-    '<Relationship Id="rId31" '
-    'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors" '
-    'Target="commentAuthors.xml"/>'
-)
-_OVERRIDES = (
-    '<Override PartName="/ppt/comments/comment1.xml" '
-    'ContentType="application/vnd.openxmlformats-officedocument.presentationml.comments+xml"/>'
-    '<Override PartName="/ppt/commentAuthors.xml" '
-    'ContentType="application/vnd.openxmlformats-officedocument.presentationml.commentAuthors+xml"/>'
-)
+_MODERN = "http://schemas.microsoft.com/office/powerpoint/2018/8/main"
 
 
-def _comments_deck(
-    *,
-    with_comments: bool = True,
-    with_authors: bool = True,
-    comments_content: str | None = None,
-) -> bytes:
-    entries: dict[str, str | bytes] = {
-        "[Content_Types].xml": content_types_xml(1, extra_defaults=_OVERRIDES),
+def _damaged_comments(body: str | None) -> bytes:
+    # Missing/malformed parts and an invalid extension root cannot be created
+    # through the normal PowerPoint comment UI.
+    entries = {
+        "[Content_Types].xml": content_types_xml(1),
         "_rels/.rels": root_rels_xml(),
         "ppt/presentation.xml": presentation_xml(1),
-        "ppt/_rels/presentation.xml.rels": presentation_rels_xml(1, extra=_COMMENTS_REL),
-        "ppt/slides/slide1.xml": slide_xml_shapes(text_shape_xml([[("t", "Slide")]])),
+        "ppt/_rels/presentation.xml.rels": presentation_rels_xml(1),
+        "ppt/slides/slide1.xml": slide_xml_shapes(""),
+        "ppt/slides/_rels/slide1.xml.rels": slide_rels_xml(
+            '<Relationship Id="c" Type="http://schemas.microsoft.com/office/2018/10/relationships/comments" '
+            'Target="../comments/modern.xml"/>'
+        ),
     }
-    if with_comments:
-        entries["ppt/comments/comment1.xml"] = comments_content or comments_xml()
-    if with_authors:
-        entries["ppt/commentAuthors.xml"] = comment_authors_xml()
+    if body is not None:
+        entries["ppt/comments/modern.xml"] = body
     return make_pptx(entries)
 
 
-def _classic_comments_deck() -> bytes:
-    presentation_ns = "http://schemas.openxmlformats.org/presentationml/2006/main"
-    comment_rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments"
-    entries: dict[str, str | bytes] = {
-        "[Content_Types].xml": content_types_xml(2),
-        "_rels/.rels": root_rels_xml(),
-        "ppt/presentation.xml": presentation_xml(2),
-        "ppt/_rels/presentation.xml.rels": presentation_rels_xml(2),
-    }
-    for number, escaped_text in ((1, " First &amp; &lt;one&gt; "), (2, "Second")):
-        entries[f"ppt/slides/slide{number}.xml"] = slide_xml_shapes(text_shape_xml([[("t", f"Slide {number}")]]))
-        entries[f"ppt/slides/_rels/slide{number}.xml.rels"] = slide_rels_xml(
-            f'<Relationship Id="rComment" Type="{comment_rel}" Target="../comments/comment{number}.xml"/>'
-        )
-        entries[f"ppt/comments/comment{number}.xml"] = (
-            f'<p:cmLst xmlns:p="{presentation_ns}">'
-            f'<p:cm authorId="0" idx="{number}"><p:pos x="0" y="0"/>'
-            f"<p:text>{escaped_text}</p:text></p:cm></p:cmLst>"
-        )
-    return make_pptx(entries)
+@pytest.mark.parametrize(
+    ("body", "code"),
+    [
+        (None, "COMMENTS_PART_MISSING"),
+        ("<broken", "COMMENTS_XML_INVALID"),
+        ("<future/>", "COMMENTS_ROOT_UNSUPPORTED"),
+        (f'<cmLst xmlns="{_MODERN}"><future:cm xmlns:future="urn:future"/></cmLst>', "COMMENT_ELEMENT_UNSUPPORTED"),
+    ],
+)
+def test_unreadable_comment_part_retains_a_placeholder(body: str | None, code: str) -> None:
+    result = parse_pptx(_damaged_comments(body), density="semantic")
+    assert code in [warning.code for warning in result.report.warnings]
+    assert result.text == (
+        '<presentation density="semantic" format="pptx"><slide number="1"><comment-ref id="cmt1" /></slide>'
+        '<comments><comment id="cmt1" slide="slide1"><unsupported type="comments" /></comment></comments></presentation>'
+    )
 
 
-class CommentsTests(unittest.TestCase):
-    def test_parent_id_maps_by_raw_comment_idx(self) -> None:
-        content = comments_xml().replace('idx="1"', 'idx="7"').replace('parentId="1"', 'parentId="7"')
-        root = ET.fromstring(parse_pptx(_comments_deck(comments_content=content), density="semantic").text)
-        self.assertEqual(root.find("./comments/comment[@id='cmt2']").get("parent"), "cmt1")
-
-    def test_missing_comments_part_yields_warning_and_no_comments(self) -> None:
-        parsed = PptxParser().parse(_comments_deck(with_comments=False), ParseOptions())
-        self.assertTrue(any(w.code == "COMMENTS_PART_MISSING" for w in parsed.warnings))
-
-    def test_missing_authors_degrades_to_empty_author(self) -> None:
-        root = ET.fromstring(parse_pptx(_comments_deck(with_authors=False), density="semantic").text)
-        self.assertFalse(root.find("./comments/comment").get("author"))
-
-    def test_plain_appends_comments_section(self) -> None:
-        text = parse_pptx(_comments_deck(), density=Density.PLAIN).text
-        self.assertIn("[Comments]", text)
-        self.assertIn("[cmt1: Nice slide]", text)
-        self.assertIn("[cmt2: Agreed]", text)
-
-    def test_plain_without_comments_omits_section(self) -> None:
-        text = parse_pptx(_comments_deck(with_comments=False), density=Density.PLAIN).text
-        self.assertNotIn("[Comments]", text)
-
-    def test_classic_comment_text_and_slide_ownership(self) -> None:
-        source = _classic_comments_deck()
-        temporary = TemporaryDirectory()
-        self.addCleanup(temporary.cleanup)
-        path = Path(temporary.name) / "comments.pptx"
-        path.write_bytes(source)
-        expected = [("slide1", " First & <one> "), ("slide2", "Second")]
-        for input_source in (path, source):
-            result = parse_pptx_result(input_source, density="semantic")
-            comments = ET.fromstring(result.text).findall("./comments/comment")
-            self.assertEqual([(node.get("slide"), node.text) for node in comments], expected)
-            self.assertEqual(sum(w.code == "LEGACY_COMMENTS_PARSED" for w in result.report.warnings), 2)
-            first_slide = parse_pptx_result(input_source, density="semantic", slide=1)
-            selected = ET.fromstring(first_slide.text).findall("./comments/comment")
-            self.assertEqual([(node.get("slide"), node.text) for node in selected], expected[:1])
-            plain = parse_pptx_result(input_source, density="plain")
-            self.assertIn("[cmt1:  First & <one> ]", plain.text)
-        with open_pptx(source) as session:
-            result = session.render(density="semantic")
-            comments = ET.fromstring(result.text).findall("./comments/comment")
-            self.assertEqual([(node.get("slide"), node.text) for node in comments], expected)
-            second_slide = session.render(density="semantic", slide=2)
-            selected = ET.fromstring(second_slide.text).findall("./comments/comment")
-            self.assertEqual([(node.get("slide"), node.text) for node in selected], expected[1:])
-
-    def test_classic_empty_text_and_modern_text_are_distinct(self) -> None:
-        source = _classic_comments_deck()
-        with zipfile.ZipFile(BytesIO(source)) as archive:
-            entries = {name: archive.read(name) for name in archive.namelist()}
-        entries["ppt/comments/comment1.xml"] = entries["ppt/comments/comment1.xml"].replace(b" First &amp; &lt;one&gt; ", b"")
-        empty = make_pptx(entries)
-        root = ET.fromstring(parse_pptx(empty, density="semantic").text)
-        self.assertEqual([item.text or "" for item in root.findall("./comments/comment")], ["", "Second"])
-
-
-if __name__ == "__main__":
-    unittest.main()
+def test_invalid_comment_status_does_not_hide_the_comment() -> None:
+    # An arbitrary enum value is invalid XML content, not a normal UI state.
+    source = _damaged_comments(f'<cmLst xmlns="{_MODERN}"><cm id="a" authorId="b" status="future"/></cmLst>')
+    result = parse_pptx(source, density="structural")
+    assert "COMMENT_STATUS_INVALID" in [warning.code for warning in result.report.warnings]
+    assert result.text == (
+        '<presentation density="structural" format="pptx"><slide number="1"><comment-ref id="cmt1" /></slide>'
+        '<comments><comment author="" id="cmt1" slide="slide1" /></comments></presentation>'
+    )

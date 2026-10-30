@@ -15,5 +15,8 @@
   - Match paragraph text across runs; do not search serialized list/shape fields
     or concatenate distinct paragraphs. Notes/comments use retained line units.
     Hidden slides remain searchable with the same saved slide numbers.
+  - Generated unreadable-content placeholders are not source text. Inline
+    unreadable regions form a boundary so text on opposite sides cannot
+    accidentally concatenate into a match.
   - Locators carry slide_start and a source, with shape_id, paragraph, table_id,
     one-based row/column or comment item_id when applicable.

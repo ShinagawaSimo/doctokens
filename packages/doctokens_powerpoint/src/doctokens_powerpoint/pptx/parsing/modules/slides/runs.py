@@ -9,9 +9,10 @@ from doctokens_core.contracts.models import ParseWarning
 from doctokens_core.ooxml.equations.converter import convert_math
 
 from ....model.presentation import Paragraph, ParagraphStyle, Run, RunFormat
-from ....ooxml.colors import is_default_text_color, resolve_color_element
 from ....ooxml.math import TEXT_MATH
 from ....ooxml.namespaces import attr, first_child, local_name
+from ....ooxml.run_format import character_format
+from ....ooxml.unsupported import UNPARSED
 from .lists import integer as _parse_int
 from .lists import list_metadata, list_prefix
 from .text import HyperlinkLookup
@@ -49,12 +50,12 @@ def paragraph_text(
     metadata = list_metadata(p, {})
     if not any(run.get("text", "").strip() for run in runs):
         return ""
-    if source_paragraphs is not None:
-        source_paragraphs.append("".join(run.get("text", "") for run in runs))
     pr = first_child(p, "a", "pPr")
     prefix = list_prefix(
         metadata, _parse_int(pr.get("lvl") if pr is not None else None, 0), counters if counters is not None else {}
     )
+    if source_paragraphs is not None:
+        source_paragraphs.append(prefix + "".join("\ufffc" if run.get("unparsed") else run.get("text", "") for run in runs))
     return prefix + "".join(run.get("text", "") for run in runs)
 
 
@@ -84,7 +85,7 @@ def shape_runs(
         if include_formatting and p_pr is not None:
             def_r_pr = first_child(p_pr, "a", "defRPr")
             if def_r_pr is not None:
-                base_format.update(_format_properties(def_r_pr, theme, color_map, warnings, part))
+                base_format.update(character_format(def_r_pr, theme, color_map, warnings, part))
         paragraph = paragraph_runs(
             child,
             part,
@@ -129,7 +130,13 @@ def paragraph_runs(
     pending = ""
     for child in p:
         name = local_name(child.tag)
-        if name in {"r", "fld"}:
+        if child.tag == UNPARSED:
+            if pending:
+                runs.append({"text": pending})
+                pending = ""
+            kind = child.get("source", "content")
+            runs.append({"text": f"[Unparsed {kind}]", "unparsed": kind})
+        elif name in {"r", "fld"}:
             if pending:
                 runs.append({"text": pending})
                 pending = ""
@@ -151,7 +158,7 @@ def paragraph_runs(
             pending += "\n"
         elif name == "tab":
             pending += "\t"
-        elif name in {"pPr", "endParaRPr"}:
+        elif name in {"pPr", "endParaRPr", "extLst"}:
             continue
         elif name in {"oMath", "oMathPara"} or child.tag == TEXT_MATH:
             if pending:
@@ -172,6 +179,10 @@ def paragraph_runs(
                     locator=part,
                 )
             )
+            if pending:
+                runs.append({"text": pending})
+                pending = ""
+            runs.append({"text": f"[Unparsed {name}]", "unparsed": name})
     if pending:
         runs.append({"text": pending})
     return runs
@@ -192,49 +203,7 @@ def _run_format(
     r_pr = first_child(r, "a", "rPr")
     if r_pr is None:
         return {}
-    return _format_properties(r_pr, theme, color_map, warnings, part)
-
-
-def _format_properties(
-    r_pr: ET.Element,
-    theme: dict[str, str],
-    color_map: dict[str, str],
-    warnings: list[ParseWarning],
-    part: str,
-) -> RunFormat:
-    fmt: RunFormat = {}
-    if r_pr.get("b") is not None:
-        fmt["bold"] = _drawingml_bool(r_pr.get("b"))
-    elif first_child(r_pr, "a", "b") is not None:
-        fmt["bold"] = True
-    if r_pr.get("i") is not None:
-        fmt["italic"] = _drawingml_bool(r_pr.get("i"))
-    elif first_child(r_pr, "a", "i") is not None:
-        fmt["italic"] = True
-    underline_value = r_pr.get("u")
-    underline = first_child(r_pr, "a", "u")
-    if underline_value is not None:
-        fmt["underline"] = underline_value not in {"none", "0", "false", "off"}
-    elif underline is not None:
-        fmt["underline"] = underline.get("val", "") not in {"none", "0", "false", "off"}
-    solid_fill = first_child(r_pr, "a", "solidFill")
-    if solid_fill is not None:
-        for color_element in solid_fill:
-            color = resolve_color_element(
-                color_element,
-                theme,
-                color_map=color_map,
-                warnings=warnings,
-                locator=part,
-            )
-            if color and not is_default_text_color(color):
-                fmt["color"] = color
-                break
-    return fmt
-
-
-def _drawingml_bool(value: str | None) -> bool:
-    return value is not None and value.lower() not in {"0", "false", "off", "no"}
+    return character_format(r_pr, theme, color_map, warnings, part)
 
 
 def _run_link(r: ET.Element, links: HyperlinkLookup, part: str) -> str | None:

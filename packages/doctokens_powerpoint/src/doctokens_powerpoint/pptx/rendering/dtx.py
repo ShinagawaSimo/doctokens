@@ -10,17 +10,18 @@ from doctokens_core.runtime.execution import checkpoint
 
 from ..model.presentation import (
     ChartRecord,
+    CommentAnchor,
     CommentItem,
     OcrResultRecord,
     Paragraph,
     ParsedPresentation,
-    Run,
     ShapeBlock,
     SlideBlock,
     SmartArtRecord,
 )
 from .charts import append_chart_preview
 from .diagrams import append_diagram
+from .inline import append_runs
 
 _TABLE_ROW_LIMIT = 30
 _TITLE_PLACEHOLDERS = {"title", "ctrTitle"}
@@ -82,6 +83,9 @@ def _append_shape(
     ocr_results: Mapping[str, OcrResultRecord],
 ) -> None:
     shape_type = shape["type"]
+    if shape_type == "unsupported":
+        append(parent, "unsupported", type="shape", source=shape.get("sourceKind"), **_shape_attrs(shape, density))
+        return
     if shape_type == "text":
         title = shape.get("placeholderType") in _TITLE_PLACEHOLDERS
         attrs = _text_shape_attrs(shape, density)
@@ -90,12 +94,12 @@ def _append_shape(
             node = append(parent, "textbox", role="title" if title else None, **attrs)
             for paragraph in paragraphs:
                 child = append(node, "p", **_paragraph_attrs(paragraph))
-                _append_runs(child, paragraph.get("runs", []), paragraph.get("text", ""), density)
+                append_runs(child, paragraph.get("runs", []), paragraph.get("text", ""), density)
         else:
             if paragraphs:
                 attrs.update(_paragraph_attrs(paragraphs[0]))
             node = append(parent, "title" if title else "p", **attrs)
-            _append_runs(node, shape.get("runs", []), shape["text"], density)
+            append_runs(node, shape.get("runs", []), shape["text"], density)
         return
     if shape_type == "picture":
         attrs = _shape_attrs(shape, density)
@@ -207,48 +211,6 @@ def _paragraph_attrs(paragraph: Paragraph) -> dict[str, object]:
     return {"level": level} if level else {}
 
 
-def _append_runs(parent: ET.Element, runs: list[Run], fallback: str, density: str) -> None:
-    if not runs:
-        text(parent, fallback)
-        return
-    previous: tuple[object, ...] | None = None
-    leaf = parent
-    for run in runs:
-        equation = run.get("equation")
-        value = run.get("text", "")
-        if not value and not equation:
-            continue
-        formatting = (run.get("format") or {}) if density == "semantic" else {}
-        signature = (
-            formatting.get("color") or None,
-            bool(formatting.get("underline")),
-            bool(formatting.get("italic")),
-            bool(formatting.get("bold")),
-            run.get("link") or None,
-        )
-        if not equation and signature == previous:
-            text(leaf, value)
-            continue
-        node = parent
-        if density == "semantic":
-            if formatting.get("color"):
-                node = append(node, "color", value=formatting["color"])
-            if formatting.get("underline"):
-                node = append(node, "u")
-            if formatting.get("italic"):
-                node = append(node, "i")
-            if formatting.get("bold"):
-                node = append(node, "b")
-        if run.get("link"):
-            node = append(node, "a", href=run["link"])
-        if equation:
-            append(node, "equation", str(equation), notation="latex")
-            previous = None
-        else:
-            text(node, value)
-            leaf, previous = node, signature
-
-
 def _append_table(parent: ET.Element, shape: ShapeBlock, density: str) -> None:
     rows = shape.get("rows", [])
     columns = max((len(row) for row in rows), default=0)
@@ -258,10 +220,10 @@ def _append_table(parent: ET.Element, shape: ShapeBlock, density: str) -> None:
     table = append(parent, "table", **attrs)
     for index, _row in enumerate(rows[:_TABLE_ROW_LIMIT]):
         row_node = append(table, "tr")
-        _append_table_cells(row_node, shape, index)
+        _append_table_cells(row_node, shape, index, density)
 
 
-def _append_table_cells(parent: ET.Element, shape: ShapeBlock, row_index: int) -> None:
+def _append_table_cells(parent: ET.Element, shape: ShapeBlock, row_index: int, density: str) -> None:
     cells = shape.get("tableCells")
     if cells is None or row_index >= len(cells):
         for value in shape.get("rows", [])[row_index]:
@@ -270,13 +232,21 @@ def _append_table_cells(parent: ET.Element, shape: ShapeBlock, row_index: int) -
     for cell in cells[row_index]:
         if cell.get("hMerge") or cell.get("vMerge"):
             continue
-        append(
+        node = append(
             parent,
             "td",
-            cell.get("text", ""),
             colspan=cell.get("colSpan") if cell.get("colSpan", 1) != 1 else None,
             rowspan=cell.get("rowSpan") if cell.get("rowSpan", 1) != 1 else None,
         )
+        paragraphs = cell.get("paragraphs", [])
+        if len(paragraphs) > 1:
+            for paragraph in paragraphs:
+                child = append(node, "p", **_paragraph_attrs(paragraph))
+                append_runs(child, paragraph.get("runs", []), paragraph.get("text", ""), density)
+        elif paragraphs:
+            append_runs(node, paragraphs[0].get("runs", []), cell.get("text", ""), density)
+        else:
+            text(node, cell.get("text", ""))
 
 
 def _append_comments(parent: ET.Element, comments: list[CommentItem]) -> None:
@@ -284,17 +254,31 @@ def _append_comments(parent: ET.Element, comments: list[CommentItem]) -> None:
         return
     group = append(parent, "comments")
     for comment in comments:
-        append(
+        node = append(
             group,
             "comment",
-            comment["text"],
+            None if comment.get("runs") or comment.get("unparsed") else comment["text"],
             id=comment["id"],
             author=comment.get("author"),
             date=comment.get("date"),
-            parent=comment.get("parentCommentId") or comment.get("parentId"),
+            parent=comment.get("parentCommentId"),
             slide=comment.get("slideId"),
             shape=comment.get("shapeId"),
+            status=comment.get("status") if comment.get("status") not in {None, "active"} else None,
         )
+        if comment.get("unparsed"):
+            append(node, "unsupported", type="comments")
+        elif comment.get("runs"):
+            append_runs(node, comment["runs"], comment["text"], "structural")
+        for anchor in comment.get("anchors", []):
+            _append_anchor(node, anchor)
+
+
+def _append_anchor(parent: ET.Element, anchor: CommentAnchor, *, root: bool = True) -> None:
+    attributes = {**anchor["attributes"], "kind": anchor["kind"]}
+    node = append(parent, "anchor" if root else "moniker", **attributes)
+    for child in anchor["children"]:
+        _append_anchor(node, child, root=False)
 
 
 def _append_ocr(parent: ET.Element, asset_id: str | None, values: Mapping[str, OcrResultRecord]) -> None:

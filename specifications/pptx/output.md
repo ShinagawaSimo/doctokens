@@ -13,6 +13,12 @@ shape. Connector endpoints reference that field. Resource `id` values remain
 separate, so a picture/chart/SmartArt can be addressed both as a slide object
 and as a reusable resource. See [shapes](shapes/shape.md).
 
+Unreadable elements reached through the shape/paragraph/comment readers retain
+`unsupported` markers and diagnostics. Plain uses `[Unparsed …]`. A readable
+compatibility fallback is emitted once; an explicitly empty selected branch
+remains empty. Format/default/author-value fallbacks do not create element
+placeholders. This rule describes these readers, not every object decoder.
+
 ## Fields
 
 ### `format`

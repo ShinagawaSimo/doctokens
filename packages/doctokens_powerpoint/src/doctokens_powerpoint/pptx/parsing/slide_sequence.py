@@ -19,8 +19,8 @@ from ..model.presentation import (
     SlideBlock,
     SmartArtLookup,
 )
+from ..ooxml.compatibility import read_content_part
 from ..ooxml.inheritance import LayoutMasterResolver
-from ..ooxml.math import read_math_part
 from ..ooxml.namespaces import attr, first_child, local_name
 from ..ooxml.package import PackageReader
 from .modules.ancillary.parts import NotesParser
@@ -93,13 +93,19 @@ def _normalize_slide_navigation(
             run_link = run.get("link")
             if run_link:
                 run["link"] = normalize(run_link)
+        for row in shape.get("tableCells", []):
+            for cell in row:
+                for paragraph in cell.get("paragraphs", []):
+                    for run in paragraph.get("runs", []):
+                        if run_link := run.get("link"):
+                            run["link"] = normalize(run_link)
 
 
 def _no_navigation(slide: SlideBlock, references: tuple[_SlideReference, ...], slide_number: int) -> None:
     """No-op strategy for plain output, which does not retain navigation."""
 
 
-def _no_notes(_slide_part: str) -> str | None:
+def _no_notes(_slide_part: str, *, source_paragraphs: list[str] | None = None) -> str | None:
     """No-op strategy for plans that omit speaker notes."""
     return None
 
@@ -205,8 +211,15 @@ class _SlideSequence:
                     ParseWarning(code="SLIDE_XML_INVALID", message=f"Invalid slide XML: {exc}", locator=ref.part)
                 )
                 continue
-            hidden, shapes, background = self._parser.parse_slide(slide_root, ref.part)
+            comment_anchors = [
+                anchor
+                for item in self._parse_context.comments
+                if item.get("slideId") in {ref.part, ref.slide_id, ref.relationship_id, f"slide{slide_number + 1}"}
+                for anchor in item.get("anchors", [])
+            ]
+            hidden, shapes, background = self._parser.parse_slide(slide_root, ref.part, comment_anchors=comment_anchors)
             slide_number += 1
+            note_sources: list[str] = []
             slide = SlideBlock(
                 id=f"slide{slide_number}",
                 type="slide",
@@ -215,7 +228,8 @@ class _SlideSequence:
                 sldId=ref.slide_id,
                 hidden=hidden,
                 shapes=shapes,
-                notes=self._notes_for(ref.part),
+                notes=self._notes_for(ref.part, source_paragraphs=note_sources),
+                notesSearch=note_sources,
                 background=background,
                 commentRefs=[],
                 section=self._parse_context.section_by_slide_id.get(ref.slide_id),
@@ -227,4 +241,4 @@ class _SlideSequence:
                 yield _ParsedSlide(slide)
 
     def _read_slide_xml(self, part: str) -> ET.Element:
-        return read_math_part(self._package_reader, part, self._warnings)
+        return read_content_part(self._package_reader, part, self._warnings)

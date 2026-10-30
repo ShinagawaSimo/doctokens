@@ -38,6 +38,10 @@ class RunFormat(TypedDict, total=False):
     bold: bool
     italic: bool
     underline: bool
+    strike: bool
+    superscript: bool
+    subscript: bool
+    highlight: str
     color: str
 
 
@@ -48,6 +52,7 @@ class Run(TypedDict, total=False):
     format: RunFormat
     link: str
     equation: str
+    unparsed: str
 
 
 class Paragraph(TypedDict, total=False):
@@ -82,6 +87,7 @@ class TableCell(TypedDict, total=False):
     """A table cell with the OOXML merge declarations preserved."""
 
     text: str
+    paragraphs: list[Paragraph]
     searchParagraphs: list[str]
     colSpan: int
     rowSpan: int
@@ -138,6 +144,10 @@ class ShapeBlock(TypedDict, total=False):
     h: int
     z: int
     runs: list[Run]
+    drawingId: str
+    creationId: str
+    commentAnchor: bool
+    sourceKind: str
 
 
 class ImageAsset(TypedDict, total=False):
@@ -254,6 +264,7 @@ class SlideBlock(TypedDict):
     hidden: bool
     shapes: list[ShapeBlock]
     notes: str | None
+    notesSearch: list[str]
     background: SlideBackground | None
     commentRefs: list[CommentRef]
     section: str | None
@@ -266,6 +277,15 @@ class PresentationSection(TypedDict):
     slideIds: list[str]
 
 
+class CommentAnchor(TypedDict):
+    """A saved source anchor tree, separate from any resolved public shape."""
+
+    kind: str
+    namespace: str
+    attributes: dict[str, str]
+    children: list[CommentAnchor]
+
+
 class CommentItem(TypedDict, total=False):
     """A modern threaded comment with author and thread linkage."""
 
@@ -273,12 +293,16 @@ class CommentItem(TypedDict, total=False):
     text: str
     author: str
     date: str
-    parentId: str
     parentCommentId: str
     slideId: str
     shapeId: str
     x: int
     y: int
+    status: str
+    anchors: list[CommentAnchor]
+    modern: bool
+    runs: list[Run]
+    unparsed: bool
 
 
 @dataclass

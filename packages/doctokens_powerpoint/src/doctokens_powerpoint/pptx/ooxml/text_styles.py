@@ -7,10 +7,10 @@ from xml.etree import ElementTree as ET
 
 from doctokens_core.contracts.models import ParseWarning
 
-from ..model.presentation import ParagraphStyle, RunFormat
+from ..model.presentation import ParagraphStyle
 from .bullet_fonts import font_declaration, text_font
-from .colors import is_default_text_color, resolve_color_element
 from .namespaces import first_child, local_name
+from .run_format import character_format
 
 
 def merge_paragraph_style(base: ParagraphStyle, overlay: ParagraphStyle) -> ParagraphStyle:
@@ -132,38 +132,9 @@ class TextStyleParser:
             if declaration := text_font(def_r_pr):
                 style["textFont"], style["textFontSymbol"] = declaration
             if self._include_formatting and def_r_pr is not None:
-                run_format = self._run_defaults(def_r_pr, color_map, theme=theme)
+                run_format = character_format(def_r_pr, theme or self._theme, color_map, self._warnings)
                 if run_format:
                     style["runFormat"] = run_format
             if style:
                 result[level] = style
-        return result
-
-    def _run_defaults(
-        self,
-        r_pr: ET.Element,
-        color_map: dict[str, str],
-        *,
-        theme: dict[str, str] | None = None,
-    ) -> RunFormat:
-        result: RunFormat = {}
-        for attribute, key in (("b", "bold"), ("i", "italic")):
-            value = r_pr.get(attribute)
-            if value is not None:
-                result[key] = value.lower() not in {"0", "false", "off", "no"}  # type: ignore[literal-required]
-        underline = r_pr.get("u")
-        if underline is not None:
-            result["underline"] = underline not in {"none", "0", "false", "off"}
-        solid_fill = first_child(r_pr, "a", "solidFill")
-        if solid_fill is not None:
-            for color_element in solid_fill:
-                color = resolve_color_element(
-                    color_element,
-                    theme or self._theme,
-                    color_map=color_map,
-                    warnings=self._warnings,
-                )
-                if color and not is_default_text_color(color):
-                    result["color"] = color
-                    break
         return result

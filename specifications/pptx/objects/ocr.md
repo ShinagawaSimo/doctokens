@@ -2,62 +2,54 @@
 
 [PPTX](../README.md) / Image OCR association
 
-Semantic parsing/session can OCR referenced embedded image assets when an adapter is supplied.
+An explicitly supplied adapter recognizes images at body-read time in all three
+densities. Parsing/opening a session does not run OCR. The current slide window
+and density's retained image scope determine recognition work; see the
+[common OCR contract](../../common/ocr.md).
 
 ## Fields
 
 ### `id`
 
 - **Output**
-  - Semantic sibling ocr-text/@id.
-
+  - Both XML densities: sibling ocr-text/@id after every corresponding picture.
+    Plain emits a marked OCR block after its image marker.
 - **Source**
-  - Picture assetId; background assetId only when background IR exists.
-
+  - Picture assetId. Existing retained semantic background IR can associate an
+    embedded background asset; omitted backgrounds do not trigger OCR.
 - **IR**
-  - `ParsedPresentation.ocr_results` keys.
-
-- **Parsing**
-  - Deduplicate byte reads by zipPath, copy result to each asset ID; only referenced embedded image assets participate.
+  - `ParsedPresentation.ocr_results` contains score-free records by asset ID.
+- **Reading**
+  - Reuse a recognized embedded source part within the explicit session; every
+    picture occurrence still expands the complete text. Independent responses
+    are self-contained. Direct binary reads, directories and native-text search
+    do not initiate recognition. External images are not downloaded.
 
 ### `text`
 
 - **Output**
-  - ocr-text text.
-
+  - Complete XML OCR character data or a plain `[OCR]`...`[/OCR]` block.
 - **Source**
-  - Common OCR result.
+  - Successful normalized adapter text.
+- **Reading**
+  - Preserve full text/line breaks, including on repeated pictures and media
+    posters. Select slides before recognition; unrelated parts are not OCRed.
 
-- **IR**
-  - `OcrResultRecord`
-
-- **Parsing**
-  - Emit recognized text after picture. No plain/structural OCR projection.
-
-### `empty`
+### `low_confidence`
 
 - **Output**
-  - ocr-text/@empty=true.
-
+  - XML @low-confidence=true or plain `[OCR low-confidence]`.
 - **Source**
-  - status empty.
+  - The common non-whitespace-character-weighted score strictly below 0.8.
+- **Reading**
+  - Emit the warning with complete text and no numeric score. Without usable
+    engine recognition scores, do not invent confidence.
 
-- **IR**
-  - Result record.
-
-- **Parsing**
-  - Emit empty marker when no recognized text.
-
-### `error`
+### `status`
 
 - **Output**
-  - ocr-text/@error=true.
-
-- **Source**
-  - Stored error result.
-
-- **IR**
-  - Result record.
-
-- **Parsing**
-  - Emit error marker; provider diagnostics remain in IR. See [OCR](../../common/ocr.md).
+  - Successful empty results add no OCR marker. Errors add
+    `<ocr-text id="img1" error="true"/>` or plain `[OCR failed]`.
+- **Diagnostics**
+  - OCR_FAILED details are kept outside document text. Session reports reflect
+    fresh read-time failures without repeating warnings for cached attempts.

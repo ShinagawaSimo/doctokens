@@ -123,7 +123,6 @@ class PptxReadSession:
         presentation = self._require_open()
         resolved = _density(density)
         selected, _selection = _select_slides(presentation, slide, span)
-        chunks = get_render_pipeline(resolved).render(selected)
 
         def guarded() -> Iterator[str]:
             self._require_open()
@@ -133,7 +132,7 @@ class PptxReadSession:
                 presentation.metrics = selected.metrics
                 if self._package_reader.memory_budget is not None:
                     self._package_reader.memory_budget.finish(presentation)
-            for chunk in chunks:
+            for chunk in get_render_pipeline(resolved).render(selected):
                 self._require_open()
                 yield chunk
 

@@ -44,6 +44,17 @@ class TesseractProviderTest(unittest.TestCase):
             result = p.extract_result(_png_bytes())
         self.assertEqual(result.text, "hello world")
 
+    def test_multiple_output_preserves_text_and_normalizes_word_scores(self) -> None:
+        # Mock engine transport supplies exact TSV scores; public records keep
+        # only the low-confidence hint, independently of TXT formatting.
+        text = "A\n\ncomplete text"
+        tsv = "text\tconf\nA\t20\ncomplete\t60\ntext\t70\n"
+        with patch("pytesseract.run_and_get_multiple_output", return_value=[text, tsv], create=True):
+            result = TesseractProvider().extract_result(_png_bytes())
+        self.assertEqual(result.text, text)
+        self.assertTrue(result.to_record()["low_confidence"])
+        self.assertNotIn("confidence", result.to_record())
+
     def test_extract_returns_empty_on_error(self) -> None:
         p = TesseractProvider()
         with patch(

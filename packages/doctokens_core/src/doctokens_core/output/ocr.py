@@ -21,5 +21,6 @@ def plain_ocr(result: OcrResultRecord | None) -> str:
     if result is None:
         return ""
     if result.get("status") == "success" and result.get("text"):
-        return ("[OCR low-confidence] " if result.get("low_confidence") else "[OCR] ") + result["text"]
+        marker = "[OCR low-confidence]" if result.get("low_confidence") else "[OCR]"
+        return marker + "\n" + result["text"] + "\n[/OCR]"
     return "[OCR failed]" if result.get("status") == "error" else ""

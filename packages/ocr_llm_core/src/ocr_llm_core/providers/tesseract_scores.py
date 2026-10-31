@@ -18,7 +18,13 @@ def recognize(engine: Any, image: Any, kwargs: dict[str, object]) -> tuple[str, 
         output = multiple(image, extensions=["txt", "tsv"], **kwargs)
         if isinstance(output, (list, tuple)) and len(output) == 2 and all(isinstance(item, str) for item in output):
             return output[0], _confidence(output[1])
-    text = engine.image_to_string(image, **kwargs)
+    text_kwargs = dict(kwargs)
+    if deadline is not None:
+        text_remaining = deadline - time.monotonic()
+        if text_remaining <= 0:
+            raise TimeoutError("OCR request deadline exceeded")
+        text_kwargs["timeout"] = text_remaining
+    text = engine.image_to_string(image, **text_kwargs)
     remaining = deadline - time.monotonic() if deadline is not None else None
     if remaining is not None and remaining <= 0:
         return text, None

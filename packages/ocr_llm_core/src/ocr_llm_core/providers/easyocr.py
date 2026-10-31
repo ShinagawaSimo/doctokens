@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import math
-from numbers import Real
 import threading
 from io import BytesIO
+from numbers import Real
 from typing import Any
 
 from ..models import OcrProvider, OcrResult, weighted_confidence
@@ -77,8 +77,7 @@ class EasyOcrProvider(OcrProvider):
             ):
                 return OcrResult.error("invalid_result", "EasyOCR returned an unexpected result shape")
             samples = [
-                (row[1], float(row[2]) if isinstance(row[2], Real) and not isinstance(row[2], bool) else None)
-                for row in records
+                (row[1], float(row[2]) if not isinstance(row[2], bool) and isinstance(row[2], Real) else None) for row in records
             ]
             return OcrResult.from_text("\n".join(row[0] for row in samples), confidence=weighted_confidence(samples))
         except TimeoutError as exc:

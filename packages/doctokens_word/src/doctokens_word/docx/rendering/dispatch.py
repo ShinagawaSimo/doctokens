@@ -14,8 +14,8 @@ from .window_assets import referenced_image_ids
 
 __all__ = [
     "iter_output",
-    "select_page_window",
     "render_resource",
+    "select_page_window",
 ]
 
 

@@ -22,6 +22,26 @@ class _CountingProvider(OcrProvider):
 
 
 class OcrResultTests(unittest.TestCase):
+    def test_confidence_threshold_and_character_weighting_do_not_expose_scores(self) -> None:
+        # Controlled provider scores test the normalization protocol; a native
+        # image cannot reliably force an OCR engine to the exact boundary.
+        from ocr_llm_core.models import weighted_confidence
+
+        score = weighted_confidence([("a", 0.2), ("abcdefghij", 0.9), (" ", 0.0), ("unscored", None)])
+        record = OcrResult.from_text("full text", confidence=score).to_record()
+        self.assertNotIn("low_confidence", record)
+        self.assertNotIn("confidence", record)
+        self.assertTrue(OcrResult.from_text("full text", confidence=0.79).to_record()["low_confidence"])
+        self.assertNotIn("low_confidence", OcrResult.from_text("full text", confidence=0.8).to_record())
+        self.assertIsNone(weighted_confidence([("a", -1.0), ("b", float("nan")), ("", 0.2)]))
+
+    def test_invalid_confidence_is_rejected(self) -> None:
+        for value in (-0.1, 1.1, float("inf"), float("nan"), True):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                OcrResult.from_text("text", confidence=value)
+        with self.assertRaises(ValueError):
+            OcrResult(OcrStatus.EMPTY, confidence=0.5)
+
     def test_from_text_distinguishes_success_and_empty(self) -> None:
         self.assertEqual(OcrResult.from_text(" text ").status, OcrStatus.SUCCESS)
         self.assertEqual(OcrResult.from_text(" \n ").status, OcrStatus.EMPTY)

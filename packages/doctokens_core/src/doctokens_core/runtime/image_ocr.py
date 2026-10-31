@@ -24,6 +24,7 @@ class ImageOcrReader:
         for key, value in (
             ("ocrResultCount", len(results)),
             ("ocrErrorCount", sum(item.get("status") == "error" for item in results.values())),
+            ("warningCount", len(warnings)),
         ):
             if key in counters:
                 counters[key] = value
@@ -38,11 +39,13 @@ class ImageOcrReader:
     ) -> None:
         if self.provider is None:
             return
-        from ocr_llm_core import OcrResult, run_ocr_batch
-
         aliases: dict[str, list[str]] = {}
         for asset_id, part in sources:
             aliases.setdefault(part, []).append(asset_id)
+        if not aliases:
+            return
+        from ocr_llm_core import OcrResult, run_ocr_batch
+
         pending: dict[str, bytes] = {}
         pending_bytes = 0
 

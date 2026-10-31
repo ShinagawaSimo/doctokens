@@ -11,6 +11,16 @@ from doctokens_powerpoint.pptx.model.presentation import ParseOptions
 
 
 class PptxSessionApiTests(unittest.TestCase):
+    def test_density_projection_is_independent_of_read_history(self) -> None:
+        # This deck supplies infrastructure state (objects and formatting).
+        # No real PPTX fixture exists yet; no ordinary content baseline is added.
+        source = rich_deck_pptx()
+        fresh = {density: parse_pptx(source, density=density) for density in ("plain", "structural", "semantic")}
+        with open_pptx(source) as session:
+            for density in ("semantic", "structural", "plain", "semantic", "plain", "structural"):
+                self.assertEqual(session.render(density=density).text, fresh[density].text)
+                self.assertEqual("".join(session.iter_render(density=density)), fresh[density].text)
+
     def test_selection_and_iteration_use_the_same_rendering(self) -> None:
         source = rich_deck_pptx()
         with open_pptx(source) as session:

@@ -55,6 +55,51 @@ known authors, dates, reply links, IDs and supported targets; semantic retains
 additional useful inline semantics or mentioned people. Status is
 active/resolved/closed/unknown; absence of readable source state is not active.
 
+### Projection boundaries independent of extraction history
+
+The following families have explicit renderer permissions. A semantic session
+can retain every source value in a row while a lower-density render still emits
+only that density's permitted fields. These rules apply to direct source
+declarations and inherited/resolved values alike. Atomic format specifications
+remain the definitions of each field, rather than a generic filter by field name.
+
+| Field family | Plain | Structural | Semantic |
+| --- | --- | --- | --- |
+| DOCX/PPTX/XLSX comment text and review status | Text and status | Text and status | Text and status |
+| Comment author/date, valid reply parent and supported target | Omitted | Retained when known | Retained when known |
+| Comment rich emphasis/citation/mention semantics | Readable text | Readable structure | Supported inline semantics |
+| DOCX control current content and human label | Marker/content/label | Wrapper/content/label | Content and semantic control projection |
+| DOCX control type, choices and content/control lock | Omitted | Omitted | Retained under the control contract |
+| DOCX revisions/property changes, ruby annotation and emphasis/color | Selected text/base text | Selected text/base structure | Supported revision/ruby/format semantics |
+| DOCX paragraph formatting properties and table-cell background | Omitted | Omitted | Retained reading properties |
+| PPTX inherited placeholder role, paragraph level and explicit links | Readable text/indent | Retained structure/links | Retained structure/links |
+| PPTX run/table emphasis and color; automatic shape name | Omitted | Omitted | Retained under existing field definitions |
+| XLSX conditional-format conditions, priority and stop behavior | Compact unsupported marker only when unreadable | Retained | Retained |
+| XLSX conditional-format dxfStyle and formatDetails | Omitted | Omitted | rule/@style and visual details |
+| XLSX validation constraints and effective error enforcement | No readable rule expansion | Retained | Retained |
+| XLSX validation saved input/error messages | Omitted | Omitted | Retained |
+| XLSX resolved color-filter condition | Compact filter marker | Retained predicate color | Retained predicate color |
+| XLSX cell/run font/fill, style-range and number-format color metadata | Omitted | Omitted | Retained reading styles |
+| XLSX formatted display value | Retained | Retained | Retained |
+| Chart/SmartArt reading previews | Bounded plain summary | Shared bounded structure | Shared bounded structure |
+| Raw hints, control binding provenance and bare dxf lookup indices | Not body fields | Not body fields | Not body fields |
+
+In particular, a color used as a filter predicate is not the same permission as
+a decorative font/fill color. Likewise validation errorStyle describes effective
+enforcement, whereas conditional-format dxfStyle describes appearance. Do not
+remove one merely because its source field name resembles the other.
+
+DOCX comment threading/status extraction belongs to every public reading plan.
+A comment with saved resolved state must not become unknown merely because a
+one-shot lower-density read omitted the threading pass. Legacy or unreadable
+state remains unknown in both one-shot and session projections.
+
+XLSX standard dxf references and inline x14 dxf can both populate semantic IR.
+The conditional-format renderer permits style/details only at semantic density,
+even after a prior semantic render populated formatting caches. Low-density
+renders never mutate or discard richer data needed by later semantic reads.
+Output iteration uses the same current-density projection as a complete read.
+
 ## Fields
 
 ### `density`

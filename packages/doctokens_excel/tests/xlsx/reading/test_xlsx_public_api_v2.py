@@ -10,6 +10,18 @@ from test_support.paths import REPO_ROOT
 
 
 class PublicApiV2Tests(unittest.TestCase):
+    def test_density_projection_is_independent_of_read_history(self) -> None:
+        # Exercise formatting-cache lifetime using real files and full outputs,
+        # without adding content assertions already owned by their goldens.
+        for name in ("xlsx-rich-color.xlsx", "xlsx-format-number-negative-red-no-symbol.xlsx"):
+            with self.subTest(name=name):
+                source = REPO_ROOT / "test_support/fixtures/xlsx" / name
+                fresh = {density: parse_xlsx(source, density=density) for density in ("plain", "structural", "semantic")}
+                with open_xlsx(source) as session:
+                    for density in ("semantic", "structural", "plain", "semantic", "plain", "structural"):
+                        self.assertEqual(session.render(density=density).text, fresh[density].text)
+                        self.assertEqual("".join(session.iter_render(density=density)), fresh[density].text)
+
     def test_parse_result_and_session(self) -> None:
         source = REPO_ROOT / "test_support/fixtures/xlsx/xlsx-value-text.xlsx"
         result = parse_xlsx(source)

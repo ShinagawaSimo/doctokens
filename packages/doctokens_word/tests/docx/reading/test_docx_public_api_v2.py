@@ -12,6 +12,16 @@ FIXTURE = REPO_ROOT / "test_support/fixtures/docx/docx-paragraph.docx"
 
 
 class PublicApiV2Tests(unittest.TestCase):
+    def test_density_projection_is_independent_of_read_history(self) -> None:
+        # Session/cache infrastructure: ordinary content remains governed by
+        # complete real-file goldens; no parallel content expectations are added.
+        source = FIXTURE.with_name("docx-list-bullet-color.docx")
+        fresh = {density: parse_docx(source, density=density) for density in ("plain", "structural", "semantic")}
+        with open_docx(source) as session:
+            for density in ("semantic", "structural", "plain", "semantic", "plain", "structural"):
+                self.assertEqual(session.render(density=density).text, fresh[density].text)
+                self.assertEqual("".join(session.iter_render(density=density)), fresh[density].text)
+
     def test_parse_returns_result_with_report_and_text(self) -> None:
         result = parse_docx(FIXTURE)
         self.assertIsInstance(result, ParseResult)

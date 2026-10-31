@@ -6,6 +6,7 @@ from collections.abc import Iterator
 
 from doctokens_core.contracts.models import Density, ParseReport, ParseResult, ResourceDescriptor, Source
 from doctokens_core.output.image_text import image_text_resource
+from doctokens_core.runtime.image_ocr import ImageOcrReader
 from doctokens_core.runtime.session import SessionLifecycle
 from doctokens_core.text.search import TextSearchOptions, TextSearchResult, search_text
 
@@ -15,7 +16,8 @@ from ..ooxml.package import PackageReader
 from ..parsing import get_render_pipeline
 from ..parsing.plan import DocxParsePlan
 from ..parsing.runner import DocxParser
-from ..rendering.dispatch import describe_pages, render_page_window, render_resource
+from ..rendering.dispatch import describe_pages, render_resource, select_page_window
+from .ocr import prepare_ocr
 from .search import text_units
 from .support import _density, _resource_descriptors, _result, _validate_window
 
@@ -27,6 +29,7 @@ class DocxReadSession:
         self.source = source
         self.options = options
         self._memory_limit_bytes = memory_limit_bytes
+        self._ocr_reader = ImageOcrReader(options.ocr, options.ocr_workers, options.ocr_timeout)
         self.parsed_document: ParsedDocument | None = None
         self._package: PackageReader | None = None
         self._lifecycle: SessionLifecycle[ParsedDocument] = SessionLifecycle("DOCX")
@@ -51,6 +54,7 @@ class DocxReadSession:
         self.close()
 
     def close(self) -> None:
+        self._ocr_reader.clear()
         self._lifecycle.close()
         self._package = None
         self.parsed_document = None
@@ -98,11 +102,18 @@ class DocxReadSession:
         resolved = _density(density)
         _validate_window(page_hint, span)
         if page_hint is None:
-            text = "".join(get_render_pipeline(resolved).render(document))
+            selected = document
             selection: dict[str, object] = {"kind": "all"}
         else:
-            text = render_page_window(document, page_hint, span, resolved)
+            selected = select_page_window(document, page_hint, span, resolved)
             selection = {"kind": "page_hint", "start": page_hint, "span": span}
+        if self._package is not None:
+            prepare_ocr(self._ocr_reader, self._package, selected, resolved)
+            document.report = selected.report
+            document.metrics = selected.metrics
+            if self._package.memory_budget is not None:
+                self._package.memory_budget.finish(document)
+        text = "".join(get_render_pipeline(resolved).render(selected))
         return _result(document, text, resolved, selection)
 
     def iter_render(
@@ -112,15 +123,20 @@ class DocxReadSession:
         page_hint: int | None = None,
         span: int = 1,
     ) -> Iterator[str]:
-        document = self._require_open()
+        self._require_open()
         resolved = _density(density)
         _validate_window(page_hint, span)
-        if page_hint is None:
-            chunks = get_render_pipeline(resolved).render(document)
-        else:
-            chunks = iter((render_page_window(document, page_hint, span, resolved),))
 
         def guarded() -> Iterator[str]:
+            document = self._require_open()
+            selected = document if page_hint is None else select_page_window(document, page_hint, span, resolved)
+            if self._package is not None:
+                prepare_ocr(self._ocr_reader, self._package, selected, resolved)
+                document.report = selected.report
+                document.metrics = selected.metrics
+                if self._package.memory_budget is not None:
+                    self._package.memory_budget.finish(document)
+            chunks = get_render_pipeline(resolved).render(selected)
             for chunk in chunks:
                 self._require_open()
                 yield chunk
@@ -207,13 +223,24 @@ def parse_docx(
     resolved = _density(density)
     _validate_window(page_hint, span)
     plan = get_render_pipeline(resolved).plan
-    document = DocxParser().parse(source, options or ParseOptions(), plan=plan)
-    if page_hint is None:
-        text = "".join(get_render_pipeline(resolved).render(document))
-        selection: dict[str, object] = {"kind": "all"}
-    else:
-        text = render_page_window(document, page_hint, span, resolved)
-        selection = {"kind": "page_hint", "start": page_hint, "span": span}
+    selected_options = options or ParseOptions()
+    with PackageReader(source, selected_options) as package:
+        document = DocxParser().parse(package, selected_options, plan=plan)
+        if page_hint is None:
+            selected = document
+            selection: dict[str, object] = {"kind": "all"}
+        else:
+            selected = select_page_window(document, page_hint, span, resolved)
+            selection = {"kind": "page_hint", "start": page_hint, "span": span}
+        prepare_ocr(
+            ImageOcrReader(selected_options.ocr, selected_options.ocr_workers, selected_options.ocr_timeout),
+            package,
+            selected,
+            resolved,
+        )
+        document.report = selected.report
+        document.metrics = selected.metrics
+        text = "".join(get_render_pipeline(resolved).render(selected))
     return _result(document, text, resolved, selection)
 
 

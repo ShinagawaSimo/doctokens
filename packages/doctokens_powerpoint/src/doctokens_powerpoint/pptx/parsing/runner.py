@@ -5,14 +5,13 @@ from __future__ import annotations
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import cast
 from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.relationships import HYPERLINK_RELATIONSHIP_TYPE, RelationshipIndex, office_relationship_type
 from doctokens_core.contracts.models import ParseReport, ParseWarning
 from doctokens_core.runtime.metrics import MetricsRecorder
 
-from ..model.presentation import ImageAsset, OcrResultRecord, ParsedPresentation, ParseOptions, PresentationSection, SlideBlock
+from ..model.presentation import ParsedPresentation, ParseOptions, PresentationSection
 from ..ooxml.inheritance import LayoutMasterResolver
 from ..ooxml.namespaces import first_child, local_name
 from ..ooxml.package import PackageReader
@@ -27,7 +26,6 @@ from .modules.resources.objects import EmbeddedObjectExtractor
 from .plan import PptxFeature, PptxParsePlan
 from .slide_sequence import PRESENTATION_PART, _PresentationParseContext, _SlideSequence
 
-_MAX_OCR_BATCH_BYTES = 64 * 1024 * 1024
 _SLIDE_RELATIONSHIP_TYPE = office_relationship_type("slide")
 
 
@@ -55,11 +53,6 @@ class PptxParser:
             smartarts = parse_context.objects.loaded_smartarts
             if parse_context.comments:
                 _CommentAttachmentPlan(parse_context.comments, slide_sequence.refs).attach_all(slides)
-            ocr_results = (
-                self._run_ocr(package_reader, parse_context.assets, slides, options)
-                if resolved_plan.needs(PptxFeature.OCR)
-                else {}
-            )
         parsed_presentation = ParsedPresentation(
             slides=slides,
             slide_size=parse_context.slide_size,
@@ -70,7 +63,7 @@ class PptxParser:
             comments=parse_context.comments,
             sections=parse_context.sections,
             warnings=warnings,
-            ocr_results=ocr_results,
+            ocr_results={},
         )
         record_metrics(parsed_presentation, metrics)
         parsed_presentation.metrics = metrics.snapshot()
@@ -152,85 +145,6 @@ class PptxParser:
             sections=sections,
             section_by_slide_id=section_by_slide_id,
         )
-
-    @staticmethod
-    def _run_ocr(
-        package_reader: PackageReader,
-        assets: list[ImageAsset],
-        slides: list[SlideBlock],
-        options: ParseOptions,
-    ) -> dict[str, OcrResultRecord]:
-        """OCR embedded image assets while preserving normalized outcomes."""
-        if options.ocr is None:
-            return {}
-        referenced_ids = {
-            asset_id
-            for slide in slides
-            for shape in slide["shapes"]
-            if shape["type"] == "picture"
-            for asset_id in [shape.get("assetId")]
-            if isinstance(asset_id, str)
-        }
-        referenced_ids.update(
-            asset_id
-            for slide in slides
-            for background in [slide.get("background")]
-            if background is not None
-            for asset_id in [background.get("assetId")]
-            if isinstance(asset_id, str)
-        )
-        asset_ids_by_path: dict[str, list[str]] = {}
-        for asset in assets:
-            if asset.get("id") not in referenced_ids or asset.get("type") != "image" or asset.get("source") != "embedded":
-                continue
-            asset_id = asset.get("id")
-            zip_path = asset.get("zipPath")
-            if not isinstance(asset_id, str) or not isinstance(zip_path, str):
-                continue
-            asset_ids_by_path.setdefault(zip_path, []).append(asset_id)
-
-        from ocr_llm_core import OcrResult, run_ocr_batch
-
-        results: dict[str, OcrResultRecord] = {}
-        pending: dict[str, bytes] = {}
-        aliases: dict[str, list[str]] = {}
-        pending_bytes = 0
-        item_limit = max(1, options.ocr_workers * 2)
-
-        def flush() -> None:
-            nonlocal pending_bytes
-            batch_results = run_ocr_batch(
-                pending,
-                options.ocr,
-                max_workers=options.ocr_workers,
-                timeout=options.ocr_timeout,
-            )
-            for primary_id, ocr_result in batch_results.items():
-                record = ocr_result.to_record()
-                for asset_id in aliases[primary_id]:
-                    results[asset_id] = cast(OcrResultRecord, dict(record))
-            pending.clear()
-            aliases.clear()
-            pending_bytes = 0
-
-        for zip_path, asset_ids in asset_ids_by_path.items():
-            try:
-                with package_reader.open_entry(zip_path) as stream:
-                    image_bytes = stream.read()
-            except Exception as exc:
-                record = OcrResult.error("image_read_error", str(exc)).to_record()
-                for asset_id in asset_ids:
-                    results[asset_id] = cast(OcrResultRecord, dict(record))
-                continue
-            if pending and (len(pending) >= item_limit or pending_bytes + len(image_bytes) > _MAX_OCR_BATCH_BYTES):
-                flush()
-            primary_id = asset_ids[0]
-            pending[primary_id] = image_bytes
-            aliases[primary_id] = asset_ids
-            pending_bytes += len(image_bytes)
-        if pending:
-            flush()
-        return results
 
     @staticmethod
     def _read_xml_part(package_reader: PackageReader, part: str) -> ET.Element:

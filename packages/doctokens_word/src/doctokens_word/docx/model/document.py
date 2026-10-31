@@ -3,22 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, TypedDict
 
 from doctokens_core.containers.opc.models import ContentTypes, RelationshipRecord
 from doctokens_core.containers.opc.options import PackageOptions
 from doctokens_core.contracts.models import MetricsSnapshot, ParseReport, ParseWarning
+from doctokens_core.contracts.ocr import OcrResultRecord
 
 from .blocks import AncillaryItem, Block
 from .content import Chart, ImageAsset, ParagraphBorders, RunFormat, SmartArt
 from .enums import RevisionMode
-
-
-class OcrResultRecord(TypedDict, total=False):
-    status: Literal["success", "empty", "error"]
-    text: str
-    error_code: str
-    error_message: str
 
 
 @dataclass(frozen=True)

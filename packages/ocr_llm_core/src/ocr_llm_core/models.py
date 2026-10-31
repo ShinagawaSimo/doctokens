@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -23,8 +25,17 @@ class OcrResult:
     text: str = ""
     error_code: str | None = None
     error_message: str | None = None
+    confidence: float | None = None
 
     def __post_init__(self) -> None:
+        if self.confidence is not None and (
+            isinstance(self.confidence, bool)
+            or not isinstance(self.confidence, (int, float))
+            or not math.isfinite(self.confidence)
+            or not 0 <= self.confidence <= 1
+            or self.status is not OcrStatus.SUCCESS
+        ):
+            raise ValueError("confidence requires successful OCR and a finite score between zero and one")
         if not isinstance(self.status, OcrStatus):
             raise TypeError("status must be an OcrStatus")
         if not isinstance(self.text, str):
@@ -46,11 +57,11 @@ class OcrResult:
                 raise ValueError("OCR errors cannot contain text")
 
     @classmethod
-    def from_text(cls, text: object) -> OcrResult:
+    def from_text(cls, text: object, *, confidence: float | None = None) -> OcrResult:
         if not isinstance(text, str):
             return cls.error("invalid_result", "OCR provider returned a non-string value")
         cleaned = text.strip()
-        return cls(OcrStatus.SUCCESS, cleaned) if cleaned else cls(OcrStatus.EMPTY)
+        return cls(OcrStatus.SUCCESS, cleaned, confidence=confidence) if cleaned else cls(OcrStatus.EMPTY)
 
     @classmethod
     def error(cls, code: object, message: object = None) -> OcrResult:
@@ -60,14 +71,36 @@ class OcrResult:
         normalized_message = message.strip()[:300] if isinstance(message, str) and message.strip() else None
         return cls(OcrStatus.ERROR, error_code=normalized_code, error_message=normalized_message)
 
-    def to_record(self) -> dict[str, str]:
+    def to_record(self) -> dict[str, str | bool]:
         """Return a parser-neutral record suitable for document models."""
-        record = {"status": self.status.value, "text": self.text}
+        record: dict[str, str | bool] = {"status": self.status.value, "text": self.text}
+        if self.confidence is not None and self.confidence < 0.8:
+            record["low_confidence"] = True
         if self.error_code:
             record["error_code"] = self.error_code
         if self.error_message:
             record["error_message"] = self.error_message
         return record
+
+
+def weighted_confidence(samples: Iterable[tuple[str, float | None]]) -> float | None:
+    """Aggregate available recognition scores by non-whitespace character count."""
+    values: list[float] = []
+    count = 0
+    for text, score in samples:
+        if (
+            score is None
+            or isinstance(score, bool)
+            or not isinstance(score, (int, float))
+            or not math.isfinite(score)
+            or not 0 <= score <= 1
+        ):
+            continue
+        weight = sum(not character.isspace() for character in text)
+        if weight:
+            count += weight
+            values.append(score * weight)
+    return math.fsum(values) / count if count else None
 
 
 class OcrProvider(ABC):

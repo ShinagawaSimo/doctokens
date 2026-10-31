@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
+from doctokens_core.contracts.ocr import OcrResultRecord
 from doctokens_core.ooxml.charts.preview import plain_chart
+from doctokens_core.output.ocr import plain_ocr
 from doctokens_core.runtime.execution import checkpoint
 
 from ..model.presentation import ChartRecord, ParsedPresentation, ShapeBlock, SlideBlock, SmartArtRecord
@@ -25,7 +27,7 @@ def iter_plain(parsed_presentation: ParsedPresentation) -> Iterator[str]:
         section = slide.get("section")
         label = f" (Section: {section})" if section else ""
         yield f"=== Slide {slide['n']}{label} ===\n"
-        yield _slide_body(slide, smartarts, charts)
+        yield _slide_body(slide, smartarts, charts, parsed_presentation.ocr_results)
     if parsed_presentation.comments:
         yield "\n\n[Comments]\n"
         yield "\n".join(
@@ -33,14 +35,24 @@ def iter_plain(parsed_presentation: ParsedPresentation) -> Iterator[str]:
         )
 
 
-def _slide_body(slide: SlideBlock, smartarts: dict[str, SmartArtRecord], charts: dict[str, ChartRecord]) -> str:
-    values = [value for shape in slide["shapes"] if (value := _shape_text(shape, smartarts, charts))]
+def _slide_body(
+    slide: SlideBlock,
+    smartarts: dict[str, SmartArtRecord],
+    charts: dict[str, ChartRecord],
+    ocr_results: dict[str, OcrResultRecord],
+) -> str:
+    values = [value for shape in slide["shapes"] if (value := _shape_text(shape, smartarts, charts, ocr_results))]
     if slide["notes"]:
         values.append(f"[Notes: {slide['notes']}]")
     return "\n\n".join(values)
 
 
-def _shape_text(shape: ShapeBlock, smartarts: dict[str, SmartArtRecord], charts: dict[str, ChartRecord]) -> str:
+def _shape_text(
+    shape: ShapeBlock,
+    smartarts: dict[str, SmartArtRecord],
+    charts: dict[str, ChartRecord],
+    ocr_results: dict[str, OcrResultRecord],
+) -> str:
     if shape["type"] == "unsupported":
         return f"[Unparsed shape: {shape.get('sourceKind', 'shape')}]"
     if shape["type"] == "text":
@@ -55,6 +67,8 @@ def _shape_text(shape: ShapeBlock, smartarts: dict[str, SmartArtRecord], charts:
         poster = f"[Image: {shape['alt']}]" if shape.get("alt") else "[Image]"
         if shape.get("embeddedType"):
             poster = f"[OLE preview: {shape['embeddedType']}]"
+        if recognized := plain_ocr(ocr_results.get(shape.get("assetId", ""))):
+            poster += "\n" + recognized
         if shape.get("mediaKind"):
             return poster + "\n\n" + _MEDIA_PLACEHOLDERS.get(shape["mediaKind"], "[Media]")
         return poster

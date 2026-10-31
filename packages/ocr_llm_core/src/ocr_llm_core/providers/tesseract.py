@@ -7,6 +7,7 @@ import threading
 from io import BytesIO
 
 from ..models import OcrProvider, OcrResult
+from .tesseract_scores import recognize
 
 
 class TesseractProvider(OcrProvider):
@@ -69,10 +70,10 @@ class TesseractProvider(OcrProvider):
                         kwargs: dict[str, object] = {"lang": self.lang}
                         if timeout is not None:
                             kwargs["timeout"] = timeout
-                        text: str = pytesseract.image_to_string(image, **kwargs)
+                        text, confidence = recognize(pytesseract, image, kwargs)
                     finally:
                         pytesseract.pytesseract.tesseract_cmd = previous_cmd
-            return OcrResult.from_text(text)
+            return OcrResult.from_text(text, confidence=confidence)
         except TimeoutError as exc:
             return OcrResult.error("timeout", str(exc) or "OCR timed out")
         except RuntimeError as exc:

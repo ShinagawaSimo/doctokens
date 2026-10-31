@@ -5,14 +5,15 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from xml.etree import ElementTree as ET
 
+from doctokens_core.contracts.ocr import OcrResultRecord
 from doctokens_core.ooxml.charts.preview import append_chart_preview
+from doctokens_core.output.ocr import append_ocr
 from doctokens_core.output.xml import append, element, serialize, text
 from doctokens_core.runtime.execution import checkpoint
 
 from ..model.presentation import (
     ChartRecord,
     CommentItem,
-    OcrResultRecord,
     Paragraph,
     ParsedPresentation,
     ShapeBlock,
@@ -65,7 +66,7 @@ def _append_slide(
     if density == "semantic" and slide.get("background"):
         background = slide["background"]
         assert background is not None
-        _append_ocr(node, background.get("assetId"), ocr_results)
+        append_ocr(node, background.get("assetId"), ocr_results)
     for shape in slide["shapes"]:
         checkpoint("rendering PPTX shapes")
         _append_shape(node, shape, density, smartarts, charts, ocr_results)
@@ -109,8 +110,7 @@ def _append_shape(
             attrs["kind"] = "ole-preview"
             attrs["progid"] = shape["embeddedType"]
         append(parent, "img", **attrs)
-        if density == "semantic":
-            _append_ocr(parent, shape.get("assetId") or shape["id"], ocr_results)
+        append_ocr(parent, shape.get("assetId") or shape["id"], ocr_results)
         if shape.get("mediaKind"):
             append(
                 parent,
@@ -272,26 +272,6 @@ def _append_comments(parent: ET.Element, comments: list[CommentItem], density: s
             append(node, "unsupported", type="comments")
         elif comment.get("runs"):
             append_runs(node, comment["runs"], comment["text"], density)
-
-
-def _append_ocr(parent: ET.Element, asset_id: str | None, values: Mapping[str, OcrResultRecord]) -> None:
-    if not asset_id or asset_id not in values:
-        return
-    value = values[asset_id]
-    recognized = _ocr_text(value)
-    if recognized:
-        append(parent, "ocr-text", recognized, id=asset_id)
-    elif isinstance(value, dict) and value.get("status") == "empty":
-        append(parent, "ocr-text", id=asset_id, empty=True)
-    else:
-        append(parent, "ocr-text", id=asset_id, error=True)
-
-
-def _ocr_text(value: OcrResultRecord) -> str:
-    if value.get("status") == "success":
-        text_value = value.get("text")
-        return text_value if isinstance(text_value, str) else ""
-    return ""
 
 
 __all__ = ["iter_dtx"]

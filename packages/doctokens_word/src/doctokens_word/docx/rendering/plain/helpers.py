@@ -6,6 +6,7 @@ from typing import cast
 
 from doctokens_core.ooxml.charts.preview import plain_chart
 from doctokens_core.output.diagram_preview import diagram_plain
+from doctokens_core.output.ocr import plain_ocr
 from doctokens_core.output.plain import page_marker
 
 from ...model import Block, ContentControl, InlineContainer, InlineObject, OcrResultRecord, TableBlock, TableRow
@@ -13,7 +14,6 @@ from ...model.traversal import iter_blocks, iter_runs
 from ..common import constants as _constants
 from ..common.controls import controlled_text, wrap_plain_control
 from ..common.floating import floating_textboxes, is_floating_textbox
-from ..common.ocr import ocr_text
 from ..common.pages import iter_block_page_segments
 from ..common.text import merge_text_runs
 
@@ -159,15 +159,9 @@ def plain_image_placeholder(
     """Render a compact plain-text image summary."""
     label = _string_field(inline_object.get("alt")) or _string_field(inline_object.get("title"))
     asset_id = _string_field(inline_object.get("assetId"))
-    recognized_text = ocr_text((ocr_results or {}).get(asset_id)) if asset_id else ""
-    parts: list[str] = []
-    if label:
-        parts.append(label)
-    if recognized_text:
-        parts.append(f"OCR: {_plain_excerpt(recognized_text)}")
-    if not parts:
-        return "[Image]"
-    return f"[Image {'; '.join(parts)}]"
+    marker = f"[Image {label}]" if label else "[Image]"
+    recognized = plain_ocr((ocr_results or {}).get(asset_id)) if asset_id else ""
+    return marker + ("\n" + recognized if recognized else "")
 
 
 def plain_chart_placeholder(inline_object: InlineObject) -> str:
@@ -263,11 +257,3 @@ def _plain_cell_text(cell: object, ocr_results: dict[str, OcrResultRecord] | Non
     value = rendered or fallback
     controls = _controls(cell.get("contentControls"))
     return wrap_plain_control(value, controls) if controls else value
-
-
-def _plain_excerpt(text: str, limit: int = 120) -> str:
-    """Return a short single-line excerpt for plain-text summaries."""
-    compact = " ".join(text.split())
-    if len(compact) <= limit:
-        return compact
-    return compact[: max(0, limit - 3)].rstrip() + "..."

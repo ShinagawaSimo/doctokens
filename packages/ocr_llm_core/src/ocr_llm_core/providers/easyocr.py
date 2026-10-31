@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import math
+from numbers import Real
 import threading
 from io import BytesIO
 from typing import Any
 
-from ..models import OcrProvider, OcrResult
+from ..models import OcrProvider, OcrResult, weighted_confidence
 
 
 class EasyOcrProvider(OcrProvider):
@@ -70,10 +71,16 @@ class EasyOcrProvider(OcrProvider):
             with self._lock:
                 if self._reader is None:
                     self._reader = easyocr.Reader(self.lang_list, gpu=self.gpu, verbose=False)
-                texts: object = self._reader.readtext(image_bytes, detail=0)
-            if not isinstance(texts, (list, tuple)) or any(not isinstance(text, str) for text in texts):
+                records: object = self._reader.readtext(image_bytes, detail=1)
+            if not isinstance(records, (list, tuple)) or any(
+                not isinstance(row, (list, tuple)) or len(row) != 3 or not isinstance(row[1], str) for row in records
+            ):
                 return OcrResult.error("invalid_result", "EasyOCR returned an unexpected result shape")
-            return OcrResult.from_text("\n".join(texts))
+            samples = [
+                (row[1], float(row[2]) if isinstance(row[2], Real) and not isinstance(row[2], bool) else None)
+                for row in records
+            ]
+            return OcrResult.from_text("\n".join(row[0] for row in samples), confidence=weighted_confidence(samples))
         except TimeoutError as exc:
             return OcrResult.error("timeout", str(exc) or "OCR timed out")
         except Exception as exc:

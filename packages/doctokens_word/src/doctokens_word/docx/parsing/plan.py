@@ -29,7 +29,6 @@ class DocxFeature(Flag):
     COMMENT_THREADING = auto()
     EMBEDDED_DETAILS = auto()
     EMBEDDED_SUMMARY = auto()
-    OCR = auto()
 
 
 _RENDER_BASE = (
@@ -53,7 +52,6 @@ _FULL = (
     | DocxFeature.COMMENTS
     | DocxFeature.COMMENT_THREADING
     | DocxFeature.EMBEDDED_DETAILS
-    | DocxFeature.OCR
 )
 
 # Raw hints are diagnostics for a reusable session, not part of semantic
@@ -83,7 +81,6 @@ class DocxParsePlan:
                 "ancillary.headers_footers",
                 "resources.assets",
                 "resources.objects.full",
-                "ocr",
             )
         if self.density is Density.PLAIN:
             return ("body.plain", "ancillary.notes", "ancillary.comments", "resources.assets", "resources.objects.summary")
@@ -96,7 +93,6 @@ class DocxParsePlan:
             "ancillary.headers_footers",
             "resources.assets",
             "resources.objects.full",
-            "ocr",
         )
 
     def needs(self, feature: DocxFeature) -> bool:

@@ -34,7 +34,6 @@ from .modules.body.scanner import DocumentBodyParser
 from .modules.body.textboxes import TextboxReader
 from .modules.resources.assets import AssetExtractor
 from .modules.resources.objects import EmbeddedObjectExtractor
-from .ocr import run_ocr
 from .plan import DocxFeature, DocxParsePlan
 
 
@@ -77,9 +76,6 @@ class DocxParser:
             )
             object_lookup, charts, smartarts = self._index_objects(package, relationships, warnings, metrics, resolved_plan)
             compatibility = DocxCompatibility(warnings, asset_lookup)
-
-            with metrics.stage("ocr"):
-                ocr_results = run_ocr(package, assets, parse_options) if resolved_plan.needs(DocxFeature.OCR) else {}
 
             if resolved_plan.needs(DocxFeature.BODY):
                 body_parser, blocks = self._parse_body(
@@ -127,7 +123,7 @@ class DocxParser:
             smartarts=smartarts,
             blocks=blocks,
             ancillary=ancillary,
-            ocr_results=ocr_results,
+            ocr_results={},
             revision_view=str(parse_options.revision_mode),
             alternate_content=compatibility.records,
         )
@@ -285,7 +281,7 @@ def _needs_ancillary_content(plan: DocxParsePlan) -> bool:
 
 def _describe_source(source: str | Path | bytes | PackageReader, metrics: MetricsRecorder) -> tuple[str, str | Path | bytes]:
     if isinstance(source, PackageReader):
-        return "session", source._source
+        return _describe_source(source._source, metrics)
     if isinstance(source, bytes):
         metrics.set_counter("inputBytes", len(source))
         return "stream", source

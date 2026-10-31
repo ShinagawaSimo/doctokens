@@ -6,6 +6,7 @@ from collections.abc import Iterator
 
 from doctokens_core.contracts.models import Density, ParseReport, ParseResult, ResourceDescriptor, Source
 from doctokens_core.output.image_text import image_text_resource
+from doctokens_core.runtime.image_ocr import ImageOcrReader
 from doctokens_core.runtime.session import SessionLifecycle
 from doctokens_core.text.search import TextSearchOptions, TextSearchResult, search_text
 
@@ -16,6 +17,7 @@ from ..parsing import get_render_pipeline
 from ..parsing.plan import PptxParsePlan
 from ..parsing.runner import PptxParser
 from ..rendering.resources import render_resource
+from .ocr import prepare_ocr
 from .search import text_units
 from .support import _density, _resource_descriptors, _result, _select_slides
 
@@ -27,6 +29,7 @@ class PptxReadSession:
         self.source = source
         self.options = options
         self._memory_limit_bytes = memory_limit_bytes
+        self._ocr_reader = ImageOcrReader(options.ocr, options.ocr_workers, options.ocr_timeout)
         self.parsed_presentation: ParsedPresentation | None = None
         self._package_reader: PackageReader | None = None
         self._lifecycle: SessionLifecycle[ParsedPresentation] = SessionLifecycle("PPTX")
@@ -51,6 +54,7 @@ class PptxReadSession:
         self.close()
 
     def close(self) -> None:
+        self._ocr_reader.clear()
         self._lifecycle.close()
         self._package_reader = None
         self.parsed_presentation = None
@@ -100,6 +104,12 @@ class PptxReadSession:
         presentation = self._require_open()
         resolved = _density(density)
         selected, selection = _select_slides(presentation, slide, span)
+        if self._package_reader is not None:
+            prepare_ocr(self._ocr_reader, self._package_reader, selected, resolved)
+            presentation.report = selected.report
+            presentation.metrics = selected.metrics
+            if self._package_reader.memory_budget is not None:
+                self._package_reader.memory_budget.finish(presentation)
         text = "".join(get_render_pipeline(resolved).render(selected))
         return _result(presentation, text, resolved, selection)
 
@@ -116,6 +126,13 @@ class PptxReadSession:
         chunks = get_render_pipeline(resolved).render(selected)
 
         def guarded() -> Iterator[str]:
+            self._require_open()
+            if self._package_reader is not None:
+                prepare_ocr(self._ocr_reader, self._package_reader, selected, resolved)
+                presentation.report = selected.report
+                presentation.metrics = selected.metrics
+                if self._package_reader.memory_budget is not None:
+                    self._package_reader.memory_budget.finish(presentation)
             for chunk in chunks:
                 self._require_open()
                 yield chunk
@@ -203,9 +220,19 @@ def parse_pptx(
     resolved = _density(density)
     selected_options = options or ParseOptions()
     pipeline = get_render_pipeline(resolved)
-    presentation = PptxParser().parse(source, selected_options, plan=pipeline.plan)
-    selected, selection = _select_slides(presentation, slide, span)
-    return _result(presentation, "".join(pipeline.render(selected)), resolved, selection)
+    with PackageReader(source, selected_options) as package:
+        presentation = PptxParser().parse(package, selected_options, plan=pipeline.plan)
+        selected, selection = _select_slides(presentation, slide, span)
+        prepare_ocr(
+            ImageOcrReader(selected_options.ocr, selected_options.ocr_workers, selected_options.ocr_timeout),
+            package,
+            selected,
+            resolved,
+        )
+        presentation.report = selected.report
+        presentation.metrics = selected.metrics
+        text = "".join(pipeline.render(selected))
+    return _result(presentation, text, resolved, selection)
 
 
 __all__ = ["PptxReadSession", "open_pptx", "parse_pptx"]

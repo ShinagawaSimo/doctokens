@@ -7,19 +7,19 @@ from typing import cast
 from xml.etree import ElementTree as ET
 
 from doctokens_core.ooxml.equations.results import append_math_text
+from doctokens_core.output.ocr import append_ocr
 from doctokens_core.output.xml import append, element, serialize
 from doctokens_core.runtime.execution import checkpoint
 
 from ..model import AncillaryItem, Block, InlineContainer, InlineObject, OcrResultRecord, ParsedDocument, Run, TableBlock
+from .common.constants import _TABLE_TRUNCATE_DTX
 from .common.floating import floating_textboxes, is_floating_textbox, iter_flow_page_blocks
 from .common.pages import iter_block_page_segments
 from .common.text import merge_text_runs
-from .dtx_content import _append_chart, _append_ocr, _append_smartart, _append_text_with_breaks
+from .dtx_content import _append_chart, _append_smartart, _append_text_with_breaks
 from .dtx_controls import append_controls, finish_controls
 from .dtx_runs import append_run_text, review_parent
 from .dtx_tables import append_rows
-
-_TABLE_ROW_LIMIT = 30
 
 
 def iter_dtx(parsed_document: ParsedDocument, density: str) -> Iterator[str]:
@@ -169,7 +169,7 @@ def _append_inline_object(
             id=inline_object.get("assetId"),
             alt=inline_object.get("alt") or inline_object.get("title") or None,
         )
-        _append_ocr(parent, inline_object.get("assetId"), ocr_results)
+        append_ocr(parent, inline_object.get("assetId"), ocr_results)
     elif object_type == "drawing":
         alt = inline_object.get("alt") or inline_object.get("title")
         append(parent, "img", alt=alt or None)
@@ -208,7 +208,7 @@ def _append_inline_object(
 
 def _append_table(parent: ET.Element, block: TableBlock, density: str, ocr_results: dict[str, OcrResultRecord]) -> None:
     rows = block["rows"]
-    truncated = len(rows) > _TABLE_ROW_LIMIT
+    truncated = len(rows) > _TABLE_TRUNCATE_DTX
     table = append(parent, "table", id=block["tableId"], truncated=True if truncated else None)
     append_rows(table, rows[:2] if truncated else rows, density, ocr_results, _append_cell_content)
 
@@ -248,7 +248,6 @@ def _append_assets(parent: ET.Element, parsed_document: ParsedDocument, density:
     assets = append(parent, "assets")
     for asset in parsed_document.assets:
         append(assets, "img", id=asset["id"], href=asset.get("href") if density == "semantic" else None)
-        _append_ocr(assets, asset["id"], parsed_document.ocr_results)
 
 
 def _append_supplemental(parent: ET.Element, parsed_document: ParsedDocument, density: str) -> None:

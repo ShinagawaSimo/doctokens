@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Literal, TypedDict
+from typing import TypedDict
 
 from doctokens_core.containers.opc.options import PackageOptions
 from doctokens_core.contracts.annotations import AnnotationStatus
 from doctokens_core.contracts.models import MetricsSnapshot, ParseReport, ParseWarning
+from doctokens_core.contracts.ocr import OcrResultRecord
 from doctokens_core.ooxml.charts.models import ChartPlotInfo, ChartSeriesInfo
 
 DEFAULT_MAX_ZIP_ENTRIES = 10_000
@@ -165,15 +166,6 @@ class ImageAsset(TypedDict, total=False):
 
 
 AssetLookup = dict[tuple[str, str], ImageAsset]
-
-
-class OcrResultRecord(TypedDict, total=False):
-    """Stored OCR outcome; provider diagnostics stay out of rendered output."""
-
-    status: Literal["success", "empty", "error"]
-    text: str
-    error_code: str
-    error_message: str
 
 
 class SmartArtNodeRequired(TypedDict):

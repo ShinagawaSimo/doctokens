@@ -37,7 +37,7 @@ class EasyOcrProviderTest(unittest.TestCase):
     def test_extract_joins_text_lines(self) -> None:
         p = EasyOcrProvider(["en"])
         mock_reader = MagicMock()
-        mock_reader.readtext.return_value = ["line1", "line2", "line3"]
+        mock_reader.readtext.return_value = [(None, "line1", 0.9), (None, "line2", 0.9), (None, "line3", 0.9)]
         with patch("easyocr.Reader", return_value=mock_reader):
             result = p.extract_result(_png_bytes())
         self.assertEqual(result.text, "line1\nline2\nline3")

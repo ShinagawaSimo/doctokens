@@ -14,7 +14,7 @@ from .window_assets import referenced_image_ids
 
 __all__ = [
     "iter_output",
-    "render_page_window",
+    "select_page_window",
     "render_resource",
 ]
 
@@ -26,13 +26,13 @@ def iter_output(parsed_document: ParsedDocument, density: Density | str = Densit
     yield from get_render_pipeline(Density.parse(density)).render(parsed_document)
 
 
-def render_page_window(
+def select_page_window(
     parsed_document: ParsedDocument,
     page: int,
     span: int = 1,
     density: Density | str = Density.SEMANTIC,
-) -> str:
-    """Return output for the given page range; page=-1 means the last page."""
+) -> ParsedDocument:
+    """Select a saved page window before reading its derived image content."""
     resolved_density = Density.parse(density)
     if page != -1 and page < 1:
         raise ValueError("page must be -1 or greater than zero")
@@ -45,7 +45,7 @@ def render_page_window(
         start_page = total_pages
     elif page > total_pages:
         empty_document = dataclasses.replace(parsed_document, blocks=[], headers=[], footers=[], comments=[])
-        return _window_output(empty_document, resolved_density)
+        return _window_document(empty_document, resolved_density)
     else:
         start_page = page
 
@@ -54,7 +54,7 @@ def render_page_window(
         # Hole pages (multiple consecutive breaks) contain no blocks; return
         # an empty window instead of silently falling back to the whole document.
         empty_document = dataclasses.replace(parsed_document, blocks=[], headers=[], footers=[], comments=[])
-        return _window_output(empty_document, resolved_density)
+        return _window_document(empty_document, resolved_density)
 
     page_blocks = list(iter_page_blocks(parsed_document))
     selected_pages = set(range(start_page, end_page + 1))
@@ -72,13 +72,12 @@ def render_page_window(
         footers=[],
         comments=window_comments(parsed_document, selected_blocks),
     )
-    return _window_output(selected_document, resolved_density)
+    return _window_document(selected_document, resolved_density)
 
 
-def _window_output(document: ParsedDocument, density: Density) -> str:
-    used = referenced_image_ids(document)
-    selected = dataclasses.replace(document, assets=[asset for asset in document.assets if asset["id"] in used])
-    return "".join(iter_output(selected, density))
+def _window_document(document: ParsedDocument, density: Density) -> ParsedDocument:
+    used = referenced_image_ids(document, density)
+    return dataclasses.replace(document, assets=[asset for asset in document.assets if asset["id"] in used])
 
 
 def describe_pages(parsed_document: ParsedDocument) -> dict[str, object]:

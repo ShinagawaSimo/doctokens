@@ -8,8 +8,7 @@ from doctokens_core.ooxml.charts.preview import append_chart_preview
 from doctokens_core.output.diagram_preview import diagram_preview
 from doctokens_core.output.xml import append, text
 
-from ..model import InlineObject, OcrResultRecord
-from .common.ocr import ocr_text
+from ..model import InlineObject
 from .objects.charts import preview_info
 
 
@@ -50,19 +49,6 @@ def _append_smartart(parent: ET.Element, smartart: InlineObject) -> None:
     for index in preview.link_indices:
         edge = links[index]
         append(node, "link", **{"from": edge["from"], "to": edge["to"], "kind": edge.get("kind")})
-
-
-def _append_ocr(parent: ET.Element, asset_id: str | None, results: dict[str, OcrResultRecord]) -> None:
-    if not asset_id or asset_id not in results:
-        return
-    result = results[asset_id]
-    recognized = ocr_text(result)
-    if recognized:
-        append(parent, "ocr-text", recognized, id=asset_id)
-    elif isinstance(result, dict) and result.get("status") == "empty":
-        append(parent, "ocr-text", id=asset_id, empty=True)
-    else:
-        append(parent, "ocr-text", id=asset_id, error=True)
 
 
 def _append_text_with_breaks(parent: ET.Element, value: str) -> None:

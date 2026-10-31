@@ -20,7 +20,6 @@ class PptxFeature(Flag):
     NOTES = auto()
     COMMENTS = auto()
     OBJECT_DETAILS = auto()
-    OCR = auto()
     NAVIGATION = auto()
     PARAGRAPH_INHERITANCE = auto()
 
@@ -33,7 +32,7 @@ _BASE = (
     | PptxFeature.NAVIGATION
     | PptxFeature.PARAGRAPH_INHERITANCE
 )
-_FULL = _BASE | PptxFeature.TEXT_FORMATTING | PptxFeature.THEME_AND_LAYOUT | PptxFeature.OCR
+_FULL = _BASE | PptxFeature.TEXT_FORMATTING | PptxFeature.THEME_AND_LAYOUT
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +56,6 @@ class PptxParsePlan:
                 "ancillary.comments",
                 "resources.assets",
                 "resources.objects.full",
-                "ocr",
             )
         return (
             "presentation.index",

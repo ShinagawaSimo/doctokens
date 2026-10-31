@@ -46,7 +46,7 @@ class ChartShapeTests(unittest.TestCase):
         parsed = PptxParser().parse(_missing_chart_deck(), ParseOptions())
         self.assertTrue(any(w.code == "CHART_PART_MISSING" for w in parsed.warnings))
         text = parse_pptx(_missing_chart_deck(), density=Density.PLAIN).text
-        self.assertIn("[Chart]", text)
+        self.assertEqual(text, "density=plain format=pptx\n=== Slide 1 ===\n[Unparsed chart]")
 
 
 if __name__ == "__main__":

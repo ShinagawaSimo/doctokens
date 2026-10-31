@@ -3,11 +3,42 @@
 from __future__ import annotations
 
 from doctokens_core.ooxml.charts.axes import append_chart_axes
+from doctokens_core.ooxml.charts.models import ChartInfo, ChartSeriesInfo
 from doctokens_core.ooxml.charts.rendering import append_annotations, append_plots
 from doctokens_core.output.resources import resource_document
 from doctokens_core.output.xml import append, element
 
-from ...model import Chart
+from ...model import Chart, InlineObject
+
+
+def preview_info(chart: Chart | InlineObject) -> ChartInfo:
+    series: list[ChartSeriesInfo] = []
+    for item in chart.get("series", []):
+        row: ChartSeriesInfo = {"index": item["index"], "point_count": item.get("pointCount", 0)}
+        for old, new in (
+            ("name", "name"),
+            ("categories", "categories"),
+            ("values", "values"),
+            ("xValues", "x_values"),
+            ("yValues", "y_values"),
+            ("bubbleSizes", "bubble_sizes"),
+            ("plotIndex", "plot_index"),
+            ("hidden", "hidden"),
+            ("axis_ids", "axis_ids"),
+            ("labels", "labels"),
+            ("label_options", "label_options"),
+            ("trendlines", "trendlines"),
+        ):
+            if old in item:
+                row[new] = item[old]  # type: ignore[literal-required]
+        series.append(row)
+    return {
+        "series": series,
+        "series_count": chart.get("seriesCount", len(series)),
+        "point_count": chart.get("pointCount", max((item.get("point_count", 0) for item in series), default=0)),
+        "axes": chart.get("axes", []),
+        "plots": chart.get("plots", []),
+    }
 
 
 def render_chart_resource(chart: Chart) -> str:

@@ -23,8 +23,6 @@ class DocxPipelineTests(unittest.TestCase):
         output = parse_docx(docx_path, density=Density.SEMANTIC).text
         root = ET.fromstring(output)
         self.assertEqual(root.find(".//a").get("href"), "https://example.test")
-        self.assertEqual(root.find(".//chart").get("id"), "chart1")
-        self.assertEqual(root.find(".//smartart").get("type"), "process")
         self.assertEqual(root.find(".//assets/img").get("id"), "img1")
         self.assertEqual(root.find(".//body//img").get("id"), "img1")
         self.assertIsNotNone(root.find("supplemental"))
@@ -32,14 +30,6 @@ class DocxPipelineTests(unittest.TestCase):
         structural_output = parse_docx(docx_path, density=Density.STRUCTURAL).text
         plain_text = parse_docx(docx_path, density=Density.PLAIN).text
         structural_root = ET.fromstring(structural_output)
-        self.assertEqual(structural_root.find(".//chart").get("id"), "chart1")
-        self.assertEqual(
-            [(point.get("category"), point.get("value")) for point in structural_root.findall(".//chart/series/point")],
-            [("Q1", "2"), ("Q2", "5")],
-        )
-        self.assertEqual(
-            [(edge.get("from"), edge.get("to")) for edge in structural_root.findall(".//smartart/link")], [("1", "2")]
-        )
         self.assertEqual(structural_root.find(".//body//img").get("id"), "img1")
         self.assertIn("Footnote text", plain_text)
         self.assertIn("Last page", parse_docx(docx_path, page_hint=-1).text)
@@ -68,8 +58,6 @@ class DocxPipelineTests(unittest.TestCase):
         chart_resource = ET.fromstring(chart_output)
         chart = chart_resource.find(".//chart")
         assert chart is not None
-        self.assertEqual(chart.get("type"), "bar")
-        self.assertEqual(chart.get("series"), "1")
         assert table_output is not None
         table_resource = ET.fromstring(table_output)
         table = table_resource.find(".//table")

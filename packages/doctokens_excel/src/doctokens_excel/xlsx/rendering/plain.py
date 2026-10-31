@@ -4,18 +4,18 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from html import escape as escape_text
-from typing import cast
 
+from doctokens_core.ooxml.charts.preview import plain_chart
 from doctokens_core.runtime.execution import checkpoint
 
-from ..model.workbook import Cell, ParsedWorkbook, SheetInfo
+from ..model.workbook import Cell, ParsedWorkbook, SheetInfo, TableInfo
 from .window import ReadingWindow, reading_window
 
 
 def iter_plain(workbook: ParsedWorkbook) -> Iterator[str]:
     """Render workbook text in reading order with the existing sheet boundaries."""
-    for index, sheet in enumerate(workbook["sheets"]):
-        yield from _iter_sheet(sheet, workbook, emit_globals=index == 0)
+    for sheet in workbook["sheets"]:
+        yield from _iter_sheet(sheet)
 
 
 def iter_plain_rows(rows: list[list[Cell]], *, hidden_cols: list[tuple[int, int]] | None = None) -> Iterator[str]:
@@ -34,7 +34,7 @@ def iter_plain_window(window: ReadingWindow, sheet: SheetInfo) -> Iterator[str]:
         yield f"[Truncated: next row {window.next_row}]\n"
 
 
-def _iter_sheet(sheet: SheetInfo, workbook: ParsedWorkbook, *, emit_globals: bool) -> Iterator[str]:
+def _iter_sheet(sheet: SheetInfo) -> Iterator[str]:
     name = escape_text(sheet["name"], quote=True)
     attrs = f"name={name}"
     state = sheet.get("state", "visible")
@@ -44,10 +44,8 @@ def _iter_sheet(sheet: SheetInfo, workbook: ParsedWorkbook, *, emit_globals: boo
         attrs += " veryHidden"
     is_chart_sheet = sheet.get("kind") == "chartsheet"
     yield f"<{'chartsheet' if is_chart_sheet else 'sheet'} {attrs}>\n"
-    if sheet.get("filter_range"):
+    if sheet.get("filter_range") and sheet.get("filter_cols"):
         yield f"[Filter {sheet['filter_range']}]\n"
-    if emit_globals:
-        yield from _iter_interactive_filters(workbook)
     for validation in sheet.get("data_validations", []):
         if validation.get("unparsed"):
             yield "[Unparsed data validation]\n"
@@ -60,9 +58,16 @@ def _iter_sheet(sheet: SheetInfo, workbook: ParsedWorkbook, *, emit_globals: boo
         if image.get("unparsed"):
             yield "[Unparsed image]\n"
     for chart in sheet.get("charts", []):
-        title = f" {chart['title']}" if chart.get("title") else ""
-        names = ", ".join(_chart_names(chart))
-        yield f"[Chart{title}{': ' + names if names else ''}]\n"
+        yield (
+            plain_chart(
+                chart.get("id"),
+                chart.get("type", "?"),
+                chart.get("title"),
+                [item["name"] for item in chart.get("series", []) if item.get("name")],
+                chart.get("series_count", 0),
+            )
+            + "\n"
+        )
         if chart.get("unparsed"):
             yield "[Unparsed chart]\n"
     for shape in sheet.get("drawing_shapes", []):
@@ -107,39 +112,9 @@ def _cell_text(cell: Cell) -> str:
     return value + (" " if value and suffix else "") + suffix
 
 
-def _iter_interactive_filters(workbook: ParsedWorkbook) -> Iterator[str]:
-    metadata = workbook["metadata"]
-    for slicer in metadata.get("slicers", []):
-        name = slicer.get("name") or slicer.get("sourceName")
-        yield f"[Slicer {name}]\n" if name else "[Slicer]\n"
-    for timeline in metadata.get("timelines", []):
-        name = timeline.get("name") or timeline.get("sourceName")
-        yield f"[Timeline {name}]\n" if name else "[Timeline]\n"
-
-
-def _chart_names(chart: object) -> list[str]:
-    if not isinstance(chart, dict):
-        return []
-    series = chart.get("series")
-    if not isinstance(series, list):
-        return []
-    return [str(item.get("name")) for item in cast(list[object], series) if isinstance(item, dict) and item.get("name")]
-
-
-def _table_summary(table: object) -> str:
-    if not isinstance(table, dict):
-        return "[Table]\n"
-    name = table.get("name")
-    raw_columns = table.get("columns")
-    columns = cast(list[object], raw_columns) if isinstance(raw_columns, list) else []
-    listed = ", ".join(str(column) for column in columns if column)
-    if name and listed:
-        return f"[Table {name}: {listed}]\n"
-    if name:
-        return f"[Table {name}]\n"
-    if listed:
-        return f"[Table: {listed}]\n"
-    return "[Table]\n"
+def _table_summary(table: TableInfo) -> str:
+    label = " ".join(value for value in (table.get("name"), table.get("ref")) if value)
+    return f"[Table {label}]\n" if label else "[Table]\n"
 
 
 __all__ = ["iter_plain", "iter_plain_rows"]

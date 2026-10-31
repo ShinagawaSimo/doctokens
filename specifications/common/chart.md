@@ -19,6 +19,37 @@ handle missing parts and parse exceptions.
 
 ## Fields
 
+### `body preview`
+
+- **Output**
+  - DOCX/PPTX/XLSX structural and semantic share a bounded projection: at most
+    8 series, 8 saved points per series, 8 axes, 8 plots and 16 annotation elements
+    across the chart. Root @series counts parsed series; @points sums each
+    series' largest cached array length, rather than distinct categories.
+  - Series names occur only on series; categories occur only on points. Point
+    @index preserves the zero-based cache position. Plot membership lists have
+    at most 8 shown identities; references do not claim omitted definitions exist.
+- **Projection**
+  - Saved scalar strings share 2,400 characters, at most 160 per field. Human
+    labels can end with an ellipsis. Numeric point fields are indivisible: omit
+    an unfittable point rather than show a false numeric prefix. Empty cache
+    positions preserve their indices without pretending they are numeric zero.
+  - Retain applicable units, axis titles/formats/scales, grouping/direction,
+    hidden-series state, labels and trendlines within the budget. Labels only
+    refer to displayed points. Do not evaluate chart formulas or scale caches.
+  - Actual omissions mark the chart truncated=true and affected series/points
+    where applicable. A complete small chart omits this flag. Unreadable objects
+    retain unsupported placeholders; resources bypass body preview limits.
+- **Plain**
+  - `[Chart chart1: Sales (bar, 1 series); A]` identifies the resource, title,
+    type, total series count and at most 8 names. Title/name strings share 512
+    characters and the 160-character field cap. Explicit truncated text marks
+    omitted labels; plain does not duplicate point arrays.
+- **Resources**
+  - Complete serializers retain their existing supported full arrays, axes,
+    plots and annotations. Body rendering does not mutate them. Use the body's
+    chart ID for lookup; ref/shape-id remain format-specific navigation.
+
 ### `chart_type`
 
 - **Output**

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import cast
 from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.relationships import RelationshipIndex
@@ -38,12 +37,12 @@ class EmbeddedObjectExtractor:
         self.relationships = relationships
         self.warnings = warnings
 
-    def extract(self, *, summary_only: bool = False) -> tuple[ObjectLookup, list[Chart], list[SmartArt]]:
+    def extract(self) -> tuple[ObjectLookup, list[Chart], list[SmartArt]]:
         """Parse charts and SmartArt, returning a `(sourcePart, rId)` index."""
         object_lookup: ObjectLookup = {}
         layout_types_by_part = self._build_layout_map()
-        charts = self._extract_charts(object_lookup, summary_only=summary_only)
-        smartarts = self._extract_smartarts(object_lookup, layout_types_by_part, summary_only=summary_only)
+        charts = self._extract_charts(object_lookup)
+        smartarts = self._extract_smartarts(object_lookup, layout_types_by_part)
         return object_lookup, charts, smartarts
 
     def _build_layout_map(self) -> dict[str, str]:
@@ -70,7 +69,7 @@ class EmbeddedObjectExtractor:
                 )
         return layout_types_by_part
 
-    def _extract_charts(self, lookup: ObjectLookup, *, summary_only: bool) -> list[Chart]:
+    def _extract_charts(self, lookup: ObjectLookup) -> list[Chart]:
         """Parse the chart parts targeted by chart relationships."""
         charts: list[Chart] = []
         chart_relationships = (record for record in self.relationships.records if record.type in CHART_RELATIONSHIP_TYPES)
@@ -98,8 +97,6 @@ class EmbeddedObjectExtractor:
                 continue
             chart["sourcePart"] = rel.source_part
             chart["relationshipId"] = rel.id
-            if summary_only:
-                chart = _chart_summary(chart)
             charts.append(chart)
             lookup[(rel.source_part, rel.id)] = chart
         return charts
@@ -108,8 +105,6 @@ class EmbeddedObjectExtractor:
         self,
         lookup: ObjectLookup,
         layout_types_by_part: dict[str, str],
-        *,
-        summary_only: bool,
     ) -> list[SmartArt]:
         """Parse the diagram data parts targeted by SmartArt data model relationships."""
         smartarts: list[SmartArt] = []
@@ -139,8 +134,6 @@ class EmbeddedObjectExtractor:
                 smartart["layoutType"] = layout_type
             smartart["sourcePart"] = rel.source_part
             smartart["relationshipId"] = rel.id
-            if summary_only:
-                smartart = _smartart_summary(smartart)
             smartarts.append(smartart)
             lookup[(rel.source_part, rel.id)] = smartart
         return smartarts
@@ -150,52 +143,6 @@ class EmbeddedObjectExtractor:
         append_warning(self.warnings, code, message, part=part)
 
 
-def _chart_summary(chart: Chart) -> Chart:
-    """Keep a bounded point preview in every reading density."""
-    series: list[ChartSeries] = []
-    for ordinal, item in enumerate(chart.get("series", [])):
-        summary: ChartSeries = {
-            "index": item["index"],
-            "pointCount": item.get("pointCount", 0),
-            "preview": item.get("preview", ""),
-        }
-        if ordinal < 8:
-            if item.get("labels"):
-                summary["labels"] = [label for label in item["labels"] if label.get("index", 8) < 8]
-            if item.get("label_options"):
-                summary["label_options"] = item["label_options"]
-            if item.get("trendlines"):
-                summary["trendlines"] = item["trendlines"][:8]
-            if "plotIndex" in item:
-                summary["plotIndex"] = item["plotIndex"]
-            if item.get("axis_ids"):
-                summary["axis_ids"] = item["axis_ids"]
-        if item.get("name"):
-            summary["name"] = item["name"]
-        if ordinal < 8:
-            for key in ("categories", "values", "xValues", "yValues", "bubbleSizes"):
-                if key in item:
-                    cast(dict[str, object], summary)[key] = item[key][:8]
-        series.append(summary)
-    result = cast(Chart, dict(chart))
-    result["series"] = series
-    return result
-
-
-def _smartart_summary(smartart: SmartArt) -> SmartArt:
-    """Copy the complete reading graph without discarding structural edges."""
-    result = cast(SmartArt, dict(smartart))
-    nodes: list[SmartArtNode] = []
-    for node in smartart.get("nodes", []):
-        summary_node: SmartArtNode = {"modelId": node["modelId"], "text": node["text"]}
-        if node.get("kind"):
-            summary_node["kind"] = node["kind"]
-        nodes.append(summary_node)
-    result["nodes"] = nodes
-    result["links"] = [link.copy() for link in smartart.get("links", [])]
-    return result
-
-
 def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> Chart:
     """Extract chart information from the chart XML, delegating to the shared ChartML parser."""
     info = ChartParser().parse(root)
@@ -203,7 +150,13 @@ def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> Chart:
     for s in info.get("series", []):
         row: ChartSeries = {
             "index": s["index"],
-            "pointCount": max(len(s.get("categories", [])), len(s.get("values", []))),
+            "pointCount": max(
+                len(s.get("categories", [])),
+                len(s.get("values", [])),
+                len(s.get("x_values", [])),
+                len(s.get("y_values", [])),
+                len(s.get("bubble_sizes", [])),
+            ),
             "preview": s.get("preview", ""),
         }
         if s.get("name"):

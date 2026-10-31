@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
+from doctokens_core.ooxml.charts.preview import plain_chart
 from doctokens_core.runtime.execution import checkpoint
 
-from ..model.presentation import ParsedPresentation, ShapeBlock, SlideBlock, SmartArtRecord
+from ..model.presentation import ChartRecord, ParsedPresentation, ShapeBlock, SlideBlock, SmartArtRecord
 from .diagrams import diagram_text
 
 _MEDIA_PLACEHOLDERS = {"video": "[Video]", "audio": "[Audio]"}
@@ -16,6 +17,7 @@ _TABLE_ROW_LIMIT = 10
 def iter_plain(parsed_presentation: ParsedPresentation) -> Iterator[str]:
     """Render the deliberately unformatted presentation text stream."""
     smartarts = {item["id"]: item for item in parsed_presentation.smartarts}
+    charts = {item["id"]: item for item in parsed_presentation.charts}
     for slide in parsed_presentation.slides:
         checkpoint("rendering PPTX slides")
         if slide["n"] > 1:
@@ -23,7 +25,7 @@ def iter_plain(parsed_presentation: ParsedPresentation) -> Iterator[str]:
         section = slide.get("section")
         label = f" (Section: {section})" if section else ""
         yield f"=== Slide {slide['n']}{label} ===\n"
-        yield _slide_body(slide, smartarts)
+        yield _slide_body(slide, smartarts, charts)
     if parsed_presentation.comments:
         yield "\n\n[Comments]\n"
         yield "\n".join(
@@ -31,14 +33,14 @@ def iter_plain(parsed_presentation: ParsedPresentation) -> Iterator[str]:
         )
 
 
-def _slide_body(slide: SlideBlock, smartarts: dict[str, SmartArtRecord]) -> str:
-    values = [value for shape in slide["shapes"] if (value := _shape_text(shape, smartarts))]
+def _slide_body(slide: SlideBlock, smartarts: dict[str, SmartArtRecord], charts: dict[str, ChartRecord]) -> str:
+    values = [value for shape in slide["shapes"] if (value := _shape_text(shape, smartarts, charts))]
     if slide["notes"]:
         values.append(f"[Notes: {slide['notes']}]")
     return "\n\n".join(values)
 
 
-def _shape_text(shape: ShapeBlock, smartarts: dict[str, SmartArtRecord]) -> str:
+def _shape_text(shape: ShapeBlock, smartarts: dict[str, SmartArtRecord], charts: dict[str, ChartRecord]) -> str:
     if shape["type"] == "unsupported":
         return f"[Unparsed shape: {shape.get('sourceKind', 'shape')}]"
     if shape["type"] == "text":
@@ -65,17 +67,19 @@ def _shape_text(shape: ShapeBlock, smartarts: dict[str, SmartArtRecord]) -> str:
         body = "\n".join("\t".join(row) for row in visible_rows)
         return f"{body}\n[Table truncated: {len(rows)} rows, {columns} cols]" if len(rows) > _TABLE_ROW_LIMIT else body
     if shape["type"] == "chart":
-        if shape.get("chartType") and shape.get("seriesCount") is not None:
-            title = f" {shape['chartTitle']}" if shape.get("chartTitle") else ""
-            return f"[Chart{title}: {shape['chartType']}, {shape['seriesCount']} series]"
-        return "[Chart]"
+        chart_record = charts.get(shape.get("chartId", ""))
+        if chart_record is None:
+            return "[Unparsed chart]"
+        return plain_chart(
+            shape.get("chartId"),
+            shape.get("chartType", "?"),
+            shape.get("chartTitle"),
+            [item["name"] for item in chart_record.get("series", []) if item.get("name")] if chart_record else [],
+            shape.get("seriesCount", 0),
+        )
     if shape["type"] == "smartart":
-        if shape.get("layoutType") and shape.get("nodeCount") is not None:
-            summary = f"[SmartArt: {shape['layoutType']}, {shape['nodeCount']} nodes]"
-        else:
-            summary = "[SmartArt]"
         record = smartarts.get(shape.get("smartartId", ""))
-        return summary + ("\n" + diagram_text(record) if record is not None else "")
+        return diagram_text(record) if record is not None else "[Unparsed SmartArt]"
     if shape["type"] == "shape":
         if description := shape.get("alt") or shape.get("title"):
             return f"[Shape: {description}]"

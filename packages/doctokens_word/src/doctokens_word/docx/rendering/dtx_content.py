@@ -4,67 +4,51 @@ from __future__ import annotations
 
 from xml.etree import ElementTree as ET
 
-from doctokens_core.ooxml.charts.axes import append_chart_axes
-from doctokens_core.ooxml.charts.rendering import append_annotations, append_plots
+from doctokens_core.ooxml.charts.preview import append_chart_preview
+from doctokens_core.output.diagram_preview import diagram_preview
 from doctokens_core.output.xml import append, text
 
 from ..model import InlineObject, OcrResultRecord
 from .common.ocr import ocr_text
+from .objects.charts import preview_info
 
 
 def _append_chart(parent: ET.Element, chart: InlineObject) -> None:
-    attrs: dict[str, object] = {
-        "id": chart.get("id"),
-        "type": chart.get("chartType", "?"),
-        "title": chart.get("title"),
-        "series": chart.get("seriesCount", 0),
-        "truncated": True,
-    }
-    series = chart.get("series") or []
-    categories = [str(item) for item in (series[0].get("categories", []) if series else [])]
-    names = [str(item.get("name")) for item in series if item.get("name")]
-    if categories:
-        attrs["categories"] = ",".join(categories[:8])
-    if names:
-        attrs["names"] = ",".join(names)
-    node = append(parent, "chart", **attrs)
-    append_chart_axes(node, chart.get("axes", []))
-    append_plots(node, chart.get("plots", []))
-    for ordinal, item in enumerate(series[:8]):
-        child = append(
-            node,
-            "series",
-            index=item.get("index", ordinal),
-            name=item.get("name"),
-            plot=item.get("plotIndex"),
-            axes=" ".join(item.get("axis_ids", [])) or None,
-        )
-        append_annotations(child, item.get("labels", []), item.get("label_options", {}), item.get("trendlines", []), preview=True)
-        arrays = [
-            ("category", item.get("categories", [])),
-            ("value", item.get("values", [])),
-            ("x", item.get("xValues", [])),
-            ("y", item.get("yValues", [])),
-            ("bubbleSize", item.get("bubbleSizes", [])),
-        ]
-        for index in range(min(8, max((len(values) for _, values in arrays), default=0))):
-            append(child, "point", index=index, **{key: values[index] for key, values in arrays if index < len(values)})
+    node = append(
+        parent, "chart", id=chart.get("id") if "series" in chart else None, type=chart.get("chartType"), title=chart.get("title")
+    )
+    if "series" not in chart:
+        append(node, "unsupported", type="chart")
+        return
+    append_chart_preview(node, preview_info(chart))
 
 
 def _append_smartart(parent: ET.Element, smartart: InlineObject) -> None:
+    nodes = smartart.get("nodes", [])
+    links = smartart.get("links", [])
+    preview = diagram_preview(
+        [(index, item["text"]) for index, item in enumerate(nodes, start=1)],
+        [(edge["from"], edge["to"]) for edge in links],
+    )
     node = append(
         parent,
         "smartart",
-        id=smartart.get("id"),
+        id=smartart.get("id") if "nodes" in smartart else None,
         type=smartart.get("layoutType"),
-        nodes=smartart.get("nodeCount", 0),
-        links=smartart.get("linkCount", 0),
-        truncated=True if "nodes" not in smartart else None,
+        nodes=smartart.get("nodeCount"),
+        links=smartart.get("linkCount"),
+        truncated=True if preview.truncated else None,
         incomplete=True if smartart.get("rawLinkCount", 0) > smartart.get("linkCount", 0) else None,
     )
-    for index, item in enumerate(smartart.get("nodes", []), start=1):
-        append(node, "node", item["text"], id=index, kind=item.get("kind"))
-    for edge in smartart.get("links", []):
+    if "nodes" not in smartart:
+        append(node, "unsupported", type="smartart")
+        return
+    for item in preview.nodes:
+        append(
+            node, "node", item.text, id=item.id, kind=nodes[item.id - 1].get("kind"), truncated=True if item.truncated else None
+        )
+    for index in preview.link_indices:
+        edge = links[index]
         append(node, "link", **{"from": edge["from"], "to": edge["to"], "kind": edge.get("kind")})
 
 

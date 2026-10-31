@@ -2,7 +2,8 @@
 
 [DOCX](../README.md) / SmartArt nodes
 
-Node ordinals are 1-based positions in the retained label list.
+Node ordinals are one-based source-point positions, including empty nodes.
+Body preview and complete resource use the same `<node id="N">text</node>`.
 
 ## Fields
 
@@ -18,7 +19,8 @@ Node ordinals are 1-based positions in the retained label list.
   - `SmartArtNode.modelId: str`
 
 - **Parsing**
-  - Required attribute access; a missing attribute causes enclosing SmartArt parse failure.
+  - Missing modelId defaults to empty and does not bind an edge. Duplicate keys
+    bind to the first occurrence; independently retained nodes keep their ordinals.
 
 ### `text`
 
@@ -32,12 +34,13 @@ Node ordinals are 1-based positions in the retained label list.
   - `SmartArtNode.text: str`
 
 - **Parsing**
-  - Concatenate then strip; omit empty node.
+  - Concatenate then strip; retain empty nodes and their graph roles. Body text
+    can be previewed under the SmartArt budget; resource text remains complete.
 
 ### `kind`
 
 - **Output**
-  - Resource node metadata.
+  - Body/resource node metadata.
 
 - **OOXML**
   - `dgm:pt/@type`

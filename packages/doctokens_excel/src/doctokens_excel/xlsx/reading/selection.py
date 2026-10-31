@@ -30,7 +30,7 @@ def render_selection(workbook: ParsedWorkbook, density: str, sheet: str | None, 
         window = reading_window(sheet_info, density, range_spec=range_spec)
         if density == "plain":
             content = (
-                "".join(_iter_sheet(sheet_info, workbook, emit_globals=False))
+                "".join(_iter_sheet(sheet_info))
                 if sheet_info.get("kind") == "chartsheet"
                 else "".join(iter_plain_window(window, sheet_info))
             )

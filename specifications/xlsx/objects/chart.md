@@ -2,6 +2,11 @@
 
 [XLSX](../README.md) / Drawing charts
 
+Both XML densities use the [shared bounded projection](../../common/chart.md#body-preview),
+including per-series cached point previews. Names and plot-type lists are no
+longer duplicated at root. Plain uses the common compact identity/title/type/
+count/name summary; complete resources retain full data.
+
 Chart summaries attach to worksheets and chart sheets independently of grid
 truncation, using the same saved chart decoder and complete resource reader.
 
@@ -104,7 +109,7 @@ compact series summary and does not expand to all points or annotations.
 ### `series`
 
 - **Output**
-  - Resource series; inline @names.
+  - Bounded body series/point children; complete resource series.
 
 - **OOXML**
   - Shared saved literal points, reference caches, or ChartEx dimensions.
@@ -113,7 +118,7 @@ compact series summary and does not expand to all points or annotations.
   - `list[DrawingChartSeries]`
 
 - **Parsing**
-  - See [series](chart-series.md); names are nonempty names joined with comma.
+  - See [series](chart-series.md). Body names occur on the corresponding series.
 
 ### `axes`
 
@@ -131,16 +136,11 @@ compact series summary and does not expand to all points or annotations.
 ### `plotTypes`
 
 - **Output**
-  - chart/@plots.
-
-- **OOXML**
-  - Shared combination plots.
-
+  - Existing resource @plots only; body plot children identify retained families.
 - **IR**
-  - `list[str]`
-
+  - Internal ordered family list for combination charts.
 - **Parsing**
-  - Copy families in plot order only for combination charts.
+  - Copy plot families for resources; do not duplicate the list in body summaries.
 
 ### `truncated`
 
@@ -154,4 +154,4 @@ compact series summary and does not expand to all points or annotations.
   - Derived.
 
 - **Parsing**
-  - Always true.
+  - True only for actual body preview omissions; otherwise omitted.

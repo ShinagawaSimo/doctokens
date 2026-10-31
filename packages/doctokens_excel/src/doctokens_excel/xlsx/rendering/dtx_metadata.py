@@ -5,12 +5,12 @@ from __future__ import annotations
 from typing import cast
 from xml.etree import ElementTree as ET
 
-from doctokens_core.ooxml.charts.axes import append_chart_axes
-from doctokens_core.ooxml.charts.rendering import append_plots
+from doctokens_core.ooxml.charts.preview import append_chart_preview
 from doctokens_core.output.xml import append
 
 from ..model.coordinates import col_letter
 from ..model.workbook import ParsedWorkbook, SheetInfo, WorkbookMetadata
+from .charts import preview_info
 from .dtx_rules import append_rules
 
 
@@ -80,15 +80,10 @@ def _append_sheet_metadata(
             id=chart.get("id"),
             ref=chart.get("ref"),
             type=chart.get("type", "?"),
-            plots=",".join(chart.get("plotTypes", [])) or None,
-            series=chart.get("series_count", 0),
-            names=",".join(_chart_names(chart)) or None,
             title=chart.get("title"),
-            truncated=True,
             group=chart.get("group"),
         )
-        append_chart_axes(chart_node, chart.get("axes", []))
-        append_plots(chart_node, chart.get("plots", []))
+        append_chart_preview(chart_node, preview_info(chart))
         if chart.get("unparsed"):
             append(chart_node, "unsupported", type="chart")
     for shape in sheet.get("drawing_shapes", []):
@@ -189,12 +184,6 @@ def _add_protection_attrs(attrs: dict[str, object], value: str) -> None:
             attrs["locked"] = False
         elif item == "formulaHidden":
             attrs["formula_hidden"] = True
-
-
-def _chart_names(chart: object) -> list[str]:
-    if not isinstance(chart, dict):
-        return []
-    return [str(item.get("name")) for item in chart.get("series", []) if item.get("name")]
 
 
 def _joined(value: object) -> str:

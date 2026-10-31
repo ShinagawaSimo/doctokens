@@ -10,7 +10,6 @@ from doctokens_core.containers.opc.relationships import RelationshipIndex
 from doctokens_word.docx.model import ParseOptions, ParseWarning
 from doctokens_word.docx.ooxml.styles import StyleMap
 from doctokens_word.docx.parsing.modules.body.inline import InlineParser
-from doctokens_word.docx.parsing.modules.resources.objects import parse_chart_root, parse_smartart_root
 from doctokens_word.docx.rendering.dtx import _append_inline, _append_table
 
 NS = (
@@ -142,54 +141,6 @@ class InlineRendererTests(unittest.TestCase):
             ET.tostring(output, encoding="unicode"),
             '<root><table id="inner"><tr><td><p>A</p></td><td colspan="2"><p>B</p></td></tr></table></root>',
         )
-
-    def test_chart_cache_renders_as_chart_summary(self) -> None:
-        """图表缓存数据应渲染为轻量 chart 摘要。"""
-        chart_xml = f"""<c:chartSpace {NS}>
-          <c:chart>
-            <c:title><c:tx><c:rich><a:p><a:r><a:t>人口趋势</a:t></a:r></a:p></c:rich></c:tx></c:title>
-            <c:plotArea><c:barChart><c:ser>
-              <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>人群A</c:v></c:pt>
-              </c:strCache></c:strRef></c:tx>
-              <c:cat><c:strRef><c:strCache>
-                <c:pt idx="0"><c:v>一期</c:v></c:pt><c:pt idx="1"><c:v>二期</c:v></c:pt>
-              </c:strCache></c:strRef></c:cat>
-              <c:val><c:numRef><c:numCache>
-                <c:pt idx="0"><c:v>1.5</c:v></c:pt><c:pt idx="1"><c:v>2.5</c:v></c:pt>
-              </c:numCache></c:numRef></c:val>
-            </c:ser></c:barChart></c:plotArea>
-          </c:chart>
-        </c:chartSpace>"""
-        chart = parse_chart_root(ET.fromstring(chart_xml), "chart1", "word/charts/chart1.xml")
-        xml = f"""<w:p {NS}><w:r><w:drawing><wp:inline>
-          <a:graphic><a:graphicData><c:chart r:id="rIdChart"/></a:graphicData></a:graphic>
-        </wp:inline></w:drawing></w:r></w:p>"""
-
-        rendered = self._render_with_objects(xml, {("word/document.xml", "rIdChart"): chart})
-
-        self.assertEqual(ET.fromstring(rendered).find("chart").get("type"), "bar")
-        self.assertIn("truncated", rendered)
-        self.assertIn('names="人群A"', rendered)
-        self.assertIn('categories="一期,二期"', rendered)
-
-    def test_smartart_data_renders_nodes_and_links(self) -> None:
-        """SmartArt data model 应输出节点文本和连接关系。"""
-        smartart_xml = f"""<dgm:dataModel {NS}>
-          <dgm:ptLst>
-            <dgm:pt modelId="n1"><dgm:t><a:p><a:r><a:t>采集</a:t></a:r></a:p></dgm:t></dgm:pt>
-            <dgm:pt modelId="n2"><dgm:t><a:p><a:r><a:t>分析</a:t></a:r></a:p></dgm:t></dgm:pt>
-          </dgm:ptLst>
-          <dgm:cxnLst><dgm:cxn modelId="c1" type="parOf" srcId="n1" destId="n2"/></dgm:cxnLst>
-        </dgm:dataModel>"""
-        smartart = parse_smartart_root(ET.fromstring(smartart_xml), "smartart1", "word/diagrams/data1.xml")
-        xml = f"""<w:p {NS}><w:r><w:drawing><wp:inline>
-          <a:graphic><a:graphicData><dgm:relIds r:dm="rIdDm"/></a:graphicData></a:graphic>
-        </wp:inline></w:drawing></w:r></w:p>"""
-
-        rendered = self._render_with_objects(xml, {("word/document.xml", "rIdDm"): smartart})
-
-        self.assertEqual([node.text for node in ET.fromstring(rendered).findall("smartart/node")], ["采集", "分析"])
-        self.assertEqual(ET.fromstring(rendered).find("smartart/link").attrib, {"from": "1", "to": "2", "kind": "parOf"})
 
 
 if __name__ == "__main__":

@@ -3,6 +3,8 @@
 [XLSX](../README.md) / AutoFilter
 
 Filter declarations describe saved conditions; they do not remove worksheet rows.
+Plain emits a compact `[Filter range]` only when at least one saved condition
+was recovered. Merely enabling the filter buttons produces no plain marker.
 
 ## Processing
 

@@ -3,6 +3,7 @@
 import io
 import unittest
 import zipfile
+from xml.etree import ElementTree as ET
 
 from doctokens_excel import parse_xlsx
 
@@ -162,8 +163,8 @@ class WorkbookResourceIdTests(unittest.TestCase):
         self.assertIn('<table-summary id="table-1" name="Sales2" ref="A1:B2" />', structural)
         self.assertIn('<img id="image1" ref="A1" />', structural)
         self.assertIn('<img id="image2" ref="A1" />', structural)
-        self.assertIn('<chart id="chart1" ref="A1"', structural)
-        self.assertIn('<chart id="chart2" ref="A1"', structural)
+        root = ET.fromstring(structural)
+        self.assertEqual([item.get("id") for item in root.findall(".//chart")], ["chart1", "chart2"])
         self.assertIn('<pivot-table id="pivot1"', structural)
         self.assertIn('<pivot-table id="pivot2"', structural)
 

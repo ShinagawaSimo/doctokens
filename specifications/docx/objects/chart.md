@@ -2,6 +2,10 @@
 
 [DOCX](../README.md) / Charts
 
+Both XML densities use the [shared bounded projection](../../common/chart.md#body-preview).
+Names/categories are no longer duplicated at root. Plain uses the common
+identity/title/type/count/name summary; complete resources retain full data.
+
 The inline chart is a summary; full retained series are available to resource rendering.
 
 ## Processing
@@ -72,7 +76,7 @@ Series conversion: shared snake_case keys become DOCX camelCase keys. See [serie
 ### `pointCount`
 
 - **Output**
-  - Resource summary; no inline DTX count.
+  - Body/resource @points, the sum of per-series cached point counts.
 
 - **OOXML**
   - Cached series arrays.
@@ -86,7 +90,7 @@ Series conversion: shared snake_case keys become DOCX camelCase keys. See [serie
 ### `series`
 
 - **Output**
-  - Inline names and up to 8 categories; resource series details.
+  - Bounded body series/point children; complete resource series details.
 
 - **OOXML**
   - ChartML/ChartEx series.
@@ -95,10 +99,9 @@ Series conversion: shared snake_case keys become DOCX camelCase keys. See [serie
   - `list[ChartSeries]`
 
 - **Parsing**
-  - Map shared series fields as described below. Low-density plans retain names
-    and counts plus up to eight saved points for each of the first eight series;
-    full series remain available through the resource API. Preview data is not
-    discarded merely because character formatting is disabled.
+  - Retain complete parsed series in the IR. The renderer applies the shared
+    body budget independently of one-shot/session extraction. Complete arrays
+    and annotations remain available through the resource API.
 
 ### `plots`
 
@@ -157,33 +160,6 @@ Series conversion: shared snake_case keys become DOCX camelCase keys. See [serie
 - **Parsing**
   - Copy rId.
 
-### `categories`
-
-- **Output**
-  - `chart/@categories`, comma-separated.
-
-- **OOXML**
-  - First series category cache.
-
-- **IR**
-  - `series[0].categories`
-
-- **Parsing**
-  - Join first 8 category strings; omit when empty. Summary-plan series omit categories.
-
-### `names`
-
-- **Output**
-  - `chart/@names`, comma-separated.
-
-- **OOXML**
-  - Series names.
-
-- **IR**
-  - `series[*].name`
-
-- **Parsing**
-  - Join nonempty names in series order.
 
 ### `truncated`
 
@@ -197,4 +173,4 @@ Series conversion: shared snake_case keys become DOCX camelCase keys. See [serie
   - Derived.
 
 - **Parsing**
-  - Always true for the inline summary; does not claim a particular number of omitted points.
+  - True only for an actual body preview omission; otherwise omitted.

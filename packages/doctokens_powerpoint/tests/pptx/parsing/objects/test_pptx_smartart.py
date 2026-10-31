@@ -50,19 +50,13 @@ def _smartart_deck(*, with_data: bool = True, data_xml: str | None = None) -> by
 
 
 class SmartArtShapeTests(unittest.TestCase):
-    def test_plain_smartart_placeholder(self) -> None:
-        text = parse_pptx(_smartart_deck(), density=Density.PLAIN).text
-        self.assertEqual(
-            text,
-            "density=plain format=pptx\n=== Slide 1 ===\n[SmartArt: process, 3 nodes]\n"
-            "[1] Start\n[2] Middle\n[3] End\n[Link 1 -> 2]\n[Link 2 -> 3]",
-        )
-
     def test_missing_data_part_degrades_with_warning(self) -> None:
+        # A dangling diagramData relationship is a damaged-package condition,
+        # rather than an ordinary graph saved through the PowerPoint UI.
         parsed = PptxParser().parse(_smartart_deck(with_data=False), ParseOptions())
         self.assertTrue(any(w.code == "SMARTART_PART_MISSING" for w in parsed.warnings))
         text = parse_pptx(_smartart_deck(with_data=False), density=Density.PLAIN).text
-        self.assertIn("[SmartArt]", text)
+        self.assertEqual(text, "density=plain format=pptx\n=== Slide 1 ===\n[Unparsed SmartArt]")
 
     def test_out_of_order_duplicate_and_dangling_producer_records(self) -> None:
         # Duplicate modelIds, a dangling edge and a connection list before its

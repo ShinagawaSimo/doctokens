@@ -4,6 +4,25 @@
 
 The diagram extractor uses its own node and connection conventions.
 
+## Processing
+
+Plain displays `[SmartArt: Start; Middle; End]`, omitting numbered labels, edge
+listings and layout/count bookkeeping. Both XML densities use the same body
+preview limits: 12 source nodes, 24 connections and 1,200 label characters,
+including a trailing ellipsis when a label must be cut. Preserve source order,
+original node IDs and empty/root/transition nodes. Empty nodes consume slots;
+plain omits their empty labels. Only show edges with two retained endpoints;
+do not fabricate a connection through a hidden node.
+
+When the entire graph fits all limits, show it completely. Otherwise body
+truncated=true identifies the preview and @id resolves with
+`session.render_resource("smartart", id)`. Plain includes
+`[SmartArt id=smartart1 truncated: ...]`. A clipped node has truncated=true.
+Resource output remains complete, keeps its original node IDs and existing
+source-id fields, and does not inherit body limits or mutate after body reads.
+Missing/unreadable data retains an unsupported child or `[Unparsed SmartArt]`,
+without inventing a readable resource key or budget-truncation flag.
+
 ## Fields
 
 ### `id`
@@ -54,7 +73,7 @@ The diagram extractor uses its own node and connection conventions.
 ### `nodes`
 
 - **Output**
-  - Explicit `node` elements in the body and resource data. Plain includes indexed labels.
+  - Previewed body nodes and complete resource nodes. Plain includes readable labels.
 
 - **OOXML**
   - DrawingML diagram `dgm:pt` descendants.
@@ -84,7 +103,7 @@ The diagram extractor uses its own node and connection conventions.
 ### `links`
 
 - **Output**
-  - Explicit body/resource `link` elements; plain lists saved endpoint pairs.
+  - Bounded body and complete resource `link` elements. Plain omits endpoint lists.
 
 - **OOXML**
   - Standard `dgm:cxn/@srcId` and `@destId`.
@@ -128,5 +147,5 @@ The diagram extractor uses its own node and connection conventions.
   - Derived.
 
 - **Parsing**
-  - Omitted when the complete parsed graph is present; true for an unresolved
-    inline placeholder. Parsing failure is distinguished from budget truncation.
+  - True when body node, connection or label budgets omit content; otherwise
+    omitted. Parsing failure retains unsupported rather than a truncation flag.

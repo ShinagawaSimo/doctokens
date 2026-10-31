@@ -27,7 +27,7 @@ Missing target → TABLE_PART_MISSING; XML error → TABLE_XML_INVALID; failed t
 ### `name`
 
 - **Output**
-  - table-summary/@name.
+  - table-summary/@name; plain `[Table name ref]` label when known.
 
 - **OOXML**
   - table/@displayName, fallback @name.
@@ -41,7 +41,7 @@ Missing target → TABLE_PART_MISSING; XML error → TABLE_XML_INVALID; failed t
 ### `ref`
 
 - **Output**
-  - table-summary/@ref.
+  - table-summary/@ref; source range in the plain table label when known.
 
 - **OOXML**
   - table/@ref.
@@ -55,7 +55,8 @@ Missing target → TABLE_PART_MISSING; XML error → TABLE_XML_INVALID; failed t
 ### `columns`
 
 - **Output**
-  - Semantic @columns; plain table summary.
+  - Semantic @columns. Plain table labels omit the column list; saved grid
+    headers remain ordinary cell content, emitted once.
 
 - **OOXML**
   - tableColumns/tableColumn/@name.

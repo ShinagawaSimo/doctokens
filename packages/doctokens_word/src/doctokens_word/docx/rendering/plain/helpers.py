@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import cast
 
+from doctokens_core.ooxml.charts.preview import plain_chart
+from doctokens_core.output.diagram_preview import diagram_plain
 from doctokens_core.output.plain import page_marker
 
 from ...model import Block, ContentControl, InlineContainer, InlineObject, OcrResultRecord, TableBlock, TableRow
@@ -170,24 +172,26 @@ def plain_image_placeholder(
 
 def plain_chart_placeholder(inline_object: InlineObject) -> str:
     """Render a compact plain-text chart summary."""
-    chart_type = _string_field(inline_object.get("chartType"), "?")
-    title = _string_field(inline_object.get("title"))
-    series = inline_object.get("series") or []
-    names = [item.get("name", "") for item in series if item.get("name")]
-    names_str = ", ".join(names) if names else ""
-    title_part = f" {title}" if title else ""
-    names_part = f": {names_str}" if names_str else ""
-    return f"[Chart{title_part} ({chart_type}, {len(series)} series{names_part})]"
+    if "series" not in inline_object:
+        return "[Unparsed chart]"
+    return plain_chart(
+        inline_object.get("id"),
+        _string_field(inline_object.get("chartType"), "?"),
+        _string_field(inline_object.get("title")),
+        [item["name"] for item in inline_object.get("series", []) if item.get("name")],
+        inline_object.get("seriesCount", len(inline_object.get("series", []))),
+    )
 
 
 def plain_smartart_placeholder(inline_object: InlineObject) -> str:
     """Render a compact plain-text SmartArt summary."""
-    smartart_type = _string_field(inline_object.get("layoutType"))
-    nodes = inline_object.get("nodes") or []
-    node_text = " ".join(node.get("text", "") for node in nodes)
-    node_count = inline_object.get("nodeCount", len(nodes))
-    type_part = f'"{smartart_type}" ' if smartart_type else ""
-    return f"[SmartArt {type_part}: {node_text} ({node_count} nodes)]"
+    if "nodes" not in inline_object:
+        return "[Unparsed SmartArt]"
+    return diagram_plain(
+        [node["text"] for node in inline_object["nodes"]],
+        inline_object.get("id"),
+        link_count=len(inline_object.get("links", [])),
+    )
 
 
 def collect_refs(block: InlineContainer, ref_type: str) -> list[str]:

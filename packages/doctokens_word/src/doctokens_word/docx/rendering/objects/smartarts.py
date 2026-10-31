@@ -19,7 +19,7 @@ def render_smartart_resource(s: SmartArt) -> str:
         incomplete=True if s.get("rawLinkCount", 0) > len(s.get("links", [])) else None,
     )
     for index, item in enumerate(s.get("nodes") or [], start=1):
-        append(node, "node", index=index, text=item.get("text", ""), kind=item.get("kind") or None)
+        append(node, "node", item.get("text", ""), id=index, kind=item.get("kind") or None)
     for link in s.get("links") or []:
         append(node, "link", **{"from": link["from"], "to": link["to"], "kind": link.get("kind") or None})
     return resource_document("docx", node)

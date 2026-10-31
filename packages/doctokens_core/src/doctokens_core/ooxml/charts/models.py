@@ -19,6 +19,8 @@ class ChartSeriesInfo(TypedDict, total=False):
     """Full data and ownership information for one chart series."""
 
     index: int
+    point_count: int
+    points: list[ChartPoint]
     plot_index: int
     chart_type: str
     name: str

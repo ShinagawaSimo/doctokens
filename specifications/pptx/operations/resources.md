@@ -104,3 +104,6 @@ Embedded resources are accessed through an open PPTX session.
 - **Parsing**
   - `syntax_version=doctokens-xml/1.0`, `media_type=application/xml`, `density=semantic`. Complete `<presentation density="semantic" format="pptx"><resources>OBJECT</resources></presentation>`.
   - Chart series retain comma-joined cached arrays. SmartArt retains node/link records. Tables use closed `table/tr/td` elements and an optional `aggregate` element. XML attributes and text are escaped by the shared serializer.
+  - SmartArt resources bypass body preview limits and retain all parsed nodes
+    and links, with the same local IDs as body previews. Body reads do not
+    shorten the retained resource graph.

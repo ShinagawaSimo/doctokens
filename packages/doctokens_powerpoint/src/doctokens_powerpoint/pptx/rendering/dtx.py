@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from xml.etree import ElementTree as ET
 
+from doctokens_core.ooxml.charts.preview import append_chart_preview
 from doctokens_core.output.xml import append, element, serialize, text
 from doctokens_core.runtime.execution import checkpoint
 
@@ -18,7 +19,6 @@ from ..model.presentation import (
     SlideBlock,
     SmartArtRecord,
 )
-from .charts import append_chart_preview
 from .diagrams import append_diagram
 from .inline import append_runs
 
@@ -125,37 +125,40 @@ def _append_shape(
         _append_table(parent, shape, density)
         return
     if shape_type == "chart":
+        chart = charts.get(shape.get("chartId", ""))
         attrs = _shape_attrs(shape, density)
         attrs.update(
             {
-                "id": shape.get("chartId") or shape["id"],
+                "id": shape.get("chartId") if chart is not None else None,
                 "type": shape.get("chartType"),
                 "series": shape.get("seriesCount"),
                 "points": shape.get("pointCount"),
                 "title": shape.get("chartTitle"),
-                "truncated": True,
             }
         )
         node = append(parent, "chart", **attrs)
-        if chart := charts.get(shape.get("chartId", "")):
+        if chart is not None:
             append_chart_preview(node, chart)
+        else:
+            append(node, "unsupported", type="chart")
         return
     if shape_type == "smartart":
         smartart_id = shape.get("smartartId") or shape["id"]
+        record = smartarts.get(smartart_id)
         attrs = _shape_attrs(shape, density)
         attrs.update(
             {
-                "id": smartart_id,
+                "id": smartart_id if record is not None else None,
                 "type": shape.get("layoutType"),
                 "nodes": shape.get("nodeCount"),
                 "links": shape.get("linkCount"),
-                "truncated": True if smartart_id not in smartarts else None,
             }
         )
         node = append(parent, "smartart", **attrs)
-        record = smartarts.get(smartart_id)
         if record is not None:
-            append_diagram(node, record)
+            append_diagram(node, record, preview=True)
+        else:
+            append(node, "unsupported", type="smartart")
         return
     if shape_type == "media":
         attrs = _shape_attrs(shape, density)

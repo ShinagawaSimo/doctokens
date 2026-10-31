@@ -3,6 +3,8 @@
 [XLSX](../README.md) / Chart series
 
 XLSX adapts shared series arrays to point records.
+Body previews retain the same series identity and cached point positions under
+the [shared limits](../../common/chart.md#body-preview); resources remain complete.
 
 ## Fields
 

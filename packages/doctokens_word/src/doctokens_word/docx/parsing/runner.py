@@ -205,7 +205,7 @@ class DocxParser:
                 package=package,
                 relationships=relationships,
                 warnings=warnings,
-            ).extract(summary_only=not plan.needs(DocxFeature.EMBEDDED_DETAILS))
+            ).extract()
 
     @staticmethod
     def _parse_body(

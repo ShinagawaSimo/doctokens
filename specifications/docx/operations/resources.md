@@ -107,4 +107,7 @@ Session binary reads and explanatory renderings have distinct result types.
 - **Parsing**
   - `syntax_version=doctokens-xml/1.0`, `media_type=application/xml`, `density=semantic`. Complete `<document density="semantic" format="docx"><resources>OBJECT</resources></document>`.
   - Tables use closed `table/tr/td` elements; aggregate output uses `table/aggregate` with `op`, `column`, and numeric text. Charts retain series and point records; SmartArt retains node and link records. XML attributes and text are escaped by the shared serializer.
+  - SmartArt resources bypass body preview limits. Nodes use `id` and element
+    text, with the same ordinals referenced by body/resource edges. Saved nodes
+    and links remain available in full after a truncated body read.
   - Table rows retain grid-before/grid-after. Cells retain spans, merge continuation, shading, and row/cell control/review wrappers; a filtered discontinuous cell can carry a 1-based column attribute. Coordinates refer to the selected logical table and are not renumbered after filtering.

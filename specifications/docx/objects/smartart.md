@@ -2,7 +2,27 @@
 
 [DOCX](../README.md) / SmartArt
 
-SmartArt preserves nonempty labels and connections between those retained labels.
+SmartArt retains every parsed node and explicit connection, including empty
+root/transition nodes. Reading bodies use a bounded preview; the resource API
+returns the complete parsed graph.
+
+## Processing
+
+Plain uses `[SmartArt: Start; Middle; End]`, omitting node numbers, edge listings
+and layout/count bookkeeping. Both XML densities share the same preview limits:
+12 source nodes, 24 connections and 1,200 label characters, including an ellipsis
+when a label must be cut. Preserve source order and original node ordinals.
+Keep only edges whose two endpoints are shown; never connect through a hidden
+node or infer business order. Empty nodes consume node slots and remain in XML.
+Plain uses the same node/label budget and omits empty labels.
+
+A small graph is complete when all three limits fit. Otherwise body
+`truncated=true` identifies a preview and @id resolves through
+`session.render_resource("smartart", id)`. Plain uses
+`[SmartArt id=smartart1 truncated: ...]`. Resource output has no body-preview
+limit and remains unchanged after repeated body reads. IDs and endpoints agree
+between the body and complete resource. A missing/unreadable graph retains an
+unsupported child or `[Unparsed SmartArt]`, without a fabricated resource ID.
 
 ## Fields
 
@@ -100,7 +120,7 @@ SmartArt preserves nonempty labels and connections between those retained labels
 - **Parsing**
   - Preserve every point, including empty/root/transition nodes, in source order.
     Empty labels do not remove connection endpoints. All reading plans retain the
-    parsed edges; low-density summaries do not discard the graph.
+    parsed edges in the IR/resource; body preview selection occurs at rendering.
 
 ### `nodeCount`
 
@@ -144,7 +164,7 @@ SmartArt preserves nonempty labels and connections between those retained labels
   - `SmartArt.linkCount: int`
 
 - **Parsing**
-  - `len(links)`; reading summaries do not reduce the edge list.
+  - `len(links)` in the complete parsed graph, even when the body previews fewer.
 
 ### `rawLinkCount`
 
@@ -172,6 +192,8 @@ SmartArt preserves nonempty labels and connections between those retained labels
   - Derived.
 
 - **Parsing**
-  - Omitted for a retained graph; true for an unresolved object placeholder.
+  - Omitted for a complete body graph; true when node, edge or label budgets
+    omit content. A clipped node also has truncated=true. Resources have no
+    body-budget truncation. Unreadable data uses unsupported, not truncated.
   - Body/resource `incomplete=true` indicates saved connections whose endpoints
     could not be resolved; this is distinct from output-budget truncation.

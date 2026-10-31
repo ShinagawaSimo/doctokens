@@ -2,6 +2,9 @@
 
 [PPTX](../README.md) / Charts
 
+Body and plain summaries follow the [shared chart budgets](../../common/chart.md#body-preview).
+Small complete charts omit truncated; complete resources bypass body budgets.
+
 Main output contains chart identity, title, family, counts, explicit saved-axis
 metadata and a bounded point preview. Complete series remain available through
 the resource operation. Compact plot grouping/direction and explicit axis
@@ -138,4 +141,4 @@ complete resources retain all annotations. See [shared series](../../common/char
   - Derived.
 
 - **Parsing**
-  - Always true for inline summary.
+  - True only for an actual body preview omission; otherwise omitted.

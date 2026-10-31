@@ -2,7 +2,8 @@
 
 [PPTX](../README.md) / SmartArt nodes
 
-The source modelId is used only during graph resolution.
+Local node ordinals identify body/resource endpoints. The resource also retains
+the source modelId under its existing source-id field.
 
 ## Fields
 
@@ -18,7 +19,8 @@ The source modelId is used only during graph resolution.
   - `SmartArtNode.id: int`
 
 - **Parsing**
-  - len(nodes)+1; map source modelId (default empty) to this ordinal, replacing duplicate keys.
+  - len(nodes)+1; map a nonempty source modelId to its first occurrence.
+    Body previews keep original ordinals rather than renumbering selected nodes.
 
 ### `text`
 
@@ -33,3 +35,5 @@ The source modelId is used only during graph resolution.
 
 - **Parsing**
   - Concatenate text including empty/whitespace results.
+    Empty nodes remain graph endpoints. Only body previews can clip a label;
+    the complete resource retains its saved text.

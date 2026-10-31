@@ -24,20 +24,24 @@ def parse_styles(
 ) -> FormatIndex:
     """Parse the style layer needed by the selected output density.
 
-    Numeric formats and protection are retained at every density.  Theme,
-    font, fill, and differential-style trees are read only for semantic output.
+    Numeric formats and protection are retained at every density. Theme and
+    differential styles also resolve structural color-filter conditions;
+    ordinary font/fill records are needed only for semantic output.
     """
     index = FormatIndex(locale=locale)
 
     root = pkg.read_xml("xl/styles.xml") if pkg.exists("xl/styles.xml") else None
     include_semantic = detail == "semantic"
-    index.colors = SpreadsheetColors.from_package(pkg, root) if include_semantic else SpreadsheetColors()
+    index.colors = SpreadsheetColors.from_package(pkg, root) if detail != "display" else SpreadsheetColors()
     if root is None:
         return index
     custom_fmts = _parse_custom_formats(root)
 
     if include_semantic:
         _register_semantic_records(index, root, index.colors)
+    if detail != "display":
+        for dxf in root.findall(f"{{{NS_S}}}dxfs/{{{NS_S}}}dxf"):
+            index.register_differential_style(differential_style(dxf, index.colors))
 
     style_xfs = _find_xfs(root, "cellStyleXfs")
     visible_fills = _visible_records(root, "fills", "fill")
@@ -101,11 +105,6 @@ def _register_semantic_records(
     if fills is not None:
         for fill in fills.findall(f"{{{NS_S}}}fill"):
             index.register_fill(fill_info(fill, colors))
-
-    dxfs = root.find(f"{{{NS_S}}}dxfs")
-    if dxfs is not None:
-        for dxf in dxfs.findall(f"{{{NS_S}}}dxf"):
-            index.register_differential_style(differential_style(dxf, colors))
 
 
 def _find_xfs(root: ET.Element, name: str) -> list[ET.Element]:

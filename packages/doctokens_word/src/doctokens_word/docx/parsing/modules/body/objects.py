@@ -46,14 +46,11 @@ class DrawingScanResult:
                 return
             if active is not None:
                 if local == "docPr":
-                    name = node.get("name")
                     descr = node.get("descr")
                     title = node.get("title")
-                    if name:
-                        active["name"] = name
-                    if descr:
+                    if descr and descr.strip():
                         active["alt"] = descr
-                    if title:
+                    if title and title.strip():
                         active["title"] = title
                 elif local == "extent" and "cx" not in active:
                     cx = node.get("cx")

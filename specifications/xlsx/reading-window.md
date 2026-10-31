@@ -4,6 +4,45 @@
 
 Body results expose `selection.windows`, one entry per selected sheet. The same window determines the rendered rows and public metadata for one-shot parsing and session rendering. Search, query and resource operations retain their own selection contracts.
 
+## Range context
+
+Explicit-range DTX retains related context rather than the entire sheet's
+metadata. Plain returns selected cell text only. Whole-workbook and default-sheet
+previews keep their existing one-time metadata index.
+
+- Clip hidden-column declarations to requested columns. Sheet protection applies
+  to every selection on the sheet.
+- Keep validations and conditional formats intersecting any requested area.
+  Preserve their original complete range lists and expressions: cropping a
+  relative rule range could change its formula interpretation.
+- Keep the entire saved filter and all conditions when its rows intersect the
+  requested rows, including selections in other columns. A filter affects
+  whole-row visibility; the parser never executes its conditions.
+- Keep intersecting table/pivot summaries. Keep an out-of-range table on the
+  selected sheet when a retained expression names it. A selected pivot retains
+  its source reference and matching cache/slicer/timeline context. Omit unrelated
+  caches and interactive controls.
+- Keep drawing objects by saved two-cell coverage or, for one-cell anchors,
+  the saved start cell. Include explicit connector endpoints, connectors touching
+  retained endpoints and necessary parent groups. Unknown/invalid placement
+  cannot prove irrelevance and is retained conservatively.
+- Keep names whose saved references intersect the request, and recursively keep
+  names used by selected formulas, internal hyperlinks, retained validation/conditional
+  formulas and visual threshold formulas. Match names case-insensitively with
+  local scope before global scope; terminate cycles without evaluating names.
+  Keep explicit external-workbook targets. String literals and structured column
+  labels do not create dependencies. Names appear once at root with @sheet for
+  local scope, including a referenced scope on another sheet.
+
+This is saved-reference selection, not formula calculation or a recursive cell
+fetch. A1 ranges, whole rows/columns, named definitions and selected-sheet
+structured table references are recognized. Dynamic references such as INDIRECT
+are not evaluated. Other-sheet data requires an explicit read; original formulas
+retain their saved targets. Unknown rule ranges keep their existing unreadable
+declaration/diagnostic. No cells are materialized to fill metadata ranges.
+Requested bounds govern context even when no selected cells exist. Projections
+do not mutate session metadata or narrow the resource directory.
+
 ## Fields
 
 ### `sheet` and `requested_range`

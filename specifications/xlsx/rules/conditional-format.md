@@ -3,6 +3,10 @@
 [XLSX](../README.md) / Conditional formatting
 
 Rules describe conditions and formatting; they do not calculate effective per-cell styles.
+Both XML densities retain conditions, valid priorities and stop behavior.
+Only semantic emits resolved reading styles and visual details, independently
+of whether a one-shot parse or a session supplied the IR. No public dxf index
+is emitted. Differential alignment is outside the reading projection.
 
 ## Processing
 
@@ -47,7 +51,8 @@ separate and in saved order. No positional or similar-formula matching occurs.
   - `ConditionalFormat.priority`
 
 - **Parsing**
-  - int, default/failure 0; source order retained without priority sorting.
+  - int; missing, zero and negative values are omitted. Source order is retained
+    without priority sorting; no invented priority is added.
 
 ### `ruleType`
 
@@ -77,19 +82,6 @@ separate and in saved order. No positional or similar-formula matching occurs.
 - **Parsing**
   - One → formula; several → join with ` | ` as formulas; none → omit.
 
-### `dxfId`
-
-- **Output**
-  - rule/@dxf
-
-- **OOXML**
-  - `s:cfRule/@dxfId`
-
-- **IR**
-  - `ConditionalFormat.dxfId`
-
-- **Parsing**
-  - Present → int, failure 0.
 
 ### `stopIfTrue`
 
@@ -164,7 +156,7 @@ separate and in saved order. No positional or similar-formula matching occurs.
 ### `formatKind`
 
 - **Output**
-  - rule/@format
+  - rule/@format only when it differs from rule/@type.
 
 - **OOXML**
   - Core or x14 cfRule/colorScale, dataBar, iconSet.
@@ -192,7 +184,7 @@ separate and in saved order. No positional or similar-formula matching occurs.
 ### `dxfStyle`
 
 - **Output**
-  - rule/@style
+  - Semantic rule/@style; structural never emits it.
 
 - **OOXML**
   - `xl/styles.xml`: `s:styleSheet/s:dxfs/s:dxf`, selected by zero-based `dxfId`.
@@ -201,10 +193,11 @@ separate and in saved order. No positional or similar-formula matching occurs.
   - `ConditionalFormat.dxfStyle`
 
 - **Parsing**
-  - Resolve core dxfId through the semantic format index. Extended direct
-    x14:dxf uses its SpreadsheetML font/fill/numFmt/alignment children through
-    the same compact differential-style reader. Lower-density session rendering
-    can retain a previously resolved string.
+  - Resolve core dxfId through the format index. Extended direct
+    x14:dxf uses its SpreadsheetML font/fill/numFmt children through the same
+    compact differential-style reader. Retain explicit emphasis changes,
+    resolved font/fill colors and number formats; omit alignment and layout.
+    The source index is used during decoding and is not retained in the rule.
 
 ### `aboveAverage`
 
@@ -240,7 +233,7 @@ separate and in saved order. No positional or similar-formula matching occurs.
 - **OOXML**
   - cfRule/@stdDev.
 - **Parsing**
-  - Retain a saved integer; do not calculate the sample deviation.
+  - Retain a nonzero saved integer; do not calculate the sample deviation.
 
 ### `timePeriod`
 

@@ -155,11 +155,7 @@ def plain_image_placeholder(
     ocr_results: dict[str, OcrResultRecord] | None = None,
 ) -> str:
     """Render a compact plain-text image summary."""
-    label = (
-        _string_field(inline_object.get("alt"))
-        or _string_field(inline_object.get("title"))
-        or _string_field(inline_object.get("name"))
-    )
+    label = _string_field(inline_object.get("alt")) or _string_field(inline_object.get("title"))
     asset_id = _string_field(inline_object.get("assetId"))
     recognized_text = ocr_text((ocr_results or {}).get(asset_id)) if asset_id else ""
     parts: list[str] = []

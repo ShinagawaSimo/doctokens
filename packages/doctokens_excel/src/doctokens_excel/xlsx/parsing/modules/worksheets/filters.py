@@ -5,21 +5,23 @@ from __future__ import annotations
 from xml.etree import ElementTree as ET
 
 from ....model.rules import FilterColumn
+from ..styles.index import FormatIndex
+from .rule_values import boolean
 from .rule_values import integer as _safe_int
 from .sheet_types import NS_S
 
 
-def _parse_auto_filter_element(auto_filter: ET.Element) -> tuple[str, list[FilterColumn]]:
+def _parse_auto_filter_element(auto_filter: ET.Element, formats: FormatIndex | None) -> tuple[str, list[FilterColumn]]:
     """Parse one completed ``autoFilter`` element from the primary scan."""
     filter_range = auto_filter.get("ref", "")
     filter_cols: list[FilterColumn] = []
     for filter_column in auto_filter.findall(f"{{{NS_S}}}filterColumn"):
         column_id = _safe_int(filter_column.get("colId"), 0)
-        filter_cols.extend(_parse_filter_column(column_id, filter_column))
+        filter_cols.extend(_parse_filter_column(column_id, filter_column, formats))
     return filter_range, filter_cols
 
 
-def _parse_filter_column(column_id: int, element: ET.Element) -> list[FilterColumn]:
+def _parse_filter_column(column_id: int, element: ET.Element, formats: FormatIndex | None) -> list[FilterColumn]:
     """Read every Excel filter form without evaluating the resulting row set."""
     result: list[FilterColumn] = []
     filters = element.find(f"{{{NS_S}}}filters")
@@ -30,9 +32,9 @@ def _parse_filter_column(column_id: int, element: ET.Element) -> list[FilterColu
         date_group.extend(dict(child.attrib) for child in filters.findall(f"{{{NS_S}}}dateGroupItem"))
         if values:
             item["values"] = values
-        if filters.get("blank") == "1":
+        if boolean(filters.get("blank")):
             item["blank"] = True
-        if calendar_type := filters.get("calendarType"):
+        if (calendar_type := filters.get("calendarType")) and calendar_type != "none":
             item["calendarType"] = calendar_type
         if values or item.get("blank") or item.get("calendarType"):
             result.append(item)
@@ -46,7 +48,7 @@ def _parse_filter_column(column_id: int, element: ET.Element) -> list[FilterColu
                 "operator": rule.get("operator", "equal"),
                 "value": rule.get("val", ""),
             }
-            if index == 0 and custom.get("and") == "1":
+            if index == 0 and boolean(custom.get("and")):
                 item["and"] = True
             result.append(item)
 
@@ -63,8 +65,8 @@ def _parse_filter_column(column_id: int, element: ET.Element) -> list[FilterColu
         item = {
             "col": column_id,
             "type": "top10",
-            "top": top10.get("top", "1") == "1",
-            "percent": top10.get("percent", "0") == "1",
+            "top": boolean(top10.get("top"), True),
+            "percent": boolean(top10.get("percent")),
             "rank": top10.get("val", ""),
         }
         if filter_value := top10.get("filterVal"):
@@ -76,10 +78,13 @@ def _parse_filter_column(column_id: int, element: ET.Element) -> list[FilterColu
         item = {
             "col": column_id,
             "type": "color",
-            "cellColor": color.get("cellColor", "1") == "1",
+            "cellColor": boolean(color.get("cellColor"), True),
         }
-        if dxf_id := color.get("dxfId"):
-            item["dxfId"] = _safe_int(dxf_id, 0)
+        if formats is not None and (dxf_id := color.get("dxfId")) is not None:
+            style = formats.differential_style(_safe_int(dxf_id, -1))
+            key = "fill=" if item["cellColor"] else "color="
+            if resolved := next((part[len(key) :] for part in style.split() if part.startswith(key)), None):
+                item["color"] = resolved
         result.append(item)
 
     icon = element.find(f"{{{NS_S}}}iconFilter")
@@ -95,5 +100,18 @@ def _parse_filter_column(column_id: int, element: ET.Element) -> list[FilterColu
     # in addition to the SpreadsheetML-standard location under filters.
     date_group.extend(dict(child.attrib) for child in element.findall(f"{{{NS_S}}}dateGroupItem"))
     if date_group:
-        result.append({"col": column_id, "type": "dateGroup", "dateGroup": date_group})
+        result.append(
+            {
+                "col": column_id,
+                "type": "dateGroup",
+                "dateGroup": [
+                    {
+                        key: value
+                        for key, value in group.items()
+                        if key in {"year", "month", "day", "hour", "minute", "second", "dateTimeGrouping"}
+                    }
+                    for group in date_group
+                ],
+            }
+        )
     return result

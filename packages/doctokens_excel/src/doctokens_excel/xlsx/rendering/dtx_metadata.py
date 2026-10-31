@@ -11,17 +11,22 @@ from doctokens_core.output.xml import append
 
 from ..model.coordinates import col_letter
 from ..model.workbook import ParsedWorkbook, SheetInfo, WorkbookMetadata
+from .dtx_rules import append_rules
 
 
-def _append_workbook_metadata(parent: ET.Element, workbook: ParsedWorkbook, density: str) -> None:
+def _append_workbook_metadata(parent: ET.Element, workbook: ParsedWorkbook, density: str, *, range_context: bool = False) -> None:
     metadata = workbook["metadata"]
     if density not in {"structural", "semantic"}:
         return
-    defined = [item for item in metadata.get("defined_names", []) if not item.get("hidden") and item.get("scopeSheet") is None]
+    defined = [
+        item
+        for item in metadata.get("defined_names", [])
+        if range_context or (not item.get("hidden") and item.get("scopeSheet") is None)
+    ]
     if defined:
         group = append(parent, "defined-names")
         for item in defined:
-            append(group, "defined-name", item["ref"], name=item["name"])
+            append(group, "defined-name", item["ref"], name=item["name"], sheet=item.get("scopeSheet") if range_context else None)
     external_links = metadata.get("external_links", [])
     if external_links:
         group = append(parent, "external-links")
@@ -53,69 +58,7 @@ def _append_sheet_metadata(
         elif scope is None and emit_globals:
             # Global definitions live once at root and are not duplicated here.
             continue
-    if sheet.get("filter_range"):
-        filter_node = append(parent, "filter", ref=sheet["filter_range"])
-        for condition in sheet.get("filter_cols", []):
-            attrs: dict[str, object] = {"column": condition.get("col"), "type": condition.get("type")}
-            for old, new in (
-                ("values", "values"),
-                ("calendarType", "calendar_type"),
-                ("operator", "operator"),
-                ("value", "value"),
-                ("value2", "value2"),
-                ("rank", "rank"),
-                ("filterValue", "filter_value"),
-                ("iconSet", "icon_set"),
-                ("dxfId", "dxf_id"),
-                ("iconId", "icon_id"),
-            ):
-                value = condition.get(old)
-                if value not in (None, "", []):
-                    attrs[new] = ",".join(value) if old == "values" and isinstance(value, list) else value
-            for old, new in (
-                ("blank", "blank"),
-                ("and", "and"),
-                ("top", "top"),
-                ("percent", "percent"),
-                ("cellColor", "cell_color"),
-            ):
-                if condition.get(old):
-                    attrs[new] = True
-            if "cellColor" in condition:
-                attrs["cell_color"] = bool(condition["cellColor"])
-            if date_groups := condition.get("dateGroup"):
-                attrs["groups"] = ";".join(
-                    ":".join(f"{key}={value}" for key, value in sorted(group.items())) for group in date_groups
-                )
-            append(filter_node, "condition", **attrs)
-    for validation in sheet.get("data_validations", []):
-        attrs = {"ref": validation.get("ranges"), "type": validation.get("type")}
-        for old, new in (
-            ("operator", "operator"),
-            ("formula1", "formula1"),
-            ("formula2", "formula2"),
-            ("errorStyle", "error_style"),
-            ("imeMode", "ime_mode"),
-            ("promptTitle", "prompt_title"),
-            ("prompt", "prompt"),
-            ("errorTitle", "error_title"),
-            ("error", "error"),
-        ):
-            if (value := validation.get(old)) is not None:
-                attrs[new] = value
-        for old, new in (
-            ("allowBlank", "allow_blank"),
-            ("showInputMessage", "show_input_message"),
-            ("showErrorMessage", "show_error_message"),
-        ):
-            if validation.get(old):
-                attrs[new] = True
-        if validation.get("type") == "list" and validation.get("showDropDown"):
-            attrs["dropdown"] = False
-        node = append(parent, "data-validation", **attrs)
-        if validation.get("unparsed"):
-            append(node, "unsupported", type="data-validation")
-    _append_conditional_formats(parent, sheet, density)
+    append_rules(parent, sheet, density)
     for image in sheet.get("images", []):
         node = append(
             parent,
@@ -203,41 +146,9 @@ def _append_sheet_metadata(
             id=table.get("id"),
             name=table.get("name"),
             ref=table.get("ref"),
-            columns=",".join(table.get("columns", [])) if density == "semantic" else None,
+            columns=(",".join(table.get("columns", [])) or None) if density == "semantic" else None,
             totals_row=True if density == "semantic" and table.get("totalsRow") else None,
         )
-
-
-def _append_conditional_formats(parent: ET.Element, sheet: SheetInfo, density: str) -> None:
-    for conditional_format in sheet.get("conditional_formats", []):
-        container = append(parent, "conditional-format", ref=conditional_format.get("ranges"))
-        attrs: dict[str, object] = {
-            "type": conditional_format.get("ruleType"),
-            "priority": conditional_format.get("priority", 0),
-            "operator": conditional_format.get("operator"),
-            "text": conditional_format.get("text"),
-            "dxf": conditional_format.get("dxfId"),
-            "style": conditional_format.get("dxfStyle"),
-            "stop_if_true": True if conditional_format.get("stopIfTrue") else None,
-            "rank": conditional_format.get("rank"),
-            "percent": True if conditional_format.get("percent") else None,
-            "format": conditional_format.get("formatKind"),
-            "bottom": True if conditional_format.get("bottom") else None,
-            "above_average": False if conditional_format.get("aboveAverage") is False else None,
-            "equal_average": True if conditional_format.get("equalAverage") else None,
-            "std_dev": conditional_format.get("stdDev"),
-            "time_period": conditional_format.get("timePeriod"),
-        }
-        formulas = conditional_format.get("formulas", [])
-        if len(formulas) == 1:
-            attrs["formula"] = formulas[0]
-        elif formulas:
-            attrs["formulas"] = " | ".join(formulas)
-        if density == "semantic" and conditional_format.get("formatDetails"):
-            attrs["details"] = _conditional_details(conditional_format["formatDetails"])
-        node = append(container, "rule", **attrs)
-        if conditional_format.get("unparsed"):
-            append(node, "unsupported", type="conditional-format")
 
 
 def _append_pivot_context(parent: ET.Element, metadata: WorkbookMetadata, density: str) -> None:
@@ -250,7 +161,7 @@ def _append_pivot_context(parent: ET.Element, metadata: WorkbookMetadata, densit
             sheet=cache.get("sourceSheet"),
             ref=cache.get("sourceRef"),
             refresh_on_load=True if cache.get("refreshOnLoad") else None,
-            fields=_joined(cache.get("fields")) if density == "semantic" else None,
+            fields=(_joined(cache.get("fields")) or None) if density == "semantic" else None,
         )
     for slicer in cast(list[dict[str, object]], metadata.get("slicers", [])):
         append(
@@ -288,21 +199,3 @@ def _chart_names(chart: object) -> list[str]:
 
 def _joined(value: object) -> str:
     return ",".join(str(item) for item in value) if isinstance(value, list) else ""
-
-
-def _conditional_details(details: object) -> str:
-    if not isinstance(details, dict):
-        return ""
-    values: list[str] = []
-    for key, value in details.items():
-        if isinstance(value, list):
-            records = [
-                ":".join(f"{item_key}={item_value}" for item_key, item_value in item.items())
-                for item in value
-                if isinstance(item, dict)
-            ]
-            if records:
-                values.append(f"{key}={';'.join(records)}")
-            continue
-        values.append(f"{key}={value}")
-    return ";".join(values)

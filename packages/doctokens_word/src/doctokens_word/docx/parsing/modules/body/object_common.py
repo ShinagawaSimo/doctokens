@@ -30,8 +30,6 @@ def append_image_or_placeholder(
 def copy_drawing_common(inline_object: InlineObject, drawing_common: DrawingCommon) -> None:
     if "placement" in drawing_common:
         inline_object["placement"] = drawing_common["placement"]
-    if "name" in drawing_common:
-        inline_object["name"] = drawing_common["name"]
     if "alt" in drawing_common:
         inline_object["alt"] = drawing_common["alt"]
     if "title" in drawing_common:

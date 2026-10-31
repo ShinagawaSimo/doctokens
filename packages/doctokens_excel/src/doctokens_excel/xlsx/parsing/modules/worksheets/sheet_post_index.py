@@ -91,7 +91,7 @@ class SheetPostIndex:
         if element.tag == _TAG_S_SHEET_PROTECTION:
             self.sheet_protection = True
         elif element.tag == _TAG_S_AUTO_FILTER:
-            self.filter_range, self.filter_cols = _parse_auto_filter_element(element)
+            self.filter_range, self.filter_cols = _parse_auto_filter_element(element, format_index)
             element.clear()
         elif element.tag in {_TAG_S_DATA_VALIDATIONS, f"{{{X14}}}dataValidations"}:
             self.data_validations.extend(parse_validations(element, self.warnings, self.part))

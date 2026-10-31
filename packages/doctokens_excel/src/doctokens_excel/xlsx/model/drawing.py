@@ -8,6 +8,7 @@ from doctokens_core.ooxml.charts.models import ChartLabel, ChartPlotInfo
 class DrawingImage(TypedDict, total=False):
     id: str
     ref: str
+    anchorRange: str  # private saved two-cell footprint for range relevance
     alt: str
     part: str
     title: str
@@ -47,6 +48,7 @@ class DrawingChartSeries(TypedDict, total=False):
 class DrawingChart(TypedDict, total=False):
     id: str
     ref: str
+    anchorRange: str
     type: str
     title: str
     series_count: int
@@ -62,6 +64,7 @@ class DrawingChart(TypedDict, total=False):
 class DrawingShape(TypedDict, total=False):
     id: str
     ref: str
+    anchorRange: str
     kind: str
     name: str
     text: str

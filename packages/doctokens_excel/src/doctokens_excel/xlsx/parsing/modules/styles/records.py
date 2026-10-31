@@ -81,7 +81,4 @@ def differential_style(dxf: ET.Element, colors: SpreadsheetColors) -> str:
     num_fmt = dxf.find(f"{{{NS_S}}}numFmt")
     if num_fmt is not None and (code := num_fmt.get("formatCode")):
         parts.append(f"numberFormat={code}")
-    alignment = dxf.find(f"{{{NS_S}}}alignment")
-    if alignment is not None:
-        parts.extend(f"{key}={value}" for key in ("horizontal", "vertical", "wrapText") if (value := alignment.get(key)))
     return " ".join(parts)

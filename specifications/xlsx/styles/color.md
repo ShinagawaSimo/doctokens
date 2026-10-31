@@ -2,7 +2,9 @@
 
 [XLSX](../README.md) / Spreadsheet colors
 
-Cell fonts and fills use the workbook theme when necessary.
+Cell fonts, fills, conditional visual rules and color-filter conditions use the
+workbook palette when necessary. Structural reads resolve differential colors
+needed by filter conditions; ordinary cell font/fill output remains semantic.
 
 ## Fields
 
@@ -36,7 +38,7 @@ Cell fonts and fills use the workbook theme when necessary.
   - Slots 0..11 are lt1, dk1, lt2, dk2, accent1..6, hlink, folHlink.
     Read the workbook's theme relationship target, otherwise the conventional
     theme1.xml path. Preserve the existing Office-default fallback for an
-    absent theme. Cell fonts, fills, differential styles, shared strings and
+    absent theme. Cell fonts, fills, differential styles, visual rules, shared strings and
     inline rich runs use the same per-workbook SpreadsheetColors context.
 
 ### `tint`

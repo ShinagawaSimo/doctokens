@@ -72,14 +72,19 @@ def parse_drawings(
                     objects.placeholder("", anchor.tag.rsplit("}", 1)[-1])
                 continue
             ref = _anchor_ref(anchor, warnings, part)
+            counts = len(objects.images), len(objects.charts), len(objects.shapes)
             for node in anchor:
                 objects.visit(node, part, ref, relationships)
+            end = _anchor_ref(anchor, warnings, part, marker="to") if anchor.tag == f"{{{XDR}}}twoCellAnchor" else ""
+            if ref and end:
+                for item in [*objects.images[counts[0] :], *objects.charts[counts[1] :], *objects.shapes[counts[2] :]]:
+                    item["anchorRange"] = f"{ref}:{end}"
         objects.finish_part()
     return DrawingResult(objects.images, objects.charts, objects.shapes, objects.next_shape)
 
 
-def _anchor_ref(anchor: ET.Element, warnings: list[ParseWarning], part: str) -> str:
-    start = anchor.find(f"{{{XDR}}}from")
+def _anchor_ref(anchor: ET.Element, warnings: list[ParseWarning], part: str, *, marker: str = "from") -> str:
+    start = anchor.find(f"{{{XDR}}}{marker}")
     if start is None:
         return ""
     try:

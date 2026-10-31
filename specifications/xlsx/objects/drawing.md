@@ -36,6 +36,12 @@ are not interpreted by merely matching a local element name.
     absoluteAnchor, retains no invented cell association. Invalid/out-of-bounds
     coordinates emit DRAWING_ANCHOR_INVALID and leave the reference empty,
     preserving independently readable object text.
+  - Range relevance privately retains the saved twoCellAnchor from/to rectangle;
+    objects can intersect a request with their start cell outside. Include
+    endpoint cells conservatively without calculating pixel coverage.
+    oneCellAnchor uses its start cell; EMU extents are not converted to guessed
+    grid coordinates. An absolute/unreadable anchor cannot establish irrelevance
+    and remains visible. The private footprint is not serialized.
 
 ### `id`
 

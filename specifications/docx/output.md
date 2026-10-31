@@ -14,9 +14,10 @@ DOCX output uses the common [DTX](../common/dtx.md) and [DTP](../common/dtp.md) 
 
 Plain separates retained blocks with blank lines; table summaries, note/comment labels, and object summaries are readable content. Only the DTP header and escaped page markers have the common DTP syntax. Empty XML body emits page 1.
 
-Both XML densities retain bound inline image resource ids. Semantic also retains
-image alternative text; structural omits that description. Drawing placeholders
-without a resolved resource omit id. See [images](objects/image.md).
+Both XML densities retain bound inline image resource ids and nonempty image
+alternative text, with a saved title as fallback. Internal drawing names are
+not descriptions. Drawing placeholders without a resolved resource omit id
+while retaining any readable description. See [images](objects/image.md).
 
 Page-window XML includes asset declarations only for images referenced by its
 visible body/table projection and retained supplemental content. Resource ids

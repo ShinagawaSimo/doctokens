@@ -31,24 +31,10 @@ image or nonempty text box retains one drawing placeholder.
 - **Parsing**
   - Choose the first inline container, otherwise the first anchor/container candidate; fallback drawing. VML uses vml.
 
-### `name`
-
-- **Output**
-  - Fallback semantic image alternative text; embedded name uses separate rules.
-
-- **OOXML**
-  - `wp:docPr/@name`; owning VML shape `@id`.
-
-- **IR**
-  - `DrawingCommon.name: str`
-
-- **Parsing**
-  - Copy nonempty value.
-
 ### `alt`
 
 - **Output**
-  - Semantic img/textbox alt.
+  - Structural/semantic img alt; semantic textbox alt.
 
 - **OOXML**
   - `wp:docPr/@descr`; owning VML shape `@alt`.
@@ -57,7 +43,7 @@ image or nonempty text box retains one drawing placeholder.
   - `DrawingCommon.alt: str`
 
 - **Parsing**
-  - Copy nonempty value. Drawing placeholder fallback is `alt or title or name`.
+  - Copy descriptions/titles only when they contain non-whitespace text, preserving their original spacing. Image/drawing-placeholder description uses `alt or title` in both XML densities; source names are not extracted as descriptions.
 
 ### `title`
 
@@ -71,7 +57,7 @@ image or nonempty text box retains one drawing placeholder.
   - `DrawingCommon.title: str`
 
 - **Parsing**
-  - Copy after referenced chart/SmartArt fields; ordinary images do not emit a title attribute.
+  - Copy after referenced chart/SmartArt fields; ordinary images use title only as an alt fallback and do not emit a separate title attribute.
   - VML shape @title and imagedata/@o:title participate in the image alt fallback; see [images](image.md).
 
 ### `cx`

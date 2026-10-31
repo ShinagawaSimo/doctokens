@@ -36,7 +36,11 @@ Plain whole-workbook output uses `<sheet name=...>` / `<chartsheet name=...>` re
   - defined_names/external_links/pivot_caches/slicers/timelines.
 
 - **Parsing**
-  - Full DTX order: global names, external links, pivot caches, slicers, timelines, sheets. Selected-sheet/range output does not append these root records.
+  - Full DTX order: global names, external links, pivot caches, slicers, timelines,
+    sheets. A selected sheet retains its existing sheet-level index. An explicit
+    range emits only relevant names and external/pivot dependencies at root.
+    Scoped range-context names carry @sheet and appear once, including a hidden
+    name when a retained expression explicitly needs it.
 
 ### `sheet content`
 
@@ -50,4 +54,7 @@ Plain whole-workbook output uses `<sheet name=...>` / `<chartsheet name=...>` re
   - Sheet collections.
 
 - **Parsing**
-  - Order: hidden columns, protection, local names, filter, validation, conditional formatting, images, charts, pivots, tables, grid. Range output keeps this sheet metadata even when objects lie outside selected cells.
+  - Order: hidden columns, protection, local names, filter, validation,
+    conditional formatting, images, charts, drawings, pivots, tables, grid.
+    Exact ranges restrict context by the requested bounds, even when the
+    selected grid is empty. See [reading windows](reading-window.md#range-context).

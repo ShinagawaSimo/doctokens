@@ -42,7 +42,7 @@ def test_textbox_table_images_and_links_do_not_consume_outer_field_state(density
     )
     source = _abnormal_docx(body, {"word/_rels/document.xml.rels": relationships})
     note = "<b>Note</b>" if density == "semantic" else "Note"
-    image = '<img alt="Inner" id="img1" />' if density == "semantic" else '<img id="img1" />'
+    image = '<img alt="Inner" id="img1" />'
     expected = (
         f'<document density="{density}" format="docx" pagination="last-rendered-hints" revision-view="final">'
         '<body><page number="1" /><p><a href="https://outer.test">Before</a><textbox>'

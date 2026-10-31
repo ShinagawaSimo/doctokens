@@ -167,12 +167,12 @@ def _append_inline_object(
             parent,
             "img",
             id=inline_object.get("assetId"),
-            alt=inline_object.get("alt") if density == "semantic" else None,
+            alt=inline_object.get("alt") or inline_object.get("title") or None,
         )
         _append_ocr(parent, inline_object.get("assetId"), ocr_results)
     elif object_type == "drawing":
-        alt = inline_object.get("alt") or inline_object.get("title") or inline_object.get("name")
-        append(parent, "img", alt=alt if density == "semantic" else None)
+        alt = inline_object.get("alt") or inline_object.get("title")
+        append(parent, "img", alt=alt or None)
     elif object_type == "textbox":
         node = append(
             parent, "textbox", id=inline_object.get("id"), alt=inline_object.get("alt") if density == "semantic" else None

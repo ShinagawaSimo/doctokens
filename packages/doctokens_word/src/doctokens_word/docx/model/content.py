@@ -137,7 +137,6 @@ ObjectLookup = dict[tuple[str, str], Chart | SmartArt]
 
 class DrawingCommon(TypedDict, total=False):
     placement: str
-    name: str
     alt: str
     title: str
     cx: str

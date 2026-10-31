@@ -79,7 +79,6 @@ def parse_conditional_formats(
             item["extensionId"] = identifier.casefold()
         if rule.get("dxfId") is not None:
             index = integer(rule.get("dxfId"), -1)
-            item["dxfId"] = index
             if formats is not None and (style := formats.differential_style(index)):
                 item["dxfStyle"] = style
         inline = rule.find(f"{{{X14}}}dxf")
@@ -96,7 +95,7 @@ def parse_conditional_formats(
         for key in ("stopIfTrue", "percent", "bottom", "aboveAverage", "equalAverage"):
             if rule.get(key) is not None:
                 item[key] = boolean(rule.get(key), key == "aboveAverage", warnings=warnings, locator=locator)  # type: ignore[literal-required]
-        if (detail := visual_details(rule)) is not None:
+        if (detail := visual_details(rule, formats.colors if formats is not None else SpreadsheetColors())) is not None:
             item["formatKind"], item["formatDetails"] = detail
         result.append(item)
     return result

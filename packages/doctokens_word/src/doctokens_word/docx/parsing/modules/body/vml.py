@@ -35,11 +35,8 @@ def pict_objects(
         if node.tag == _IMAGE_DATA:
             image_common = common.copy()
             title = attr(node, "o", "title")
-            if title and not image_common.get("title"):
+            if title and title.strip() and not image_common.get("title"):
                 image_common["title"] = title
-            alt = image_common.get("alt") or image_common.get("title") or image_common.get("name")
-            if alt:
-                image_common["alt"] = alt
             append_image_or_placeholder(objects, asset_lookup, part, attr(node, "r", "id") or "", image_common)
             return
         if node.tag == _TEXTBOX:
@@ -66,12 +63,8 @@ def _shape_common(shape: ET.Element) -> DrawingCommon:
     }
     if style.get("position", "").strip().lower() in {"absolute", "relative"}:
         common["placement"] = "anchor"
-    for key, value in (("name", shape.get("id")), ("alt", shape.get("alt")), ("title", shape.get("title"))):
-        if value:
-            if key == "name":
-                common["name"] = value
-            elif key == "alt":
-                common["alt"] = value
-            else:
-                common["title"] = value
+    if (alt := shape.get("alt")) and alt.strip():
+        common["alt"] = alt
+    if (title := shape.get("title")) and title.strip():
+        common["title"] = title
     return common

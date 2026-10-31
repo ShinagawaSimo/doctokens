@@ -102,15 +102,16 @@ Image records are indexed by owning part and relationship ID.
 ### `alt`
 
 - **Output**
-  - Semantic inline `img/@alt`.
+  - Inline `img/@alt` in structural and semantic; readable plain image description.
 
 - **OOXML**
-  - DrawingML docPr/@descr; VML owning shape @alt, @title, @id and imagedata/@o:title.
+  - DrawingML docPr/@descr, then @title; VML owning shape @alt, @title and imagedata/@o:title.
 
 - **IR**
-  - `InlineObject.alt: str`
+  - `InlineObject.alt: str`, with optional `InlineObject.title` fallback.
 
 - **Parsing**
   - DrawingML uses [drawing metadata](drawing.md).
-  - VML uses its owning shape's nonempty alt, then title, then name/id. A nonempty `imagedata/@o:title` supplies title when the shape has none.
-  - Sibling shapes do not share description fields. Structural inline images omit alt while retaining the bound id.
+  - VML uses its owning shape's nonempty alt, then title. A nonempty `imagedata/@o:title` supplies title when the shape has none.
+  - Both XML densities use alt or title, omitting the attribute when neither has non-whitespace content. Preserve the original spacing of a readable description. Plain uses the same description and otherwise emits [Image]. Do not fabricate alt from drawing names, shape IDs or filenames.
+  - The same projection applies to images in body paragraphs, retained table cells, text-box stories and retained ancillary content, including page windows. Sibling shapes do not share description fields.

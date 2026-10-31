@@ -18,7 +18,7 @@ FilterColumn = TypedDict(
         "percent": bool,
         "rank": str,
         "filterValue": str,
-        "dxfId": int,
+        "color": str,
         "cellColor": bool,
         "iconSet": str,
         "iconId": int,
@@ -36,8 +36,6 @@ class DataValidation(TypedDict, total=False):
     formula2: str
     operator: str
     errorStyle: str
-    imeMode: str
-    showDropDown: bool
     showInputMessage: bool
     showErrorMessage: bool
     promptTitle: str
@@ -52,7 +50,6 @@ class ConditionalFormat(TypedDict, total=False):
     priority: int
     ruleType: str
     formulas: list[str]
-    dxfId: int
     stopIfTrue: bool
     operator: str
     text: str

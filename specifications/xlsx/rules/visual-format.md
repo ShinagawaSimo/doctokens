@@ -2,265 +2,115 @@
 
 [XLSX](../README.md) / Conditional visual formats
 
-Visual-format dictionaries retain source strings.
+Semantic retains the meaning of saved visual emphasis without executing rules.
+Structural retains rule types and conditions but omits visual details. Drawing
+sizes, gradients, borders, axes and arbitrary source attributes are not extracted.
 
 ## Fields
 
 ### `stops`
 
 - **Output**
-  - Semantic details string.
-
+  - Semantic rule/@details: colon-separated fields and semicolon-separated records.
 - **OOXML**
-  - colorScale/cfvo and color children.
-
+  - Core/x14 colorScale/cfvo and color children, paired in source order.
 - **IR**
-  - `formatDetails["stops"]: list[dict[str,str]]`
-
+  - `formatDetails["stops"]: list[dict[str, str]]`.
 - **Parsing**
-  - Pair by position. Each cfvo retains type/val/gte; paired color chooses rgb then theme then indexed. Missing color leaves threshold only.
+  - Retain each threshold and its resolved color where available.
 
 ### `thresholds`
 
 - **Output**
-  - Semantic details string.
-
+  - Semantic details, using the same record notation as stops.
 - **OOXML**
-  - dataBar/cfvo or iconSet/cfvo.
-
-- **IR**
-  - `list[dict[str,str]]`
-
+  - Core/x14 dataBar/cfvo or iconSet/cfvo.
 - **Parsing**
-  - Keep direct cfvo children, preserving type/val/gte if present.
+  - Preserve source order; do not calculate effective threshold values.
 
 ### `type`
 
 - **Output**
-  - Stop/threshold field.
-
+  - Stop/threshold type.
 - **OOXML**
   - cfvo/@type.
-
-- **IR**
-  - `str`
-
 - **Parsing**
-  - Copy source discriminator without evaluating it.
+  - Preserve the saved discriminator: num/percent/percentile/formula,
+    min/max/autoMin/autoMax, or an unknown source value.
 
 ### `val`
 
 - **Output**
-  - Stop/threshold field.
-
+  - Stop/threshold value.
 - **OOXML**
-  - cfvo/@val.
-
-- **IR**
-  - `str`
-
+  - Core cfvo/@val; direct x14 cfvo/xm:f text takes precedence.
 - **Parsing**
-  - Core cfvo/@val supplies a literal/formula string. x14:cfvo uses direct
-    xm:f text instead; map it to the same value field, including zero.
+  - Keep values/formulas, including zero. Omit irrelevant saved values on
+    min/max/autoMin/autoMax thresholds.
 
 ### `gte`
 
 - **Output**
-  - Stop/threshold field.
-
+  - gte=false for an exclusive boundary; omit default true.
 - **OOXML**
   - cfvo/@gte.
-
-- **IR**
-  - `str`
-
 - **Parsing**
-  - Copy present source string; no synthesized default.
+  - Normalize 0/false to false; omit 1/true. Retain unknown spellings.
 
 ### `color`
 
 - **Output**
-  - Stop/bar field.
-
+  - Semantic stop/bar color as #RRGGBB.
 - **OOXML**
-  - color/@rgb, @theme, @indexed; x14 data bars also use fillColor.
-
-- **IR**
-  - `str`
-
+  - color or x14 fillColor nodes.
 - **Parsing**
-  - First truthy in that order; color references are not resolved here.
-
-### `minLength`
-
-- **Output**
-  - Semantic details field.
-
-- **OOXML**
-  - dataBar/@minLength.
-
-- **IR**
-  - `str`
-
-- **Parsing**
-  - Retain present attribute verbatim.
-
-### `maxLength`
-
-- **Output**
-  - Semantic details field.
-
-- **OOXML**
-  - dataBar/@maxLength.
-
-- **IR**
-  - `str`
-
-- **Parsing**
-  - Retain present attribute verbatim.
-
-### `showValue`
-
-- **Output**
-  - Semantic details field.
-
-- **OOXML**
-  - dataBar/@showValue.
-
-- **IR**
-  - `str`
-
-- **Parsing**
-  - Retain present attribute verbatim.
-
-### `gradient`
-
-- **Output**
-  - Semantic details field.
-
-- **OOXML**
-  - dataBar/@gradient.
-
-- **IR**
-  - `str`
-
-- **Parsing**
-  - Retain present attribute verbatim.
-
-### `border`
-
-- **Output**
-  - Semantic details field.
-
-- **OOXML**
-  - dataBar/@border.
-
-- **IR**
-  - `str`
-
-- **Parsing**
-  - Retain present attribute verbatim.
-
-### `direction`
-
-- **Output**
-  - Semantic details field.
-
-- **OOXML**
-  - dataBar/@direction.
-
-- **IR**
-  - `str`
-
-- **Parsing**
-  - Retain present attribute verbatim.
-
-### `iconSet attributes`
-
-- **Output**
-  - Semantic details fields.
-
-- **OOXML**
-  - All iconSet attributes.
-
-- **IR**
-  - `dict[str,object]`
-
-- **Parsing**
-  - Copy complete attribute dictionary; add thresholds. Attribute vocabulary is open and source-defined.
-
-### `negativeBarColorSameAsPositive`
-
-- **Output**
-  - Semantic data-bar details field.
-- **OOXML**
-  - x14:dataBar/@negativeBarColorSameAsPositive.
-- **Parsing**
-  - Retain a saved source boolean string; do not synthesize a color.
-
-### `negativeBarBorderColorSameAsPositive`
-
-- **Output**
-  - Semantic data-bar details field.
-- **OOXML**
-  - x14:dataBar/@negativeBarBorderColorSameAsPositive.
-- **Parsing**
-  - Retain the saved flag independently of negative fill behavior.
-
-### `axisPosition`
-
-- **Output**
-  - Semantic data-bar details field.
-- **OOXML**
-  - x14:dataBar/@axisPosition.
-- **Parsing**
-  - Retain the source value; do not derive a pixel coordinate.
-
-### `borderColor`
-
-- **Output**
-  - Semantic data-bar details field.
-- **OOXML**
-  - x14:dataBar/x14:borderColor.
-- **Parsing**
-  - Retain the saved RGB/theme/indexed source color using the existing color
-    reference policy. This reader does not evaluate the conditional style.
+  - Resolve RGB/theme/indexed/tint with the workbook palette. Omit unresolved
+    colors instead of emitting ambiguous palette indices.
 
 ### `negativeFillColor`
 
 - **Output**
-  - Semantic data-bar details field.
+  - Semantic data-bar details.
 - **OOXML**
-  - x14:dataBar/x14:negativeFillColor.
+  - x14:dataBar/x14:negativeFillColor and @negativeBarColorSameAsPositive.
 - **Parsing**
-  - Retain the saved source color.
+  - Retain a resolved saved negative color unless the source explicitly uses
+    the positive color for negative values. Never synthesize a negative color.
 
-### `negativeBorderColor`
+### `showValue`
 
 - **Output**
-  - Semantic data-bar details field.
+  - Semantic showValue=false; omit default true.
 - **OOXML**
-  - x14:dataBar/x14:negativeBorderColor.
+  - dataBar/@showValue or iconSet/@showValue.
 - **Parsing**
-  - Retain the saved source color.
+  - Preserve saved value hiding; the reading grid still retains cell content.
 
-### `axisColor`
+### `iconSet`
 
 - **Output**
-  - Semantic data-bar details field.
+  - Semantic icon-set name alongside ordered thresholds.
 - **OOXML**
-  - x14:dataBar/x14:axisColor.
+  - iconSet/@iconSet, default 3TrafficLights1.
 - **Parsing**
-  - Retain the saved source color.
+  - The name identifies the visual vocabulary even at its default. No open
+    attribute dictionary is retained.
+
+### `reverse`
+
+- **Output**
+  - Semantic reverse=true; omit default false.
+- **OOXML**
+  - iconSet/@reverse.
+- **Parsing**
+  - Preserve reversal of the icon interpretation.
 
 ### `icons`
 
 - **Output**
-  - Semantic icon-set details records.
+  - Semantic ordered custom-icon records.
 - **OOXML**
-  - x14:iconSet/x14:cfIcon attributes, including iconSet and iconId.
+  - x14:iconSet/x14:cfIcon/@iconSet and @iconId.
 - **Parsing**
-  - Preserve saved custom-icon order and attribute values alongside thresholds.
-    Do not substitute a different built-in icon set. Serialize record lists
-    with the existing colon-separated field and semicolon-separated record
-    notation used for stops/thresholds.
+  - Keep only set and ordinal, including NoIcons. Do not substitute a built-in
+    icon set or copy unrelated source attributes.

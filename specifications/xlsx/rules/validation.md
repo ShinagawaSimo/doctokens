@@ -3,8 +3,9 @@
 [XLSX](../README.md) / Data validation
 
 Read declarations without enforcing constraints or evaluating formulas.
-Both XML densities retain constraints and messages; plain omits readable rule
-declarations by its existing policy. Default values are omitted from DTX.
+Both XML densities retain constraints and error-enforcement behavior. Semantic
+also retains saved prompt/error text. Plain omits readable declarations. Default
+values are omitted from DTX; declarations never certify that saved values comply.
 
 ## Processing
 
@@ -49,7 +50,7 @@ defines the extension structure.
 ### `operator`
 
 - **Output**
-  - @operator on numeric/date/time/textLength constraints.
+  - @operator on numeric/date/time/textLength constraints; omit default between.
 - **OOXML**
   - @operator.
 - **Parsing**
@@ -87,20 +88,12 @@ defines the extension structure.
 - **Parsing**
   - Default false. Decode XML boolean 1/true and 0/false.
 
-### `showDropDown`
-
-- **Output**
-  - @dropdown=false on list rules when the saved control is suppressed.
-- **OOXML**
-  - @showDropDown.
-- **Parsing**
-  - Default false. In this OOXML flag true suppresses the list dropdown;
-    it is not an instruction to display it.
 
 ### `showInputMessage`
 
 - **Output**
-  - @show-input-message=true when enabled.
+  - Semantic @show-input-message=true only when saved prompt text/title exists
+    and the prompt is enabled. Omitted means disabled or no readable prompt.
 - **OOXML**
   - Rule @showInputMessage; parent dataValidations/@disablePrompts.
 - **Parsing**
@@ -110,7 +103,9 @@ defines the extension structure.
 ### `showErrorMessage`
 
 - **Output**
-  - @show-error-message=true when enabled.
+  - Both XML densities: @show-error-message=true for an enforced constraint.
+    Omitted means invalid entries do not trigger the saved error alert.
+    A type=none prompt-only rule can retain this flag in semantic alongside text.
 - **OOXML**
   - @showErrorMessage.
 - **Parsing**
@@ -120,35 +115,29 @@ defines the extension structure.
 ### `errorStyle`
 
 - **Output**
-  - @error-style for a non-default saved value.
+  - Both XML densities: @error-style for a non-default value only when an
+    actual constraint enables the error alert. Omitted style means stop.
 - **OOXML**
   - @errorStyle.
 - **Parsing**
   - Default stop; retain saved warning/information values.
 
-### `imeMode`
-
-- **Output**
-  - @ime-mode for a non-default saved value.
-- **OOXML**
-  - @imeMode.
-- **Parsing**
-  - Default noControl; retain an explicit input constraint.
 
 ### `promptTitle`
 
 - **Output**
-  - @prompt-title.
+  - Semantic @prompt-title, including disabled saved prompts.
 - **OOXML**
   - @promptTitle.
 - **Parsing**
   - Decode one ST_Xstring layer, preserving literal escapes, whitespace
     and XML-safe decoded characters; see [shared strings](../cells/shared-string.md).
+    Omit empty/whitespace-only message fields; preserve spacing in readable text.
 
 ### `prompt`
 
 - **Output**
-  - @prompt.
+  - Semantic @prompt, including disabled saved prompts.
 - **OOXML**
   - @prompt.
 - **Parsing**
@@ -157,7 +146,7 @@ defines the extension structure.
 ### `errorTitle`
 
 - **Output**
-  - @error-title.
+  - Semantic @error-title, including disabled saved alerts.
 - **OOXML**
   - @errorTitle.
 - **Parsing**
@@ -166,7 +155,7 @@ defines the extension structure.
 ### `error`
 
 - **Output**
-  - @error.
+  - Semantic @error, including disabled saved alerts.
 - **OOXML**
   - @error.
 - **Parsing**

@@ -2,8 +2,9 @@
 
 Synthetic packages here intentionally contain dangling/missing image references
 or unsupported extension branches, which desktop Office cannot reliably save.
-Ordinary binding and both XML densities are also verified on the native tmp DOCX;
-atomic native image fixtures remain in the existing real-file checklist.
+Ordinary binding and both XML densities are also checked on the native tmp DOCX.
+That document has no readable image descriptions; positive native alt coverage
+remains in the existing real-file checklist.
 """
 
 from __future__ import annotations
@@ -48,11 +49,11 @@ def test_dangling_images_do_not_drop_valid_siblings_or_mix_shape_descriptions(de
         {"word/_rels/document.xml.rels": _image_relationships("valid", "media/valid.png")},
     )
     result = parse_docx(data, density=density)
+    textbox = '<textbox alt="Caption"><p>Note</p></textbox>' if density == "semantic" else "<textbox><p>Note</p></textbox>"
     visible = (
-        '<img alt="A &amp; B" id="img1" /><img alt="Missing" /><textbox alt="Caption"><p>Note</p></textbox>'
-        '<img alt="Title" id="img1" /><img alt="Image title" id="img1" /><img alt="name4" id="img1" /><img alt="empty" />'
-        if density == "semantic"
-        else '<img id="img1" /><img /><textbox><p>Note</p></textbox><img id="img1" /><img id="img1" /><img id="img1" /><img />'
+        '<img alt="A &amp; B" id="img1" /><img alt="Missing" />'
+        + textbox
+        + '<img alt="Title" id="img1" /><img alt="Image title" id="img1" /><img id="img1" /><img />'
     )
     assert result.text == _expected(density, visible)
     assert result.report.warnings == ()
@@ -78,9 +79,7 @@ def test_missing_target_does_not_bind_same_relationship_id_from_another_part(den
         if density == "semantic"
         else ""
     )
-    assert result.text == _expected(
-        density, '<img alt="Deleted" />' if density == "semantic" else "<img />", supplemental=supplemental
-    )
+    assert result.text == _expected(density, '<img alt="Deleted" />', supplemental=supplemental)
     assert [(w.code, w.locator) for w in result.report.warnings] == [("IMAGE_TARGET_MISSING", "word/document.xml")]
 
 
@@ -93,7 +92,7 @@ def test_unknown_producer_choice_can_fall_through_to_bound_vml_choice(density: s
     </mc:AlternateContent></w:r></w:p>"""
     entries = {"word/_rels/document.xml.rels": _image_relationships("valid", "media/valid.png")}
     result = parse_docx(_abnormal_docx(body, entries), density=density)
-    assert result.text == _expected(density, '<img alt="VML" id="img1" />' if density == "semantic" else '<img id="img1" />')
+    assert result.text == _expected(density, '<img alt="VML" id="img1" />')
     assert result.report.warnings == ()
     record = result.report.manifest["alternateContent"][0]
     assert (record["branch"], record["choiceIndex"]) == ("Choice", 2)

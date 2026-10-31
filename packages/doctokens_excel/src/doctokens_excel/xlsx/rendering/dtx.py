@@ -12,6 +12,8 @@ from ..model.coordinates import col_letter
 from ..model.workbook import Cell, ParsedWorkbook, SheetInfo
 from ..parsing.modules.styles.index import FormatIndex
 from .dtx_metadata import _add_protection_attrs, _append_sheet_metadata, _append_workbook_metadata
+from .range_context import range_context
+from .selection import parse_range
 from .style_ranges import _add_style_attrs, _style_range_records
 from .window import ReadingWindow, cell_bounds, reading_window
 
@@ -36,6 +38,12 @@ def render_sheet_dtx(
     """Render a selected sheet or range as an independent DTX workbook."""
     root = element("workbook", density=density, format="xlsx")
     selected = window if window is not None else reading_window(sheet, density, rows=rows)
+    requested = selected.metadata.get("requested_range")
+    if isinstance(requested, str):
+        parsed_workbook, sheet = range_context(parsed_workbook, sheet, parse_range(requested), selected.rows)
+        _append_workbook_metadata(root, parsed_workbook, density, range_context=True)
+        # All relevant names are emitted once at root with explicit scope.
+        parsed_workbook = {**parsed_workbook, "metadata": {**parsed_workbook["metadata"], "defined_names": []}}
     _append_sheet(root, sheet, parsed_workbook, density, emit_globals=True, window=selected)
     return serialize(root)
 

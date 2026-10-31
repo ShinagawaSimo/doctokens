@@ -78,7 +78,7 @@ Within each filterColumn, process values, custom, dynamic, top10, color, icon, t
   - `FilterColumn["blank"]`
 
 - **Parsing**
-  - Store true exactly for 1; false omitted.
+  - XML boolean 1/true enables blank matching; false is omitted.
 
 ### `calendarType`
 
@@ -92,7 +92,7 @@ Within each filterColumn, process values, custom, dynamic, top10, color, icon, t
   - `FilterColumn["calendarType"]`
 
 - **Parsing**
-  - Copy nonempty string.
+  - Copy nonempty string, omitting the default none calendar.
 
 ### `operator`
 
@@ -150,7 +150,7 @@ Within each filterColumn, process values, custom, dynamic, top10, color, icon, t
   - `FilterColumn["and"]`
 
 - **Parsing**
-  - True for 1, applied only to first emitted custom rule.
+  - True for XML boolean 1/true, applied only to the first emitted custom rule.
 
 ### `top`
 
@@ -164,7 +164,7 @@ Within each filterColumn, process values, custom, dynamic, top10, color, icon, t
   - `FilterColumn["top"]`
 
 - **Parsing**
-  - Default true; exactly 1 → true. DTX emits only true, so false is omitted.
+  - Default true; DTX omits true and emits top=false for bottom-ranked filtering.
 
 ### `percent`
 
@@ -178,7 +178,7 @@ Within each filterColumn, process values, custom, dynamic, top10, color, icon, t
   - `FilterColumn["percent"]`
 
 - **Parsing**
-  - Default false; exactly 1 → true, output only true.
+  - Default false; XML boolean 1/true enables percent matching, output only true.
 
 ### `rank`
 
@@ -208,19 +208,21 @@ Within each filterColumn, process values, custom, dynamic, top10, color, icon, t
 - **Parsing**
   - Copy nonempty string.
 
-### `dxfId`
+### `color`
 
 - **Output**
-  - filter/condition/@dxf-id.
+  - Both XML densities: filter/condition/@color as #RRGGBB.
 
 - **OOXML**
   - `s:autoFilter/s:filterColumn/s:colorFilter/@dxfId`
 
 - **IR**
-  - `FilterColumn["dxfId"]`
+  - `FilterColumn["color"]`
 
 - **Parsing**
-  - Parse nonempty attribute int; malformed 0.
+  - Resolve the source dxf index while parsing. cellColor=true selects its fill;
+    false selects font color. Resolve theme/indexed/tint colors through the
+    workbook palette. No bare source index or guessed color is emitted.
 
 ### `cellColor`
 
@@ -234,7 +236,8 @@ Within each filterColumn, process values, custom, dynamic, top10, color, icon, t
   - `FilterColumn["cellColor"]`
 
 - **Parsing**
-  - Default true; exactly 1 → true. DTX emits explicit true or false when present.
+  - Default true; XML boolean 1/true or 0/false selects fill/font color.
+    DTX emits the explicit color target.
 
 ### `iconSet`
 
@@ -277,4 +280,5 @@ Within each filterColumn, process values, custom, dynamic, top10, color, icon, t
   - `FilterColumn["dateGroup"]`
 
 - **Parsing**
-  - Retain each full attribute dictionary. Serialize groups with ;, attributes sorted by key as key=value joined by :. No date calculation.
+  - Retain year/month/day/hour/minute/second/dateTimeGrouping only. Serialize
+    groups with ;, attributes sorted by key as key=value joined by :. No date calculation.

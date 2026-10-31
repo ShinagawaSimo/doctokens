@@ -46,16 +46,17 @@ def parse_validations(container: ET.Element, warnings: list[ParseWarning], locat
             if node is not None:
                 value = node.findtext(f"{{{XM}}}f", "") if namespace == X14 else node.text or ""
                 item[key] = value
-        for key in ("allowBlank", "showDropDown", "showInputMessage", "showErrorMessage"):
+        for key in ("allowBlank", "showInputMessage", "showErrorMessage"):
             item[key] = boolean(element.get(key), warnings=warnings, locator=locator)  # type: ignore[literal-required]
         if disabled:
             item["showInputMessage"] = False
         for key in ("promptTitle", "prompt", "errorTitle", "error"):
             if (label := element.get(key)) is not None:
-                item[key] = decode_xstring(label, warn=lambda c, m: warnings.append(ParseWarning(c, m, locator)))  # type: ignore[literal-required]
-        for key, default in (("errorStyle", "stop"), ("imeMode", "noControl")):
-            if (value := element.get(key, default)) != default:
-                item[key] = value  # type: ignore[literal-required]
+                decoded = decode_xstring(label, warn=lambda c, m: warnings.append(ParseWarning(c, m, locator)))
+                if decoded.strip():
+                    item[key] = decoded  # type: ignore[literal-required]
+        if (value := element.get("errorStyle", "stop")) != "stop":
+            item["errorStyle"] = value
         if kind not in {"none"} and not item.get("formula1"):
             item["unparsed"] = True
             warnings.append(

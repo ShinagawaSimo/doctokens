@@ -56,7 +56,8 @@ needed by filter conditions; ordinary cell font/fill output remains semantic.
   - Apply to a resolved RGB/theme/indexed color in HLS space. Negative tint
     scales luminance by 1+tint; positive tint uses L*(1-tint)+tint.
     Convert back to RGB and round channels to byte values. Require a finite
-    tint within -1..1; invalid tint preserves the base property.
+    tint within -1..1. An invalid/nonfinite/out-of-range tint leaves the color
+    unresolved; do not report the unadjusted base as a resolved tinted color.
 
 ### `indexed`
 
@@ -75,3 +76,20 @@ needed by filter conditions; ordinary cell font/fill output remains semantic.
     resolve directly, for example indexed=10 is FF0000. Indices 64/65 are
     application/system colors and are not guessed; invalid indices cannot
     invoke Python negative indexing.
+
+### `XLSX_COLOR_UNRESOLVED`
+
+- **Output**
+  - ParseWarning with the affected worksheet or styles.xml part as locator.
+    No unresolved-color attribute is added to the reading body.
+- **Source**
+  - A retained conditional visual color or differential font/foreground-fill
+    color that cannot reliably resolve to RGB, including automatic/system
+    color, invalid references, missing values or invalid tint.
+- **Parsing**
+  - Retain independently readable rule conditions, thresholds and emphasis.
+    Omit only the unresolved color; do not substitute a palette index or black.
+    Diagnostics belong to parsing and do not accumulate on repeated rendering.
+  - Differential-style color diagnostics come from the styles table or inline
+    rule part. Other uses of the shared color resolver can omit unavailable
+    colors without opting into these conditional-format diagnostics.

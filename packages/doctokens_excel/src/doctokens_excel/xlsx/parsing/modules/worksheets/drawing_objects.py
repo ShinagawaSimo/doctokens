@@ -8,8 +8,7 @@ from doctokens_core.containers.opc.models import RelationshipRecord
 from doctokens_core.containers.opc.reader import PackageReader
 from doctokens_core.contracts.models import ParseWarning
 from doctokens_core.ooxml.charts.parser import CHART_RELATIONSHIP_TYPES
-from doctokens_core.text.descriptions import first_readable
-from doctokens_core.text.object_names import reading_object_name
+from doctokens_core.text.descriptions import first_readable, reading_object_name
 
 from ....model.drawing import DrawingChart, DrawingImage, DrawingShape
 from .chart_parts import parse_chart_part

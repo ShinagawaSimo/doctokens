@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.reader import PackageReader
+from doctokens_core.contracts.models import ParseWarning
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 _A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
@@ -119,7 +120,14 @@ class SpreadsheetColors:
                     result.indexed[index] = value
         return result
 
-    def resolve(self, node: ET.Element) -> str | None:
+    def resolve(self, node: ET.Element, *, warnings: list[ParseWarning] | None = None, locator: str = "") -> str | None:
+        """Resolve a saved color; callers opt into diagnostics for reading limits."""
+        value = self._resolve(node)
+        if value is None and warnings is not None:
+            warnings.append(ParseWarning("XLSX_COLOR_UNRESOLVED", "Saved color could not be reliably resolved to RGB", locator))
+        return value
+
+    def _resolve(self, node: ET.Element) -> str | None:
         if node.get("auto") in {"1", "true"}:
             return None
         base = _rgb(node.get("rgb"))
@@ -136,12 +144,12 @@ class SpreadsheetColors:
             try:
                 tint = float(node.get("tint", ""))
                 if not math.isfinite(tint) or not -1 <= tint <= 1:
-                    return base
+                    return None
                 red, green, blue = (int(base[i : i + 2], 16) / 255 for i in (0, 2, 4))
                 hue, luminance, saturation = colorsys.rgb_to_hls(red, green, blue)
                 luminance = luminance * (1 + tint) if tint < 0 else luminance * (1 - tint) + tint
                 channels = colorsys.hls_to_rgb(hue, luminance, saturation)
                 return "".join(f"{round(channel * 255):02X}" for channel in channels)
             except ValueError:
-                return base
+                return None
         return base

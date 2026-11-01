@@ -84,6 +84,7 @@ remain the definitions of each field, rather than a generic filter by field name
 | XLSX cell/run font/fill, style-range and number-format color metadata | Omitted | Omitted | Retained reading styles |
 | XLSX enabled sheet protection and affirmative applicable cell restrictions | Omitted | Omitted | sheet-protection; locked=true and formula-hidden=true when applicable |
 | XLSX formatted display value | Retained | Retained | Retained |
+| XLSX resolved pivot-cache relationships | Compact pivot name only | Short cache references with local targets | Same, with existing semantic field summaries |
 | Chart/SmartArt reading previews | Bounded plain summary | Shared bounded structure | Shared bounded structure |
 | Raw hints, control binding provenance and bare dxf lookup indices | Not body fields | Not body fields | Not body fields |
 

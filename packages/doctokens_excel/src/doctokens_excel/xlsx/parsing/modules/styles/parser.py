@@ -6,6 +6,7 @@ from typing import Literal
 from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.reader import PackageReader
+from doctokens_core.contracts.models import ParseWarning
 
 from doctokens_excel.formatting.values import builtin_format_code
 
@@ -21,6 +22,7 @@ def parse_styles(
     *,
     detail: StyleDetail = "semantic",
     locale: str = "zh-CN",
+    warnings: list[ParseWarning] | None = None,
 ) -> FormatIndex:
     """Parse the style layer needed by the selected output density.
 
@@ -41,20 +43,21 @@ def parse_styles(
         _register_semantic_records(index, root, index.colors)
     if detail != "display":
         for dxf in root.findall(f"{{{NS_S}}}dxfs/{{{NS_S}}}dxf"):
-            index.register_differential_style(differential_style(dxf, index.colors))
+            index.register_differential_style(differential_style(dxf, index.colors, warnings=warnings, locator="xl/styles.xml"))
 
     style_xfs = _find_xfs(root, "cellStyleXfs")
     visible_fills = _visible_records(root, "fills", "fill")
     visible_borders = _visible_records(root, "borders", "border")
     for xf in _find_xfs(root, "cellXfs"):
         num_fmt_id, format_code = _effective_number_format(xf, style_xfs, custom_fmts, locale)
+        locked, formula_hidden = _protection_flags(xf, style_xfs)
         index.register_cell_format(
             num_fmt_id,
             format_code,
             font_id=_effective_style_id(xf, style_xfs, "font"),
             fill_id=_effective_style_id(xf, style_xfs, "fill"),
-            locked=_protection_flag(xf, style_xfs, "locked", default=True),
-            formula_hidden=_protection_flag(xf, style_xfs, "hidden", default=False),
+            locked=locked,
+            formula_hidden=formula_hidden,
             visible_blank=(
                 _effective_style_id(xf, style_xfs, "fill") in visible_fills
                 or _effective_style_id(xf, style_xfs, "border") in visible_borders
@@ -145,15 +148,20 @@ def _int_attr(element: ET.Element, name: str, default: int = 0) -> int:
         return default
 
 
-def _protection_flag(element: ET.Element, parents: list[ET.Element], name: str, *, default: bool) -> bool | None:
+def _protection_flags(element: ET.Element, parents: list[ET.Element]) -> tuple[bool | None, bool | None]:
+    """Resolve the effective protection group once for its two saved flags."""
     protection = element.find(f"{{{NS_S}}}protection")
     apply = element.get("applyProtection")
     if apply not in {None, "0", "1", "true", "false"}:
-        return None
+        return None, None
     if protection is None or apply in {"0", "false"}:
         index = _int_attr(element, "xfId", -1)
         parent = parents[index] if 0 <= index < len(parents) else None
         protection = parent.find(f"{{{NS_S}}}protection") if parent is not None else None
+    return _protection_value(protection, "locked", default=True), _protection_value(protection, "hidden", default=False)
+
+
+def _protection_value(protection: ET.Element | None, name: str, *, default: bool) -> bool | None:
     if protection is None:
         return default
     value = protection.get(name)

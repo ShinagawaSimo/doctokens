@@ -3,8 +3,10 @@
 import io
 import unittest
 import zipfile
+from xml.etree import ElementTree as ET
 
 from doctokens_excel import parse_xlsx
+from doctokens_excel.xlsx.parsing.modules.styles.colors import SpreadsheetColors
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -20,6 +22,16 @@ def _make_xlsx(entries: dict[str, str]) -> bytes:
 
 
 class StyleTests(unittest.TestCase):
+    def test_invalid_tint_is_not_reported_as_a_resolved_base_color(self) -> None:
+        # Office's color UI cannot save malformed/nonfinite/out-of-range tint.
+        # Do not present the unadjusted base as a successfully resolved color.
+        for tint in ("bad", "NaN", "INF", "-INF", "1.1", "-1.1"):
+            with self.subTest(tint=tint):
+                warnings = []
+                node = ET.fromstring(f'<color rgb="FF4472C4" tint="{tint}"/>')
+                self.assertIsNone(SpreadsheetColors().resolve(node, warnings=warnings, locator="xl/styles.xml"))
+                self.assertEqual([(w.code, w.locator) for w in warnings], [("XLSX_COLOR_UNRESOLVED", "xl/styles.xml")])
+
     def test_no_styles_file(self) -> None:
         """Missing styles.xml should not crash style output."""
         data = _make_xlsx(

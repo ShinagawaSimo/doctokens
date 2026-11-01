@@ -9,7 +9,9 @@ Caches supply field names and source metadata without refreshing records.
 ### `id`
 
 - **Output**
-  - pivot-cache/@id.
+  - Structural/semantic pivot-cache/@id; referenced by pivot-table, slicer and
+    supported timeline @cache. This is a local XML target, not a binary or
+    render_resource cache resource.
 
 - **OOXML**
   - Workbook pivotCache relationship enumeration.
@@ -18,23 +20,36 @@ Caches supply field names and source metadata without refreshing records.
   - `PivotCacheInfo.id: str`
 
 - **Parsing**
-  - cache1,cache2,...; failed catalog read still leaves a record with ID/cacheId/empty fields.
+  - cache1,cache2,... in resolvable workbook relationship order. A failed cache
+    part still leaves a record with its compact ID and empty fields; callers
+    may refer to that record while diagnostics describe its unreadable content.
 - **Diagnostics**
   - A declared missing cache target yields `XLSX_CATALOG_PART_MISSING`; malformed cache XML yields `XLSX_CATALOG_XML_INVALID`. The ID-only cache record remains. See [optional catalog diagnostics](../workbook/catalog-diagnostics.md).
 
 ### `cacheId`
 
 - **Output**
-  - pivot-cache/@cache-id.
+  - No public source-number attribute. Only the compact id is serialized.
 
 - **OOXML**
   - workbook pivotCache/@cacheId.
 
 - **IR**
-  - `int`
+  - Temporary parser lookup key, absent from the reading model.
 
 - **Parsing**
-  - int, missing/invalid0.
+  - Require a readable unsigned 32-bit integer (including valid zero); XML
+    whitespace and a leading plus are accepted. Missing, invalid, negative and
+    oversized values do not default to zero. Duplicate source numbers are
+    ambiguous, even if their parts coincide; no consumer is linked through them.
+  - Keep readable cache records independently of source-key validity. A unique
+    valid key maps consumers to the record's compact ID; unresolved relations
+    do not fabricate a cache target. Selected ranges retain caches and bound
+    slicer/timeline metadata required by selected pivot tables.
+- **Diagnostics**
+  - XLSX_CATALOG_REFERENCE_UNRESOLVED identifies missing/invalid/ambiguous keys
+    and consumers of unknown keys. Diagnostics are collected during parsing,
+    not repeated on each render.
 
 ### `sourceRef`
 

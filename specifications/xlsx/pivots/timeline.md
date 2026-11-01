@@ -54,19 +54,24 @@ Scan XML paths containing timeline; first timelineCacheDefinition/timeline desce
 - **Parsing**
   - Copy, default empty.
 
-### `cacheId`
+### `cache`
 
 - **Output**
-  - Internal; no timeline cache attribute.
+  - Structural/semantic timeline/@cache="cacheN" for a supported saved binding.
 
 - **OOXML**
   - Definition/@pivotCacheId.
 
 - **IR**
-  - `int`
+  - `TimelineInfo.cacheRef: str`.
 
 - **Parsing**
-  - Nonempty → int; invalid0.
+  - Resolve a saved definition/@pivotCacheId using the
+    [cache identity rules](cache.md#cacheid). Invalid, unknown and ambiguous
+    declarations omit the link and emit XLSX_CATALOG_REFERENCE_UNRESOLVED.
+    An absent optional binding is not guessed from names, field text or dates.
+  - The target record occurs in the same XML response; no source number is
+    serialized. Other timeline binding representations remain unsupported.
 
 ### `level`
 

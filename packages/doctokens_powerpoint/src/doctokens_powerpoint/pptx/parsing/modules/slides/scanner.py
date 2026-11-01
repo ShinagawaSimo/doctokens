@@ -28,6 +28,7 @@ from .geometry import SlideGeometry, _GroupTransform
 from .objects import SlideObjectParser
 from .runs import shape_runs
 from .shape_details import (
+    _PLACEHOLDER_NAMES,
     _attach_accessibility,
     _drawing_id,
     _filter_decorative_shapes,
@@ -193,7 +194,13 @@ class SlideParser:
             if groups:
                 shape["groups"] = list(groups)
             self._geometry._attach_inheritance(shape, node, context, transform)
-            if shape.get("name") and _shape_name(node, placeholder_type=shape.get("placeholderType")) is None:
+            # Only inherited title/number roles add candidates beyond the
+            # object's direct metadata. Other names have already been filtered.
+            if (
+                shape.get("name")
+                and shape.get("placeholderType") in _PLACEHOLDER_NAMES
+                and _shape_name(node, placeholder_type=shape.get("placeholderType")) is None
+            ):
                 shape.pop("name", None)
             if self.include_navigation:
                 self._attach_shape_navigation(shape, node, part)

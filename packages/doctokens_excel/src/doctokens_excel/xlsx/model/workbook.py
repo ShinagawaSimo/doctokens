@@ -115,7 +115,7 @@ class PivotTableInfo(TypedDict, total=False):
     id: str
     ref: str
     name: str
-    cacheId: int
+    cacheRef: str
     sourceRef: str
     sourceSheet: str
     rowFields: list[str]
@@ -129,7 +129,6 @@ class PivotTableInfo(TypedDict, total=False):
 
 class PivotCacheInfo(TypedDict, total=False):
     id: str
-    cacheId: int
     sourceRef: str
     sourceSheet: str
     fields: list[str]
@@ -143,7 +142,7 @@ class SlicerInfo(TypedDict, total=False):
     id: str
     name: str
     sourceName: str
-    cacheId: int
+    cacheRef: str
     type: str
 
 
@@ -151,7 +150,7 @@ class TimelineInfo(TypedDict, total=False):
     id: str
     name: str
     sourceName: str
-    cacheId: int
+    cacheRef: str
     level: str
 
 

@@ -120,23 +120,46 @@ def _base_entries() -> dict[str, str]:
 
 
 class ModernP0FeatureTests(unittest.TestCase):
-    def test_checkbox_and_pivot_context(self) -> None:
+    def test_checkbox_control(self) -> None:
         data = _make_xlsx(_base_entries())
         plain = parse_xlsx(data, density="plain").text
         structural = parse_xlsx(data, density="structural").text
-        semantic = parse_xlsx(data, density="semantic").text
 
         self.assertIn("[Checkbox true]", plain)
         structural_root = ET.fromstring(structural)
-        semantic_root = ET.fromstring(semantic)
         self.assertEqual(structural_root.find(".//cell[@control]").get("control"), "checkbox")
-        self.assertEqual(semantic_root.find("pivot-cache").get("id"), "cache1")
-        self.assertEqual(semantic_root.find("slicer").get("name"), "RegionFilter")
-        self.assertEqual(semantic_root.find("timeline").get("level"), "months")
-        pivot = semantic_root.find(".//pivot-table")
-        self.assertEqual(pivot.get("id"), "pivot1")
-        self.assertEqual(pivot.get("rows"), "Region")
-        self.assertEqual(pivot.get("values"), "Sum of Amount")
+
+    def test_invalid_cache_keys_never_create_false_or_ambiguous_links(self) -> None:
+        # Excel's UI cannot save duplicate, invalid or dangling source cache
+        # identities. These are damaged/unsupported producer states.
+        for declaration in (
+            '<pivotCache r:id="rCache"/>',
+            '<pivotCache cacheId="not-a-number" r:id="rCache"/>',
+            '<pivotCache cacheId="8" r:id="rCache"/>',
+            '<pivotCache cacheId="7" r:id="rCache"/><pivotCache cacheId="7" r:id="rCache"/>',
+            f'<pivotCache cacheId="{"9" * 5000}" r:id="rCache"/>',
+        ):
+            with self.subTest(declaration=declaration[:100]):
+                entries = _base_entries()
+                entries["xl/workbook.xml"] = entries["xl/workbook.xml"].replace(
+                    '<pivotCache cacheId="7" r:id="rCache"/>', declaration
+                )
+                with open_xlsx(_make_xlsx(entries)) as session:
+                    first = session.render(density="semantic")
+                    second = session.render(density="structural")
+                    again = session.render(density="semantic")
+                self.assertEqual(first.text, again.text)
+                for result in (first, second):
+                    root = ET.fromstring(result.text)
+                    self.assertEqual(
+                        [
+                            (node.tag, node.get("cache"))
+                            for node in root.iter()
+                            if node.tag in {"pivot-table", "slicer", "timeline"}
+                        ],
+                        [("slicer", None), ("timeline", None), ("pivot-table", None)],
+                    )
+                    self.assertTrue(any(w.code == "XLSX_CATALOG_REFERENCE_UNRESOLVED" for w in result.report.warnings))
 
     def test_optional_catalog_xml_failures_are_local_and_reported(self) -> None:
         cases = (

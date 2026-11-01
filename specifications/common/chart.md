@@ -148,11 +148,38 @@ handle missing parts and parse exceptions.
 - **IR**
   - `ChartInfo.axes: list[dict[str, str]]`, retained by format chart records.
 - **Parsing**
-  - Preserve axis id/kind, cross-axis id, position, title, number-format code,
-    explicit minimum/maximum/log base/orientation, built-in display unit and
-    custom display-unit factor. Values remain saved lexical strings; units and
-    formats are not used to recalculate the chart's underlying cached numbers.
-  - ChartEx plotArea/axis retains saved id/hidden, valScaling min/max/major/minor
-    units or catScaling fields, saved title text, number format and units.
-    Auto limits are not calculated. Series' cx:axisId values preserve the
-    relationship. Unspecified fields remain absent; axis titles are not chart titles.
+  - Apply the same closed reading field set to body metadata and complete
+    resources: id, kind, cross-axis, title, num-format, minimum, maximum,
+    log-base, orientation, display-unit and custom-unit. Plain does not expand
+    axis records. Units/formats do not recalculate the cached chart numbers.
+  - Omit position, default minMax orientation, empty format codes and General
+    (case-insensitive after trimming). Retain nonempty other saved format codes
+    verbatim, including percent, currency and date codes. Preserve explicit
+    limits, log base and reverse maxMin orientation. Missing/auto limits are
+    not calculated. Axis titles are not chart titles.
+  - ChartEx uses only declared axis identity, known valScaling min/max,
+    catScaling/valScaling identity, saved title, non-General number format and
+    units/@unit. Normalize unit to display-unit. Do not copy hidden, category
+    gap width, tick spacing majorUnit/minorUnit or arbitrary source attributes.
+    Built-in units are hundreds, thousands, tenThousands, hundredThousands,
+    millions, tenMillions, hundredMillions, billions, trillions and ChartEx
+    percentage; unknown unit declarations add no guessed interpretation.
+
+### `axis identity`
+
+- **Output**
+  - Chart-local axis1, axis2, ... in saved axis declaration order. Plot/series
+    @axes and axis/@cross-axis refer to these same IDs in all formats.
+- **OOXML**
+  - ChartML axId/crossAx and plot axId; ChartEx axis/@id and series/axisId.
+- **IR**
+  - Compact axes/@id and cross_axis, ChartPlotInfo/ChartSeriesInfo.axis_ids.
+    Source identities are discarded after the per-chart mapping pass.
+- **Parsing**
+  - Rewrite only references that resolve uniquely to a declared axis. Missing,
+    dangling or duplicate ambiguous source identities produce no guessed link;
+    independently readable axis records remain. No primary/secondary role is
+    inferred from position, value ranges, chart type or proximity.
+  - Body preview limits can omit axis records and their links under the existing
+    budget. Complete resources retain all parsed reading axes, using the same
+    numbering. A body render never renumbers or mutates the resource model.

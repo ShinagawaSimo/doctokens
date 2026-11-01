@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from xml.etree import ElementTree as ET
 
-from .axes import parse_chart_axes
+from .axes import attach_chart_axes
 from .construction import chart_info, series_row
 from .models import ChartInfo, ChartPlotInfo, ChartSeriesInfo
 from .semantics import axis_ids, series_labels, trendlines
@@ -88,12 +88,9 @@ class ChartParser:
     def parse(self, root: ET.Element) -> ChartInfo:
         if _namespace(root.tag) == NS_CX and _local_name(root.tag) == "chartSpace":
             result = self._parse_chartex(root)
-            if axes := parse_chart_axes(root):
-                result["axes"] = axes
-            return result
-        result = self._parse_chartml(root)
-        if axes := parse_chart_axes(root):
-            result["axes"] = axes
+        else:
+            result = self._parse_chartml(root)
+        attach_chart_axes(result, root)
         return result
 
     def _parse_chartml(self, root: ET.Element) -> ChartInfo:

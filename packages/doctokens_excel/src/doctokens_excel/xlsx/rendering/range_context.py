@@ -50,11 +50,11 @@ def range_context(
     ]
     _project_drawings(projected, sheet, selected)
     metadata: WorkbookMetadata = {"defined_names": names, "external_links": external}
-    caches = {pivot["cacheId"] for pivot in projected["pivot_tables"] if "cacheId" in pivot}
+    caches = {pivot["cacheRef"] for pivot in projected["pivot_tables"] if "cacheRef" in pivot}
     original = workbook["metadata"]
-    metadata["pivot_caches"] = [cache for cache in original.get("pivot_caches", []) if cache.get("cacheId") in caches]
-    metadata["slicers"] = [item for item in original.get("slicers", []) if item.get("cacheId") in caches]
-    metadata["timelines"] = [item for item in original.get("timelines", []) if item.get("cacheId") in caches]
+    metadata["pivot_caches"] = [cache for cache in original.get("pivot_caches", []) if cache.get("id") in caches]
+    metadata["slicers"] = [item for item in original.get("slicers", []) if item.get("cacheRef") in caches]
+    metadata["timelines"] = [item for item in original.get("timelines", []) if item.get("cacheRef") in caches]
     return {**workbook, "metadata": metadata}, projected
 
 

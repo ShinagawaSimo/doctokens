@@ -65,7 +65,10 @@ sizes, gradients, borders, axes and arbitrary source attributes are not extracte
   - color or x14 fillColor nodes.
 - **Parsing**
   - Resolve RGB/theme/indexed/tint with the workbook palette. Omit unresolved
-    colors instead of emitting ambiguous palette indices.
+    colors instead of emitting ambiguous palette indices. Invalid tint does
+    not fall back to the unadjusted base. Emit XLSX_COLOR_UNRESOLVED at the rule's
+    worksheet part, while retaining readable thresholds and other properties.
+    This is a diagnostic, not an extra body attribute or an unreadable rule.
 
 ### `negativeFillColor`
 

@@ -50,19 +50,25 @@ Pivot output describes declared layout and source fields.
 - **Parsing**
   - Retain nonempty.
 
-### `cacheId`
+### `cache`
 
 - **Output**
-  - Internal cache identity.
+  - Structural/semantic pivot-table/@cache="cacheN" when uniquely resolved.
 
 - **OOXML**
   - pivotTableDefinition/@cacheId.
 
 - **IR**
-  - `int`
+  - `PivotTableInfo.cacheRef: str`.
 
 - **Parsing**
-  - int, default 0; lookup cache catalog.
+  - Resolve the source unsigned cacheId through the workbook cache catalog,
+    following its [identity rules](cache.md#cacheid). Do not expose the source
+    number or infer an absent value as zero. An unknown or ambiguous key omits
+    the link and emits XLSX_CATALOG_REFERENCE_UNRESOLVED.
+  - The target pivot-cache record occurs in the same XML response, including
+    selected ranges. Source sheet/range fields remain readable on the table.
+    A failed cache part can still have an addressable summary with diagnostics.
 
 ### `sourceRef`
 

@@ -198,6 +198,9 @@ separate and in saved order. No positional or similar-formula matching occurs.
     compact differential-style reader. Retain explicit emphasis changes,
     resolved font/fill colors and number formats; omit alignment and layout.
     The source index is used during decoding and is not retained in the rule.
+  - Unresolved font/foreground-fill colors are omitted with XLSX_COLOR_UNRESOLVED
+    at styles.xml or the inline worksheet part. Other readable emphasis and
+    conditions remain; no unresolved-color body field is emitted.
 
 ### `aboveAverage`
 

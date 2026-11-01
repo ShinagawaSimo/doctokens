@@ -54,19 +54,24 @@ Scan XML paths containing slicercache; first slicerCacheDefinition descendant, f
 - **Parsing**
   - Copy, default empty.
 
-### `cacheId`
+### `cache`
 
 - **Output**
-  - slicer/@cache-id.
+  - Structural/semantic slicer/@cache="cacheN" when uniquely resolved.
 
 - **OOXML**
   - tabularSlicerCache or olapSlicerCache/@pivotCacheId.
 
 - **IR**
-  - `int`
+  - `SlicerInfo.cacheRef: str`.
 
 - **Parsing**
-  - Nonempty → int; invalid0.
+  - A saved pivotCacheId uses the [cache identity rules](cache.md#cacheid).
+    Invalid, unknown or ambiguous keys omit the link and produce
+    XLSX_CATALOG_REFERENCE_UNRESOLVED. An absent optional binding adds no link
+    or warning; table slicers and unsupported binding encodings are not guessed.
+  - The compact link targets a pivot-cache in the same XML result. Source
+    numeric keys are discarded after resolution.
 
 ### `type`
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import cast
 from xml.etree import ElementTree as ET
 
 from doctokens_core.ooxml.charts.preview import append_chart_preview
@@ -118,6 +117,7 @@ def _append_sheet_metadata(
             "id": pivot.get("id"),
             "name": pivot.get("name"),
             "ref": pivot.get("ref"),
+            "cache": pivot.get("cacheRef"),
             "source_sheet": pivot.get("sourceSheet"),
             "source_ref": pivot.get("sourceRef"),
         }
@@ -146,33 +146,33 @@ def _append_sheet_metadata(
 
 
 def _append_pivot_context(parent: ET.Element, metadata: WorkbookMetadata, density: str) -> None:
-    for cache in cast(list[dict[str, object]], metadata.get("pivot_caches", [])):
+    for cache in metadata.get("pivot_caches", []):
         append(
             parent,
             "pivot-cache",
             id=cache.get("id"),
-            cache_id=cache.get("cacheId"),
             sheet=cache.get("sourceSheet"),
             ref=cache.get("sourceRef"),
             refresh_on_load=True if cache.get("refreshOnLoad") else None,
             fields=(_joined(cache.get("fields")) or None) if density == "semantic" else None,
         )
-    for slicer in cast(list[dict[str, object]], metadata.get("slicers", [])):
+    for slicer in metadata.get("slicers", []):
         append(
             parent,
             "slicer",
             id=slicer.get("id"),
             name=slicer.get("name"),
             source=slicer.get("sourceName"),
-            cache_id=slicer.get("cacheId"),
+            cache=slicer.get("cacheRef"),
         )
-    for timeline in cast(list[dict[str, object]], metadata.get("timelines", [])):
+    for timeline in metadata.get("timelines", []):
         append(
             parent,
             "timeline",
             id=timeline.get("id"),
             name=timeline.get("name"),
             source=timeline.get("sourceName"),
+            cache=timeline.get("cacheRef"),
             level=timeline.get("level"),
         )
 

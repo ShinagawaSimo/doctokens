@@ -51,7 +51,9 @@ Saved points use the same indexed reader for literal data and reference caches. 
 - **OOXML**
   - cx:series/cx:axisId.
 - **Parsing**
-  - Preserve source ID order; use the matching axis metadata for meaning.
+  - Preserve reference order while mapping to uniquely declared chart-local
+    axisN IDs under the [axis identity](chart.md#axis-identity) rule. Unknown or
+    ambiguous targets add no guessed link; matching axis metadata supplies meaning.
 
 ### `index`
 

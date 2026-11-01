@@ -50,8 +50,14 @@ parts, so an invalid shared part is not reported twice.
 - **Output**
   - `ParseWarning.code = "XLSX_CATALOG_REFERENCE_UNRESOLVED"`; `locator` is the XML part containing the unresolved reference. The message identifies its index or relationship ID.
 - **OOXML**
-  - A used `valueMetadata` index, rich-image or web-image `r:id`, cell-style `xfComplement` mapping, or workbook pivot-cache relationship that cannot resolve against an otherwise readable catalog.
+  - A used `valueMetadata` index, rich-image or web-image `r:id`, cell-style
+    `xfComplement` mapping, or workbook pivot-cache relationship that cannot
+    resolve against an otherwise readable catalog; also missing/invalid,
+    unknown or duplicate ambiguous pivot-cache numeric identities and bindings.
 - **IR**
   - The unsupported descriptor is omitted or retains its existing fallback; ordinary cell values remain.
+  - A pivot-table/slicer/timeline omits an unresolved cache link. Readable cache
+    summaries remain available through their compact XML IDs; source numbers
+    are not serialized as fallback links.
 - **Parsing**
   - The warning is deduplicated by code, locator, and reference within the catalog read. References in unrecognized extensions are not interpreted as supported catalog references.

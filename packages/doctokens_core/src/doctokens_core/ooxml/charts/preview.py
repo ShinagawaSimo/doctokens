@@ -7,22 +7,9 @@ from typing import cast
 from xml.etree import ElementTree as ET
 
 from ...output.xml import append
+from .axes import READING_AXIS_FIELDS
 from .models import ChartInfo, ChartPoint, ChartSeriesInfo
 from .rendering import append_annotations
-
-_AXIS_FIELDS = {
-    "id",
-    "kind",
-    "cross_axis",
-    "title",
-    "num_format",
-    "minimum",
-    "maximum",
-    "log_base",
-    "orientation",
-    "display_unit",
-    "custom_unit",
-}
 
 
 def _arrays(series: ChartSeriesInfo) -> tuple[tuple[str, list[str]], ...]:
@@ -90,7 +77,7 @@ def append_chart_preview(parent: ET.Element, chart: ChartInfo) -> None:
     if len(series) > 8 or len(axes) > 8 or chart.get("series_count", len(series)) > len(shown):
         budget.changes += 1
     for axis in retained_axes:
-        attrs: dict[str, object] = {key: value for key, value in axis.items() if key in _AXIS_FIELDS}
+        attrs: dict[str, object] = {key: value for key, value in axis.items() if key in READING_AXIS_FIELDS}
         if attrs.get("cross_axis") not in axis_ids and attrs.pop("cross_axis", None) is not None:
             budget.changes += 1
         identity = attrs.pop("id", None)

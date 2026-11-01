@@ -90,6 +90,7 @@ def _parse_workbook(
                 package_reader,
                 detail=parse_plan.style_detail,  # type: ignore[arg-type]
                 locale=parse_options.locale,
+                warnings=warnings,
             )
         )
         format_index.set_cell_controls(cell_controls.by_style)

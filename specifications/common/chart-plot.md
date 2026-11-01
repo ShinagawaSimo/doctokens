@@ -69,11 +69,14 @@ Plot membership is retained for combination charts and saved grouping/axis relat
 ### `axis_ids`
 
 - **Output**
-  - plot/@axes, a space-separated list of saved IDs; series/@plot identifies ownership.
+  - plot/@axes, a space-separated list of chart-local axisN IDs;
+    series/@plot identifies ownership.
 - **OOXML**
   - Direct plot c:axId/@val in source order.
 - **Parsing**
-  - Axis titles/units stay on matching axis records. No primary/secondary
+  - Map saved references to uniquely declared axes using the shared
+    [axis identity](chart.md#axis-identity) rule, retaining source reference
+    order. Axis titles/units stay on matching axis records. No primary/secondary
     assignment is inferred from values, ranges or element proximity.
 
 ### `unsupported`

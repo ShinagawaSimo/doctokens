@@ -4,12 +4,11 @@
 
 ChartML and ChartEx are parsed from saved literal points, reference caches, and ChartEx dimensions without evaluating formulas or opening embedded workbooks.
 
-Body chart previews in DOCX/PPTX retain the first eight series and up to eight
+Body chart previews in DOCX/PPTX/XLSX retain the first eight series and up to eight
 saved points per series. They remain explicitly truncated and can be expanded
 through the existing resource operation; point/category boundaries use XML child
-elements, even when labels contain commas. PPTX resources also contain
-comma-joined summary attributes; explicit point children are the unambiguous
-data representation.
+elements, even when labels contain commas. Complete resources use indexed point
+children as their single data representation across all three formats.
 
 ## Processing
 
@@ -27,8 +26,8 @@ handle missing parts and parse exceptions.
     across the chart. Root @series counts parsed series; @points sums each
     series' largest cached array length, rather than distinct categories.
   - Series names occur only on series; categories occur only on points. Point
-    @index preserves the zero-based cache position. Plot membership lists have
-    at most 8 shown identities; references do not claim omitted definitions exist.
+    @index preserves the zero-based cache position. Series/@plot refers only to
+    retained plot definitions; no reverse plot member list is duplicated.
 - **Projection**
   - Saved scalar strings share 2,400 characters, at most 160 per field. Human
     labels can end with an ellipsis. Numeric point fields are indivisible: omit
@@ -46,9 +45,26 @@ handle missing parts and parse exceptions.
     characters and the 160-character field cap. Explicit truncated text marks
     omitted labels; plain does not duplicate point arrays.
 - **Resources**
-  - Complete serializers retain their existing supported full arrays, axes,
-    plots and annotations. Body rendering does not mutate them. Use the body's
+  - Complete serializers retain all supported points, axes, plots and
+    annotations. Body rendering does not mutate them. Use the body's
     chart ID for lookup; ref/shape-id remain format-specific navigation.
+
+### `complete points`
+
+- **Output**
+  - All formats use series/@index (one-based) and point/@index (zero-based saved
+    cache position). Ordinary category/value data uses category/value; recognized
+    scatter/bubble plots use x/y and optional bubbleSize without repeated
+    category/value aliases. Empty fields are omitted while their point position
+    remains. No missing number becomes zero.
+- **Parsing**
+  - Preserve saved lexical strings and precision. Do not rescale points for
+    axis units or generate values beyond decoded cache positions. Full resources
+    have no duplicate comma arrays, textual point previews or derived min/max.
+    Necessary series/point totals and incompleteness/preview limits remain.
+  - Root type supplies a single-family chart's kind. A plot adds type only when
+    it differs; combination plots define each actual family. Series/@plot is
+    the sole membership relation, without duplicated series/@type or root/@plots.
 
 ### `chart_type`
 

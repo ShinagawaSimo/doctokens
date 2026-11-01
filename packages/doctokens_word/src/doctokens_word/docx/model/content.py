@@ -16,7 +16,6 @@ RunFormat = dict[str, bool | str | None]
 class ParagraphBorder(TypedDict, total=False):
     style: str
     color: str
-    size: str
 
 
 ParagraphBorders = dict[str, ParagraphBorder]
@@ -57,18 +56,14 @@ class ImageAsset(ImageAssetRequired, total=False):
 class ChartSeriesRequired(TypedDict):
     index: int
     pointCount: int
-    preview: str
 
 
 class ChartSeries(ChartSeriesRequired, total=False):
     name: str
-    min: float
-    max: float
     formula: str
     categories: list[str]
     values: list[str]
     plotIndex: int
-    chartType: str
     xValues: list[str]
     yValues: list[str]
     bubbleSizes: list[str]

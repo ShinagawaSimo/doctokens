@@ -4,7 +4,11 @@
 
 Semantic styles use the effective cell-XF and its font/fill references. Cell XF selection is defined in [cells](../cells/cell.md#style). Font/fill IDs inherit a valid cellStyleXf parent when the corresponding apply flag is false or the direct ID is absent, matching effective number-format inheritance.
 
-Differential-style summaries retain explicitly disabled font properties as `bold=false`, `italic=false`, or `underline=false`. A false override in a saved conditional rule is not equivalent to an absent property and must not be summarized as an enabled style.
+Differential styles are typed records, rendered as semantic rule/style attributes
+including explicit bold=false, italic=false and underline=false overrides. Color
+filters access resolved fill/color directly from the same record. No whitespace
+string summary is generated or reparsed for these rules. A false override is not
+an absent property and must not be summarized as an enabled style.
 
 ## Fields
 

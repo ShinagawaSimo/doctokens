@@ -53,6 +53,9 @@ Select structural revisions and historical property sets before computing rows, 
 
 - **Parsing**
   - Retain selected-view source order. Filter inserted/deleted rows according to revision_mode. Empty selected table produces no segments. Semantic review wraps affected rows in ins/del; row controls wrap the row without duplicating their text in each cell.
+  - Saved header rows use th cells in body and table resources. Do not repeat
+    that fact as tr/@header or tr/@isHeader. Logical grid offsets remain on tr;
+    this does not change the separate table-resource content fidelity contract.
 
 ### `columns`
 

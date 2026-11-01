@@ -18,7 +18,7 @@ def preview_info(chart: DrawingChart) -> ChartInfo:
             ("value", "values"),
             ("x", "x_values"),
             ("y", "y_values"),
-            ("bubbleSize", "bubble_sizes"),
+            ("bubble_size", "bubble_sizes"),
         ):
             row[target] = [point.get(source, "") for point in points[:8]]  # type: ignore[literal-required]
         for old, new in (

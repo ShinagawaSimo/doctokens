@@ -45,6 +45,39 @@ class DataValidation(TypedDict, total=False):
     unparsed: bool
 
 
+class ConditionalStyle(TypedDict, total=False):
+    bold: bool
+    italic: bool
+    underline: bool
+    strike: bool
+    color: str
+    fill: str
+    number_format: str
+
+
+class FormatThreshold(TypedDict, total=False):
+    type: str
+    val: str
+    gte: str
+    color: str
+
+
+class FormatIcon(TypedDict, total=False):
+    iconSet: str
+    iconId: str
+
+
+class VisualDetails(TypedDict, total=False):
+    stops: list[FormatThreshold]
+    thresholds: list[FormatThreshold]
+    icons: list[FormatIcon]
+    color: str
+    negativeFillColor: str
+    showValue: str
+    reverse: str
+    iconSet: str
+
+
 class ConditionalFormat(TypedDict, total=False):
     ranges: str
     priority: int
@@ -56,8 +89,8 @@ class ConditionalFormat(TypedDict, total=False):
     rank: int
     percent: bool
     formatKind: str
-    formatDetails: dict[str, object]
-    dxfStyle: str
+    formatDetails: VisualDetails
+    dxfStyle: ConditionalStyle
     extensionId: str
     unparsed: bool
     aboveAverage: bool

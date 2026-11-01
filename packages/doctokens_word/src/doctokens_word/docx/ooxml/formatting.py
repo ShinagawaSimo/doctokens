@@ -73,9 +73,6 @@ def parse_paragraph_borders(paragraph_properties: ET.Element | None, theme: Word
         color = theme.color(node, literal="color")
         if color:
             border["color"] = color
-        size = attr(node, "w", "sz")
-        if size:
-            border["size"] = size
         borders[side] = border
     return borders
 

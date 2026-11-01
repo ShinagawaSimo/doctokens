@@ -6,9 +6,10 @@ from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.reader import PackageReader
 from doctokens_core.contracts.models import ParseWarning
+from doctokens_core.ooxml.charts.models import ChartPoint
 from doctokens_core.ooxml.charts.parser import ChartParser
 
-from ....model.drawing import ChartPoint, DrawingChart, DrawingChartSeries
+from ....model.drawing import DrawingChart, DrawingChartSeries
 from .post_common import _warn
 
 
@@ -39,20 +40,8 @@ def parse_chart_part(pkg: PackageReader, chart_part: str, warnings: list[ParseWa
         }
         if source_series.get("name"):
             series_item["name"] = source_series["name"]
-        if "min" in source_series:
-            series_item["min"] = source_series["min"]
-        if "max" in source_series:
-            series_item["max"] = source_series["max"]
         if "plot_index" in source_series:
             series_item["plotIndex"] = source_series["plot_index"]
-        if "chart_type" in source_series:
-            series_item["chartType"] = source_series["chart_type"]
-        if source_series.get("x_values"):
-            series_item["xValues"] = source_series["x_values"]
-        if source_series.get("y_values"):
-            series_item["yValues"] = source_series["y_values"]
-        if source_series.get("bubble_sizes"):
-            series_item["bubbleSizes"] = source_series["bubble_sizes"]
         if source_series.get("hidden"):
             series_item["hidden"] = True
         for key in ("labels", "label_options", "trendlines", "axis_ids"):
@@ -76,7 +65,7 @@ def parse_chart_part(pkg: PackageReader, chart_part: str, warnings: list[ParseWa
             if index < len(y_values):
                 point["y"] = y_values[index]
             if index < len(bubble_sizes):
-                point["bubbleSize"] = bubble_sizes[index]
+                point["bubble_size"] = bubble_sizes[index]
             if point:
                 points.append(point)
         if points:
@@ -96,7 +85,4 @@ def parse_chart_part(pkg: PackageReader, chart_part: str, warnings: list[ParseWa
         result["plots"] = chart_info["plots"]
     if chart_info.get("axes"):
         result["axes"] = chart_info["axes"]
-    plot_types = [plot.get("chart_type", "unknown") for plot in chart_info.get("plots", [])]
-    if chart_info.get("chart_type") == "combination" and plot_types:
-        result["plotTypes"] = plot_types
     return result

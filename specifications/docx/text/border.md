@@ -2,7 +2,9 @@
 
 [DOCX](../README.md) / Paragraph borders
 
-Border properties are extracted for semantic formatting.
+Border side/style/color are semantic reading clues. Structural/plain never
+serialize border metadata, including after a richer session read. Exact line
+width and page geometry are outside this projection.
 
 ## Fields
 
@@ -35,7 +37,9 @@ Border properties are extracted for semantic formatting.
   - `ParagraphBorder.style: str`
 
 - **Parsing**
-  - Lowercase; omit an empty source value. Preserve nil/none as internal cancellation values during inheritance. Renderer default for an existing visible record without style is `single`.
+  - Lowercase; omit an empty source value. Preserve nil/none as internal
+    cancellation values during inheritance. Every retained visible record has
+    a saved style; the renderer does not fabricate single for a missing style.
 
 ### `color`
 
@@ -53,17 +57,3 @@ Border properties are extracted for semantic formatting.
 
 - **Absence and defaults**
   - No color suffix.
-
-### `size`
-
-- **Output**
-  - No main-text attribute.
-
-- **OOXML**
-  - `@w:sz`
-
-- **IR**
-  - `ParagraphBorder.size: str`
-
-- **Parsing**
-  - Retain nonempty source string; not used for page layout.

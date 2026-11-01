@@ -107,9 +107,8 @@ def _parse_cell(
     if include_cell_controls and format_index is not None and (control := format_index.cell_control(style_index)):
         control_data = cast(CellControl, dict(control))
         cell["cellControl"] = control_data
-        if control.get("kind") == "checkbox":
-            control_data["value"] = text
-            control_data["state"] = {"TRUE": "true", "FALSE": "false", "": "empty"}.get(text, "empty")
+        if control["kind"] == "checkbox" and text in {"TRUE", "FALSE"}:
+            control_data["checked"] = text == "TRUE"
     if formula is not None:
         cell["formula"] = formula
     cell.update(formula_meta)

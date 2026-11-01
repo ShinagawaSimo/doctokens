@@ -82,7 +82,7 @@ Caches supply field names and source metadata without refreshing records.
 ### `fields`
 
 - **Output**
-  - Semantic pivot-cache/@fields.
+  - Semantic ordered pivot-cache/field text.
 
 - **OOXML**
   - cacheFields/cacheField/@name.
@@ -91,7 +91,8 @@ Caches supply field names and source metadata without refreshing records.
   - `list[str]`
 
 - **Parsing**
-  - Preserve order, empty default; join with comma.
+  - Preserve parsed names, order and empty positions as individual elements.
+    No comma protocol is embedded in a name.
 - **Diagnostics**
   - Failed cache XML leaves this list empty and reports `XLSX_CATALOG_XML_INVALID` at the cache part.
 

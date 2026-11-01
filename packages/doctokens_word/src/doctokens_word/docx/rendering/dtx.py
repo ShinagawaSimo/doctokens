@@ -11,7 +11,18 @@ from doctokens_core.output.ocr import append_ocr
 from doctokens_core.output.xml import append, element, serialize
 from doctokens_core.runtime.execution import checkpoint
 
-from ..model import AncillaryItem, Block, InlineContainer, InlineObject, OcrResultRecord, ParsedDocument, Run, TableBlock
+from ..model import (
+    AncillaryItem,
+    Block,
+    InlineContainer,
+    InlineObject,
+    OcrResultRecord,
+    ParsedDocument,
+    Run,
+    TableBlock,
+    TableCell,
+    TextBlock,
+)
 from .common.constants import _TABLE_TRUNCATE_DTX
 from .common.floating import floating_textboxes, is_floating_textbox, iter_flow_page_blocks
 from .common.pages import iter_block_page_segments
@@ -76,6 +87,8 @@ def _append_block(
         return
     name = f"h{block['level']}" if block["type"] == "heading" else "p"
     attrs: dict[str, object] = {}
+    if (numbering := block.get("numbering")) and numbering["level"] >= 1:
+        attrs["list_level"] = numbering["level"]
     if density == "semantic":
         _add_semantic_block_attrs(attrs, block)
     node = append(container, name, **attrs)
@@ -102,15 +115,13 @@ def _append_anchors(node: ET.Element, block: Block) -> None:
             append(node, "anchor", name=name)
 
 
-def _add_semantic_block_attrs(attrs: dict[str, object], block: Block) -> None:
+def _add_semantic_block_attrs(attrs: dict[str, object], block: TextBlock) -> None:
     alignment = block.get("alignment")
     if alignment in {"center", "right", "distribute"}:
         attrs["align"] = alignment
-    if block.get("numbering"):
-        attrs["numbering"] = True
     borders = block.get("borders", {})
-    for side, border in borders.items() if isinstance(borders, dict) else ():
-        value = str(border.get("style", "single"))
+    for side, border in borders.items():
+        value = border["style"]
         if color := border.get("color"):
             value += f":{color}"
         attrs[f"border_{side}"] = value
@@ -177,12 +188,8 @@ def _append_inline_object(
         node = append(
             parent, "textbox", id=inline_object.get("id"), alt=inline_object.get("alt") if density == "semantic" else None
         )
-        if "blocks" in inline_object:
-            blocks = inline_object["blocks"]
-            for block in blocks:
-                _append_block(node, block, density, ocr_results)
-        else:
-            _append_text_with_breaks(node, inline_object.get("text", ""))
+        for block in inline_object["blocks"]:
+            _append_block(node, block, density, ocr_results)
     elif object_type == "equation":
         node = append(parent, "equation", notation="latex")
         append_math_text(
@@ -213,14 +220,8 @@ def _append_table(parent: ET.Element, block: TableBlock, density: str, ocr_resul
     append_rows(table, rows[:2] if truncated else rows, density, ocr_results, _append_cell_content)
 
 
-def _append_cell_content(parent: ET.Element, cell: object, density: str, ocr_results: dict[str, OcrResultRecord]) -> None:
-    typed_cell = cast(dict[str, object], cell)
-    blocks = typed_cell.get("blocks")
-    if not isinstance(blocks, list) or not blocks:
-        _append_text_with_breaks(parent, str(typed_cell.get("text", "")))
-        return
-    for child in blocks:
-        block = cast(Block, child)
+def _append_cell_content(parent: ET.Element, cell: TableCell, density: str, ocr_results: dict[str, OcrResultRecord]) -> None:
+    for block in cell["blocks"]:
         if block["type"] == "table":
             nested = append(
                 parent,

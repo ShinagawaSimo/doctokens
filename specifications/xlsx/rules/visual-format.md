@@ -6,23 +6,25 @@ Semantic retains the meaning of saved visual emphasis without executing rules.
 Structural retains rule types and conditions but omits visual details. Drawing
 sizes, gradients, borders, axes and arbitrary source attributes are not extracted.
 
+Formula text and format literals never use a delimiter subprotocol. No new truncation is imposed by this structural representation; existing range and density permissions remain.
+
 ## Fields
 
 ### `stops`
 
 - **Output**
-  - Semantic rule/@details: colon-separated fields and semicolon-separated records.
+  - Semantic rule/color-scale/stop elements, in saved order.
 - **OOXML**
   - Core/x14 colorScale/cfvo and color children, paired in source order.
 - **IR**
-  - `formatDetails["stops"]: list[dict[str, str]]`.
+  - `VisualDetails.stops: list[FormatThreshold]`.
 - **Parsing**
   - Retain each threshold and its resolved color where available.
 
 ### `thresholds`
 
 - **Output**
-  - Semantic details, using the same record notation as stops.
+  - Semantic rule/data-bar/threshold or rule/icon-set/threshold elements.
 - **OOXML**
   - Core/x14 dataBar/cfvo or iconSet/cfvo.
 - **Parsing**
@@ -41,7 +43,7 @@ sizes, gradients, borders, axes and arbitrary source attributes are not extracte
 ### `val`
 
 - **Output**
-  - Stop/threshold value.
+  - Stop/threshold @value, retaining the full literal or formula.
 - **OOXML**
   - Core cfvo/@val; direct x14 cfvo/xm:f text takes precedence.
 - **Parsing**
@@ -73,7 +75,7 @@ sizes, gradients, borders, axes and arbitrary source attributes are not extracte
 ### `negativeFillColor`
 
 - **Output**
-  - Semantic data-bar details.
+  - Semantic data-bar/@negative-fill-color.
 - **OOXML**
   - x14:dataBar/x14:negativeFillColor and @negativeBarColorSameAsPositive.
 - **Parsing**
@@ -83,7 +85,7 @@ sizes, gradients, borders, axes and arbitrary source attributes are not extracte
 ### `showValue`
 
 - **Output**
-  - Semantic showValue=false; omit default true.
+  - Semantic data-bar|icon-set/@show-value=false; omit default true.
 - **OOXML**
   - dataBar/@showValue or iconSet/@showValue.
 - **Parsing**
@@ -92,7 +94,7 @@ sizes, gradients, borders, axes and arbitrary source attributes are not extracte
 ### `iconSet`
 
 - **Output**
-  - Semantic icon-set name alongside ordered thresholds.
+  - Semantic icon-set/@name alongside ordered threshold elements.
 - **OOXML**
   - iconSet/@iconSet, default 3TrafficLights1.
 - **Parsing**
@@ -102,7 +104,7 @@ sizes, gradients, borders, axes and arbitrary source attributes are not extracte
 ### `reverse`
 
 - **Output**
-  - Semantic reverse=true; omit default false.
+  - Semantic icon-set/@reverse=true; omit default false.
 - **OOXML**
   - iconSet/@reverse.
 - **Parsing**
@@ -111,7 +113,7 @@ sizes, gradients, borders, axes and arbitrary source attributes are not extracte
 ### `icons`
 
 - **Output**
-  - Semantic ordered custom-icon records.
+  - Semantic ordered icon-set/icon elements with @set and @id.
 - **OOXML**
   - x14:iconSet/x14:cfIcon/@iconSet and @iconId.
 - **Parsing**

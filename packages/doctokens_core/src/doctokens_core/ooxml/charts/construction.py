@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from .models import ChartInfo, ChartPlotInfo, ChartSeriesInfo
-from .values import _to_float
+from collections.abc import Iterator
+from typing import cast
 
-MAX_PREVIEW_POINTS = 8
+from .models import ChartInfo, ChartPlotInfo, ChartPoint, ChartSeriesInfo
 
 
 def chart_info(
@@ -15,6 +15,11 @@ def chart_info(
     series: list[ChartSeriesInfo],
     plots: list[ChartPlotInfo],
 ) -> ChartInfo:
+    kinds = {plot["index"]: plot["chart_type"] for plot in plots}
+    for item in series:
+        if kinds.get(item.get("plot_index", -1)) in {"scatter", "bubble"}:
+            item.pop("categories", None)
+            item.pop("values", None)
     result: ChartInfo = {
         "chart_type": chart_type,
         "series": series,
@@ -28,7 +33,6 @@ def chart_info(
     else:
         for series_item in series:
             series_item.pop("plot_index", None)
-            series_item.pop("chart_type", None)
     if title:
         result["title"] = title
     return result
@@ -38,7 +42,6 @@ def series_row(
     *,
     index: int,
     plot_index: int,
-    chart_type: str,
     categories: list[str],
     values: list[str],
     x_values: list[str],
@@ -49,19 +52,11 @@ def series_row(
     category_formula: str | None,
     hidden: bool,
 ) -> ChartSeriesInfo:
-    point_count = max(len(categories), len(values), len(x_values), len(y_values), len(bubble_sizes))
-    preview_items: list[str] = []
-    for item_index in range(min(point_count, MAX_PREVIEW_POINTS)):
-        category = categories[item_index] if item_index < len(categories) else str(item_index + 1)
-        value = values[item_index] if item_index < len(values) else ""
-        preview_items.append(f"{category}={value}" if value else category)
     row: ChartSeriesInfo = {
         "index": index,
         "plot_index": plot_index,
-        "chart_type": chart_type,
         "categories": categories,
         "values": values,
-        "preview": "; ".join(preview_items),
     }
     if x_values:
         row["x_values"] = x_values
@@ -77,18 +72,25 @@ def series_row(
         row["category_formula"] = category_formula
     if hidden:
         row["hidden"] = True
-    numbers = [number for value in values if (number := _to_float(value)) is not None]
-    if numbers:
-        row["min"] = min(numbers)
-        row["max"] = max(numbers)
     return row
 
 
 def series_point_count(series: ChartSeriesInfo) -> int:
-    return max(
-        len(series.get("categories", [])),
-        len(series.get("values", [])),
-        len(series.get("x_values", [])),
-        len(series.get("y_values", [])),
-        len(series.get("bubble_sizes", [])),
+    return max(len(values) for _, values in series_arrays(series))
+
+
+def series_arrays(series: ChartSeriesInfo) -> tuple[tuple[str, list[str]], ...]:
+    return (
+        ("category", series.get("categories", [])),
+        ("value", series.get("values", [])),
+        ("x", series.get("x_values", [])),
+        ("y", series.get("y_values", [])),
+        ("bubble_size", series.get("bubble_sizes", [])),
     )
+
+
+def iter_series_points(series: ChartSeriesInfo) -> Iterator[ChartPoint]:
+    """Keep saved cache positions, including holes, without numeric conversion."""
+    arrays = series_arrays(series)
+    for index in range(series_point_count(series)):
+        yield cast(ChartPoint, {key: values[index] for key, values in arrays if index < len(values)})

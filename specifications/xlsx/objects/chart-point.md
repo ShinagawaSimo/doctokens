@@ -6,6 +6,8 @@ Point records preserve saved string values.
 
 Literal strLit/numLit points and strRef/numRef caches feed the same arrays. Match categories, values, scatter x/y, and bubble sizes by their saved point indices rather than XML child order. Missing intermediate positions remain empty records; a declared count alone does not invent values. Full chart resources retain all decoded positions, independently of the existing body-preview policy.
 
+Resources expose point/@index as the zero-based saved cache position, including holes. All formats use the same complete point serializer; empty fields are omitted and never replaced with zero.
+
 ## Fields
 
 ### `category`
@@ -73,7 +75,7 @@ Literal strLit/numLit points and strRef/numRef caches feed the same arrays. Matc
   - Shared series bubble_sizes[index].
 
 - **IR**
-  - `ChartPoint.bubbleSize: str`
+  - `ChartPoint.bubble_size: str`
 
 - **Parsing**
   - Copy only when index is within the source list.

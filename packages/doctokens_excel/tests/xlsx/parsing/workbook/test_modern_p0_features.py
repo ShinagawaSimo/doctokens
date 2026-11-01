@@ -6,7 +6,7 @@ import zipfile
 from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.reader import PackageError
-from doctokens_excel import open_xlsx, parse_xlsx
+from doctokens_excel import open_xlsx
 from doctokens_excel import parse_xlsx as parse_xlsx_result
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -120,15 +120,6 @@ def _base_entries() -> dict[str, str]:
 
 
 class ModernP0FeatureTests(unittest.TestCase):
-    def test_checkbox_control(self) -> None:
-        data = _make_xlsx(_base_entries())
-        plain = parse_xlsx(data, density="plain").text
-        structural = parse_xlsx(data, density="structural").text
-
-        self.assertIn("[Checkbox true]", plain)
-        structural_root = ET.fromstring(structural)
-        self.assertEqual(structural_root.find(".//cell[@control]").get("control"), "checkbox")
-
     def test_invalid_cache_keys_never_create_false_or_ambiguous_links(self) -> None:
         # Excel's UI cannot save duplicate, invalid or dangling source cache
         # identities. These are damaged/unsupported producer states.
@@ -185,12 +176,15 @@ class ModernP0FeatureTests(unittest.TestCase):
                         [("XLSX_CATALOG_XML_INVALID", part)],
                     )
                     self.assertIn(first_text, result.text)
-                    self.assertIn("[Checkbox true]" if density == "plain" and control else "TRUE", result.text)
+                    if density == "plain" or not control:
+                        self.assertIn("[Checkbox true]" if control else "TRUE", result.text)
+                    else:
+                        self.assertEqual(ET.fromstring(result.text).find(".//cell[@control]").get("checked"), "true")
                 root = ET.fromstring(parse_xlsx_result(source, density="semantic").text)
                 checkbox = root.find(".//cell[@control]")
                 self.assertEqual(checkbox.get("control") if checkbox is not None else None, control)
-                pivot = root.find(".//pivot-table")
-                self.assertEqual(pivot.get("rows") if pivot is not None else None, row_field)
+                field = root.find(".//pivot-table/row-field")
+                self.assertEqual(field.text if field is not None else None, row_field)
 
     def test_optional_relationship_errors_keep_cells_and_other_catalogs(self) -> None:
         # Broken relationship XML/required targets are damaged-package states
@@ -228,7 +222,7 @@ class ModernP0FeatureTests(unittest.TestCase):
                 else:
                     self.assertEqual(cell.text, "Logo")
                 self.assertEqual(root.find(".//cell[@control]").get("control"), "checkbox")
-                self.assertEqual(root.find(".//pivot-table").get("rows"), "Region")
+                self.assertEqual(root.find(".//pivot-table/row-field").text, "Region")
 
     def test_optional_reference_failures_and_absence_are_distinct(self) -> None:
         base = _base_entries()
@@ -248,7 +242,7 @@ class ModernP0FeatureTests(unittest.TestCase):
                 entries.pop(part)
                 result = parse_xlsx_result(_make_xlsx(entries), density="semantic")
                 self.assertIn((code, locator), [(warning.code, warning.locator) for warning in result.report.warnings])
-                self.assertIn("TRUE", result.text)
+                self.assertEqual(ET.fromstring(result.text).find(".//cell[@control]").get("checked"), "true")
         missing_metadata = dict(base)
         missing_metadata.pop("xl/metadata.xml")
         missing_metadata["xl/worksheets/sheet1.xml"] = missing_metadata["xl/worksheets/sheet1.xml"].replace(

@@ -25,6 +25,22 @@ from doctokens_word import parse_docx  # noqa: E402
 
 SUPPORT = ROOT / "test_support"
 DENSITIES = ("semantic", "structural", "plain")
+_TEXT_CONTAINERS = {
+    "p",
+    "title",
+    "cell",
+    "td",
+    "th",
+    "choice",
+    "value",
+    "label",
+    "comment",
+    "footnote",
+    "endnote",
+    "header",
+    "footer",
+    "content-control",
+} | {f"h{level}" for level in range(1, 10)}
 PARSERS = {"docx": parse_docx, "pptx": parse_pptx, "xlsx": parse_xlsx}
 
 
@@ -52,8 +68,19 @@ def parse_text(fixture: Path, density: str, **options: str) -> str:
 def format_xml(value: str) -> str:
     """Pretty-print one DTX result for the human-reviewed XML golden."""
     root = ET.fromstring(value)
-    ET.indent(root, space="  ")
+    _indent_blocks(root)
     return ET.tostring(root, encoding="unicode", short_empty_elements=True) + "\n"
+
+
+def _indent_blocks(node: ET.Element, depth: int = 0) -> None:
+    # Inline reading containers may hold only styled children, with no direct
+    # text. ET.indent would still add readable whitespace inside those nodes.
+    if not len(node) or node.tag in _TEXT_CONTAINERS or node.text is not None or any(child.tail is not None for child in node):
+        return
+    node.text = "\n" + "  " * (depth + 1)
+    for index, child in enumerate(node):
+        _indent_blocks(child, depth + 1)
+        child.tail = "\n" + "  " * (depth if index == len(node) - 1 else depth + 1)
 
 
 def golden_text(text: str, density: str) -> str:

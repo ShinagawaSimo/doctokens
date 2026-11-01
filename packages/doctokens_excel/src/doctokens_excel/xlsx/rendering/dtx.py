@@ -211,12 +211,10 @@ def _cell_attrs(
                 attrs[new] = value
         if cell.get("cellControl"):
             control = cell["cellControl"]
-            attrs["control"] = control.get("kind", "unknown")
-            attrs["state"] = control.get("state")
-            attrs["default"] = control.get("default")
+            attrs["control"] = control["kind"]
+            attrs["checked"] = control.get("checked")
         if cell.get("richValue"):
             rich = cell["richValue"]
-            attrs["rich_type"] = rich.get("type", "rich")
             if rich.get("imageStatus") or rich.get("imagePart") or rich.get("imageUrl"):
                 attrs["in_cell_image"] = True
                 attrs["alt"] = rich.get("alt")
@@ -233,6 +231,8 @@ def _cell_attrs(
 
 def _append_cell_text(parent: ET.Element, cell: Cell, density: str, inherited: set[str]) -> None:
     content_parent = append(parent, "a", href=cell["hyperlink"]) if cell.get("hyperlink") else parent
+    if "checked" in cell.get("cellControl", {}):
+        return
     rich_value = cell.get("richValue")
     if rich_value and rich_value.get("imageStatus") == "unbound":
         text(content_parent, cell["text"] or rich_value.get("display") or rich_value.get("fallback") or "")

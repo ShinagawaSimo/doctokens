@@ -2,7 +2,7 @@
 
 from typing import TypedDict
 
-from doctokens_core.ooxml.charts.models import ChartLabel, ChartPlotInfo
+from doctokens_core.ooxml.charts.models import ChartLabel, ChartPlotInfo, ChartPoint
 
 
 class DrawingImage(TypedDict, total=False):
@@ -17,26 +17,12 @@ class DrawingImage(TypedDict, total=False):
     unparsed: bool
 
 
-class ChartPoint(TypedDict, total=False):
-    category: str
-    value: str
-    x: str
-    y: str
-    bubbleSize: str
-
-
 class DrawingChartSeries(TypedDict, total=False):
     index: int
     pointCount: int
     name: str
-    min: float
-    max: float
     points: list[ChartPoint]
     plotIndex: int
-    chartType: str
-    xValues: list[str]
-    yValues: list[str]
-    bubbleSizes: list[str]
     hidden: bool
     labels: list[ChartLabel]
     label_options: dict[str, str]
@@ -54,7 +40,6 @@ class DrawingChart(TypedDict, total=False):
     part: str
     series: list[DrawingChartSeries]
     plots: list[ChartPlotInfo]
-    plotTypes: list[str]
     axes: list[dict[str, str]]
     group: str
     unparsed: bool

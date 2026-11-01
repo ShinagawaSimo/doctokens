@@ -41,9 +41,9 @@ class CellControlCatalog:
         ]
         values = [cls._bag_values(bag) for bag in bags]
         checkbox_by_index: dict[int, CellControl] = {}
-        for index, (bag, props) in enumerate(zip(bags, values, strict=True)):
+        for index, bag in enumerate(bags):
             if bag.get("type") == "Checkbox":
-                checkbox_by_index[index] = {"kind": "checkbox", "default": _int(props.get("default"), 0)}
+                checkbox_by_index[index] = {"kind": "checkbox"}
         controls_by_index: dict[int, CellControl] = {}
         for index, (bag, props) in enumerate(zip(bags, values, strict=True)):
             if bag.get("type") != "XFControls":
@@ -84,7 +84,7 @@ class CellControlCatalog:
         values: dict[str, str] = {}
         for child in bag:
             key = child.get("k")
-            if not key:
+            if key not in {"CellControl", "MappedFeaturePropertyBags", "XFControls"}:
                 continue
             text = (child.text or "").strip()
             if _local_name(child.tag) == "a":

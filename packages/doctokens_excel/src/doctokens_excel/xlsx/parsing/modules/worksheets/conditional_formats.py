@@ -118,9 +118,9 @@ def merge_conditional_formats(
         if target is None:
             result.append(extension)
             continue
+        if "formatDetails" in extension:
+            target["formatDetails"] = {**target.get("formatDetails", {}), **extension["formatDetails"]}
         for key, value in extension.items():
-            if key == "formatDetails" and isinstance(value, dict):
-                target["formatDetails"] = {**target.get("formatDetails", {}), **value}
-            else:
+            if key != "formatDetails":
                 target[key] = value  # type: ignore[literal-required]
     return result

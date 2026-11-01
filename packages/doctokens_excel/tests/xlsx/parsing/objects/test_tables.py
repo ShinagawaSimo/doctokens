@@ -1,11 +1,10 @@
-"""Excel Table (ListObject) tests."""
+"""Source-query/session ownership for a named table."""
 
 import io
 import unittest
 import zipfile
-from xml.etree import ElementTree as ET
 
-from doctokens_excel import open_xlsx, parse_xlsx, query_xlsx
+from doctokens_excel import open_xlsx, query_xlsx
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_O = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -22,8 +21,9 @@ def _make_xlsx(entries: dict[str, str]) -> bytes:
 
 
 class TableTests(unittest.TestCase):
-    def test_table_summary_before_grid(self) -> None:
-        """ListObject produces <table> summary before <grid>."""
+    def test_named_table_source_query_matches_session_query(self) -> None:
+        # This named table supplies the infrastructure condition for two query
+        # ownership routes. Ordinary table output belongs to native goldens.
         data = _make_xlsx(
             {
                 "[Content_Types].xml": (
@@ -80,20 +80,6 @@ class TableTests(unittest.TestCase):
                 ),
             },
         )
-        structural = parse_xlsx(data, density="structural").text
-        semantic = parse_xlsx(data, density="semantic").text
-
-        # structural: basic table locator
-        structural_root = ET.fromstring(structural)
-        semantic_root = ET.fromstring(semantic)
-        structural_table = structural_root.find(".//table-summary")
-        semantic_table = semantic_root.find(".//table-summary")
-        self.assertEqual(structural_table.get("id"), "table-0")
-        self.assertNotIn("columns", structural_table.attrib)
-        # semantic: adds column names
-        self.assertEqual(semantic_table.get("columns"), "Product,Q1,Q2")
-        # Compare the public source-query route with session ownership on this
-        # existing migration case; native table coverage remains in the checklist.
         with open_xlsx(data) as session:
             expected = session.query_data(table_id="table-0").text
         self.assertEqual(query_xlsx(data, table_id="table-0").text, expected)

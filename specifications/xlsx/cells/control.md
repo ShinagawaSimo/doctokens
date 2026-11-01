@@ -2,68 +2,41 @@
 
 [XLSX](../README.md) / Cell controls
 
-The supported control is a saved checkbox state.
-
-## Processing
-
-Discover XML bags in styles.xml and paths containing featurepropertybag; use bag/featurePropertyBag local names. Plain checkbox rendering returns before appending ordinary cell comments.
+The supported saved control is a checkbox. XML reading output represents its
+current value once through checked; plain uses a compact checkbox marker.
+Underlying saved cell values remain available to search/query operations.
 
 ## Fields
 
 ### `kind`
 
 - **Output**
-  - cell/@control=checkbox; plain `[Checkbox state]`.
-
+  - Both XML densities: cell/@control="checkbox". Plain uses [Checkbox true],
+    [Checkbox false], or [Checkbox] followed by a distinct unknown saved value.
 - **OOXML**
-  - Feature-property bag type Checkbox.
-
+  - Feature-property bag type Checkbox, resolved through style xfComplement,
+    XFComplements, XFComplement, XFControls and CellControl relationships.
 - **IR**
-  - `CellControl.kind: str`
-
+  - CellControl.kind: str.
 - **Parsing**
-  - Resolve cell style through xfComplement → XFComplements mapping → XFComplement → XFControls → CellControl → Checkbox.
+  - Preserve a declared control even when its value is empty/unknown. Editing
+    defaults are not extracted into the control reading model. Comments and
+    explicit links keep their independent reading contracts.
 - **Diagnostics**
-  - Malformed optional bag XML yields `XLSX_CATALOG_XML_INVALID`; the saved boolean cell value remains. A readable style with an `xfComplement` that cannot resolve to a bag yields `XLSX_CATALOG_REFERENCE_UNRESOLVED` when the bag catalog is absent. See [optional catalog diagnostics](../workbook/catalog-diagnostics.md).
+  - Malformed optional bag XML yields XLSX_CATALOG_XML_INVALID; unresolved
+    declared bag references retain existing catalog diagnostics. Saved cell
+    values are not replaced by a guessed control state.
 
-### `default`
-
-- **Output**
-  - cell/@default.
-
-- **OOXML**
-  - Checkbox bag property k=default.
-
-- **IR**
-  - `int`
-
-- **Parsing**
-  - int(value); missing/malformed 0.
-
-### `value`
+### `checked`
 
 - **Output**
-  - Internal displayed value.
-
+  - Both XML densities: checked=true or checked=false. Do not repeat TRUE/FALSE
+    as cell character data. Unknown values omit checked and retain their text.
 - **OOXML**
-  - Resolved cell text.
-
+  - Current saved display text TRUE/FALSE of the declared checkbox cell.
 - **IR**
-  - `str`
-
+  - CellControl.checked: bool, absent when unknown. Cell.text remains the saved
+    value; no duplicate control value/state/default is stored.
 - **Parsing**
-  - Copy current saved display text.
-
-### `state`
-
-- **Output**
-  - cell/@state.
-
-- **OOXML**
-  - Resolved cell text.
-
-- **IR**
-  - `str`
-
-- **Parsing**
-  - Saved display text `TRUE` → state `true`; `FALSE` → state `false`; empty or other → state `empty`. The value retains the uppercase display text. Does not toggle or evaluate control.
+  - TRUE maps to true and FALSE to false. Empty/error/other values are not false.
+    The parser does not toggle, evaluate or default a checkbox.

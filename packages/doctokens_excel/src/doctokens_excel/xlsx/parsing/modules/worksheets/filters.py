@@ -82,8 +82,7 @@ def _parse_filter_column(column_id: int, element: ET.Element, formats: FormatInd
         }
         if formats is not None and (dxf_id := color.get("dxfId")) is not None:
             style = formats.differential_style(_safe_int(dxf_id, -1))
-            key = "fill=" if item["cellColor"] else "color="
-            if resolved := next((part[len(key) :] for part in style.split() if part.startswith(key)), None):
+            if resolved := style.get("fill") if item["cellColor"] else style.get("color"):
                 item["color"] = resolved
         result.append(item)
 

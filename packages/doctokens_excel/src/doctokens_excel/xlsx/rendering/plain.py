@@ -92,8 +92,10 @@ def _hidden_column(column: int, ranges: list[tuple[int, int]] | None) -> bool:
 def _cell_text(cell: Cell) -> str:
     control = cell.get("cellControl")
     if control and control.get("kind") == "checkbox":
-        value = control.get("state", cell["text"])
-        value = f"[Checkbox {value}]"
+        if "checked" in control:
+            value = f"[Checkbox {str(control['checked']).lower()}]"
+        else:
+            value = "[Checkbox]" + (f" {cell['text']}" if cell["text"] else "")
     elif rich_value := cell.get("richValue"):
         if rich_value.get("imageStatus") == "unbound":
             description = rich_value.get("alt") or rich_value.get("display") or rich_value.get("fallback")

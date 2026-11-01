@@ -13,16 +13,18 @@ Cell vm resolves valueMetadata records in xl/metadata.xml through futureMetadata
 ### `type`
 
 - **Output**
-  - cell/@rich-type.
+  - No raw rich-type reading attribute; known images use their image marker.
 
 - **OOXML**
   - rv/@t, fallback structure/@t.
 
 - **IR**
-  - `RichCellValue.type: str`
+  - Temporary source discriminator, not retained in RichCellValue
 
 - **Parsing**
-  - Default rich.
+  - Use the source discriminator locally to recognize supported images. Unknown
+    provider type strings are not promoted to a readable class. Saved display,
+    fallback, image status and description contracts remain unchanged.
 - **Diagnostics**
   - Invalid `xl/richData/*.xml` part syntax yields `XLSX_CATALOG_XML_INVALID`; the saved cell value remains available. See [optional catalog diagnostics](../workbook/catalog-diagnostics.md).
 

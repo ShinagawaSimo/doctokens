@@ -114,7 +114,6 @@ def _render_table_resource(
             child = append(
                 container,
                 "tr",
-                isHeader=True if row.get("isHeader") else None,
                 grid_before=row.get("gridBefore"),
                 grid_after=row.get("gridAfter"),
             )
@@ -123,7 +122,7 @@ def _render_table_resource(
                 container = review_parent(append_controls(child, cell.get("contentControls", []), "semantic"), cell, "semantic")
                 append(
                     container,
-                    "td",
+                    "th" if row.get("isHeader") else "td",
                     cell.get("text", ""),
                     column=cell["colIndex"] + 1 if cell["colIndex"] != next_column else None,
                     colspan=cell["colSpan"] if cell["colSpan"] != 1 else None,

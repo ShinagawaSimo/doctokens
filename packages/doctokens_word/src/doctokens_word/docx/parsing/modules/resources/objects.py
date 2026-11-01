@@ -158,14 +158,9 @@ def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> Chart:
                 len(s.get("y_values", [])),
                 len(s.get("bubble_sizes", [])),
             ),
-            "preview": s.get("preview", ""),
         }
         if s.get("name"):
             row["name"] = s["name"]
-        if "min" in s:
-            row["min"] = s["min"]
-        if "max" in s:
-            row["max"] = s["max"]
         if s.get("formula"):
             row["formula"] = s["formula"]
         if s.get("categories"):
@@ -174,8 +169,6 @@ def parse_chart_root(root: ET.Element, chart_id: str, part_name: str) -> Chart:
             row["values"] = s["values"]
         if "plot_index" in s:
             row["plotIndex"] = s["plot_index"]
-        if "chart_type" in s:
-            row["chartType"] = s["chart_type"]
         if s.get("x_values"):
             row["xValues"] = s["x_values"]
         if s.get("y_values"):

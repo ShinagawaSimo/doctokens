@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from xml.etree import ElementTree as ET
 
 from ...output.xml import append
-from .models import ChartLabel, ChartPlotInfo
+from .models import ChartLabel, ChartPlotInfo, ChartPoint
 
 
 def append_plots(parent: ET.Element, plots: list[ChartPlotInfo]) -> None:
@@ -14,16 +15,14 @@ def append_plots(parent: ET.Element, plots: list[ChartPlotInfo]) -> None:
             append(parent, "unsupported", type="chart-plot", source=plot.get("source"), index=plot.get("index"))
             continue
         axes = plot.get("axis_ids", [])
-        members = plot.get("series_indices", [])
         append(
             parent,
             "plot",
             index=plot.get("index"),
-            type=plot.get("chart_type"),
+            type=plot.get("chart_type") if plot.get("chart_type") != parent.get("type") else None,
             grouping=plot.get("grouping"),
             direction=plot.get("direction"),
             axes=" ".join(axes) or None,
-            series=" ".join(map(str, members)) or None,
         )
 
 
@@ -47,3 +46,14 @@ def append_annotations(
             append(node, "label-options", **label["options"])
     for trend in trends:
         append(parent, "trendline", **trend)
+
+
+def append_points(parent: ET.Element, points: Iterable[ChartPoint]) -> None:
+    """One complete saved-data representation shared by all resource writers."""
+    for index, point in enumerate(points):
+        append(
+            parent,
+            "point",
+            index=index,
+            **{"bubbleSize" if key == "bubble_size" else key: value for key, value in point.items() if value != ""},
+        )

@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 from doctokens_core.ooxml.charts.axes import append_chart_axes
+from doctokens_core.ooxml.charts.construction import iter_series_points
 from doctokens_core.ooxml.charts.models import ChartInfo, ChartSeriesInfo
-from doctokens_core.ooxml.charts.rendering import append_annotations, append_plots
+from doctokens_core.ooxml.charts.rendering import append_annotations, append_plots, append_points
 from doctokens_core.output.resources import resource_document
 from doctokens_core.output.xml import append, element
 
 from ...model import Chart, InlineObject
 
 
-def preview_info(chart: Chart | InlineObject) -> ChartInfo:
+def reading_info(chart: Chart | InlineObject) -> ChartInfo:
     series: list[ChartSeriesInfo] = []
     for item in chart.get("series", []):
         row: ChartSeriesInfo = {"index": item["index"], "point_count": item.get("pointCount", 0)}
@@ -51,32 +52,18 @@ def render_chart_resource(chart: Chart) -> str:
         series=chart.get("seriesCount", 0),
         points=chart.get("pointCount", 0),
     )
-    combination = chart.get("chartType") == "combination"
     append_chart_axes(node, chart.get("axes", []))
-    if combination and chart.get("plots"):
-        node.set("plots", ",".join(str(p.get("chart_type", "unknown")) for p in chart["plots"]))
     append_plots(node, chart.get("plots", []))
-    for series in chart.get("series") or []:
+    for series in reading_info(chart)["series"]:
         child = append(
             node,
             "series",
             index=series.get("index", 0),
-            plot=series.get("plotIndex"),
+            plot=series.get("plot_index"),
             axes=" ".join(series.get("axis_ids", [])) or None,
             name=series.get("name") or None,
-            min=series.get("min"),
-            max=series.get("max"),
-            type=series.get("chartType") if combination else None,
             hidden=True if series.get("hidden") else None,
         )
         append_annotations(child, series.get("labels", []), series.get("label_options", {}), series.get("trendlines", []))
-        arrays = [
-            ("category", series.get("categories", [])),
-            ("value", series.get("values", [])),
-            ("x", series.get("xValues", [])),
-            ("y", series.get("yValues", [])),
-            ("bubbleSize", series.get("bubbleSizes", [])),
-        ]
-        for i in range(max((len(values) for _, values in arrays), default=0)):
-            append(child, "point", **{name: values[i] for name, values in arrays if i < len(values)})
+        append_points(child, iter_series_points(series))
     return resource_document("docx", node)

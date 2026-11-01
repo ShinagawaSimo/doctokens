@@ -78,7 +78,6 @@ class RichCellValue(TypedDict, total=False):
     locator needed to understand the cell without refreshing external data.
     """
 
-    type: str
     display: str
     fallback: str
     fields: dict[str, str]
@@ -96,9 +95,7 @@ class RichCellValue(TypedDict, total=False):
 
 class CellControl(TypedDict, total=False):
     kind: str
-    default: int
-    value: str
-    state: str
+    checked: bool
 
 
 class TableInfo(TypedDict, total=False):

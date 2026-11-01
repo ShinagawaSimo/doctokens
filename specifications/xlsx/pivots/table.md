@@ -115,7 +115,7 @@ Pivot output describes declared layout and source fields.
 ### `rowFields`
 
 - **Output**
-  - Semantic @rows.
+  - Semantic ordered pivot-table/row-field text.
 
 - **OOXML**
   - rowFields/field/@x.
@@ -131,7 +131,7 @@ Pivot output describes declared layout and source fields.
 ### `columnFields`
 
 - **Output**
-  - Semantic @columns.
+  - Semantic ordered pivot-table/column-field text.
 
 - **OOXML**
   - colFields/field/@x.
@@ -145,7 +145,7 @@ Pivot output describes declared layout and source fields.
 ### `pageFields`
 
 - **Output**
-  - Semantic @pages.
+  - Semantic ordered pivot-table/page-field text.
 
 - **OOXML**
   - pageFields/field/@x.
@@ -159,7 +159,7 @@ Pivot output describes declared layout and source fields.
 ### `dataFields`
 
 - **Output**
-  - Semantic @values.
+  - Semantic ordered pivot-table/data-field text.
 
 - **OOXML**
   - dataFields/dataField/@name, fallback @fld.
@@ -168,12 +168,12 @@ Pivot output describes declared layout and source fields.
   - `list[str]`
 
 - **Parsing**
-  - Copy source label/index strings; comma join.
+  - Copy each source label/index string into its own element, in source order.
 
 ### `filters`
 
 - **Output**
-  - Semantic @filters.
+  - Semantic ordered pivot-table/filter text.
 
 - **OOXML**
   - filters descendant filter/@name, fallback @fld.

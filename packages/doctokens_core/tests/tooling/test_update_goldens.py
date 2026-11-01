@@ -54,9 +54,19 @@ def test_selected_update_preserves_other_baselines(fixtures: list[Path]) -> None
     assert not list(updater.SUPPORT.rglob("*.tmp"))
 
 
-def test_xml_goldens_are_pretty_printed_without_changing_inline_text() -> None:
-    source = '<document format="docx"><p>Before<b>bold</b>After</p></document>'
-    assert updater.format_xml(source) == '<document format="docx">\n  <p>Before<b>bold</b>After</p>\n</document>\n'
+@pytest.mark.parametrize(
+    "tag,content",
+    [
+        ("p", "Before<b>bold</b>After"),
+        ("p", '<color value="#C00000">●<tab /></color>Item 1'),
+        ("p", '<color value="#C00000"><b>styled only</b></color>'),
+        ("cell", "<b>bold</b><i>italic</i>"),
+        ("choice", "  <b>spaced</b>  "),
+    ],
+)
+def test_xml_goldens_are_pretty_printed_without_changing_inline_text(tag: str, content: str) -> None:
+    source = f'<document format="docx"><{tag}>{content}</{tag}></document>'
+    assert updater.format_xml(source) == f'<document format="docx">\n  <{tag}>{content}</{tag}>\n</document>\n'
 
 
 def test_unknown_selector_changes_nothing(fixtures: list[Path]) -> None:

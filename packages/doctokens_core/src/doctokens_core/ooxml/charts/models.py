@@ -21,16 +21,12 @@ class ChartSeriesInfo(TypedDict, total=False):
     index: int
     point_count: int
     plot_index: int
-    chart_type: str
     name: str
     categories: list[str]
     values: list[str]
     x_values: list[str]
     y_values: list[str]
     bubble_sizes: list[str]
-    preview: str
-    min: float
-    max: float
     formula: str
     category_formula: str
     hidden: bool
@@ -45,7 +41,6 @@ class ChartPlotInfo(TypedDict, total=False):
 
     index: int
     chart_type: str
-    series_indices: list[int]
     grouping: str
     direction: str
     axis_ids: list[str]

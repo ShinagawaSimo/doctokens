@@ -107,12 +107,11 @@ class ChartParser:
                         )
                     continue
                 plot_index = len(plots) + 1
-                plot_series = self._parse_chartml_series(chart_element, chart_type, plot_index, len(series))
+                plot_series = self._parse_chartml_series(chart_element, plot_index, len(series))
                 series.extend(plot_series)
                 plot: ChartPlotInfo = {
                     "index": plot_index,
                     "chart_type": chart_type,
-                    "series_indices": [item["index"] for item in plot_series],
                 }
                 if grouping := _direct_attr(chart_element, NS_C, "grouping", "val"):
                     plot["grouping"] = grouping
@@ -133,7 +132,6 @@ class ChartParser:
     def _parse_chartml_series(
         self,
         chart_element: ET.Element,
-        chart_type: str,
         plot_index: int,
         start_index: int,
     ) -> list[ChartSeriesInfo]:
@@ -154,7 +152,6 @@ class ChartParser:
                 series_row(
                     index=start_index + offset,
                     plot_index=plot_index,
-                    chart_type=chart_type,
                     categories=categories,
                     values=values,
                     x_values=x_values,
@@ -195,7 +192,7 @@ class ChartParser:
                 chart_type = series_element.get("layoutId") or "unknown"
                 plot = plots_by_type.get(chart_type)
                 if plot is None:
-                    plot = {"index": len(plots_by_type) + 1, "chart_type": chart_type, "series_indices": []}
+                    plot = {"index": len(plots_by_type) + 1, "chart_type": chart_type}
                     plots_by_type[chart_type] = plot
                 data_id = _direct_attr(series_element, NS_CX, "dataId", "val")
                 data = catalog.get(data_id) if data_id is not None else None
@@ -204,7 +201,6 @@ class ChartParser:
                 row = series_row(
                     index=len(series) + 1,
                     plot_index=plot["index"],
-                    chart_type=chart_type,
                     categories=data.categories if data is not None else [],
                     values=values,
                     x_values=dimensions.get("x", []),
@@ -223,7 +219,6 @@ class ChartParser:
                 if axes := axis_ids(series_element, chartex=True):
                     row["axis_ids"] = axes
                 series.append(row)
-                plot["series_indices"].append(row["index"])
 
         plots = list(plots_by_type.values())
         return chart_info(

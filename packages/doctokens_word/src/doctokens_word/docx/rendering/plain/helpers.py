@@ -139,12 +139,10 @@ def plain_object_placeholder(
     if object_type == "equation":
         return _string_field(inline_object.get("text", ""))
     if object_type == "textbox":
-        if "blocks" in inline_object:
-            return "\n".join(
-                table_text_only(block, ocr_results) if block["type"] == "table" else inline_text_only(block, ocr_results)
-                for block in inline_object["blocks"]
-            )
-        return _string_field(inline_object.get("text", ""))
+        return "\n".join(
+            table_text_only(block, ocr_results) if block["type"] == "table" else inline_text_only(block, ocr_results)
+            for block in inline_object["blocks"]
+        )
     if object_type == "fieldInstruction":
         return ""
     if object_type == "embedded":

@@ -23,7 +23,8 @@ Rows and cells use table-local coordinates.
 ### `isHeader`
 
 - **Output**
-  - `tr/@header="true"`; child `th` instead of `td`.
+  - Header cells use th instead of td in body and table resources. Do not
+    duplicate that role on tr with header/isHeader attributes.
 
 - **OOXML**
   - `w:trPr/w:tblHeader`, selected from saved history in original view.

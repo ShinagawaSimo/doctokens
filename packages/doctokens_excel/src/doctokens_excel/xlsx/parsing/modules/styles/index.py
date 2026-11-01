@@ -18,6 +18,7 @@ from doctokens_excel.formatting.values import (
 )
 from doctokens_excel.formatting.values import format_value as format_number_value
 
+from ....model.rules import ConditionalStyle
 from ....model.workbook import CellControl
 from .colors import SpreadsheetColors
 from .records import FillInfo, FontInfo
@@ -35,8 +36,7 @@ class FormatIndex:
         self._style_attrs_cache: dict[int, str] = {}
         self._fonts: list[FontInfo] = []
         self._fills: list[FillInfo] = []
-        # dxf index → compact semantic style summary used by conditional formatting.
-        self._differential_styles: list[str] = []
+        self._differential_styles: list[ConditionalStyle] = []
         self._cell_controls: dict[int, CellControl] = {}
         self._visible_blank_styles: set[int] = set()
         self.date_1904 = False
@@ -52,14 +52,14 @@ class FormatIndex:
     def register_fill(self, fill_info: FillInfo) -> None:
         self._fills.append(fill_info)
 
-    def register_differential_style(self, style: str) -> None:
+    def register_differential_style(self, style: ConditionalStyle) -> None:
         self._differential_styles.append(style)
 
-    def differential_style(self, dxf_id: int) -> str:
+    def differential_style(self, dxf_id: int) -> ConditionalStyle:
         """Return the meaningful formatting carried by a conditional-format dxf."""
         if 0 <= dxf_id < len(self._differential_styles):
             return self._differential_styles[dxf_id]
-        return ""
+        return {}
 
     def set_cell_controls(self, controls: dict[int, CellControl]) -> None:
         """Attach feature-property controls resolved for cell-XF indices."""

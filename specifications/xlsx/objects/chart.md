@@ -129,18 +129,9 @@ compact series summary and does not expand to all points or annotations.
 - **IR**
   - `DrawingChart.axes: list[dict[str, str]]`.
 - **Parsing**
-  - Carry the complete parsed axes from the chart-part result into its attached drawing-chart record. Preserve saved order, IDs and cross-axis references, titles, position, number format, explicit scale bounds/orientation/log base, built-in units and custom unit factors. Omit absent fields and axis data when none is saved.
-  - Example: a value-axis title USD, display unit thousands and bounds 0..100 produce `<axis display-unit="thousands" kind="valAx" maximum="100" minimum="0" title="USD"/>` plus any other saved axis attributes in both XML reading paths.
+  - Carry the complete parsed axes from the chart-part result into its attached drawing-chart record. Use the shared short IDs and closed reading projection for cross-axis relationships, titles, non-General formats, explicit bounds/reversal/log base and units. Omit absent fields and axis data when none is saved.
+  - Example: a value-axis title USD, display unit thousands and bounds 0..100 produce `<axis display-unit="thousands" kind="valAx" maximum="100" minimum="0" title="USD"/>` with a chart-local axisN identity under the shared field definitions.
   - Units/scales describe the source axis. Do not divide the saved point values by the display factor, infer unsaved bounds, or substitute the axis title for an absent chart title. See [shared axes](../../common/chart.md#axes).
-
-### `plotTypes`
-
-- **Output**
-  - Existing resource @plots only; body plot children identify retained families.
-- **IR**
-  - Internal ordered family list for combination charts.
-- **Parsing**
-  - Copy plot families for resources; do not duplicate the list in body summaries.
 
 ### `truncated`
 

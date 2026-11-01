@@ -7,6 +7,7 @@ from xml.etree import ElementTree as ET
 
 from doctokens_core.contracts.models import ParseWarning
 
+from ....model.rules import ConditionalStyle
 from .colors import SpreadsheetColors
 
 NS_S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -70,23 +71,23 @@ def fill_info(
 
 def differential_style(
     dxf: ET.Element, colors: SpreadsheetColors, *, warnings: list[ParseWarning] | None = None, locator: str = ""
-) -> str:
+) -> ConditionalStyle:
     """Summarize meaningful ``<dxf>`` fields for conditional formatting."""
-    parts: list[str] = []
+    style: ConditionalStyle = {}
     font = dxf.find(f"{{{NS_S}}}font")
     if font is not None:
         font_details = font_info(font, colors, warnings=warnings, locator=locator)
         for tag, key in (("b", "bold"), ("i", "italic"), ("u", "underline"), ("strike", "strike")):
             if font.find(f"{{{NS_S}}}{tag}") is not None:
-                parts.append(key if font_details.get(key) else f"{key}=false")
+                style[key] = bool(font_details.get(key))  # type: ignore[literal-required]
         if color := font_details.get("color"):
-            parts.append(f"color={color}")
+            style["color"] = color
     fill = dxf.find(f"{{{NS_S}}}fill")
     if fill is not None:
         fill_details = fill_info(fill, colors, warnings=warnings, locator=locator)
         if color := fill_details.get("fill"):
-            parts.append(f"fill={color}")
+            style["fill"] = color
     num_fmt = dxf.find(f"{{{NS_S}}}numFmt")
     if num_fmt is not None and (code := num_fmt.get("formatCode")):
-        parts.append(f"numberFormat={code}")
-    return " ".join(parts)
+        style["number_format"] = code
+    return style

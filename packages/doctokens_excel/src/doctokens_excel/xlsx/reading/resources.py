@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from doctokens_core.contracts.models import ResourceDescriptor
 from doctokens_core.ooxml.charts.axes import append_chart_axes
-from doctokens_core.ooxml.charts.rendering import append_annotations, append_plots
+from doctokens_core.ooxml.charts.rendering import append_annotations, append_plots, append_points
 from doctokens_core.output.resources import resource_document
 from doctokens_core.output.xml import append, element
 
@@ -62,8 +62,8 @@ def _render_chart_resource(chart: DrawingChart) -> str:
         id=chart["id"],
         ref=chart["ref"],
         type=chart.get("type", "?"),
-        plots=",".join(chart["plotTypes"]) if chart.get("plotTypes") else None,
         series=chart.get("series_count", 0),
+        points=sum(series.get("pointCount", 0) for series in chart.get("series", [])),
         title=chart.get("title") or None,
     )
     append_chart_axes(node, chart.get("axes", []))
@@ -78,17 +78,8 @@ def _render_chart_resource(chart: DrawingChart) -> str:
             plot=series.get("plotIndex"),
             axes=" ".join(series.get("axis_ids", [])) or None,
             name=series.get("name") or None,
-            min=series.get("min"),
-            max=series.get("max"),
-            type=series.get("chartType") if chart.get("type") == "combination" else None,
-            bubbleSizes=",".join(series["bubbleSizes"]) if series.get("bubbleSizes") else None,
             hidden=True if series.get("hidden") else None,
         )
         append_annotations(child, series.get("labels", []), series.get("label_options", {}), series.get("trendlines", []))
-        for point in series.get("points", []):
-            append(
-                child,
-                "point",
-                **{name: point[name] for name in ("category", "value", "x", "y", "bubbleSize") if point.get(name, "")},
-            )
+        append_points(child, series.get("points", []))
     return resource_document("xlsx", node)

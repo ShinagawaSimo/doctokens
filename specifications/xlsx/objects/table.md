@@ -55,7 +55,7 @@ Missing target → TABLE_PART_MISSING; XML error → TABLE_XML_INVALID; failed t
 ### `columns`
 
 - **Output**
-  - Semantic @columns. Plain table labels omit the column list; saved grid
+  - Semantic table-summary/column text in source order. Plain labels omit the list; saved grid
     headers remain ordinary cell content, emitted once.
 
 - **OOXML**
@@ -65,7 +65,8 @@ Missing target → TABLE_PART_MISSING; XML error → TABLE_XML_INVALID; failed t
   - `list[str]`
 
 - **Parsing**
-  - Keep nonempty names, source order; comma join in DTX.
+  - Keep parsed names in source order, with one element per name and no
+    delimiter interpretation. Commas and other punctuation remain literal.
 
 ### `totalsRow`
 

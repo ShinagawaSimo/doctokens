@@ -6,7 +6,8 @@ import base64
 import re
 
 from doctokens_core.ooxml.charts.axes import append_chart_axes
-from doctokens_core.ooxml.charts.rendering import append_annotations, append_plots
+from doctokens_core.ooxml.charts.construction import iter_series_points
+from doctokens_core.ooxml.charts.rendering import append_annotations, append_plots, append_points
 from doctokens_core.output.resources import resource_document
 from doctokens_core.output.xml import append, element
 
@@ -71,7 +72,6 @@ def _render_chart(parsed_presentation: ParsedPresentation, resource_id: str) -> 
     series = chart.get("series", [])
     point_count = chart.get("point_count")
     plots = chart.get("plots", [])
-    is_combination = chart_type == "combination"
     node = element(
         "chart",
         id=resource_id,
@@ -79,40 +79,23 @@ def _render_chart(parsed_presentation: ParsedPresentation, resource_id: str) -> 
         title=title or None,
         series=len(series),
         points=point_count if point_count is not None else 0,
-        plots=",".join(plot.get("chart_type", "unknown") for plot in plots) if is_combination and plots else None,
     )
     append_chart_axes(node, chart.get("axes", []))
     append_plots(node, plots)
-    for series_index, series_item in enumerate(series, start=1):
+    for series_item in series:
         child = append(
             node,
             "series",
-            id=series_index,
+            index=series_item["index"],
             plot=series_item.get("plot_index"),
             axes=" ".join(series_item.get("axis_ids", [])) or None,
             name=series_item.get("name") or None,
-            categories=",".join(series_item.get("categories", [])),
-            values=",".join(series_item.get("values", [])),
-            type=series_item.get("chart_type") if is_combination else None,
-            bubbleSizes=",".join(series_item["bubble_sizes"]) if series_item.get("bubble_sizes") else None,
-            xValues=",".join(series_item["x_values"]) if series_item.get("x_values") else None,
-            yValues=",".join(series_item["y_values"]) if series_item.get("y_values") else None,
             hidden=True if series_item.get("hidden") else None,
-            min=f"{series_item['min']:g}" if series_item.get("min") is not None else None,
-            max=f"{series_item['max']:g}" if series_item.get("max") is not None else None,
         )
         append_annotations(
             child, series_item.get("labels", []), series_item.get("label_options", {}), series_item.get("trendlines", [])
         )
-        arrays = [
-            ("category", series_item.get("categories", [])),
-            ("value", series_item.get("values", [])),
-            ("x", series_item.get("x_values", [])),
-            ("y", series_item.get("y_values", [])),
-            ("bubbleSize", series_item.get("bubble_sizes", [])),
-        ]
-        for index in range(max((len(values) for _, values in arrays), default=0)):
-            append(child, "point", index=index, **{key: values[index] for key, values in arrays if index < len(values)})
+        append_points(child, iter_series_points(series_item))
     return resource_document("pptx", node)
 
 

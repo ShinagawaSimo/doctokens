@@ -3,23 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import cast
+from itertools import islice
 from xml.etree import ElementTree as ET
 
 from ...output.xml import append
 from .axes import READING_AXIS_FIELDS
-from .models import ChartInfo, ChartPoint, ChartSeriesInfo
+from .construction import iter_series_points, series_arrays
+from .models import ChartInfo, ChartSeriesInfo
 from .rendering import append_annotations
-
-
-def _arrays(series: ChartSeriesInfo) -> tuple[tuple[str, list[str]], ...]:
-    return (
-        ("category", series.get("categories", [])),
-        ("value", series.get("values", [])),
-        ("x", series.get("x_values", [])),
-        ("y", series.get("y_values", [])),
-        ("bubble_size", series.get("bubble_sizes", [])),
-    )
 
 
 @dataclass
@@ -54,7 +45,7 @@ class _Budget:
 
 
 def series_points(series: ChartSeriesInfo) -> int:
-    return max(series.get("point_count", 0), *(len(values) for _, values in _arrays(series)))
+    return max(series.get("point_count", 0), *(len(values) for _, values in series_arrays(series)))
 
 
 def append_chart_preview(parent: ET.Element, chart: ChartInfo) -> None:
@@ -85,7 +76,7 @@ def append_chart_preview(parent: ET.Element, chart: ChartInfo) -> None:
     plots = chart.get("plots", [])
     retained_plots: set[int] = set()
     for ordinal, plot in enumerate(plots[:8]):
-        members = plot.get("series_indices", [])
+        members = [item["index"] for item in series if item.get("plot_index") == plot.get("index")]
         included = [member for member in members if member in shown_ids][:8]
         if members and not included:
             budget.changes += 1
@@ -96,10 +87,9 @@ def append_chart_preview(parent: ET.Element, chart: ChartInfo) -> None:
             append(parent, "unsupported", type="chart-plot", index=index)
             continue
         attrs = {
-            "type": plot.get("chart_type"),
+            "type": plot.get("chart_type") if plot.get("chart_type") != parent.get("type") else None,
             "grouping": plot.get("grouping"),
             "direction": plot.get("direction"),
-            "series": " ".join(map(str, included)) or None,
             "axes": _axis_refs(plot.get("axis_ids", []), axis_ids, budget),
         }
         if len(included) != len(members):
@@ -125,8 +115,7 @@ def append_chart_preview(parent: ET.Element, chart: ChartInfo) -> None:
         if count > 8:
             budget.changes += 1
         visible_points: set[int] = set()
-        for index in range(min(8, count)):
-            point = _point(item, index)
+        for index, point in enumerate(islice(iter_series_points(item), 8)):
             old_remaining, old_changes = budget.remaining, budget.changes
             attrs = budget.attrs({"bubbleSize" if key == "bubble_size" else key: value for key, value in point.items()})
             # Numeric data is indivisible: never publish a clipped numeric prefix.
@@ -151,10 +140,6 @@ def _axis_refs(values: list[str], known: set[str], budget: _Budget) -> str | Non
     if len(retained) != len(values):
         budget.changes += 1
     return " ".join(retained) or None
-
-
-def _point(series: ChartSeriesInfo, index: int) -> ChartPoint:
-    return cast(ChartPoint, {key: values[index] for key, values in _arrays(series) if index < len(values)})
 
 
 def _annotations(parent: ET.Element, series: ChartSeriesInfo, budget: _Budget, visible_points: set[int]) -> None:

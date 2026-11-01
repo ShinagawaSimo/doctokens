@@ -2,7 +2,7 @@
 
 [XLSX](../README.md) / Chart series
 
-XLSX adapts shared series arrays to point records.
+XLSX adapts shared arrays once to the common ChartPoint records. Point order is the cache position; no duplicate coordinate arrays are retained in its drawing-series model.
 Body previews retain the same series identity and cached point positions under
 the [shared limits](../../common/chart.md#body-preview); resources remain complete.
 
@@ -50,34 +50,6 @@ the [shared limits](../../common/chart.md#body-preview); resources remain comple
 - **Parsing**
   - Copy nonempty.
 
-### `min`
-
-- **Output**
-  - Chart resource detail.
-
-- **OOXML**
-  - [Shared series](../../common/chart-series.md#min)
-
-- **IR**
-  - `DrawingChartSeries.min`
-
-- **Parsing**
-  - Copy when present.
-
-### `max`
-
-- **Output**
-  - Chart resource detail.
-
-- **OOXML**
-  - [Shared series](../../common/chart-series.md#max)
-
-- **IR**
-  - `DrawingChartSeries.max`
-
-- **Parsing**
-  - Copy when present.
-
 ### `plotIndex`
 
 - **Output**
@@ -91,62 +63,6 @@ the [shared limits](../../common/chart.md#body-preview); resources remain comple
 
 - **Parsing**
   - Copy when present.
-
-### `chartType`
-
-- **Output**
-  - Chart resource detail.
-
-- **OOXML**
-  - [Shared series](../../common/chart-series.md#chart_type)
-
-- **IR**
-  - `DrawingChartSeries.chartType`
-
-- **Parsing**
-  - Copy when present.
-
-### `xValues`
-
-- **Output**
-  - Chart resource detail.
-
-- **OOXML**
-  - [Shared series](../../common/chart-series.md#x_values)
-
-- **IR**
-  - `DrawingChartSeries.xValues`
-
-- **Parsing**
-  - Copy nonempty list.
-
-### `yValues`
-
-- **Output**
-  - Chart resource detail.
-
-- **OOXML**
-  - [Shared series](../../common/chart-series.md#y_values)
-
-- **IR**
-  - `DrawingChartSeries.yValues`
-
-- **Parsing**
-  - Copy nonempty list.
-
-### `bubbleSizes`
-
-- **Output**
-  - Chart resource detail.
-
-- **OOXML**
-  - [Shared series](../../common/chart-series.md#bubble_sizes)
-
-- **IR**
-  - `DrawingChartSeries.bubbleSizes`
-
-- **Parsing**
-  - Copy nonempty list.
 
 ### `hidden`
 

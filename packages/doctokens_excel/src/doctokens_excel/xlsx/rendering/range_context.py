@@ -35,13 +35,9 @@ def range_context(
     expressions.extend(v[key] for v in projected["data_validations"] for key in ("formula1", "formula2") if v.get(key))
     expressions.extend(f for rule in projected["conditional_formats"] for f in rule.get("formulas", []))
     for rule in projected["conditional_formats"]:
-        for value in rule.get("formatDetails", {}).values():
-            if isinstance(value, list):
-                expressions.extend(
-                    str(stop["val"])
-                    for stop in value
-                    if isinstance(stop, dict) and stop.get("type") == "formula" and "val" in stop
-                )
+        details = rule.get("formatDetails", {})
+        for stops in (details.get("stops", []), details.get("thresholds", [])):
+            expressions.extend(stop["val"] for stop in stops if stop.get("type") == "formula" and "val" in stop)
     names, used_tables, external = _dependencies(workbook, sheet, selected, expressions)
     projected["tables"] = [
         table

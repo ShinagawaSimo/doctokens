@@ -6,6 +6,7 @@ from xml.etree import ElementTree as ET
 
 from doctokens_core.output.xml import append
 
+from ..model.rules import VisualDetails
 from ..model.workbook import SheetInfo
 
 
@@ -15,7 +16,6 @@ def append_rules(parent: ET.Element, sheet: SheetInfo, density: str) -> None:
         for condition in sheet.get("filter_cols", []):
             attrs: dict[str, object] = {"column": condition.get("col"), "type": condition.get("type")}
             for old, new in (
-                ("values", "values"),
                 ("calendarType", "calendar_type"),
                 ("operator", "operator"),
                 ("value", "value"),
@@ -28,7 +28,7 @@ def append_rules(parent: ET.Element, sheet: SheetInfo, density: str) -> None:
             ):
                 value = condition.get(old)
                 if value not in (None, "", []):
-                    attrs[new] = ",".join(value) if old == "values" and isinstance(value, list) else value
+                    attrs[new] = value
             for key in ("blank", "and", "percent"):
                 if condition.get(key):
                     attrs[key] = True
@@ -36,11 +36,16 @@ def append_rules(parent: ET.Element, sheet: SheetInfo, density: str) -> None:
                 attrs["top"] = False
             if "cellColor" in condition:
                 attrs["cell_color"] = bool(condition["cellColor"])
-            if date_groups := condition.get("dateGroup"):
-                attrs["groups"] = ";".join(
-                    ":".join(f"{key}={value}" for key, value in sorted(group.items())) for group in date_groups
+            node = append(filter_node, "condition", **attrs)
+            for value in condition.get("values", []):
+                append(node, "value", value)
+            for group in condition.get("dateGroup", []):
+                append(
+                    node,
+                    "date-group",
+                    grouping=group.get("dateTimeGrouping"),
+                    **{key: value for key, value in group.items() if key != "dateTimeGrouping"},
                 )
-            append(filter_node, "condition", **attrs)
     for validation in sheet.get("data_validations", []):
         attrs = {"ref": validation.get("ranges"), "type": validation.get("type")}
         for key in ("formula1", "formula2"):
@@ -91,33 +96,49 @@ def _append_conditional_formats(parent: ET.Element, sheet: SheetInfo, density: s
         }
         if rule.get("formatKind") != rule.get("ruleType"):
             attrs["format"] = rule.get("formatKind")
-        formulas = rule.get("formulas", [])
-        if len(formulas) == 1:
-            attrs["formula"] = formulas[0]
-        elif formulas:
-            attrs["formulas"] = " | ".join(formulas)
-        if density == "semantic":
-            attrs["style"] = rule.get("dxfStyle")
-            if rule.get("formatDetails"):
-                attrs["details"] = _conditional_details(rule["formatDetails"])
         node = append(container, "rule", **attrs)
+        for formula in rule.get("formulas", []):
+            append(node, "formula", formula)
+        if density == "semantic":
+            if rule.get("dxfStyle"):
+                append(node, "style", **rule["dxfStyle"])
+            if rule.get("formatDetails"):
+                _append_visual(node, rule.get("formatKind", ""), rule["formatDetails"])
         if rule.get("unparsed"):
             append(node, "unsupported", type="conditional-format")
 
 
-def _conditional_details(details: object) -> str:
-    if not isinstance(details, dict):
-        return ""
-    values: list[str] = []
-    for key, value in details.items():
-        if isinstance(value, list):
-            records = [
-                ":".join(f"{item_key}={item_value}" for item_key, item_value in item.items())
-                for item in value
-                if isinstance(item, dict)
-            ]
-            if records:
-                values.append(f"{key}={';'.join(records)}")
-            continue
-        values.append(f"{key}={value}")
-    return ";".join(values)
+def _append_visual(parent: ET.Element, kind: str, details: VisualDetails) -> None:
+    if kind == "colorScale":
+        node = append(parent, "color-scale")
+    elif kind == "dataBar":
+        node = append(
+            parent,
+            "data-bar",
+            color=details.get("color"),
+            negative_fill_color=details.get("negativeFillColor"),
+            show_value=details.get("showValue"),
+        )
+    elif kind == "iconSet":
+        node = append(
+            parent,
+            "icon-set",
+            name=details.get("iconSet"),
+            reverse=details.get("reverse"),
+            show_value=details.get("showValue"),
+        )
+    else:
+        return
+    stops = details.get("stops", []) if kind == "colorScale" else details.get("thresholds", [])
+    for stop in stops:
+        append(
+            node,
+            "stop" if kind == "colorScale" else "threshold",
+            type=stop.get("type"),
+            value=stop.get("val"),
+            gte=stop.get("gte"),
+            color=stop.get("color"),
+        )
+    if kind == "iconSet":
+        for icon in details.get("icons", []):
+            append(node, "icon", set=icon.get("iconSet"), id=icon.get("iconId"))

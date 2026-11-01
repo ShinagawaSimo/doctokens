@@ -23,7 +23,8 @@ Plot membership is retained for combination charts and saved grouping/axis relat
 ### `chart_type`
 
 - **Output**
-  - Resource plot family.
+  - plot/@type only when it differs from the root chart family. The root type
+    supplies a single-family default; combination plots state their own family.
 
 - **OOXML**
   - Plot element / layoutId.
@@ -33,20 +34,6 @@ Plot membership is retained for combination charts and saved grouping/axis relat
 
 - **Parsing**
   - See [chart types](chart.md#chart_type).
-
-### `series_indices`
-
-- **Output**
-  - Resource series ownership.
-
-- **OOXML**
-  - Series assigned to this plot.
-
-- **IR**
-  - `ChartPlotInfo.series_indices: list[int]`
-
-- **Parsing**
-  - Global series indices in traversal order. ChartEx series with the same layoutId share one plot record.
 
 ### `grouping`
 

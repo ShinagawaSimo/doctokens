@@ -8,6 +8,8 @@ Each field belongs to ChartSeriesInfo.
 
 Saved points use the same indexed reader for literal data and reference caches. Enumerate direct pt children; int(idx) or enumeration index on missing/malformed idx. A duplicate index replaces its preceding value. Prefer the direct v child's text, including an explicitly empty v; otherwise use direct point text, as in ChartEx. Formatting whitespace around a v child is not a point value. Return positions 0..max(index), filling holes with empty strings; declared ptCount does not manufacture points or set list length. ChartEx numeric dimensions use their last lvl. ChartEx dataId resolves a catalog of chartData/data; later duplicate IDs replace earlier records.
 
+Recognized scatter/bubble series expose only their x/y/bubble-size caches; category/value aliases are removed before reading projection. Other supported layouts retain their saved dimensions.
+
 ## Fields
 
 ### `labels`
@@ -112,20 +114,6 @@ Saved points use the same indexed reader for literal data and reference caches. 
   - 1-based plot index whenever plot metadata is retained, including explicit
     grouping/axis relationships on a single-family chart.
 
-### `chart_type`
-
-- **Output**
-  - Resource series family.
-
-- **OOXML**
-  - Owning plot family.
-
-- **IR**
-  - `ChartSeriesInfo.chart_type: `str``
-
-- **Parsing**
-  - Same mapping as chart_type; retained with plot ownership.
-
 ### `name`
 
 - **Output**
@@ -170,7 +158,7 @@ Saved points use the same indexed reader for literal data and reference caches. 
 
 - **Parsing**
   - Read the first recognized direct source: numLit/strLit supplies its own indexed points; numRef/strRef supplies its matching direct numCache/strCache when saved. An absent cache is not populated by evaluating a formula, opening an embedded workbook, or searching unrelated descendant extension data.
-  - ChartEx uses nonempty val, then y, then the first numeric dimension. Preserve saved zeros, negatives, empty point positions, and lexical value strings. The same arrays drive previews, point counts, numeric min/max and full resource data.
+  - ChartEx uses nonempty val, then y, then the first numeric dimension. Preserve saved zeros, negatives, empty point positions, and lexical value strings. The same saved arrays drive previews, position counts and complete point resources. No float summary is calculated.
 
 - **Absence and defaults**
   - Empty list.
@@ -216,48 +204,6 @@ Saved points use the same indexed reader for literal data and reference caches. 
 
 - **Parsing**
   - Use indexed literal/cache/dimension values; omit empty list.
-
-### `preview`
-
-- **Output**
-  - Readable series summary.
-
-- **OOXML**
-  - Category/value arrays.
-
-- **IR**
-  - `ChartSeriesInfo.preview: `str``
-
-- **Parsing**
-  - First min(point_count,8) positions; category fallback is 1-based ordinal string. Nonempty value → `category=value`, otherwise category. Join with `; `.
-
-### `min`
-
-- **Output**
-  - Resource numeric minimum.
-
-- **OOXML**
-  - values.
-
-- **IR**
-  - `ChartSeriesInfo.min: `float``
-
-- **Parsing**
-  - Convert each value with float(); ignore ValueError; take min when at least one conversion succeeds. No finite-number filter.
-
-### `max`
-
-- **Output**
-  - Resource numeric maximum.
-
-- **OOXML**
-  - values.
-
-- **IR**
-  - `ChartSeriesInfo.max: `float``
-
-- **Parsing**
-  - Same conversion as min; take max.
 
 ### `formula`
 

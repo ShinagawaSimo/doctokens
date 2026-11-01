@@ -75,7 +75,9 @@ A visible paragraph becomes one paragraph block before page-window projection.
 ### `numbering`
 
 - **Output**
-  - Semantic `numbering="true"`; visible prefix in every density.
+  - Visible prefix in every density. Structural/semantic expose list-level
+    only when the saved zero-based level is at least 1; level 0 is omitted.
+    No automatic-numbering provenance boolean is serialized.
 
 - **OOXML**
   - `w:numPr` and numbering/style definitions.
@@ -87,7 +89,8 @@ A visible paragraph becomes one paragraph block before page-window projection.
   - Insert marker as first synthetic run; see [numbering](numbering.md).
 
 - **Absence and defaults**
-  - No label record: omit attribute.
+  - No resolved label or a level below 1: omit list-level. Typed markers are
+    not inferred to be saved lists. Alignment and borders remain semantic-only.
 
 ### `contentControls`
 

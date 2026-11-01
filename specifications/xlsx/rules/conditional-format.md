@@ -71,7 +71,7 @@ separate and in saved order. No positional or similar-formula matching occurs.
 ### `formulas`
 
 - **Output**
-  - rule/@formula or @formulas
+  - Ordered rule/formula children in both XML densities.
 
 - **OOXML**
   - `s:cfRule/s:formula/text()`; x14:cfRule/xm:f.
@@ -80,7 +80,8 @@ separate and in saved order. No positional or similar-formula matching occurs.
   - `ConditionalFormat.formulas`
 
 - **Parsing**
-  - One → formula; several → join with ` | ` as formulas; none → omit.
+  - Preserve each parsed formula and its position verbatim, including commas,
+    pipes, colons, semicolons and line breaks. No delimiter grammar is embedded.
 
 
 ### `stopIfTrue`
@@ -170,27 +171,28 @@ separate and in saved order. No positional or similar-formula matching occurs.
 ### `formatDetails`
 
 - **Output**
-  - Semantic rule/@details
+  - Semantic rule/color-scale, rule/data-bar or rule/icon-set child structure.
 
 - **OOXML**
   - The child selected by `formatKind`.
 
 - **IR**
-  - `ConditionalFormat.formatDetails`
+  - `ConditionalFormat.formatDetails: VisualDetails`
 
 - **Parsing**
-  - See [visual rules](visual-format.md). Serialize scalar key=value; stops/thresholds records use colon-separated fields and semicolon-separated entries; then join top-level items with semicolon.
+  - See [visual rules](visual-format.md). Use explicit typed fields and ordered
+    stop/threshold/icon nodes. No string flattening or reparsing is used.
 
 ### `dxfStyle`
 
 - **Output**
-  - Semantic rule/@style; structural never emits it.
+  - Semantic rule/style with explicit attributes; structural never emits it.
 
 - **OOXML**
   - `xl/styles.xml`: `s:styleSheet/s:dxfs/s:dxf`, selected by zero-based `dxfId`.
 
 - **IR**
-  - `ConditionalFormat.dxfStyle`
+  - `ConditionalFormat.dxfStyle: ConditionalStyle`
 
 - **Parsing**
   - Resolve core dxfId through the format index. Extended direct
@@ -198,6 +200,9 @@ separate and in saved order. No positional or similar-formula matching occurs.
     compact differential-style reader. Retain explicit emphasis changes,
     resolved font/fill colors and number formats; omit alignment and layout.
     The source index is used during decoding and is not retained in the rule.
+  - Style fields are bold/italic/underline/strike booleans, color/fill RGB and
+    number-format. Explicit false overrides remain false. Format codes remain
+    a single literal attribute, without an embedded key/value string protocol.
   - Unresolved font/foreground-fill colors are omitted with XLSX_COLOR_UNRESOLVED
     at styles.xml or the inline worksheet part. Other readable emphasis and
     conditions remain; no unresolved-color body field is emitted.

@@ -230,7 +230,6 @@ class RichValueCatalog:
             fields[key] = raw
 
         descriptor: RichCellValue = {
-            "type": type_name or "rich",
             "fields": fields,
         }
         fallback = next((node for node in element if _local_name(node.tag) == "fb"), None)

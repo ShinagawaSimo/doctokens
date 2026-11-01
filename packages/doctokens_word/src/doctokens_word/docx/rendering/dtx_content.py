@@ -9,7 +9,7 @@ from doctokens_core.output.diagram_preview import diagram_preview
 from doctokens_core.output.xml import append, text
 
 from ..model import InlineObject
-from .objects.charts import preview_info
+from .objects.charts import reading_info
 
 
 def _append_chart(parent: ET.Element, chart: InlineObject) -> None:
@@ -19,7 +19,7 @@ def _append_chart(parent: ET.Element, chart: InlineObject) -> None:
     if "series" not in chart:
         append(node, "unsupported", type="chart")
         return
-    append_chart_preview(node, preview_info(chart))
+    append_chart_preview(node, reading_info(chart))
 
 
 def _append_smartart(parent: ET.Element, smartart: InlineObject) -> None:

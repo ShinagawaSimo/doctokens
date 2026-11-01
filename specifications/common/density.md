@@ -71,19 +71,21 @@ remain the definitions of each field, rather than a generic filter by field name
 | DOCX control current content and human label | Marker/content/label | Wrapper/content/label | Content and semantic control projection |
 | DOCX control type, choices and content/control lock | Omitted | Omitted | Retained under the control contract |
 | DOCX revisions/property changes, ruby annotation and emphasis/color | Selected text/base text | Selected text/base structure | Supported revision/ruby/format semantics |
-| DOCX paragraph formatting properties and table-cell background | Omitted | Omitted | Retained reading properties |
+| DOCX paragraph alignment/borders and table-cell background | Omitted | Omitted | Retained reading properties |
+| DOCX resolved zero-based list level >= 1 | Readable saved marker | list-level | list-level |
 | PPTX inherited placeholder role, paragraph level and explicit links | Readable text/indent | Retained structure/links | Retained structure/links |
 | PPTX run/table emphasis and color | Omitted | Omitted | Retained reading semantics |
 | PPTX nonmatching shape name | Omitted | Omitted | Retained under the English default-name heuristic |
 | PPTX/XLSX group names and explicit containment | Omitted | Retained, with English default names filtered | Same |
 | XLSX conditional-format conditions, priority and stop behavior | Compact unsupported marker only when unreadable | Retained | Retained |
-| XLSX conditional-format dxfStyle and formatDetails | Omitted | Omitted | rule/@style and visual details |
+| XLSX conditional-format dxfStyle and formatDetails | Omitted | Omitted | rule/style and typed visual children |
 | XLSX validation constraints and effective error enforcement | No readable rule expansion | Retained | Retained |
 | XLSX validation saved input/error messages | Omitted | Omitted | Retained |
 | XLSX resolved color-filter condition | Compact filter marker | Retained predicate color | Retained predicate color |
 | XLSX cell/run font/fill, style-range and number-format color metadata | Omitted | Omitted | Retained reading styles |
 | XLSX enabled sheet protection and affirmative applicable cell restrictions | Omitted | Omitted | sheet-protection; locked=true and formula-hidden=true when applicable |
 | XLSX formatted display value | Retained | Retained | Retained |
+| XLSX declared checkbox current value | Compact marker; unknown text retained | checked once; unknown text retained | Same |
 | XLSX resolved pivot-cache relationships | Compact pivot name only | Short cache references with local targets | Same, with existing semantic field summaries |
 | Chart/SmartArt reading previews | Bounded plain summary | Shared bounded structure | Shared bounded structure |
 | Raw hints, control binding provenance and bare dxf lookup indices | Not body fields | Not body fields | Not body fields |

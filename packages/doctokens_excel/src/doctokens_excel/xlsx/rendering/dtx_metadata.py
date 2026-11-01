@@ -121,41 +121,44 @@ def _append_sheet_metadata(
             "source_sheet": pivot.get("sourceSheet"),
             "source_ref": pivot.get("sourceRef"),
         }
+        node = append(parent, "pivot-table", **pivot_attrs)
         if density == "semantic":
-            for old, new in (
-                ("rowFields", "rows"),
-                ("columnFields", "columns"),
-                ("pageFields", "pages"),
-                ("dataFields", "values"),
-                ("filters", "filters"),
+            for tag, values in (
+                ("row-field", pivot.get("rowFields", [])),
+                ("column-field", pivot.get("columnFields", [])),
+                ("page-field", pivot.get("pageFields", [])),
+                ("data-field", pivot.get("dataFields", [])),
+                ("filter", pivot.get("filters", [])),
             ):
-                values = pivot.get(old)
-                if values:
-                    pivot_attrs[new] = _joined(values)
-        append(parent, "pivot-table", **pivot_attrs)
+                for value in values:
+                    append(node, tag, value)
     for table in sheet.get("tables", []):
-        append(
+        node = append(
             parent,
             "table-summary",
             id=table.get("id"),
             name=table.get("name"),
             ref=table.get("ref"),
-            columns=(",".join(table.get("columns", [])) or None) if density == "semantic" else None,
             totals_row=True if density == "semantic" and table.get("totalsRow") else None,
         )
+        if density == "semantic":
+            for column in table.get("columns", []):
+                append(node, "column", column)
 
 
 def _append_pivot_context(parent: ET.Element, metadata: WorkbookMetadata, density: str) -> None:
     for cache in metadata.get("pivot_caches", []):
-        append(
+        node = append(
             parent,
             "pivot-cache",
             id=cache.get("id"),
             sheet=cache.get("sourceSheet"),
             ref=cache.get("sourceRef"),
             refresh_on_load=True if cache.get("refreshOnLoad") else None,
-            fields=(_joined(cache.get("fields")) or None) if density == "semantic" else None,
         )
+        if density == "semantic":
+            for field in cache.get("fields", []):
+                append(node, "field", field)
     for slicer in metadata.get("slicers", []):
         append(
             parent,
@@ -175,7 +178,3 @@ def _append_pivot_context(parent: ET.Element, metadata: WorkbookMetadata, densit
             cache=timeline.get("cacheRef"),
             level=timeline.get("level"),
         )
-
-
-def _joined(value: object) -> str:
-    return ",".join(str(item) for item in value) if isinstance(value, list) else ""

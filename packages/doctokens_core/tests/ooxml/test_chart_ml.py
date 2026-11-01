@@ -12,7 +12,6 @@ from doctokens_core.ooxml.charts.values import (
     _namespace,
     _safe_int,
     _summary_chart_type,
-    _to_float,
     _true_value,
 )
 from doctokens_core.output.xml import element, serialize
@@ -41,7 +40,6 @@ class ChartParserTests(unittest.TestCase):
         self.assertEqual(ChartParser().parse(ET.Element("chartSpace"))["chart_type"], "unknown")
         self.assertEqual(_summary_chart_type([]), "unknown")
         self.assertIsNone(_safe_int("bad"))
-        self.assertIsNone(_to_float("bad"))
         self.assertFalse(_true_value(None))
         self.assertIsNone(_namespace("plain"))
         self.assertEqual(_first_dimension({}), [])

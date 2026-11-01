@@ -169,12 +169,5 @@ def _safe_int(value: str | None) -> int | None:
         return None
 
 
-def _to_float(value: str) -> float | None:
-    try:
-        return float(value)
-    except ValueError:
-        return None
-
-
 def _true_value(value: str | None) -> bool:
     return value in {"1", "true", "True"}

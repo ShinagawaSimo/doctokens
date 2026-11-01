@@ -34,21 +34,7 @@ preview and full resource keep their existing distinct bounds.
   - `ChartSeries.pointCount`
 
 - **Parsing**
-  - `max(len(categories), len(values))`; unlike shared aggregate point_count, extra x/y/bubble arrays do not enlarge this DOCX series count.
-
-### `preview`
-
-- **Output**
-  - Resource series detail; inline projection is defined by [charts](chart.md).
-
-- **OOXML**
-  - [Shared chart series](../../common/chart-series.md#preview)
-
-- **IR**
-  - `ChartSeries.preview`
-
-- **Parsing**
-  - Copy.
+  - Maximum saved length across category/value/x/y/bubble arrays; point positions and cache holes agree with the shared chart model.
 
 ### `name`
 
@@ -63,34 +49,6 @@ preview and full resource keep their existing distinct bounds.
 
 - **Parsing**
   - Copy when nonempty.
-
-### `min`
-
-- **Output**
-  - Resource series detail; inline projection is defined by [charts](chart.md).
-
-- **OOXML**
-  - [Shared chart series](../../common/chart-series.md#min)
-
-- **IR**
-  - `ChartSeries.min`
-
-- **Parsing**
-  - Copy when present, including zero.
-
-### `max`
-
-- **Output**
-  - Resource series detail; inline projection is defined by [charts](chart.md).
-
-- **OOXML**
-  - [Shared chart series](../../common/chart-series.md#max)
-
-- **IR**
-  - `ChartSeries.max`
-
-- **Parsing**
-  - Copy when present, including zero.
 
 ### `formula`
 
@@ -144,20 +102,6 @@ preview and full resource keep their existing distinct bounds.
 
 - **IR**
   - `ChartSeries.plotIndex`
-
-- **Parsing**
-  - Copy when present.
-
-### `chartType`
-
-- **Output**
-  - Resource series detail; inline projection is defined by [charts](chart.md).
-
-- **OOXML**
-  - [Shared chart series](../../common/chart-series.md#chart_type)
-
-- **IR**
-  - `ChartSeries.chartType`
 
 - **Parsing**
   - Copy when present.

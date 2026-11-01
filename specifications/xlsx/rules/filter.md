@@ -57,7 +57,7 @@ Within each filterColumn, process values, custom, dynamic, top10, color, icon, t
 ### `values`
 
 - **Output**
-  - filter/condition/@values.
+  - Ordered filter/condition/value character data in both XML densities.
 
 - **OOXML**
   - `s:autoFilter/s:filterColumn/s:filters/s:filter/@val`
@@ -66,7 +66,7 @@ Within each filterColumn, process values, custom, dynamic, top10, color, icon, t
   - `FilterColumn["values"]`
 
 - **Parsing**
-  - Keep nonempty source values; join with comma.
+  - Preserve parsed values and order without splitting or joining user text.
 
 ### `blank`
 
@@ -272,7 +272,7 @@ Within each filterColumn, process values, custom, dynamic, top10, color, icon, t
 ### `dateGroup`
 
 - **Output**
-  - filter/condition/@groups.
+  - Ordered filter/condition/date-group elements.
 
 - **OOXML**
   - `s:autoFilter/s:filterColumn/s:filters/s:dateGroupItem`
@@ -282,5 +282,5 @@ Within each filterColumn, process values, custom, dynamic, top10, color, icon, t
   - `FilterColumn["dateGroup"]`
 
 - **Parsing**
-  - Retain year/month/day/hour/minute/second/dateTimeGrouping only. Serialize
-    groups with ;, attributes sorted by key as key=value joined by :. No date calculation.
+  - Retain year/month/day/hour/minute/second attributes and expose
+    dateTimeGrouping as grouping. No delimiter protocol or date calculation.

@@ -101,7 +101,8 @@ anchor. The name alone does not retain decoration.
 ### `name`
 
 - **Output**
-  - Semantic `@name`.
+  - Semantic shape `@name`; group directory `@name` in both XML densities.
+    Plain omits object names.
 
 - **OOXML**
   - First descendant cNvPr/@name.
@@ -110,7 +111,34 @@ anchor. The name alone does not retain decoration.
   - `ShapeBlock.name: str`
 
 - **Parsing**
-  - Copy, default empty string; omit empty output attribute.
+  - Preserve nonempty names except the exact English default-name forms below.
+    Match the complete prefix, one ASCII space, and a canonical positive ASCII
+    integer (`[1-9][0-9]*`). Matching is case-sensitive. Do not compare the
+    numeric suffix with cNvPr/@id.
+  - Require a PresentationML object with PresentationML cNvPr. Compatible
+    prefixes are Group for grpSp, Picture for pic, and Chart/Table/Diagram for
+    graphicFrame with the corresponding recognized graphicData URI (including
+    ChartEx for Chart).
+  - For sp/cxnSp geometry: rect permits Rectangle, roundRect permits Rounded
+    Rectangle, ellipse permits Oval, and line permits Line. A line cxnSp also
+    permits Straight Connector. An sp with preset/custom geometry permits
+    AutoShape; custom geometry also permits Freeform. An sp with txBody and
+    absent/rect geometry permits Text Box and TextBox.
+  - A declared ph permits Placeholder. Its direct or inherited title/ctrTitle
+    role also permits Title; sldNum permits Slide Number Placeholder.
+  - Chinese names, unknown prefixes, incompatible types, leading-zero suffixes
+    and other nonmatches remain verbatim. This is a conservative heuristic,
+    not proof that retained names were authored by a person. A manually assigned
+    matching name is also omitted. Shape text, descriptions and titles are
+    outside this filter; names alone still do not retain decorative shapes.
+- **References**
+  - [PowerPoint Shape.Name](https://learn.microsoft.com/en-us/office/vba/api/powerpoint.shape.name)
+    specifies automatic ShapeType Number names and advises custom names to
+    avoid that form; examples include Placeholder 1, Oval 2 and Rectangle 3.
+  - [OOXML non-visual drawing properties](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.presentation.nonvisualdrawingproperties?view=openxml-3.0.1)
+    define a non-unique Object Model-compatible name, without an authored-name
+    provenance flag. Other English prefixes above cover confirmed producer
+    conventions rather than a universal normative prefix catalog.
 
 ### `alt`
 
@@ -186,7 +214,9 @@ anchor. The name alone does not retain decoration.
 
 - **Output**
   - Primary shape `@group` in both XML densities references its immediate group.
-  - `groups/group/@parent` preserves nested containment and `@name` preserves a saved name.
+  - `groups/group/@parent` preserves nested containment; `@name` follows the
+    name-filtering rule above. Filtering a name does not change group IDs,
+    parents or membership.
 - **IR**
   - `ShapeBlock.groups: list[ShapeGroup]` is the source ancestor path.
 - **Parsing**

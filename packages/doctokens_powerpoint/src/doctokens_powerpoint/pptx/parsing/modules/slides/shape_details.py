@@ -5,6 +5,7 @@ from __future__ import annotations
 from xml.etree import ElementTree as ET
 
 from doctokens_core.text.descriptions import first_readable
+from doctokens_core.text.object_names import reading_object_name
 
 from ....model.presentation import ShapeBlock
 from ....ooxml.namespaces import local_name
@@ -79,9 +80,56 @@ def _renumber_shapes(shapes: list[ShapeBlock]) -> None:
             shape["toShape"] = replacement_ids.get(to_shape, to_shape)
 
 
-def _shape_name(shape: ET.Element) -> str | None:
+def _shape_name(shape: ET.Element, *, placeholder_type: str | None = None) -> str | None:
     c_nv_pr = _find_descendant(shape, "cNvPr")
-    return c_nv_pr.get("name") if c_nv_pr is not None else None
+    if c_nv_pr is None:
+        return None
+    name = c_nv_pr.get("name")
+    if not name:
+        return name
+    namespace = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
+    if not shape.tag.startswith(namespace) or c_nv_pr.tag != namespace + "cNvPr":
+        return name
+    prefixes: set[str] = set()
+    kind = local_name(shape.tag)
+    if kind == "grpSp":
+        prefixes.add("Group")
+    elif kind == "pic":
+        prefixes.add("Picture")
+    elif kind in {"sp", "cxnSp"}:
+        geometry = _geometry_type(shape)
+        if kind == "sp":
+            if geometry is not None or _find_descendant(shape, "custGeom") is not None:
+                prefixes.add("AutoShape")
+            if _find_descendant(shape, "custGeom") is not None:
+                prefixes.add("Freeform")
+            if _find_descendant(shape, "txBody") is not None and geometry in {None, "rect"}:
+                prefixes.update(("Text Box", "TextBox"))
+        geometry_prefixes = {"rect": "Rectangle", "roundRect": "Rounded Rectangle", "ellipse": "Oval", "line": "Line"}
+        if geometry in geometry_prefixes:
+            prefixes.add(geometry_prefixes[geometry])
+        if kind == "cxnSp" and geometry == "line":
+            prefixes.add("Straight Connector")
+    elif kind == "graphicFrame":
+        data = _find_descendant(shape, "graphicData")
+        uri = data.get("uri", "") if data is not None else ""
+        families = {
+            "http://schemas.openxmlformats.org/drawingml/2006/chart": "Chart",
+            "http://schemas.microsoft.com/office/drawing/2014/chartex": "Chart",
+            "http://schemas.openxmlformats.org/drawingml/2006/table": "Table",
+            "http://schemas.openxmlformats.org/drawingml/2006/diagram": "Diagram",
+        }
+        if uri in families:
+            prefixes.add(families[uri])
+    placeholder = _find_descendant(shape, "ph")
+    if placeholder is not None:
+        prefixes.add("Placeholder")
+        effective_type = placeholder_type or placeholder.get("type")
+        if effective_type in {"title", "ctrTitle"}:
+            prefixes.add("Title")
+        elif effective_type == "sldNum":
+            prefixes.add("Slide Number Placeholder")
+    return reading_object_name(name, prefixes)
 
 
 def _shape_alt(shape: ET.Element) -> str | None:

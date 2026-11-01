@@ -12,7 +12,7 @@ from ....model.rules import ConditionalFormat, DataValidation, FilterColumn
 from ..styles.index import FormatIndex
 from .conditional_formats import merge_conditional_formats, parse_conditional_formats
 from .filters import _parse_auto_filter_element
-from .rule_values import X14, XM
+from .rule_values import X14, XM, boolean
 from .rule_values import integer as _safe_int
 from .sheet_types import NS_R, NS_S, SheetParseFlags
 from .validations import parse_validations
@@ -89,7 +89,8 @@ class SheetPostIndex:
         if not self.flags.sheet_rules:
             return
         if element.tag == _TAG_S_SHEET_PROTECTION:
-            self.sheet_protection = True
+            self.sheet_protection = boolean(element.get("sheet"), warnings=self.warnings, locator=self.part)
+            element.clear()
         elif element.tag == _TAG_S_AUTO_FILTER:
             self.filter_range, self.filter_cols = _parse_auto_filter_element(element, format_index)
             element.clear()

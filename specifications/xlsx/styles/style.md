@@ -101,27 +101,57 @@ Differential-style summaries retain explicitly disabled font properties as `bold
 ### `locked`
 
 - **Output**
-  - cell/@locked=false.
+  - Semantic cell/@locked=true only when saved sheet protection is enabled
+    and the effective cell protection is locked. False/unknown values are
+    omitted; plain and structural emit no protection attributes.
 
 - **OOXML**
   - xf/protection/@locked.
 
 - **IR**
-  - Cell-format bool.
+  - Optional cell-format boolean; None represents an invalid/unknown flag.
 
 - **Parsing**
-  - Default true; exact "0" → false. Output is not gated by sheet_protection.
+  - Decode 1/true and 0/false. With no direct protection group, or with
+    applyProtection=0/false, use the valid cellStyleXf parent protection group.
+    Otherwise use the cell-XF group. Missing attributes in the chosen group
+    use the intrinsic defaults: locked=true and hidden=false.
+  - A missing cell style selects the default cell XF (index 0). Without a style
+    table, it uses the intrinsic defaults. Invalid/negative/out-of-range cell
+    style indices yield no protection attributes. Invalid boolean values and
+    applyProtection values are unknown, not affirmative restrictions.
+  - Retain the existing blank-cell and reading-window policy; protection does
+    not materialize every empty grid location. An omitted flag is not evidence
+    that the cell is editable, especially when its style is unreadable.
 
 ### `formulaHidden`
 
 - **Output**
-  - cell/@formula-hidden=true.
+  - Semantic cell/@formula-hidden=true only with enabled saved sheet protection,
+    a resolved nonempty formula, and an effective hidden=true setting. False,
+    unknown, non-formula and inactive settings are omitted at every density.
 
 - **OOXML**
   - xf/protection/@hidden.
 
 - **IR**
-  - Cell-format bool.
+  - Optional cell-format boolean, resolved with the same inheritance/default
+    algorithm as locked.
 
 - **Parsing**
-  - Default false; exact "1" → true. Formula text remains available; parser does not enforce protection.
+  - Default false; 1/true enables the saved formula-hiding setting.
+  - Formula text remains available. These fields describe supported saved
+    restrictions, not a computed user permission model. The parser neither
+    enforces protection nor opens password/allowed-edit-range exceptions.
+  - Row/column/sheet visibility is independent of formula hiding.
+
+## Example
+
+```xml
+<sheet-protection/>
+<grid ref="A1:C1"><tr number="1">
+  <cell locked="true">Read-only value</cell>
+  <cell>Editable value</cell>
+  <cell formula="A1*2" locked="true" formula-hidden="true">4</cell>
+</tr></grid>
+```

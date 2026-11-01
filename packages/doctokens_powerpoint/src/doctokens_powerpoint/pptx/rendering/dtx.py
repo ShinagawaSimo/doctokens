@@ -26,6 +26,14 @@ from .inline import append_runs
 
 _TABLE_ROW_LIMIT = 30
 _TITLE_PLACEHOLDERS = {"title", "ctrTitle"}
+_READING_ROLES = {
+    "subTitle": "subtitle",
+    "sldNum": "slide-number",
+    "dt": "date",
+    "ftr": "footer",
+    "hdr": "header",
+    "sldImg": "slide-preview",
+}
 
 
 def iter_dtx(presentation: ParsedPresentation, density: str) -> Iterator[str]:
@@ -96,10 +104,12 @@ def _append_shape(
         return
     if shape_type == "text":
         title = shape.get("placeholderType") in _TITLE_PLACEHOLDERS
-        attrs = _text_shape_attrs(shape, density)
+        attrs = _shape_attrs(shape, density)
         paragraphs = shape.get("paragraphs", [])
         if len(paragraphs) > 1:
-            node = append(parent, "textbox", role="title" if title else None, **attrs)
+            if title:
+                attrs["role"] = "title"
+            node = append(parent, "textbox", **attrs)
             for paragraph in paragraphs:
                 child = append(node, "p", **_paragraph_attrs(paragraph))
                 append_runs(child, paragraph.get("runs", []), paragraph.get("text", ""), density)
@@ -194,25 +204,15 @@ def _append_shape(
     raise AssertionError(f"Unknown shape type: {shape_type}")
 
 
-def _text_shape_attrs(shape: ShapeBlock, density: str) -> dict[str, object]:
-    if density == "semantic":
-        return _shape_attrs(shape, density)
-    attrs: dict[str, object] = {"shape_id": shape["id"], "placeholder": shape.get("placeholderType") or None}
-    if groups := shape.get("groups"):
-        attrs["group"] = groups[-1]["id"]
-    if shape.get("link"):
-        attrs["link"] = shape["link"]
-    return attrs
-
-
 def _shape_attrs(shape: ShapeBlock, density: str) -> dict[str, object]:
     attrs: dict[str, object] = {"shape_id": shape["id"], "link": shape.get("link")}
     if groups := shape.get("groups"):
         attrs["group"] = groups[-1]["id"]
+    role = _READING_ROLES.get(shape.get("placeholderType", ""))
+    if role:
+        attrs["role"] = role
     if density != "semantic":
         return attrs
-    if shape.get("placeholderType"):
-        attrs["placeholder"] = shape["placeholderType"]
     if shape.get("name"):
         attrs["name"] = shape["name"]
     return attrs

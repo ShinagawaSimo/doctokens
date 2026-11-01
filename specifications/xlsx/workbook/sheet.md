@@ -102,13 +102,20 @@ Sheet order is the workbook sheet-list order.
 ### `sheet_protection`
 
 - **Output**
-  - `<sheet-protection/>`.
+  - Semantic `<sheet-protection/>` only for enabled saved cell-sheet protection.
+    Plain/structural omit this marker and cell protection attributes.
 
 - **OOXML**
-  - Presence of s:sheetProtection.
+  - s:sheetProtection/@sheet.
 
 - **IR**
   - `bool`
 
 - **Parsing**
-  - Element presence determines true; protection flags/password are not enforced.
+  - 1/true enables protection. 0/false, absent @sheet or an absent element
+    disables it. An invalid boolean emits RULE_BOOLEAN_INVALID and uses false.
+    The presence of other flags or password settings alone does not enable
+    cell-sheet protection.
+  - [Cell protection](../styles/style.md#locked) describes saved cell flags.
+    Passwords, allowed-edit exceptions and application permissions are not
+    enforced. Sheet/row/column visibility has its own independent contract.

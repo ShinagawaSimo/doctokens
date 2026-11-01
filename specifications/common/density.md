@@ -73,13 +73,16 @@ remain the definitions of each field, rather than a generic filter by field name
 | DOCX revisions/property changes, ruby annotation and emphasis/color | Selected text/base text | Selected text/base structure | Supported revision/ruby/format semantics |
 | DOCX paragraph formatting properties and table-cell background | Omitted | Omitted | Retained reading properties |
 | PPTX inherited placeholder role, paragraph level and explicit links | Readable text/indent | Retained structure/links | Retained structure/links |
-| PPTX run/table emphasis and color; automatic shape name | Omitted | Omitted | Retained under existing field definitions |
+| PPTX run/table emphasis and color | Omitted | Omitted | Retained reading semantics |
+| PPTX nonmatching shape name | Omitted | Omitted | Retained under the English default-name heuristic |
+| PPTX/XLSX group names and explicit containment | Omitted | Retained, with English default names filtered | Same |
 | XLSX conditional-format conditions, priority and stop behavior | Compact unsupported marker only when unreadable | Retained | Retained |
 | XLSX conditional-format dxfStyle and formatDetails | Omitted | Omitted | rule/@style and visual details |
 | XLSX validation constraints and effective error enforcement | No readable rule expansion | Retained | Retained |
 | XLSX validation saved input/error messages | Omitted | Omitted | Retained |
 | XLSX resolved color-filter condition | Compact filter marker | Retained predicate color | Retained predicate color |
 | XLSX cell/run font/fill, style-range and number-format color metadata | Omitted | Omitted | Retained reading styles |
+| XLSX enabled sheet protection and affirmative applicable cell restrictions | Omitted | Omitted | sheet-protection; locked=true and formula-hidden=true when applicable |
 | XLSX formatted display value | Retained | Retained | Retained |
 | Chart/SmartArt reading previews | Bounded plain summary | Shared bounded structure | Shared bounded structure |
 | Raw hints, control binding provenance and bare dxf lookup indices | Not body fields | Not body fields | Not body fields |

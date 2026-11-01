@@ -94,7 +94,7 @@ class LayoutMasterResolverTests(unittest.TestCase):
         self.assertEqual(
             parse_pptx(source, density="structural").text,
             '<presentation density="structural" format="pptx"><slide number="1">'
-            '<textbox placeholder="body" shape-id="s1"><p>• One</p><p>n Two</p>'
+            '<textbox shape-id="s1"><p>• One</p><p>n Two</p>'
             "</textbox></slide></presentation>",
         )
 
@@ -128,9 +128,7 @@ class LayoutMasterResolverTests(unittest.TestCase):
                     if density == "plain":
                         self.assertEqual(result.text, "density=plain format=pptx\n=== Slide 1 ===\n" + expected)
                     else:
-                        attrs = 'placeholder="body" shape-id="s1"'
-                        if density == "semantic":
-                            attrs = 'name="TextBox 1" ' + attrs
+                        attrs = 'shape-id="s1"'
                         self.assertEqual(
                             result.text,
                             f'<presentation density="{density}" format="pptx"><slide number="1"><textbox {attrs}>'

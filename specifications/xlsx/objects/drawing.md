@@ -108,6 +108,26 @@ are not interpreted by merely matching a local element name.
     description/action or a retained connector gives them reading significance.
     Group coordinates do not imply a semantic connection.
 
+### `name`
+
+- **Output**
+  - Optional drawing-group/@name in both XML densities. Ordinary shape names
+    remain internal; their readable text, alt and title have separate fields.
+- **OOXML**
+  - The group's own xdr:cNvPr/@name.
+- **Parsing**
+  - Omit only a complete case-sensitive `Group [1-9][0-9]*` name with one ASCII
+    space on an actual group. Keep other names verbatim, including Chinese,
+    unknown prefixes, incompatible object types and leading-zero suffixes.
+  - Do not compare the suffix with the source cNvPr ID. IDs, parent references
+    and member relationships remain unchanged. This heuristic also omits an
+    authored name that deliberately matches; a retained name is not proof of
+    authored provenance. No new name inspection API is implied.
+- **References**
+  - [Excel Shape.Name](https://learn.microsoft.com/en-us/office/vba/api/excel.shape.name)
+    does not specify a complete automatic prefix catalog. Group is a confirmed
+    English producer convention, not a universal rule for Excel object names.
+
 ### `link`
 
 - **Output**

@@ -53,8 +53,8 @@ def parse_styles(
             format_code,
             font_id=_effective_style_id(xf, style_xfs, "font"),
             fill_id=_effective_style_id(xf, style_xfs, "fill"),
-            locked=_protection_flag(xf, "locked", default=True),
-            formula_hidden=_protection_flag(xf, "hidden", default=False),
+            locked=_protection_flag(xf, style_xfs, "locked", default=True),
+            formula_hidden=_protection_flag(xf, style_xfs, "hidden", default=False),
             visible_blank=(
                 _effective_style_id(xf, style_xfs, "fill") in visible_fills
                 or _effective_style_id(xf, style_xfs, "border") in visible_borders
@@ -145,14 +145,23 @@ def _int_attr(element: ET.Element, name: str, default: int = 0) -> int:
         return default
 
 
-def _protection_flag(element: ET.Element, name: str, *, default: bool) -> bool:
+def _protection_flag(element: ET.Element, parents: list[ET.Element], name: str, *, default: bool) -> bool | None:
     protection = element.find(f"{{{NS_S}}}protection")
+    apply = element.get("applyProtection")
+    if apply not in {None, "0", "1", "true", "false"}:
+        return None
+    if protection is None or apply in {"0", "false"}:
+        index = _int_attr(element, "xfId", -1)
+        parent = parents[index] if 0 <= index < len(parents) else None
+        protection = parent.find(f"{{{NS_S}}}protection") if parent is not None else None
     if protection is None:
         return default
     value = protection.get(name)
     if value is None:
         return default
-    return value not in {"0", "false", "False"}
+    if value in {"1", "true"}:
+        return True
+    return False if value in {"0", "false"} else None
 
 
 __all__ = ["StyleDetail", "parse_styles"]

@@ -9,6 +9,7 @@ from doctokens_core.containers.opc.reader import PackageReader
 from doctokens_core.contracts.models import ParseWarning
 from doctokens_core.ooxml.charts.parser import CHART_RELATIONSHIP_TYPES
 from doctokens_core.text.descriptions import first_readable
+from doctokens_core.text.object_names import reading_object_name
 
 from ....model.drawing import DrawingChart, DrawingImage, DrawingShape
 from .chart_parts import parse_chart_part
@@ -158,7 +159,10 @@ class DrawingObjects:
         if properties is None:
             return
         for source, key in (("name", "name"), ("descr", "alt"), ("title", "title")):
-            if value := properties.get(source):
+            value = properties.get(source)
+            if source == "name" and item["kind"] == "group":
+                value = reading_object_name(value, {"Group"})
+            if value:
                 item[key] = value  # type: ignore[literal-required]
         hyperlink = properties.find(f"{{{A}}}hlinkClick")
         if hyperlink is not None:

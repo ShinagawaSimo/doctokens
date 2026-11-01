@@ -47,7 +47,7 @@ def _append_sheet_metadata(
     for first, last in sheet.get("hidden_cols", []):
         ref = col_letter(first) if first == last else f"{col_letter(first)}:{col_letter(last)}"
         append(parent, "columns", ref=ref, hidden=True)
-    if sheet.get("sheet_protection"):
+    if density == "semantic" and sheet.get("sheet_protection"):
         append(parent, "sheet-protection")
     for defined_name in workbook["metadata"].get("defined_names", []):
         if defined_name.get("hidden") or defined_name["name"].startswith("_xlnm."):
@@ -175,14 +175,6 @@ def _append_pivot_context(parent: ET.Element, metadata: WorkbookMetadata, densit
             source=timeline.get("sourceName"),
             level=timeline.get("level"),
         )
-
-
-def _add_protection_attrs(attrs: dict[str, object], value: str) -> None:
-    for item in value.split():
-        if item == "unlocked":
-            attrs["locked"] = False
-        elif item == "formulaHidden":
-            attrs["formula_hidden"] = True
 
 
 def _joined(value: object) -> str:

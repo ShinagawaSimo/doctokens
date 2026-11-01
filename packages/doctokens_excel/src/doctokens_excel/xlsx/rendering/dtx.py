@@ -11,7 +11,7 @@ from doctokens_core.runtime.execution import checkpoint
 from ..model.coordinates import col_letter
 from ..model.workbook import Cell, ParsedWorkbook, SheetInfo
 from ..parsing.modules.styles.index import FormatIndex
-from .dtx_metadata import _add_protection_attrs, _append_sheet_metadata, _append_workbook_metadata
+from .dtx_metadata import _append_sheet_metadata, _append_workbook_metadata
 from .range_context import range_context
 from .selection import parse_range
 from .style_ranges import _add_style_attrs, _style_range_records
@@ -70,7 +70,14 @@ def _append_sheet(
         return
     if density in {"structural", "semantic"}:
         selected = window if window is not None else reading_window(sheet, density)
-        _append_grid(node, selected.rows, workbook, density, next_row=selected.next_row)
+        _append_grid(
+            node,
+            selected.rows,
+            workbook,
+            density,
+            next_row=selected.next_row,
+            sheet_protected=bool(sheet.get("sheet_protection")),
+        )
 
 
 def _append_grid(
@@ -80,6 +87,7 @@ def _append_grid(
     density: str,
     *,
     next_row: int | None,
+    sheet_protected: bool,
 ) -> None:
     bounds = cell_bounds(rows)
     if bounds is None:
@@ -111,7 +119,7 @@ def _append_grid(
         for cell in row:
             if cell.get("shadow"):
                 continue
-            attrs = _cell_attrs(cell, expected_col, density, format_index, suppressed_styles)
+            attrs = _cell_attrs(cell, expected_col, density, format_index, suppressed_styles, sheet_protected=sheet_protected)
             if cell.get("formulaType") == "dataTable" and cell.get("formula") and cell.get("formulaRange"):
                 data_table_key = (cell["formulaRange"], cell["formula"])
                 if data_table_key in data_table_groups:
@@ -179,6 +187,8 @@ def _cell_attrs(
     density: str,
     format_index: FormatIndex | None,
     suppressed_styles: set[str],
+    *,
+    sheet_protected: bool,
 ) -> dict[str, object]:
     attrs: dict[str, object] = {}
     if cell["col"] != expected_col:
@@ -210,8 +220,8 @@ def _cell_attrs(
             if rich.get("imageStatus") or rich.get("imagePart") or rich.get("imageUrl"):
                 attrs["in_cell_image"] = True
                 attrs["alt"] = rich.get("alt")
-        if format_index is not None and cell.get("style") is not None:
-            _add_protection_attrs(attrs, format_index.protection_attrs(cell.get("style")))
+        if density == "semantic" and sheet_protected and format_index is not None:
+            attrs.update(format_index.protection_attrs(cell.get("style"), has_formula=bool(cell.get("formula"))))
     if density == "semantic" and format_index is not None and cell.get("style") is not None:
         style = format_index.style_attrs(cell.get("style"))
         if style and style not in suppressed_styles:

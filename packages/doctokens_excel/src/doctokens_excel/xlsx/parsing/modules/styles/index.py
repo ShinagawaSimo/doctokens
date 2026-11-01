@@ -28,7 +28,7 @@ class FormatIndex:
 
     def __init__(self, *, locale: str = "zh-CN") -> None:
         # cellXfs index → (numFmtId, formatCode, fontId, fillId, locked, formulaHidden)
-        self._cell_formats: list[tuple[int, str, int, int, bool, bool]] = []
+        self._cell_formats: list[tuple[int, str, int, int, bool | None, bool | None]] = []
         self._programs: dict[tuple[str, str], FormatProgram] = {}
         self._text_parts: dict[str, list[str | None] | None] = {}
         # style_index → resolved attribute string ("" = no styles)
@@ -76,8 +76,8 @@ class FormatIndex:
         format_code: str,
         font_id: int = 0,
         fill_id: int = 0,
-        locked: bool = True,
-        formula_hidden: bool = False,
+        locked: bool | None = True,
+        formula_hidden: bool | None = False,
         visible_blank: bool = False,
     ) -> None:
         if visible_blank or not locked or formula_hidden:
@@ -162,17 +162,23 @@ class FormatIndex:
             self._style_attrs_cache[style_index] = " ".join(parts)
         return self._style_attrs_cache[style_index]
 
-    def protection_attrs(self, style_index: int | None) -> str:
-        """Return non-default protection attributes for a cell style."""
-        if style_index is None or not 0 <= style_index < len(self._cell_formats):
-            return ""
-        _num_fmt_id, _fmt_code, _font_id, _fill_id, locked, formula_hidden = self._cell_formats[style_index]
-        parts: list[str] = []
-        if not locked:
-            parts.append("unlocked")
-        if formula_hidden:
-            parts.append("formulaHidden")
-        return " ".join(parts)
+    def protection_attrs(self, style_index: int | None, *, has_formula: bool) -> dict[str, bool]:
+        """Positive saved flags; the caller establishes enabled sheet protection."""
+        index = 0 if style_index is None else style_index
+        locked: bool | None
+        formula_hidden: bool | None
+        if not self._cell_formats and index == 0:
+            locked, formula_hidden = True, False
+        elif 0 <= index < len(self._cell_formats):
+            _num_fmt_id, _fmt_code, _font_id, _fill_id, locked, formula_hidden = self._cell_formats[index]
+        else:
+            return {}
+        attrs: dict[str, bool] = {}
+        if locked is True:
+            attrs["locked"] = True
+        if formula_hidden is True and has_formula:
+            attrs["formula_hidden"] = True
+        return attrs
 
 
 __all__ = ["FormatIndex"]

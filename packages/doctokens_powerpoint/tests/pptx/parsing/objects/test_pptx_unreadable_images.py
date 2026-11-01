@@ -54,8 +54,6 @@ class UnreadablePictureTests(unittest.TestCase):
                     else:
                         expected = (
                             f'<presentation density="{density}" format="pptx"><slide number="1">'
-                            '<img alt="Readable" shape-id="s1"'
-                            + (' name="Picture 3"' if density == "semantic" else "")
-                            + '><unsupported type="image"/></img></slide></presentation>'
+                            '<img alt="Readable" shape-id="s1"' + '><unsupported type="image"/></img></slide></presentation>'
                         )
                         self.assertEqual(ET.canonicalize(result.text), ET.canonicalize(expected))

@@ -19,24 +19,11 @@ XML read failure: `ANCILLARY_XML_PARSE_FAILED`; omit the failed part. Scan match
   - `word/footer*.xml`; package basename without .xml
 
 - **IR**
-  -  `AncillaryItem.id: str | None`
+  - `AncillaryItem.id: str`
 
 - **Parsing**
   - Use basename (e.g. header1).
 
-### `locator`
-
-- **Output**
-  - `footer/@locator`.
-
-- **OOXML**
-  - Derived from group and ID.
-
-- **IR**
-  - `AncillaryItem.loc: str`
-
-- **Parsing**
-  - `"footers." + id`.
 
 ### `text`
 

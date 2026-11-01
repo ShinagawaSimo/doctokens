@@ -2,25 +2,27 @@
 
 [DOCX](../README.md) / SmartArt nodes
 
-Node ordinals are one-based source-point positions, including empty nodes.
+Node ordinals are original one-based source-point positions, including retained empty endpoints.
 Body preview and complete resource use the same `<node id="N">text</node>`.
 
 ## Fields
 
-### `modelId`
+### `id`
 
 - **Output**
-  - Internal source key.
+  - Body/resource node id and explicit connection endpoint.
 
 - **OOXML**
-  - `dgm:pt/@modelId`
+  - Original dgm:pt traversal ordinal; modelId is a temporary lookup key.
 
 - **IR**
-  - `SmartArtNode.modelId: str`
+  - `SmartArtNode.id: int`
 
 - **Parsing**
-  - Missing modelId defaults to empty and does not bind an edge. Duplicate keys
-    bind to the first occurrence; independently retained nodes keep their ordinals.
+  - Missing modelId does not bind an edge. Duplicate keys bind to the first
+    occurrence; independently retained nodes keep their original ordinals.
+    Source keys are discarded after resolving connections. Neither the model
+    nor resource output retains source IDs; filtered ID gaps are intentional.
 
 ### `text`
 
@@ -34,7 +36,7 @@ Body preview and complete resource use the same `<node id="N">text</node>`.
   - `SmartArtNode.text: str`
 
 - **Parsing**
-  - Concatenate then strip; retain empty nodes and their graph roles. Body text
+  - Concatenate then strip; retain empty connected nodes and their graph roles. Body text
     can be previewed under the SmartArt budget; resource text remains complete.
 
 ### `kind`
@@ -50,3 +52,5 @@ Body preview and complete resource use the same `<node id="N">text</node>`.
 
 - **Parsing**
   - Copy nonempty string.
+  - Keep kind on connected empty nodes as well as readable nodes. Standard
+    types include node, asst (assistant), doc (root), pres, parTrans and sibTrans.

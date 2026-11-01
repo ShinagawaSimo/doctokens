@@ -9,6 +9,7 @@ from xml.etree import ElementTree as ET
 from ....model import AncillaryContent, RawHint, Run
 from ....model.blocks import AncillarySearchParagraph
 from ....ooxml.namespaces import first_child, local_name
+from ....ooxml.numbering import NumberingMap
 from ....ooxml.property_changes import apply_property_review, revision_record, selected_properties, structural_revision
 from ....ooxml.table_styles import TableStyleResolver
 from ....ooxml.wrapped_content import content_children
@@ -23,9 +24,10 @@ def has_objects(runs: list[Run]) -> bool:
 
 
 class AncillaryContentParser:
-    def __init__(self, inline: InlineParser, next_block_id: Callable[[str], str]) -> None:
+    def __init__(self, inline: InlineParser, next_block_id: Callable[[str], str], numbering: NumberingMap) -> None:
         self.inline = inline
         self.next_block_id = next_block_id
+        self.numbering = numbering
         self._tables = 0
 
     def read(self, node: ET.Element, part: str) -> AncillaryContent:
@@ -54,7 +56,15 @@ class AncillaryContentParser:
             p_runs, p_hints = self.inline.paragraph_runs(paragraph, part, self.next_block_id(part), style, pending)
             properties = first_child(paragraph, "w", "pPr")
             for run in p_runs:
-                apply_property_review(run, properties, "paragraph", view)
+                apply_property_review(
+                    run,
+                    properties,
+                    "paragraph",
+                    view,
+                    styles=self.inline.styles,
+                    numbering=self.numbering,
+                    table_style=self.inline.table_style,
+                )
             mark = structural_revision(first_child(properties, "w", "rPr"))
             if view == "review" and mark is not None:
                 p_runs.append({"text": "", "paragraphMark": revision_record(mark)})
@@ -100,9 +110,9 @@ class AncillaryContentParser:
             row_texts: list[str] = [""] * source.before
             row_pr = first_child(source.node, "w", "trPr")
             row_markup: Run = {"text": ""}
-            apply_property_review(row_markup, row_pr, "row", view)
+            apply_property_review(row_markup, row_pr, "row", view, styles=self.inline.styles)
             exceptions = first_child(source.node, "w", "tblPrEx")
-            apply_property_review(row_markup, exceptions, "row-table", view)
+            apply_property_review(row_markup, exceptions, "row-table", view, styles=self.inline.styles)
             row_resolver = resolver.row_exception(selected_properties(exceptions, view))
             for cell in source.cells:
                 cell_pr = first_child(cell.node, "w", "tcPr")
@@ -112,7 +122,8 @@ class AncillaryContentParser:
                 )
                 outer = self.inline.table_style
                 outer_resolver = self.inline.table_style_for_paragraph
-                self.inline.table_style = row_resolver.cell(row, cell.column, cell.span, source.properties, cell.properties)
+                cell_style = row_resolver.cell(row, cell.column, cell.span, source.properties, cell.properties)
+                self.inline.table_style = cell_style
                 self.inline.table_style_for_paragraph = partial(
                     row_resolver.cell, row, cell.column, cell.span, source.properties, cell.properties
                 )
@@ -124,7 +135,7 @@ class AncillaryContentParser:
                     self.inline.table_style_for_paragraph = outer_resolver
                     self.inline.revisions.deleted_depth -= int(deleted)
                 cell_markup: Run = {"text": ""}
-                apply_property_review(cell_markup, cell_pr, "cell", view)
+                apply_property_review(cell_markup, cell_pr, "cell", view, styles=self.inline.styles, table_style=cell_style)
                 for run in content["runs"]:
                     markers = [*row_markup.get("revisions", []), *cell_markup.get("revisions", []), *run.get("revisions", [])]
                     if markers:

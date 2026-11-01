@@ -99,7 +99,7 @@ class Chart(ChartRequired, total=False):
 
 
 class SmartArtNodeRequired(TypedDict):
-    modelId: str
+    id: int
     text: str
 
 

@@ -22,8 +22,8 @@ def append_plots(parent: ET.Element, plots: list[ChartPlotInfo]) -> None:
             type=plot.get("chart_type"),
             grouping=plot.get("grouping"),
             direction=plot.get("direction"),
-            axes=" ".join(str(value) for value in axes) if isinstance(axes, list) and axes else None,
-            series=" ".join(str(value) for value in members) if isinstance(members, list) and members else None,
+            axes=" ".join(axes) or None,
+            series=" ".join(map(str, members)) or None,
         )
 
 
@@ -32,29 +32,18 @@ def append_annotations(
     labels: list[ChartLabel],
     options: dict[str, str],
     trends: list[dict[str, str]],
-    *,
-    preview: bool = False,
 ) -> None:
     if options:
         append(parent, "label-options", **options)
-    shown = 0
     for label in labels:
-        if preview and ("index" not in label or label["index"] >= 8):
-            continue
-        if preview and shown >= 8:
-            break
-        shown += 1
         node = append(
             parent,
             "label",
             label.get("text"),
             index=label.get("index"),
-            position=label.get("position"),
             deleted=True if label.get("deleted") else None,
         )
         if label.get("options"):
             append(node, "label-options", **label["options"])
-        if label.get("unsupported"):
-            append(node, "unsupported", type="chart-label")
-    for trend in trends[:8] if preview else trends:
+    for trend in trends:
         append(parent, "trendline", **trend)

@@ -175,7 +175,6 @@ class SmartArtNodeRequired(TypedDict):
 
 
 class SmartArtNode(SmartArtNodeRequired, total=False):
-    sourceId: str
     kind: str
 
 

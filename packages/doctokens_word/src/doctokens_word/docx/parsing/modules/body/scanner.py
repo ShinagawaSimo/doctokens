@@ -91,6 +91,7 @@ class DocumentBodyParser:
             on_page_break=self._mark_page_break,
             on_bookmark=self._anchors._register_bookmark,
             on_comment_anchor=self._anchors._register_comment_anchor,
+            textbox_reader=lambda node, part: parse_textbox_blocks(self, node, part),
         )
         self.block_ids = BlockIdAllocator()
         self._order = 0
@@ -100,7 +101,6 @@ class DocumentBodyParser:
         self._pending_page_breaks = 0
         self._table_parser = TableParser(self)
         self._textbox_depth = 0
-        self.inline.textbox_reader = lambda node, part: parse_textbox_blocks(self, node, part)
 
     def parse(self) -> list[Block]:
         """Stream-parse word/document.xml, preserving the original paragraph/table order."""
@@ -279,8 +279,15 @@ class DocumentBodyParser:
             change = property_change(
                 current_properties,
                 "paragraph",
-                reading_properties(selected_properties(current_properties, "original")),
-                reading_properties(current_properties),
+                reading_properties(
+                    selected_properties(current_properties, "original"),
+                    styles=self.styles,
+                    numbering=self.numbering_state.numbering,
+                    table_style=table_style,
+                ),
+                reading_properties(
+                    current_properties, styles=self.styles, numbering=self.numbering_state.numbering, table_style=table_style
+                ),
             )
             if change:
                 block["propertyChanges"] = [change]

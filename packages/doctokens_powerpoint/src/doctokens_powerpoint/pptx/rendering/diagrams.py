@@ -14,7 +14,6 @@ def append_diagram(
     parent: ET.Element,
     record: SmartArtRecord,
     *,
-    include_source_ids: bool = False,
     preview: bool = False,
 ) -> None:
     nodes, links = record.get("nodes", []), record.get("links", [])
@@ -38,7 +37,6 @@ def append_diagram(
             "node",
             label.text if label is not None else node["text"],
             id=node["id"],
-            source_id=node.get("sourceId") if include_source_ids else None,
             kind=node.get("kind"),
             truncated=True if label is not None and label.truncated else None,
         )

@@ -9,7 +9,7 @@ from doctokens_core.output.diagram_preview import diagram_plain
 from doctokens_core.output.ocr import plain_ocr
 from doctokens_core.output.plain import page_marker
 
-from ...model import Block, ContentControl, InlineContainer, InlineObject, OcrResultRecord, TableBlock, TableRow
+from ...model import Block, ContentControl, InlineContainer, InlineObject, OcrResultRecord, TableBlock, TableCell, TableRow
 from ...model.traversal import iter_blocks, iter_runs
 from ..common import constants as _constants
 from ..common.controls import controlled_text, wrap_plain_control
@@ -238,22 +238,13 @@ def _plain_row_text(row: TableRow, ocr_results: dict[str, OcrResultRecord] | Non
     return wrap_plain_control(value, controls) if controls else value
 
 
-def _plain_cell_text(cell: object, ocr_results: dict[str, OcrResultRecord] | None) -> str:
-    if not isinstance(cell, dict):
-        return ""
-    fallback = _string_field(cell.get("text"))
-    blocks = cell.get("blocks")
-    if not isinstance(blocks, list) or not blocks:
-        return fallback
+def _plain_cell_text(cell: TableCell, ocr_results: dict[str, OcrResultRecord] | None) -> str:
     parts: list[str] = []
-    for child in blocks:
-        if not isinstance(child, dict):
-            continue
-        if child.get("type") == "table":
-            parts.append(table_text_only(cast(TableBlock, child), ocr_results))
+    for child in cell["blocks"]:
+        if child["type"] == "table":
+            parts.append(table_text_only(child, ocr_results))
         else:
-            parts.append(inline_text_only(cast(InlineContainer, child), ocr_results))
+            parts.append(inline_text_only(child, ocr_results))
     rendered = "\n".join(part for part in parts if part)
-    value = rendered or fallback
-    controls = _controls(cell.get("contentControls"))
-    return wrap_plain_control(value, controls) if controls else value
+    controls = cell.get("contentControls", [])
+    return wrap_plain_control(rendered, controls) if controls else rendered

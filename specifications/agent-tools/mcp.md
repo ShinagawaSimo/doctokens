@@ -12,8 +12,7 @@ doctokens-mcp --root /absolute/path/to/documents
 
 The equivalent module command is `python -m doctokens_agent_tools.mcp.server --root ...`. Repeat `--root` for multiple allowed directories. The service requires initialization by an MCP client; it does not print document content as an ordinary command-line converter.
 
-`--mcp-output-mode compatible|compact` selects native metadata projection;
-`compatible` is the default. `--max-session-memory-bytes` and
+`--max-session-memory-bytes` and
 `--max-session-total-memory-bytes` configure the estimated session budgets, with
 defaults 268435456 and 536870912. Host configuration is fixed until restart.
 `--max-search-bytes`, `--max-search-states` and `--search-idle-seconds` configure
@@ -29,18 +28,12 @@ resumable XLSX text search with defaults 33554432, 8 and 600.
   - `tools/call` uses the same strict validation and execution as `ToolRuntime.execute`, including stable error codes.
   - Document text appears once in native `TextContent`. `structuredContent`
     carries `ok`/`data`/optional `error`, selection and continuation metadata.
-    A part's `content_index` identifies its native body block in either mode.
-  - In `compatible` mode, the first native text block is compact JSON navigation
-    metadata, separate from document text. It exposes snapshot identity, selections,
-    resource URIs and applicable continuation without serializing the body again.
-    Multi-part replies also identify native body indices, including the absence
-    of a block for an unstarted part. For one body, it follows the JSON block.
-  - In `compact` mode, body replies omit that native metadata block. Structured
-    clients must follow `content_index`, rather than assume block zero is a body.
-    In both modes, metadata-only replies provide native JSON, and errors provide
-    native error code/message as well as structured diagnostics and `isError=true`.
-    No client-capability heuristic selects a mode. `RuntimeConfig.mcp_output_mode`
-    provides the same choice for programmatic servers.
+    A part's `content_index` identifies its native body block.
+  - Body replies carry navigation only in structuredContent. Clients follow
+    content_index for each started part; an unstarted part has no body block.
+    Metadata-only replies provide native JSON, and errors provide native error
+    code/message plus structured diagnostics and isError=true. This is one fixed
+    projection with no output-mode flag or client-capability heuristic.
   - Large text reads return a first prefix immediately. Retain its result_id
     and continue from next_offset; do not restart at offset 0. Each continuation
     returns native text and only content_index/next_offset metadata. The final

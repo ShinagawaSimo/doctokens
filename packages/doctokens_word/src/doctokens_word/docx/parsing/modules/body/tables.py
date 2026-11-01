@@ -60,7 +60,7 @@ class TableParser:
             }
             if content_controls:
                 block["contentControls"] = list(content_controls)
-            apply_property_review(block, current_properties, "table", view)
+            apply_property_review(block, current_properties, "table", view, styles=owner.styles)
             grid_change = first_child(grid, "w", "tblGridChange")
             if view == "review" and grid_change is not None:
                 from ....ooxml.property_changes import property_change
@@ -107,9 +107,9 @@ class TableParser:
         if source.controls:
             row["contentControls"] = list(source.controls)
         row_pr = first_child(source.node, "w", "trPr")
-        apply_property_review(row, row_pr, "row", view)
+        apply_property_review(row, row_pr, "row", view, styles=owner.styles)
         exceptions = first_child(source.node, "w", "tblPrEx")
-        apply_property_review(row, exceptions, "row-table", view)
+        apply_property_review(row, exceptions, "row-table", view, styles=owner.styles)
         styles = styles.row_exception(selected_properties(exceptions, view))
         revision = structural_revision(row_pr)
         deleted_row = revision is not None and local_name(revision.tag) in {"del", "moveFrom"}
@@ -119,9 +119,8 @@ class TableParser:
             deleted_cell = cell_revision is not None and local_name(cell_revision.tag) == "cellDel"
             outer_style = owner.inline.table_style
             outer_resolver = owner.inline.table_style_for_paragraph
-            owner.inline.table_style = styles.cell(
-                index, cell_source.column, cell_source.span, source.properties, cell_source.properties
-            )
+            cell_style = styles.cell(index, cell_source.column, cell_source.span, source.properties, cell_source.properties)
+            owner.inline.table_style = cell_style
             owner.inline.table_style_for_paragraph = partial(
                 styles.cell, index, cell_source.column, cell_source.span, source.properties, cell_source.properties
             )
@@ -153,7 +152,7 @@ class TableParser:
                     background = None
             if background and owner.include_character_formatting:
                 cell["background"] = background
-            apply_property_review(cell, cell_pr, "cell", view)
+            apply_property_review(cell, cell_pr, "cell", view, styles=owner.styles, table_style=cell_style)
             row["cells"].append(cell)
         return row
 

@@ -13,24 +13,41 @@ Saved points use the same indexed reader for literal data and reference caches. 
 ### `labels`
 
 - **Output**
-  - series/label with zero-based index, optional position/deleted and saved text.
-    label-options retains saved visibility and separator declarations.
+  - series/label with zero-based index, optional deleted state and saved text.
+    label-options retains defined content visibility and saved separator text.
+    Pure label position is not extracted or serialized.
 - **OOXML**
   - c:dLbls/c:dLbl/c:idx and c:tx rich text/strRef cache.
     c15:datalabelsRange/c15:dlblRangeCache/c:pt supplies explicitly indexed
     range labels (DrawingML 2012 chart namespace).
-    ChartEx dataLabels/dataLabel/dataLabelHidden retains indices, position,
-    hidden state and visibility declarations.
+    ChartEx dataLabels/dataLabel/dataLabelHidden retains indices, hidden state
+    and the defined seriesName/categoryName/value visibility declarations.
 - **Parsing**
   - Direct labels override plot defaults and saved range text at that index.
     Preserve paragraph/soft-break text. Do not open external workbooks or
     generate numeric/percentage labels from visibility flags.
-  - DOCX/PPTX previews retain at most eight labels for points 0..7 in the first
-    eight series; full resources retain all saved labels. XLSX keeps its compact
-    body summary, with annotations in full chart resources.
-  - A label reference with no saved cache retains an unsupported chart-label
-    marker; an explicitly empty saved label remains empty. The reader does
-    not fetch/compute missing label text.
+  - DOCX/PPTX/XLSX XML previews retain at most eight labels for shown points in
+    the first eight series, within the shared annotation/character budget.
+    Full resources retain all recovered saved text. Plain keeps its bounded
+    chart summary; source annotation settings do not expand it.
+  - Missing saved automatic/reference results add no generated text, new
+    placeholder or diagnostic. Empty text without a state/visibility declaration
+    contributes no reading label. The reader does not fetch external results
+    or generate displayed numbers/percentages from flags.
+
+### `label_options`
+
+- **Output**
+  - series/label-options and label/label-options in XML previews and resources.
+- **Source**
+  - ChartML showLegendKey/showVal/showCatName/showSerName/showPercent/showBubbleSize,
+    separator, and supported c15:showDataLabelsRange; ChartEx visibility fields.
+- **Parsing**
+  - Use a closed set. Normalize saved 1/true and 0/false to true/false, including
+    explicit false overrides. ChartEx seriesName/categoryName/value map to
+    showSerName/showCatName/showVal. Unknown attributes are not retained.
+  - These declarations identify displayed content kinds, not recovered values.
+    A display flag must never be interpreted as the actual label text.
 
 ### `trendlines`
 
@@ -42,7 +59,18 @@ Saved points use the same indexed reader for literal data and reference caches. 
 - **Parsing**
   - Read saved configuration/text only. A saved y=2x+1 remains readable;
     an enabled equation without saved text never causes fitting/reconstruction.
-    DOCX/PPTX previews cap at eight trendlines; full resources retain all.
+    Preserve all saved label text, including a saved R² value and line breaks;
+    no numerical value is inferred from the display boolean. Normalize display
+    booleans to true/false and preserve explicit false. Missing generated text
+    adds no extra status/unsupported marker in this contract.
+  - All three formats' XML previews cap at eight trendlines within the common
+    annotation/character budget; complete resources retain all recovered text.
+- **References**
+  - ISO/IEC 29500-1 §§21.2.2.43–44 define display-equation/display-r-squared as
+    display booleans, and §21.2.2.212 defines the separate saved trendline label.
+  - [Excel Trendline.DisplayRSquared](https://learn.microsoft.com/en-us/office/vba/api/excel.trendline.displayrsquared)
+    and [DisplayEquation](https://learn.microsoft.com/en-us/office/vba/api/excel.trendline.displayequation)
+    confirm that these values can appear together in the chart's data label.
 
 ### `axis_ids`
 

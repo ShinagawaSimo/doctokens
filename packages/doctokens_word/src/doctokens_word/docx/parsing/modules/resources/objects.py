@@ -6,6 +6,7 @@ from xml.etree import ElementTree as ET
 
 from doctokens_core.containers.opc.relationships import RelationshipIndex
 from doctokens_core.ooxml.charts.parser import CHART_RELATIONSHIP_TYPES, ChartParser
+from doctokens_core.output.diagram_preview import reading_node_ids
 
 from ....model import (
     Chart,
@@ -216,7 +217,7 @@ def parse_smartart_root(root: ET.Element, smartart_id: str, part_name: str) -> S
     for point in root.iter(qualified_name("dgm", "pt")):
         model_id = point.get("modelId", "")
         text = _node_text(point)
-        node: SmartArtNode = {"modelId": model_id, "text": text}
+        node: SmartArtNode = {"id": len(nodes) + 1, "text": text}
         point_type = point.get("type")
         if point_type:
             node["kind"] = point_type
@@ -242,6 +243,8 @@ def parse_smartart_root(root: ET.Element, smartart_id: str, part_name: str) -> S
                 link["kind"] = kind
             links.append(link)
 
+    retained = reading_node_ids([(node["id"], node["text"]) for node in nodes], [(edge["from"], edge["to"]) for edge in links])
+    nodes = [node for node in nodes if node["id"] in retained]
     return {
         "id": smartart_id,
         "type": "smartart",

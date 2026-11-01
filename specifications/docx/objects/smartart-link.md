@@ -18,7 +18,8 @@ Connections address retained node ordinals.
   - `SmartArtLink["from"]: int`
 
 - **Parsing**
-  - Resolve modelId to retained 1-based node position; omit connection if unresolved.
+  - Resolve modelId to the original 1-based source-point ordinal; omit a
+    connection if unresolved. Every resolved endpoint survives node filtering.
 
 ### `to`
 

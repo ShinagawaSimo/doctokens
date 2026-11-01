@@ -44,18 +44,26 @@ def label_options(container: ET.Element, prefix: str = _C) -> dict[str, str]:
     result: dict[str, str] = {}
     for name in _LABEL_FLAGS:
         node = container.find(prefix + name)
-        if node is not None:
-            result[name] = node.get("val", "1")
+        if node is not None and (value := _display_flag(node.get("val", "1"))) is not None:
+            result[name] = value
     separator = container.find(prefix + "separator")
     if separator is not None:
         result["separator"] = separator.text or ""
     visibility = container.find(_CX + "visibility")
     if visibility is not None:
-        result.update(visibility.attrib)
+        for source, target in (("seriesName", "showSerName"), ("categoryName", "showCatName"), ("value", "showVal")):
+            if (value := _display_flag(visibility.get(source))) is not None:
+                result[target] = value
     show_range = container.find(_C + "extLst/" + _C + "ext/" + _C15 + "showDataLabelsRange")
-    if show_range is not None:
-        result["showDataLabelsRange"] = show_range.get("val", "1")
+    if show_range is not None and (value := _display_flag(show_range.get("val", "1"))) is not None:
+        result["showDataLabelsRange"] = value
     return result
+
+
+def _display_flag(value: str | None) -> str | None:
+    if value in {"1", "true"}:
+        return "true"
+    return "false" if value in {"0", "false"} else None
 
 
 def series_labels(series: ET.Element, *, chartex: bool = False) -> tuple[list[ChartLabel], dict[str, str]]:
@@ -68,7 +76,7 @@ def series_labels(series: ET.Element, *, chartex: bool = False) -> tuple[list[Ch
         if source.tag not in {prefix + ("dataLabel" if chartex else "dLbl"), _CX + "dataLabelHidden"}:
             continue
         label: ChartLabel = {}
-        raw_index = source.get("idx") if chartex else source.findtext(_C + "idx")
+        raw_index = source.get("idx") if chartex else None
         if not chartex:
             index = source.find(_C + "idx")
             raw_index = index.get("val") if index is not None else None
@@ -81,23 +89,13 @@ def series_labels(series: ET.Element, *, chartex: bool = False) -> tuple[list[Ch
         value = saved_text(tx, prefix)
         if value:
             label["text"] = value
-        elif (
-            tx is not None
-            and tx.find(prefix + "strRef") is not None
-            and tx.find(prefix + "strRef/" + prefix + "strCache") is None
-        ):
-            label["unsupported"] = True
-        position = source.get("pos") if chartex else None
-        if not chartex and (node := source.find(_C + "dLblPos")) is not None:
-            position = node.get("val")
-        if position:
-            label["position"] = position
         deleted = source.find(_C + "delete")
         if source.tag == _CX + "dataLabelHidden" or (deleted is not None and deleted.get("val", "1") in {"1", "true"}):
             label["deleted"] = True
         if options := label_options(source, prefix):
             label["options"] = options
-        labels.append(label)
+        if label.get("text") or label.get("deleted") or label.get("options"):
+            labels.append(label)
     if not chartex:
         selected = {label["index"]: label for label in labels if "index" in label}
         for cache in series.findall(_C + "extLst/" + _C + "ext/" + _C15 + "datalabelsRange/" + _C15 + "dlblRangeCache"):
@@ -109,7 +107,7 @@ def series_labels(series: ET.Element, *, chartex: bool = False) -> tuple[list[Ch
                 if point_index < 0:
                     continue
                 label_text = point.findtext(_C + "v")
-                if label_text is None:
+                if not label_text:
                     continue
                 cached_label = selected.get(point_index)
                 if cached_label is None:
@@ -132,12 +130,14 @@ def trendlines(series: ET.Element) -> list[dict[str, str]]:
             ("forward", "forward"),
             ("backward", "backward"),
             ("intercept", "intercept"),
-            ("display-equation", "dispEq"),
-            ("display-r-squared", "dispRSqr"),
         ):
             child = source.find(_C + name)
-            if child is not None:
-                item[field] = child.get("val", "1" if name.startswith("disp") else "")
+            if child is not None and (value := child.get("val")):
+                item[field] = value
+        for field, name in (("display-equation", "dispEq"), ("display-r-squared", "dispRSqr")):
+            child = source.find(_C + name)
+            if child is not None and (flag := _display_flag(child.get("val", "1"))) is not None:
+                item[field] = flag
         if title := source.findtext(_C + "name"):
             item["name"] = title
         label = source.find(_C + "trendlineLbl/" + _C + "tx")

@@ -11,6 +11,12 @@ _LINK_LIMIT = 24
 _TEXT_LIMIT = 1200
 
 
+def reading_node_ids(labels: Sequence[tuple[int, str]], edges: Sequence[tuple[int, int]]) -> set[int]:
+    """Retain readable labels and every endpoint, without bypassing empty nodes."""
+    endpoints = {identifier for edge in edges for identifier in edge}
+    return {identifier for identifier, label in labels if label.strip() or identifier in endpoints}
+
+
 @dataclass(frozen=True)
 class PreviewNode:
     id: int

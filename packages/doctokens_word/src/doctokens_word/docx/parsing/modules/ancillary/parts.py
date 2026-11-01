@@ -21,6 +21,7 @@ from ....model import (
 )
 from ....ooxml.compatibility import DocxCompatibility
 from ....ooxml.namespaces import attr, child_elements, local_name
+from ....ooxml.numbering import NumberingMap
 from ....ooxml.package import PackageReader
 from ....ooxml.styles import StyleMap
 from ...plan import DocxFeature, DocxParsePlan
@@ -44,7 +45,9 @@ class AncillaryParser:
         comment_anchors: Mapping[str, str] | None = None,
         plan: DocxParsePlan | None = None,
         compatibility: DocxCompatibility | None = None,
-        textbox_reader: TextboxReader | None = None,
+        *,
+        textbox_reader: TextboxReader,
+        numbering: NumberingMap,
     ) -> None:
         self.package = package
         self.options = options
@@ -59,10 +62,10 @@ class AncillaryParser:
             asset_lookup=asset_lookup,
             object_lookup=object_lookup,
             plan=self.plan,
+            textbox_reader=textbox_reader,
         )
-        self.inline.textbox_reader = textbox_reader
         self._block_index = 0
-        self.content = AncillaryContentParser(self.inline, self._next_block_id)
+        self.content = AncillaryContentParser(self.inline, self._next_block_id, numbering)
         self._comment_anchors = dict(comment_anchors or {})
 
     def parse(self) -> AncillaryResult:
@@ -90,7 +93,7 @@ class AncillaryParser:
             self.inline.revisions.ranges.clear()
             content = self.content.read(root, name)
             item_id = name.rsplit("/", 1)[-1].removesuffix(".xml")
-            self._try_emit_item(item_id, f"{kind}s.{item_id}", content, rows)
+            self._try_emit_item(item_id, content, rows)
         return rows
 
     def _parse_notes(self, part_name: str, tag_name: str) -> list[AncillaryItem]:
@@ -101,7 +104,6 @@ class AncillaryParser:
         if root is None:
             return []
         rows: list[AncillaryItem] = []
-        group = "footnotes" if tag_name == "footnote" else "endnotes"
         for note in child_elements(root, "w", tag_name):
             note_type = attr(note, "w", "type")
             if note_type in {"separator", "continuationSeparator"}:
@@ -111,7 +113,7 @@ class AncillaryParser:
                 continue
             self.inline.revisions.ranges.clear()
             content = self.content.read(note, part_name)
-            self._try_emit_item(note_id, f"{group}.{note_id}", content, rows)
+            self._try_emit_item(note_id, content, rows)
         return rows
 
     def _parse_comments(self) -> list[AncillaryItem]:
@@ -132,7 +134,6 @@ class AncillaryParser:
             content = self.content.read(comment, part_name)
             row = self._try_emit_item(
                 comment_id,
-                f"comments.{comment_id}",
                 content,
                 rows,
                 author=attr(comment, "w", "author") or "",
@@ -156,7 +157,6 @@ class AncillaryParser:
     def _try_emit_item(
         self,
         item_id: str,
-        loc: str,
         content: AncillaryContent,
         rows: list[AncillaryItem],
         *,
@@ -169,7 +169,6 @@ class AncillaryParser:
             return None
         row: AncillaryItem = {
             "id": item_id,
-            "loc": loc,
             "text": content["text"],
             "runs": content["runs"],
             "searchUnits": content.get("searchUnits", []),

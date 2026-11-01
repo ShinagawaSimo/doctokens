@@ -19,7 +19,7 @@ def text_units(document: ParsedDocument, *, include_headers_footers: bool = Fals
         groups.extend((("header", document.headers), ("footer", document.footers)))
     for source, items in groups:
         for item in items:
-            identity = item.get("id") or item["loc"]
+            identity = item["id"]
             locator: Locator = {**references.get((source, identity), {}), "source": source, "item_id": identity}
             for index, unit in enumerate(item.get("searchUnits", []), 1):
                 position = {**locator, "paragraph": index}
@@ -70,8 +70,5 @@ def _objects(container: InlineContainer, locator: Locator, references: dict[tupl
                     nested["story_source"] = locator["source"]
                 if item.get("id"):
                     nested["textbox_id"] = str(item["id"])
-                for block in item.get("blocks", []):
+                for block in item["blocks"]:
                     yield from _block(block, nested, references)
-                if "blocks" not in item:
-                    for index, text in enumerate(item.get("text", "").splitlines(), 1):
-                        yield TextUnit(text, {**nested, "paragraph": index})

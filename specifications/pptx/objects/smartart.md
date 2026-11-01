@@ -10,7 +10,8 @@ Plain displays `[SmartArt: Start; Middle; End]`, omitting numbered labels, edge
 listings and layout/count bookkeeping. Both XML densities use the same body
 preview limits: 12 source nodes, 24 connections and 1,200 label characters,
 including a trailing ellipsis when a label must be cut. Preserve source order,
-original node IDs and empty/root/transition nodes. Empty nodes consume slots;
+original node IDs and all connected empty/root/transition nodes. Isolated
+whitespace-only nodes are removed before the budget. Connected empty nodes consume slots;
 plain omits their empty labels. Only show edges with two retained endpoints;
 do not fabricate a connection through a hidden node.
 
@@ -18,8 +19,8 @@ When the entire graph fits all limits, show it completely. Otherwise body
 truncated=true identifies the preview and @id resolves with
 `session.render_resource("smartart", id)`. Plain includes
 `[SmartArt id=smartart1 truncated: ...]`. A clipped node has truncated=true.
-Resource output remains complete, keeps its original node IDs and existing
-source-id fields, and does not inherit body limits or mutate after body reads.
+Resource output contains the complete retained reading graph, keeps original
+node IDs without source GUIDs, and does not inherit body limits or mutate after body reads.
 Missing/unreadable data retains an unsupported child or `[Unparsed SmartArt]`,
 without inventing a readable resource key or budget-truncation flag.
 
@@ -82,9 +83,11 @@ without inventing a readable resource key or budget-truncation flag.
   - `list[SmartArtNode]`
 
 - **Parsing**
-  - Keep every pt, including empty/root/transition labels, in source order. Node
-    ids are one-based positions; preserve source model ids in resource `source-id`
-    and explicit node types in `kind`. Do not guess business-node roles.
+  - Keep readable pts and all endpoints, including connected empty/root/transition
+    labels, in source order. Node IDs are original one-based source positions;
+    do not renumber after filtering. Discard source model IDs after resolving
+    edges, but preserve explicit node/link types in kind as a reading clue.
+    No business roles or edges are inferred.
 
 ### `nodeCount`
 

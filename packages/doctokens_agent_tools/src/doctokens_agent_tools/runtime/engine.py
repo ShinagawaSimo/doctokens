@@ -96,7 +96,6 @@ class ToolRuntime:
                     "total": self.config.max_session_total_memory_bytes,
                     "unit": "estimated bytes; not process RSS",
                 },
-                "mcp_output_mode": self.config.mcp_output_mode,
                 "result_bytes": self._results.bytes,
                 "search_states": search_states,
                 "search_estimated_bytes": search_bytes,

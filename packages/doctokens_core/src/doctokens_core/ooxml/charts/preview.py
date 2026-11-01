@@ -54,7 +54,7 @@ class _Budget:
 
 
 def series_points(series: ChartSeriesInfo) -> int:
-    return max(series.get("point_count", 0), len(series.get("points", [])), *(len(values) for _, values in _arrays(series)))
+    return max(series.get("point_count", 0), *(len(values) for _, values in _arrays(series)))
 
 
 def append_chart_preview(parent: ET.Element, chart: ChartInfo) -> None:
@@ -154,22 +154,20 @@ def _axis_refs(values: list[str], known: set[str], budget: _Budget) -> str | Non
 
 
 def _point(series: ChartSeriesInfo, index: int) -> ChartPoint:
-    if "points" in series:
-        return series["points"][index] if index < len(series["points"]) else {}
     return cast(ChartPoint, {key: values[index] for key, values in _arrays(series) if index < len(values)})
 
 
 def _annotations(parent: ET.Element, series: ChartSeriesInfo, budget: _Budget, visible_points: set[int]) -> None:
     labels, trends = series.get("labels", []), series.get("trendlines", [])
+    shown_labels = [label for label in labels if label.get("index") in visible_points][:8]
     temporary = ET.Element("annotations")
     append_annotations(
         temporary,
-        [label for label in labels if label.get("index") in visible_points],
+        shown_labels,
         series.get("label_options", {}),
-        trends,
-        preview=True,
+        trends[:8],
     )
-    if len(labels) != sum(1 for child in temporary if child.tag == "label") or len(trends) > 8:
+    if len(labels) != len(shown_labels) or len(trends) > 8:
         budget.changes += 1
 
     def copy(source: ET.Element, target: ET.Element) -> None:

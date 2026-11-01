@@ -33,3 +33,16 @@ Edges reference retained node ordinals.
 
 - **Parsing**
   - Same prior-node resolution.
+
+### `kind`
+
+- **Output**
+  - Saved nonempty link/@kind in body previews and resources.
+- **OOXML**
+  - dgm:cxn/@type.
+- **IR**
+  - SmartArtLink.kind: str.
+- **Parsing**
+  - Preserve the explicit relation clue. Standard parOf means parent-child;
+    presOf/presParOf describe presentation relationships, not inferred business
+    hierarchy; unknownRelationship declares an unknown relationship.

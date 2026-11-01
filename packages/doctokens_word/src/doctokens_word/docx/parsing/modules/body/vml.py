@@ -16,9 +16,7 @@ _IMAGE_DATA = qualified_name("v", "imagedata")
 _TEXTBOX = qualified_name("w", "txbxContent")
 
 
-def pict_objects(
-    pict: ET.Element, part: str, asset_lookup: AssetLookup, textbox_reader: TextboxReader | None = None
-) -> list[InlineObject]:
+def pict_objects(pict: ET.Element, part: str, asset_lookup: AssetLookup, textbox_reader: TextboxReader) -> list[InlineObject]:
     """Bind each image using its owner part and retain the shape's description.
 
     Traversal stops at text-box content: the existing text-box projection owns

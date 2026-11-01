@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
 from ....model import Block, DrawingCommon, InlineObject
-from ....ooxml.namespaces import child_elements, local_name
 from ....ooxml.numbering import NumberingState
 from .containers import container_blocks
 from .object_common import copy_drawing_common
@@ -21,7 +20,7 @@ TextboxReader = Callable[[ET.Element, str], list[Block]]
 def parse_textbox_blocks(owner: DocumentBodyParser, node: ET.Element, part: str) -> list[Block]:
     from .scanner import DocumentBodyParser
 
-    if getattr(owner, "_textbox_depth", 0) >= 32:
+    if owner._textbox_depth >= 32:
         owner._warn("TEXTBOX_NESTING_LIMIT", "Text-box nesting exceeds 32 stories", part=part)
         return []
     child = DocumentBodyParser(
@@ -39,7 +38,7 @@ def parse_textbox_blocks(owner: DocumentBodyParser, node: ET.Element, part: str)
     child.block_ids = owner.block_ids
     child.table_ids = owner.table_ids
     child._page_hint = owner._page_hint
-    child._textbox_depth = getattr(owner, "_textbox_depth", 0) + 1
+    child._textbox_depth = owner._textbox_depth + 1
     child._anchors = owner._anchors
     child.inline.on_bookmark = owner._anchors._register_bookmark
     child.inline.on_comment_anchor = owner._anchors._register_comment_anchor
@@ -47,20 +46,16 @@ def parse_textbox_blocks(owner: DocumentBodyParser, node: ET.Element, part: str)
 
 
 def textbox_objects_from_nodes(
-    nodes: list[ET.Element], common: DrawingCommon, part: str = "", reader: TextboxReader | None = None
+    nodes: list[ET.Element], common: DrawingCommon, part: str, reader: TextboxReader
 ) -> list[InlineObject]:
     objects: list[InlineObject] = []
     for txbx in nodes:
-        blocks = reader(txbx, part) if reader is not None else None
-        if blocks is not None and not blocks:
+        blocks = reader(txbx, part)
+        if not blocks:
             continue
-        text = _blocks_text(blocks) if blocks is not None else _container_plain_text(txbx)
-        if blocks or text.strip():
-            textbox: InlineObject = {"type": "textbox", "text": text}
-            if blocks is not None:
-                textbox["blocks"] = blocks
-            copy_drawing_common(textbox, common)
-            objects.append(textbox)
+        textbox: InlineObject = {"type": "textbox", "text": _blocks_text(blocks), "blocks": blocks}
+        copy_drawing_common(textbox, common)
+        objects.append(textbox)
     return objects
 
 
@@ -72,41 +67,3 @@ def _blocks_text(blocks: list[Block]) -> str:
         else:
             parts.append(block["text"])
     return "\n".join(parts)
-
-
-def _container_plain_text(node: ET.Element) -> str:
-    parts: list[str] = []
-    for child in node:
-        lname = local_name(child.tag)
-        if lname == "p":
-            text = _inline_plain_text(child)
-        elif lname == "tbl":
-            text = _table_plain_text(child)
-        else:
-            text = _inline_plain_text(child)
-        if text.strip():
-            parts.append(text)
-    return "\n".join(parts)
-
-
-def _table_plain_text(tbl: ET.Element) -> str:
-    rows: list[str] = []
-    for tr in child_elements(tbl, "w", "tr"):
-        cells = [_container_plain_text(tc) for tc in child_elements(tr, "w", "tc")]
-        row = " | ".join(cell.strip() for cell in cells if cell.strip())
-        if row:
-            rows.append(row)
-    return "\n".join(rows)
-
-
-def _inline_plain_text(node: ET.Element) -> str:
-    parts: list[str] = []
-    for item in node.iter():
-        lname = local_name(item.tag)
-        if lname == "t":
-            parts.append(item.text or "")
-        elif lname == "tab":
-            parts.append("\t")
-        elif lname in {"br", "cr"}:
-            parts.append("\n")
-    return "".join(parts)

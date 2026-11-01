@@ -26,7 +26,7 @@ def _append_smartart(parent: ET.Element, smartart: InlineObject) -> None:
     nodes = smartart.get("nodes", [])
     links = smartart.get("links", [])
     preview = diagram_preview(
-        [(index, item["text"]) for index, item in enumerate(nodes, start=1)],
+        [(item["id"], item["text"]) for item in nodes],
         [(edge["from"], edge["to"]) for edge in links],
     )
     node = append(
@@ -42,10 +42,9 @@ def _append_smartart(parent: ET.Element, smartart: InlineObject) -> None:
     if "nodes" not in smartart:
         append(node, "unsupported", type="smartart")
         return
+    by_id = {item["id"]: item for item in nodes}
     for item in preview.nodes:
-        append(
-            node, "node", item.text, id=item.id, kind=nodes[item.id - 1].get("kind"), truncated=True if item.truncated else None
-        )
+        append(node, "node", item.text, id=item.id, kind=by_id[item.id].get("kind"), truncated=True if item.truncated else None)
     for index in preview.link_indices:
         edge = links[index]
         append(node, "link", **{"from": edge["from"], "to": edge["to"], "kind": edge.get("kind")})

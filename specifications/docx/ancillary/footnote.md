@@ -19,24 +19,11 @@ XML read failure: `ANCILLARY_XML_PARSE_FAILED`; omit the failed part. Skip sourc
   - `word/footnotes.xml/w:footnotes/w:footnote`; `@w:id`
 
 - **IR**
-  -  `AncillaryItem.id: str | None`
+  - `AncillaryItem.id: str`
 
 - **Parsing**
   - Copy nonempty source id; skip missing IDs.
 
-### `locator`
-
-- **Output**
-  - `footnote/@locator`.
-
-- **OOXML**
-  - Derived from group and ID.
-
-- **IR**
-  - `AncillaryItem.loc: str`
-
-- **Parsing**
-  - `"footnotes." + id`.
 
 ### `text`
 

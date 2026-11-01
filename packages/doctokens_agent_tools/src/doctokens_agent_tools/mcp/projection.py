@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import Any, Literal
+from typing import Any
 
 from mcp import types
 from pydantic import AnyUrl
@@ -12,7 +12,7 @@ from pydantic import AnyUrl
 from ..contracts.models import ToolResponse
 
 
-def project_response(response: ToolResponse, mode: Literal["compatible", "compact"]) -> types.CallToolResult:
+def project_response(response: ToolResponse) -> types.CallToolResult:
     structured = response.to_dict(include_attachments=False)
     data = dict(response.data)
     parts = [dict(part) for part in data.get("parts", [])]
@@ -28,21 +28,13 @@ def project_response(response: ToolResponse, mode: Literal["compatible", "compac
             payload["content_index"] = len(content)
             content.append(types.TextContent(type="text", text=value))
 
-    # Separate native blocks keep JSON/XML fragments byte-for-byte reusable by
-    # structured consumers. No wrapper is injected into the document body.
-    native: dict[str, Any]
-    if response.is_error:
-        assert response.error is not None
-        native = {"error": {key: response.error[key] for key in ("code", "message")}}
-    else:
-        native = {key: value for key, value in data.items() if key != "content_index"}
-        if "parts" in native:
-            native["parts"] = [{key: value for key, value in part.items() if key != "content_index"} for part in parts]
-            if len(parts) > 1 and mode == "compatible":
-                for part, metadata in zip(parts, native["parts"], strict=True):
-                    if "content_index" in part:
-                        metadata["content_index"] = part["content_index"] + 1
-    if mode == "compatible" or response.is_error or not content:
+    if response.is_error or not content:
+        native: dict[str, Any]
+        if response.is_error:
+            assert response.error is not None
+            native = {"error": {key: response.error[key] for key in ("code", "message")}}
+        else:
+            native = data
         content.insert(0, types.TextContent(type="text", text=json.dumps(native, ensure_ascii=False, separators=(",", ":"))))
         for payload in [data, *parts]:
             if "content_index" in payload:

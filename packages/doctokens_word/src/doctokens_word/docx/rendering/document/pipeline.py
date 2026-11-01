@@ -15,7 +15,7 @@ from ..plain import block_text_only, inline_text_only
 
 def iter_plain(parsed_document: ParsedDocument, *, first_page: int | None = None) -> Iterator[str]:
     """plain — pure text stream. Footnotes are appended to paragraph ends, endnotes to the document end."""
-    ocr_results = getattr(parsed_document, "ocr_results", None) or {}
+    ocr_results = parsed_document.ocr_results
     footnote_map: dict[str, str] = {}
     for footnote in parsed_document.footnotes:
         footnote_text = inline_text_only(footnote, ocr_results)

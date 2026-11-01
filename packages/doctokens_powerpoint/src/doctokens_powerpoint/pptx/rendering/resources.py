@@ -134,7 +134,7 @@ def _render_smartart(parsed_presentation: ParsedPresentation, resource_id: str) 
     nodes = smartart_record.get("nodes", [])
     links = smartart_record.get("links", [])
     root = element("smartart", id=resource_id, type=layout_type, nodes=len(nodes), links=len(links))
-    append_diagram(root, smartart_record, include_source_ids=True)
+    append_diagram(root, smartart_record)
     return resource_document("pptx", root)
 
 

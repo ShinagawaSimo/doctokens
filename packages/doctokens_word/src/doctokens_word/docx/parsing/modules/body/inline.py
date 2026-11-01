@@ -63,6 +63,8 @@ class InlineParser:
         on_page_break: PageBreakCallback | None = None,
         on_bookmark: NavigationMarkerCallback | None = None,
         on_comment_anchor: NavigationMarkerCallback | None = None,
+        *,
+        textbox_reader: TextboxReader,
     ) -> None:
         self.styles = styles
         self.options = options
@@ -83,7 +85,7 @@ class InlineParser:
         self.ruby_depth = 0
         self.table_style = StyleRecord(style_id="")
         self.table_style_for_paragraph: Callable[[ET.Element | None], StyleRecord] | None = None
-        self.textbox_reader: TextboxReader | None = None
+        self.textbox_reader = textbox_reader
 
     def field_context_type(self) -> _FieldContext:
         return _FieldContext()

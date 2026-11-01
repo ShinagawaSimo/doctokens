@@ -20,7 +20,6 @@ class ChartSeriesInfo(TypedDict, total=False):
 
     index: int
     point_count: int
-    points: list[ChartPoint]
     plot_index: int
     chart_type: str
     name: str
@@ -57,10 +56,8 @@ class ChartPlotInfo(TypedDict, total=False):
 class ChartLabel(TypedDict, total=False):
     index: int
     text: str
-    position: str
     deleted: bool
     options: dict[str, str]
-    unsupported: bool
 
 
 class ChartInfo(TypedDict, total=False):

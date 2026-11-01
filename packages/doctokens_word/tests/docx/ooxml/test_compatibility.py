@@ -139,7 +139,7 @@ def test_ancillary_reader_uses_same_fallback_contract() -> None:
     assert result.text == (
         '<document density="semantic" format="docx" pagination="last-rendered-hints" revision-view="final">'
         '<body><page number="1" /><p>body</p></body>'
-        '<supplemental><headers><header id="header1" locator="headers.header1">header</header>'
+        '<supplemental><headers><header id="header1">header</header>'
         "</headers></supplemental></document>"
     )
     assert result.report.manifest["alternateContent"][0]["part"] == "word/header1.xml"

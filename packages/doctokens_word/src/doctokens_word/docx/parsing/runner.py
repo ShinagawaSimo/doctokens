@@ -107,7 +107,8 @@ class DocxParser:
                 metrics,
                 resolved_plan,
                 compatibility,
-                body_parser.inline.textbox_reader if resolved_plan.needs(DocxFeature.BODY) else None,
+                body_parser.inline.textbox_reader,
+                body_parser.numbering_state.numbering,
             )
 
         parse_result = _DocumentParseResult(
@@ -246,7 +247,8 @@ class DocxParser:
         metrics: MetricsRecorder,
         plan: DocxParsePlan,
         compatibility: DocxCompatibility,
-        textbox_reader: TextboxReader | None = None,
+        textbox_reader: TextboxReader,
+        numbering: NumberingMap,
     ) -> AncillaryResult:
         if not _needs_ancillary_content(plan):
             return {"headers": [], "footers": [], "footnotes": [], "endnotes": [], "comments": []}
@@ -263,6 +265,7 @@ class DocxParser:
                 plan=plan,
                 compatibility=compatibility,
                 textbox_reader=textbox_reader,
+                numbering=numbering,
             ).parse()
 
 

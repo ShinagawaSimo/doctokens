@@ -236,12 +236,7 @@ def _append_table(parent: ET.Element, shape: ShapeBlock, density: str) -> None:
 
 
 def _append_table_cells(parent: ET.Element, shape: ShapeBlock, row_index: int, density: str) -> None:
-    cells = shape.get("tableCells")
-    if cells is None or row_index >= len(cells):
-        for value in shape.get("rows", [])[row_index]:
-            append(parent, "td", value)
-        return
-    for cell in cells[row_index]:
+    for cell in shape["tableCells"][row_index]:
         if cell.get("hMerge") or cell.get("vMerge"):
             continue
         node = append(

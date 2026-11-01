@@ -128,7 +128,22 @@ The selected view determines saved content, paragraph boundaries, table structur
   - `ReviewMarkup.propertyChanges: list[PropertyChange]`; each record stores scope, before/after descriptions, and saved author/date.
 - **Parsing**
   - Original selects the nested saved previous property set, including an explicitly empty set. Final/review select current properties. The selected set participates in the normal defaults/style/direct-format cascade.
-  - Run before/after descriptions use effective visible reading formats. Structural descriptions include the supported style, alignment, outline, numbering, borders, cell fill, grid positions/spans, region settings, and merge relationships. Descriptions sort `key=value` pairs and use `normal` for an empty set. Geometry-only changes do not add review markup.
+  - Run before/after descriptions use effective visible reading formats.
+    Paragraph descriptions resolve saved styles to supported alignment, outline,
+    reading borders and numbering format/level. Source style IDs and numId are
+    never reading descriptors; changes between equivalent resolved declarations
+    add no wrapper. Do not advance counters to invent historical marker values.
+  - Structural descriptions retain supported grid offsets/spans, effective
+    header state, merge relationships and resolved table/cell background. Explicit
+    cell fill equal to its inherited table fill is not a reading change.
+    Descriptions sort key=value pairs and use normal for an empty supported set.
+  - Do not serialize tblLook regions, row/column band settings, source IDs or raw
+    property dictionaries as a fallback. Complex historical conditional-table
+    effects and paragraph-style character history that cannot be reliably
+    reconstructed in this model add no inferred descriptor. Original/final
+    views still use their selected saved properties in ordinary parsing; absence
+    of a review wrapper is not proof that all historical formatting is equal.
+    Saved authors/dates, direct run-format history and real move pairs remain.
   - Table grid history affects logical column count. Tracked cell merge selects vMergeOrig for original and vMerge for final/review, describing cont/rest as continue/restart.
   - Saved numberingChange definitions restore the original label format. Review formats the established counter with previous and current definitions, annotating the marker without advancing counters twice. It does not infer a previous counter value that was not saved.
   - With no saved previous property set, retain the available current set; do not infer an absent historical value.

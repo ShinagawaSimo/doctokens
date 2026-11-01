@@ -33,7 +33,6 @@ def build_server(runtime: ToolRuntime) -> Server[Any, Any]:
         instructions=(
             "Read paths directly; inspect only to discover navigation. DOCX pages are saved-render hints. "
             "Text appears once in content; structuredContent gives selection and content_index. "
-            "Compatible mode also provides a separate native JSON metadata block; it is not document text. "
             "Root next_offset in search continues matches; per-part next_offset and read_result continue characters/bytes. "
             "Incomplete parts return result_id and next_offset: continue with read_result at that offset. "
             "Continuation next_offset=null ends the result; XML fragments are not standalone documents. "
@@ -89,7 +88,7 @@ def build_server(runtime: ToolRuntime) -> Server[Any, Any]:
             if control.cancelled.is_set():
                 for task in pending:
                     task.cancel()
-        return project_response(response, runtime.config.mcp_output_mode)
+        return project_response(response)
 
     async def list_resources() -> list[types.Resource]:
         # Resource links are issued by binary tool responses, rather than exposing
@@ -127,7 +126,6 @@ def main() -> None:
     parser.add_argument("--max-sessions", type=int, default=4)
     parser.add_argument("--max-session-memory-bytes", type=int, default=256 * 1024 * 1024)
     parser.add_argument("--max-session-total-memory-bytes", type=int, default=512 * 1024 * 1024)
-    parser.add_argument("--mcp-output-mode", choices=("compatible", "compact"), default="compatible")
     parser.add_argument("--max-search-bytes", type=int, default=32 * 1024 * 1024)
     parser.add_argument("--max-search-states", type=int, default=8)
     parser.add_argument("--search-idle-seconds", type=float, default=600)
@@ -147,7 +145,6 @@ def main() -> None:
             max_sessions=args.max_sessions,
             max_session_memory_bytes=args.max_session_memory_bytes,
             max_session_total_memory_bytes=args.max_session_total_memory_bytes,
-            mcp_output_mode=args.mcp_output_mode,
             max_search_bytes=args.max_search_bytes,
             max_search_states=args.max_search_states,
             search_idle_seconds=args.search_idle_seconds,

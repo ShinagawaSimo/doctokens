@@ -74,8 +74,7 @@ def test_missing_target_does_not_bind_same_relationship_id_from_another_part(den
     }
     result = parse_docx(_abnormal_docx(body, entries), density=density)
     supplemental = (
-        '<supplemental><headers><header id="header1" locator="headers.header1">'
-        '<img alt="Header" id="img1" /></header></headers></supplemental>'
+        '<supplemental><headers><header id="header1"><img alt="Header" id="img1" /></header></headers></supplemental>'
         if density == "semantic"
         else ""
     )

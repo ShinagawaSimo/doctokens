@@ -76,7 +76,7 @@ def drawing_objects(
     part: str,
     asset_lookup: AssetLookup,
     object_lookup: ObjectLookup,
-    textbox_reader: TextboxReader | None = None,
+    textbox_reader: TextboxReader,
 ) -> list[InlineObject]:
     """Extract image references, text boxes, charts, SmartArt, and placeholders."""
     drawing_scan = DrawingScanResult.scan(drawing)

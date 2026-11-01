@@ -2,9 +2,9 @@
 
 [DOCX](../README.md) / SmartArt
 
-SmartArt retains every parsed node and explicit connection, including empty
-root/transition nodes. Reading bodies use a bounded preview; the resource API
-returns the complete parsed graph.
+SmartArt retains readable nodes and all resolved connection endpoints, including
+empty root/transition endpoints. Reading bodies use a bounded preview; resources
+return the complete retained reading graph without source GUIDs.
 
 ## Processing
 
@@ -13,7 +13,8 @@ and layout/count bookkeeping. Both XML densities share the same preview limits:
 12 source nodes, 24 connections and 1,200 label characters, including an ellipsis
 when a label must be cut. Preserve source order and original node ordinals.
 Keep only edges whose two endpoints are shown; never connect through a hidden
-node or infer business order. Empty nodes consume node slots and remain in XML.
+node or infer business order. Empty connected nodes consume slots and remain in
+XML; isolated whitespace-only nodes are removed before applying the budget.
 Plain uses the same node/label budget and omits empty labels.
 
 A small graph is complete when all three limits fit. Otherwise body
@@ -118,9 +119,11 @@ unsupported child or `[Unparsed SmartArt]`, without a fabricated resource ID.
   - `list[SmartArtNode]`
 
 - **Parsing**
-  - Preserve every point, including empty/root/transition nodes, in source order.
-    Empty labels do not remove connection endpoints. All reading plans retain the
-    parsed edges in the IR/resource; body preview selection occurs at rendering.
+  - Assign source ordinals before filtering; keep every readable point and every
+    endpoint of a resolved edge, including empty root/transition nodes. Remove
+    only isolated whitespace-only points. Do not compact IDs or infer edges.
+    The same reading graph feeds all densities and resources; preview selection
+    occurs at rendering. Keep saved node/link kind as explicitly requested.
 
 ### `nodeCount`
 
@@ -148,7 +151,7 @@ unsupported child or `[Unparsed SmartArt]`, without a fabricated resource ID.
   - `list[SmartArtLink]`
 
 - **Parsing**
-  - Retain edges whose standard srcId/destId or supported producer aliases both
+  - Retain edges whose standard srcId/destId both
     resolve to retained nodes. All reading plans retain the graph. Duplicate
     source node ids bind references to their first occurrence.
 

@@ -271,7 +271,6 @@ def _append_supplemental(parent: ET.Element, parsed_document: ParsedDocument, de
                 group,
                 singular,
                 id=item.get("id"),
-                locator=item.get("loc") if group_name != "comments" else None,
                 author=item.get("author"),
                 date=item.get("date"),
                 parent=item.get("parentId"),

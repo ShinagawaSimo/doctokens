@@ -5,6 +5,7 @@ from __future__ import annotations
 from xml.etree import ElementTree as ET
 
 from doctokens_core.contracts.models import ParseWarning
+from doctokens_core.output.diagram_preview import reading_node_ids
 
 from ....model.presentation import SmartArtLink, SmartArtNode
 from ....ooxml.namespaces import local_name, qualified_name
@@ -24,7 +25,6 @@ def parse_diagram_data(
         }
         model_id = element.get("modelId")
         if model_id:
-            node["sourceId"] = model_id
             if model_id in node_map:
                 warnings.append(ParseWarning("SMARTART_DUPLICATE_MODEL_ID", "Duplicate diagram node modelId", part))
             else:
@@ -45,4 +45,5 @@ def parse_diagram_data(
         if kind := element.get("type"):
             link["kind"] = kind
         links.append(link)
-    return nodes, links
+    retained = reading_node_ids([(node["id"], node["text"]) for node in nodes], [(edge["from"], edge["to"]) for edge in links])
+    return [node for node in nodes if node["id"] in retained], links

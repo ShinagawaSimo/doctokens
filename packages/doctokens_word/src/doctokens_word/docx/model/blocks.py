@@ -142,8 +142,7 @@ class AncillaryContent(TypedDict):
 
 
 class AncillaryItemRequired(TypedDict):
-    id: str | None
-    loc: str
+    id: str
     text: str
     runs: list[Run]
 

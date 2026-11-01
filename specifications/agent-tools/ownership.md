@@ -54,7 +54,7 @@
   - Eviction closes the parser and releases its reservation; snapshot and stored
     result identities survive. Release, expiry and runtime exit also clear the
     session estimate. `get_runtime_info` exposes `session_estimated_bytes`, both
-    `session_memory_limits` and `mcp_output_mode` only on explicit inspection.
+    `session_memory_limits` only on explicit inspection.
   - Runtime locking and active leases protect operations from maintenance or eviction. Explicit release and runtime exit close readers and remove snapshots.
   - Background maintenance runs at most every 30 seconds; expiration also runs
     before tool calls. Estimates are admission heuristics, not process RSS or a

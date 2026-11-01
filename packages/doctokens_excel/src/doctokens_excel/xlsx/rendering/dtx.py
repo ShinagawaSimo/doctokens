@@ -207,7 +207,7 @@ def _cell_attrs(
         if cell.get("richValue"):
             rich = cell["richValue"]
             attrs["rich_type"] = rich.get("type", "rich")
-            if rich.get("imagePart") or rich.get("imageUrl"):
+            if rich.get("imageStatus") or rich.get("imagePart") or rich.get("imageUrl"):
                 attrs["in_cell_image"] = True
                 attrs["alt"] = rich.get("alt")
         if format_index is not None and cell.get("style") is not None:
@@ -224,7 +224,15 @@ def _cell_attrs(
 def _append_cell_text(parent: ET.Element, cell: Cell, density: str, inherited: set[str]) -> None:
     content_parent = append(parent, "a", href=cell["hyperlink"]) if cell.get("hyperlink") else parent
     rich_value = cell.get("richValue")
-    if rich_value and (density == "plain" or rich_value.get("display") or rich_value.get("fallback")):
+    if rich_value and rich_value.get("imageStatus") == "unbound":
+        text(content_parent, cell["text"] or rich_value.get("display") or rich_value.get("fallback") or "")
+        append(content_parent, "unsupported", type="image")
+    elif rich_value and (
+        density == "plain"
+        or rich_value.get("display")
+        or rich_value.get("fallback")
+        or (rich_value.get("imageStatus") == "bound" and rich_value.get("alt"))
+    ):
         text(content_parent, rich_value.get("alt") or rich_value.get("display") or rich_value.get("fallback") or cell["text"])
     elif density == "semantic" and cell.get("rich"):
         for run in cell["rich"]:

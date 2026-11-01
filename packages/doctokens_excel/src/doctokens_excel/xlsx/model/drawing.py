@@ -11,7 +11,6 @@ class DrawingImage(TypedDict, total=False):
     anchorRange: str  # private saved two-cell footprint for range relevance
     alt: str
     part: str
-    title: str
     group: str
     link: str
     href: str

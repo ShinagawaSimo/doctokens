@@ -33,15 +33,11 @@ class SlideObjectParser:
         self._layout_lookup = layouts
         self._tables = tables
 
-    def _picture_shape(self, pic: ET.Element, part: str, ordinal: int) -> ShapeBlock | None:
+    def _picture_shape(self, pic: ET.Element, part: str, ordinal: int) -> ShapeBlock:
         media = media_shape(pic, part, ordinal, self._asset_lookup, self._warnings)
         blip = _find_descendant(pic, "blip")
-        if blip is None:
-            if media is not None:
-                return media
-            self._warnings.append(ParseWarning(code="PICTURE_MISSING_BLIP", message="p:pic without a:blip", locator=part))
-            return None
-        rid = attr(blip, "r", "embed") or attr(blip, "r", "link")
+        if blip is None and media is not None:
+            return media
         shape: ShapeBlock = {
             "id": f"s{ordinal}",
             "type": "picture",
@@ -54,11 +50,18 @@ class SlideObjectParser:
         alt = _shape_alt(pic)
         if alt:
             shape["alt"] = alt
+        if blip is None:
+            shape["unparsed"] = True
+            self._warnings.append(ParseWarning(code="PICTURE_MISSING_BLIP", message="p:pic without a:blip", locator=part))
+            return shape
+        rid = attr(blip, "r", "embed") or attr(blip, "r", "link")
         if rid is None:
+            shape["unparsed"] = True
             self._warnings.append(ParseWarning(code="PICTURE_MISSING_RID", message="a:blip without r:embed/r:link", locator=part))
             return shape
         asset = self._asset_lookup.get((part, rid))
         if asset is None or asset.get("type") != "image":
+            shape["unparsed"] = True
             self._warnings.append(
                 ParseWarning(
                     code="PICTURE_ASSET_MISSING",

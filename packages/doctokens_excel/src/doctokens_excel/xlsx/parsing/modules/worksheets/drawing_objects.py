@@ -8,6 +8,7 @@ from doctokens_core.containers.opc.models import RelationshipRecord
 from doctokens_core.containers.opc.reader import PackageReader
 from doctokens_core.contracts.models import ParseWarning
 from doctokens_core.ooxml.charts.parser import CHART_RELATIONSHIP_TYPES
+from doctokens_core.text.descriptions import first_readable
 
 from ....model.drawing import DrawingChart, DrawingImage, DrawingShape
 from .chart_parts import parse_chart_part
@@ -119,9 +120,8 @@ class DrawingObjects:
         item: DrawingImage = {"id": f"image{self.image_start + len(self.images)}", "ref": ref}
         properties = next(node.iter(f"{{{XDR}}}cNvPr"), None)
         if properties is not None:
-            item["alt"] = properties.get("descr") or properties.get("title") or ""
-            if (title := properties.get("title")) and title != item.get("alt"):
-                item["title"] = title
+            if description := first_readable(properties.get("descr"), properties.get("title")):
+                item["alt"] = description
             hyperlink = properties.find(f"{{{A}}}hlinkClick")
             if hyperlink is not None:
                 relation = relationships.get(hyperlink.get(f"{{{NS_R}}}id", ""))

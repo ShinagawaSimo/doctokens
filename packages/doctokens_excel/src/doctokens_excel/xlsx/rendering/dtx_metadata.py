@@ -66,7 +66,6 @@ def _append_sheet_metadata(
             id=image.get("id"),
             ref=image.get("ref"),
             alt=image.get("alt") or None,
-            title=image.get("title"),
             group=image.get("group"),
             href=image.get("href"),
             link=image.get("link"),

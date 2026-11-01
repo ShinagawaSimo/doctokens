@@ -66,7 +66,14 @@ Cell vm resolves valueMetadata records in xl/metadata.xml through futureMetadata
   - `str`
 
 - **Parsing**
-  - First nonempty. DTX rich branch is selected only with nonempty display/fallback; inside it choose alt, display, fallback, cell text. Plain chooses image alt/display/[Image] or entity display/fallback/cell text.
+  - Image descriptions/display candidates skip whitespace-only values and
+    preserve meaningful spacing. Bound image reading uses alt/display/fallback
+    under its existing contract. Unbound images retain the cached cell value
+    (or saved display/fallback when no cached text exists), the independent alt
+    attribute and an unsupported image child. Plain includes an unavailable
+    image marker and description, followed by a distinct nonempty saved value.
+    This avoids replacing a saved error with a caption. Entity-value behavior
+    remains display/fallback/cell text.
 - **Diagnostics**
   - A used `s:c/@vm` with no `xl/metadata.xml` yields `XLSX_CATALOG_PART_MISSING`. A readable binding that points outside the rich-value list yields `XLSX_CATALOG_REFERENCE_UNRESOLVED`. An invalid metadata or rich-value XML part yields `XLSX_CATALOG_XML_INVALID`. The cached `s:v` text remains available.
 
@@ -114,7 +121,31 @@ Cell vm resolves valueMetadata records in xl/metadata.xml through futureMetadata
   - `str`
 
 - **Parsing**
-  - Keep nonempty; XML alt is emitted only when imagePart/imageUrl is truthy.
+  - Prefer non-whitespace Text, then AltText; preserve meaningful source spacing.
+    Both XML densities retain it for a recognized image value even when its
+    binary/URL binding is absent. Do not use source filenames or indices.
+
+### `imageStatus`
+
+- **Output**
+  - Recognized image values set cell/@in-cell-image=true independently of source
+    binding. Unbound images add `<unsupported type="image"/>` and retain alt.
+    Plain uses `[Image unavailable: description]` (or `[Image unavailable]`)
+    and retains a distinct saved value such as #VALUE!.
+- **Source**
+  - Known image rich-value types or declared ImageIdentifier/_rvRel keys, after
+    resolving saved image relationships. A cell error alone does not imply image.
+- **IR**
+  - `RichCellValue.imageStatus: Literal["bound", "unbound"]`.
+- **Parsing**
+  - Bound means a saved embedded source or external URI was resolved; external
+    sources are not downloaded. Missing parts/relationships remain unbound.
+    No image resource-directory entry or fake binary ID is introduced here.
+- **Diagnostics**
+  - Existing catalog failures remain the primary diagnostic. An unresolved image
+    source adds XLSX_CATALOG_REFERENCE_UNRESOLVED only when source decoding has
+    not already diagnosed the catalog problem. Reading projections do not append
+    duplicate diagnostics; resource registration remains a separate capability.
 
 ### `sizing`
 

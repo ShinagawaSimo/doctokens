@@ -95,7 +95,13 @@ def _cell_text(cell: Cell) -> str:
         value = control.get("state", cell["text"])
         value = f"[Checkbox {value}]"
     elif rich_value := cell.get("richValue"):
-        if rich_value.get("imagePart") or rich_value.get("imageUrl"):
+        if rich_value.get("imageStatus") == "unbound":
+            description = rich_value.get("alt") or rich_value.get("display") or rich_value.get("fallback")
+            value = f"[Image unavailable: {description}]" if description else "[Image unavailable]"
+            saved = cell["text"]
+            if saved.strip() and saved != description:
+                value += " " + saved
+        elif rich_value.get("imagePart") or rich_value.get("imageUrl"):
             value = str(rich_value.get("alt") or rich_value.get("display") or "[Image]")
         else:
             value = str(rich_value.get("display") or rich_value.get("fallback") or cell["text"])

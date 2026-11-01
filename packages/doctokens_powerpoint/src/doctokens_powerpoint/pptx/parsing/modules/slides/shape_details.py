@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from xml.etree import ElementTree as ET
 
+from doctokens_core.text.descriptions import first_readable
+
 from ....model.presentation import ShapeBlock
 from ....ooxml.namespaces import local_name
 
@@ -88,7 +90,7 @@ def _shape_alt(shape: ET.Element) -> str | None:
         return None
     descr = c_nv_pr.get("descr")
     title = c_nv_pr.get("title")
-    return descr or title or None
+    return first_readable(descr, title)
 
 
 def _geometry_type(shape: ET.Element) -> str | None:
@@ -105,9 +107,13 @@ def _attach_accessibility(result: ShapeBlock, shape: ET.Element) -> None:
     c_nv_pr = _find_descendant(shape, "cNvPr")
     if c_nv_pr is None:
         return
-    if description := c_nv_pr.get("descr"):
+    if result["type"] == "picture":
+        if description := first_readable(c_nv_pr.get("descr"), result.get("alt"), c_nv_pr.get("title")):
+            result["alt"] = description
+        return
+    if description := first_readable(c_nv_pr.get("descr")):
         result["alt"] = description
-    if title := c_nv_pr.get("title"):
+    if title := first_readable(c_nv_pr.get("title")):
         result["title"] = title
 
 

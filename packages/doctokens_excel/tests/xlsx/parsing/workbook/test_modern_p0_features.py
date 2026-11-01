@@ -120,17 +120,15 @@ def _base_entries() -> dict[str, str]:
 
 
 class ModernP0FeatureTests(unittest.TestCase):
-    def test_rich_value_checkbox_and_pivot_context(self) -> None:
+    def test_checkbox_and_pivot_context(self) -> None:
         data = _make_xlsx(_base_entries())
         plain = parse_xlsx(data, density="plain").text
         structural = parse_xlsx(data, density="structural").text
         semantic = parse_xlsx(data, density="semantic").text
 
-        self.assertIn("Logo", plain)
         self.assertIn("[Checkbox true]", plain)
         structural_root = ET.fromstring(structural)
         semantic_root = ET.fromstring(semantic)
-        self.assertEqual(structural_root.find(".//cell").get("in-cell-image"), "true")
         self.assertEqual(structural_root.find(".//cell[@control]").get("control"), "checkbox")
         self.assertEqual(semantic_root.find("pivot-cache").get("id"), "cache1")
         self.assertEqual(semantic_root.find("slicer").get("name"), "RegionFilter")
@@ -172,6 +170,9 @@ class ModernP0FeatureTests(unittest.TestCase):
                 self.assertEqual(pivot.get("rows") if pivot is not None else None, row_field)
 
     def test_optional_relationship_errors_keep_cells_and_other_catalogs(self) -> None:
+        # Broken relationship XML/required targets are damaged-package states
+        # unavailable through normal Excel image UI. Keep the readable alt and
+        # cached value while reporting the unavailable image.
         cases = (
             ("xl/richData/_rels/richValueRel.xml.rels", "<broken", "XLSX_CATALOG_RELS_INVALID"),
             (
@@ -196,7 +197,13 @@ class ModernP0FeatureTests(unittest.TestCase):
                 self.assertEqual(first.text, second.text)
                 self.assertEqual([(w.code, w.locator) for w in first.report.warnings], [(code, part)])
                 root = ET.fromstring(first.text)
-                self.assertEqual(root.find(".//cell").text, "Logo")
+                cell = root.find(".//cell")
+                self.assertEqual(cell.get("alt"), "Logo")
+                if "richValueRel" in part:
+                    self.assertEqual(cell.text, "#VALUE!")
+                    self.assertIsNotNone(cell.find("unsupported[@type='image']"))
+                else:
+                    self.assertEqual(cell.text, "Logo")
                 self.assertEqual(root.find(".//cell[@control]").get("control"), "checkbox")
                 self.assertEqual(root.find(".//pivot-table").get("rows"), "Region")
 

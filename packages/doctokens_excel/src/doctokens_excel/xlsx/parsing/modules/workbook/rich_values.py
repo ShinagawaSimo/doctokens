@@ -9,6 +9,7 @@ from xml.etree import ElementTree as ET
 from doctokens_core.containers.opc.models import RelationshipRecord
 from doctokens_core.containers.opc.reader import PackageReader, rels_path_for_part
 from doctokens_core.contracts.models import ParseWarning
+from doctokens_core.text.descriptions import first_readable
 
 from ....model.workbook import RichCellValue
 from .catalog_parts import (
@@ -89,6 +90,7 @@ class RichValueCatalog:
         if rich_root is None:
             return cls(bindings, [], parts, metadata_part, rich_part)
 
+        diagnostics_before = len(parts.warnings)
         structures = cls._parse_structures(pkg, parts)
         rel_targets = cls._parse_rich_relationships(pkg, parts)
         web_images = cls._parse_web_images(pkg, parts)
@@ -97,6 +99,8 @@ class RichValueCatalog:
             for node in rich_root.iter()
             if _local_name(node.tag) == "rv"
         ]
+        if any(value.get("imageStatus") == "unbound" for value in values) and len(parts.warnings) == diagnostics_before:
+            parts.reference_missing(rich_part, "image source")
         return cls(bindings, values, parts, metadata_part, rich_part)
 
     def resolve(self, vm: str | None) -> RichCellValue | None:
@@ -197,7 +201,8 @@ class RichValueCatalog:
                     if record.target_mode != "External" and record.resolved_target and not pkg.exists(record.resolved_target):
                         parts.missing(record.resolved_target, part, rel_id)
                         continue
-                    result[index] = (record.resolved_target or "", record.target_mode or "")
+                    target = record.target if record.target_mode == "External" else record.resolved_target or ""
+                    result[index] = (target, record.target_mode or "")
         return result
 
     @classmethod
@@ -248,6 +253,13 @@ class RichValueCatalog:
                     slot = _int(raw, -1)
                     break
         if image_key or type_name.lower() in {"image", "_localimage", "_webimage", "webimage"}:
+            image_display = first_readable(
+                fields.get("_DisplayString"), fields.get("Text"), fields.get("Display"), descriptor.get("fallback")
+            )
+            if image_display is not None:
+                descriptor["display"] = image_display
+            else:
+                descriptor.pop("display", None)
             if "WebImageIdentifier" in fields:
                 web_target = web_images.get(_int(fields["WebImageIdentifier"], -1))
                 if web_target is not None:
@@ -262,7 +274,10 @@ class RichValueCatalog:
                         descriptor["imageUrl"] = record.resolved_target or record.target
                     elif record.resolved_target:
                         descriptor["imagePart"] = record.resolved_target
-            if alt := fields.get("Text") or fields.get("AltText"):
+            descriptor["imageStatus"] = (
+                "bound" if first_readable(descriptor.get("imagePart"), descriptor.get("imageUrl")) else "unbound"
+            )
+            if alt := first_readable(fields.get("Text"), fields.get("AltText")):
                 descriptor["alt"] = alt
             if sizing := fields.get("ImageSizing"):
                 descriptor["sizing"] = _int(sizing)

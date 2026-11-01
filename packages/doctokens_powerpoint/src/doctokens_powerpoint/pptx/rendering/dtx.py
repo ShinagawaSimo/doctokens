@@ -10,6 +10,7 @@ from doctokens_core.ooxml.charts.preview import append_chart_preview
 from doctokens_core.output.ocr import append_ocr
 from doctokens_core.output.xml import append, element, serialize, text
 from doctokens_core.runtime.execution import checkpoint
+from doctokens_core.text.descriptions import first_readable
 
 from ..model.presentation import (
     ChartRecord,
@@ -84,7 +85,14 @@ def _append_shape(
 ) -> None:
     shape_type = shape["type"]
     if shape_type == "unsupported":
-        append(parent, "unsupported", type="shape", source=shape.get("sourceKind"), **_shape_attrs(shape, density))
+        append(
+            parent,
+            "unsupported",
+            type="shape",
+            source=shape.get("sourceKind"),
+            alt=first_readable(shape.get("alt"), shape.get("title")),
+            **_shape_attrs(shape, density),
+        )
         return
     if shape_type == "text":
         title = shape.get("placeholderType") in _TITLE_PLACEHOLDERS
@@ -103,13 +111,15 @@ def _append_shape(
         return
     if shape_type == "picture":
         attrs = _shape_attrs(shape, density)
-        attrs["id"] = shape.get("assetId") or shape["id"]
+        attrs["id"] = shape.get("assetId")
         if shape.get("alt"):
             attrs["alt"] = shape["alt"]
         if shape.get("embeddedType"):
             attrs["kind"] = "ole-preview"
             attrs["progid"] = shape["embeddedType"]
-        append(parent, "img", **attrs)
+        node = append(parent, "img", **attrs)
+        if shape.get("unparsed"):
+            append(node, "unsupported", type="image")
         append_ocr(parent, shape.get("assetId") or shape["id"], ocr_results)
         if shape.get("mediaKind"):
             append(

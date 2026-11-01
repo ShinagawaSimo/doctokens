@@ -1,9 +1,8 @@
-"""Picture shapes and lazy image asset indexing."""
+"""Image-package input for OCR transport and session-lifecycle tests."""
 
 from __future__ import annotations
 
 import base64
-import unittest
 
 from _pptx_namespaces import PNG_BYTES
 from _pptx_package import (
@@ -16,11 +15,9 @@ from _pptx_package import (
     slide_rels_xml,
     slide_xml_shapes,
 )
-from doctokens_powerpoint import parse_pptx
-from doctokens_powerpoint.pptx.model.enums import Density
 
 
-def _image_deck(*, alt: str | None = None, external: bool = False) -> bytes:
+def image_deck(*, alt: str | None = None, external: bool = False) -> bytes:
     if external:
         rel = (
             '<Relationship Id="rId2" '
@@ -44,17 +41,3 @@ def _image_deck(*, alt: str | None = None, external: bool = False) -> bytes:
     if not external:
         entries["ppt/media/image1.png"] = base64.b64decode(PNG_BYTES)
     return make_pptx(entries)
-
-
-class ImageShapeTests(unittest.TestCase):
-    def test_plain_image_placeholder_with_alt(self) -> None:
-        text = parse_pptx(_image_deck(alt="Chart photo"), density=Density.PLAIN).text
-        self.assertIn("[Image: Chart photo]", text)
-
-    def test_plain_image_placeholder_without_alt(self) -> None:
-        text = parse_pptx(_image_deck(), density=Density.PLAIN).text
-        self.assertIn("[Image]", text)
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -8,6 +8,7 @@ from doctokens_core.contracts.ocr import OcrResultRecord
 from doctokens_core.ooxml.charts.preview import plain_chart
 from doctokens_core.output.ocr import plain_ocr
 from doctokens_core.runtime.execution import checkpoint
+from doctokens_core.text.descriptions import first_readable
 
 from ..model.presentation import ChartRecord, ParsedPresentation, ShapeBlock, SlideBlock, SmartArtRecord
 from .diagrams import diagram_text
@@ -54,7 +55,9 @@ def _shape_text(
     ocr_results: dict[str, OcrResultRecord],
 ) -> str:
     if shape["type"] == "unsupported":
-        return f"[Unparsed shape: {shape.get('sourceKind', 'shape')}]"
+        description = first_readable(shape.get("alt"), shape.get("title"))
+        suffix = f": {description}" if description else ""
+        return f"[Unparsed shape: {shape.get('sourceKind', 'shape')}{suffix}]"
     if shape["type"] == "text":
         if paragraphs := shape.get("paragraphs"):
             lines = []
@@ -64,9 +67,12 @@ def _shape_text(
             return "\n".join(lines)
         return shape["text"]
     if shape["type"] == "picture":
-        poster = f"[Image: {shape['alt']}]" if shape.get("alt") else "[Image]"
-        if shape.get("embeddedType"):
-            poster = f"[OLE preview: {shape['embeddedType']}]"
+        kind = "OLE preview" if shape.get("embeddedType") else "Image"
+        if shape.get("unparsed"):
+            kind += " unavailable"
+        description = first_readable(shape.get("alt"))
+        label = description or (shape.get("embeddedType") if kind.startswith("OLE preview") else None)
+        poster = f"[{kind}: {label}]" if label else f"[{kind}]"
         if recognized := plain_ocr(ocr_results.get(shape.get("assetId", ""))):
             poster += "\n" + recognized
         if shape.get("mediaKind"):

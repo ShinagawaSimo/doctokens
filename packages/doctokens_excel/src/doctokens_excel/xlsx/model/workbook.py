@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 from doctokens_core.containers.opc.options import PackageOptions
 from doctokens_core.contracts.annotations import ThreadedAnnotation
@@ -84,6 +84,7 @@ class RichCellValue(TypedDict, total=False):
     fields: dict[str, str]
     imagePart: str
     imageUrl: str
+    imageStatus: Literal["bound", "unbound"]
     alt: str
     sizing: int
     width: str

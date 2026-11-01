@@ -5,11 +5,11 @@ from __future__ import annotations
 import unittest
 from xml.etree import ElementTree as ET
 
+from _pptx_images import image_deck
 from doctokens_powerpoint import parse_pptx
 from doctokens_powerpoint.pptx.model.enums import Density
 from doctokens_powerpoint.pptx.model.presentation import ParseOptions
 from ocr_llm_core import OcrProvider, OcrResult
-from test_pptx_images import _image_deck
 
 
 class _TextProvider(OcrProvider):
@@ -35,14 +35,14 @@ class PptxOcrTests(unittest.TestCase):
     def test_each_one_shot_density_owns_its_ocr_attempt(self) -> None:
         options = ParseOptions(ocr=_TextProvider())
         for density in (Density.SEMANTIC, Density.STRUCTURAL, Density.PLAIN):
-            parse_pptx(_image_deck(), density=density, options=options)
+            parse_pptx(image_deck(), density=density, options=options)
         self.assertEqual(options.ocr.calls, 3)
 
     def test_session_recognizes_on_first_body_iteration_and_reuses_across_densities(self) -> None:
         from doctokens_powerpoint import open_pptx
 
         provider = _TextProvider()
-        with open_pptx(_image_deck(), options=ParseOptions(ocr=provider)) as presentation:
+        with open_pptx(image_deck(), options=ParseOptions(ocr=provider)) as presentation:
             self.assertEqual(provider.calls, 0)
             result = presentation.read_resource("image", "img1")
             self.assertEqual(provider.calls, 0)
@@ -56,14 +56,14 @@ class PptxOcrTests(unittest.TestCase):
 
     def test_external_picture_is_not_downloaded_or_ocrd(self) -> None:
         provider = _TextProvider()
-        parse_pptx(_image_deck(external=True), options=ParseOptions(ocr=provider))
+        parse_pptx(image_deck(external=True), options=ParseOptions(ocr=provider))
         self.assertEqual(provider.calls, 0)
 
     def test_unreferenced_package_image_is_not_ocrd(self) -> None:
         import zipfile
         from io import BytesIO
 
-        source = _image_deck()
+        source = image_deck()
         input_zip = zipfile.ZipFile(BytesIO(source))
         output = BytesIO()
         with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -82,7 +82,7 @@ class PptxOcrTests(unittest.TestCase):
                 return OcrResult.error("engine_error", "private diagnostic")
 
         options = ParseOptions(ocr=ErrorProvider())
-        rendered = parse_pptx(_image_deck(), density=Density.SEMANTIC, options=options).text
+        rendered = parse_pptx(image_deck(), density=Density.SEMANTIC, options=options).text
         root = ET.fromstring(rendered)
         marker = root.find(".//ocr-text")
         self.assertIsNotNone(marker)

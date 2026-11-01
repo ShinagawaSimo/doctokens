@@ -150,6 +150,7 @@ class ShapeBlock(TypedDict, total=False):
     creationId: str
     commentAnchor: bool
     sourceKind: str
+    unparsed: bool  # known picture with missing blip, relationship or resource
 
 
 class ImageAsset(TypedDict, total=False):

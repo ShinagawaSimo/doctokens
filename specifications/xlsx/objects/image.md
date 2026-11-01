@@ -47,8 +47,11 @@ Images are referenced by package location without eager binary reads.
   - `str`
 
 - **Parsing**
-  - Preserve the saved nonempty description; never substitute an unrelated
-    shape's text. If @title is also saved and differs, retain img/@title.
+  - Prefer non-whitespace descr, then non-whitespace title. Preserve meaningful
+    source spacing. Omit alt when neither is readable; do not substitute shape
+    names, IDs, filenames or nearby cell text. Title serves only as a fallback
+    and is not retained as a second image attribute. Unresolved image bindings
+    keep the same description and their unsupported marker.
 
 ### `part`
 
